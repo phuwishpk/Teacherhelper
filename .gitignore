@@ -1,0 +1,65 @@
+# ---- OS / editor / local tooling ----
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+.idea/
+*.iml
+.vscode/
+.markdown-collab/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# ---- secrets: repo is PUBLIC, never commit these ----
+.env
+.env.*
+!.env.example
+**/auth.json
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json
+**/firebase-adminsdk*.json
+**/key.properties
+**/*.jks
+**/*.keystore
+# Phase 5: add `!app/assets/models/*.tflite` when the on-device model is committed
+*.tflite
+
+# ---- Flutter (app/) ----
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/build/
+app/coverage/
+app/.widget_preview/
+app/android/.gradle/
+app/android/.cxx/
+app/android/local.properties
+app/android/gradlew
+app/android/gradlew.bat
+app/android/**/gradle-wrapper.jar
+app/android/**/GeneratedPluginRegistrant.java
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+
+# ---- Laravel (backend/) ----
+backend/vendor/
+backend/node_modules/
+backend/public/build/
+backend/public/hot
+backend/public/storage
+backend/storage/*.key
+backend/storage/pail/
+backend/.phpunit.cache/
+backend/.phpunit.result.cache
+
+# ---- Python / uv (ml/) : commit uv.lock ----
+ml/.venv/
+__pycache__/
+*.py[cod]
+ml/.pytest_cache/
+ml/data/
+ml/runs/
+*.h5
+*.keras
+*.ckpt*
