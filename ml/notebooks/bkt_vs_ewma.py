@@ -150,10 +150,26 @@ test[["student_id", "skill_id", "source", "score_ratio", "correct", "p_ewma"]].h
 # ค่า `correct_predictions` ของ pyBKT คือ P(ถูก) แบบ one-step-ahead จาก observation ก่อนหน้าของนักเรียนคนนั้น
 
 # %%
+import pyBKT.fit.EM_fit as _em_fit  # noqa: E402
 from pyBKT.models import Model  # noqa: E402
 
+# pyBKT 1.4.3 keeps the log-likelihood as a (1, 1) array and NumPy >= 2.4 refuses to store that in a
+# scalar slot (EM_fit.py, `log_likelihoods[i][0] = ...`), so unwrap it to a float. `parallel=False`:
+# the multiprocessing pool re-imports an unguarded script on macOS (spawn) and is not needed at this
+# size (6 skills x 3 fits take ~10 s serially).
+if not getattr(_em_fit, "_eduvision_patched", False):
+    _orig_em_run = _em_fit.run
+
+    def _em_run(*args, **kwargs):
+        result = _orig_em_run(*args, **kwargs)
+        result["total_loglike"] = float(np.asarray(result["total_loglike"]).reshape(-1)[0])
+        return result
+
+    _em_fit.run = _em_run
+    _em_fit._eduvision_patched = True
+
 BKT_COLUMNS = {"user_id": "student_id", "skill_name": "skill", "correct": "correct", "order_id": "order"}
-bkt = Model(seed=SEED, num_fits=3)
+bkt = Model(seed=SEED, num_fits=3, parallel=False)
 bkt.fit(data=train, defaults=BKT_COLUMNS)
 fitted = bkt.params().reset_index()
 fitted_table = fitted.pivot_table(index="skill", columns="param", values="value", aggfunc="first")[["prior", "learns", "guesses", "slips"]]
@@ -161,7 +177,7 @@ if "true_params" in obs.attrs:
     truth = obs.attrs["true_params"].assign(skill="skill_" + obs.attrs["true_params"].skill_id.astype(str)).set_index("skill")
     fitted_table = fitted_table.join(truth[["prior", "learn", "guess", "slip"]].add_prefix("true_"))
 print(fitted_table.round(3))
-bkt_pred = bkt.predict(data=test, defaults=BKT_COLUMNS)
+bkt_pred = bkt.predict(data=test).sort_values("order")  # predict() reuses the column mapping given to fit()
 test["p_bkt"] = bkt_pred["correct_predictions"].to_numpy()
 
 # %% [markdown]
