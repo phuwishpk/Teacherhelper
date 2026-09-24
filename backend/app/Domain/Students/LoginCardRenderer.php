@@ -2,7 +2,9 @@
 
 namespace App\Domain\Students;
 
+use Mpdf\HTMLParserMode;
 use Mpdf\Mpdf;
+use Mpdf\Output\Destination;
 
 /**
  * Renders student QR login cards (DESIGN §9.2) as an A4 PDF with mPDF:
@@ -37,10 +39,10 @@ class LoginCardRenderer
         $mpdf->autoScriptToLang = true;
         $mpdf->autoLangToFont = true;
 
-        $mpdf->WriteHTML(self::css(), \Mpdf\HTMLParserMode::HEADER_CSS);
-        $mpdf->WriteHTML($this->html($schoolName, $cards), \Mpdf\HTMLParserMode::HTML_BODY);
+        $mpdf->WriteHTML(self::css(), HTMLParserMode::HEADER_CSS);
+        $mpdf->WriteHTML($this->html($schoolName, $cards), HTMLParserMode::HTML_BODY);
 
-        return $mpdf->Output('', \Mpdf\Output\Destination::STRING_RETURN);
+        return $mpdf->Output('', Destination::STRING_RETURN);
     }
 
     /** mPDF caches font data here; vendor/ is read-only on the Plesk deploy. */

@@ -1,0 +1,132 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\LoginCardPrintService;
+use App\Domain\Students\LoginCardRenderer;
+use App\Models\Classroom;
+use App\Models\LoginCardPrint;
+use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
+
+/**
+ * Renders one login_card_prints row to a PDF on the private disk.
+ *
+ * Order matters: the new QR tokens are generated in memory, the PDF is rendered
+ * and stored first, and only then are the credential rows rotated (and the
+ * students' sessions revoked) in one transaction. A failed render therefore
+ * changes nothing for the students, and the print is marked `failed`.
+ */
+class RenderLoginCardsJob implements ShouldQueue
+{
+    use Queueable;
+
+    /** One attempt: a retry would rotate the tokens a second time. */
+    public int $tries = 1;
+
+    public function __construct(public readonly int $printId)
+    {
+        $this->onQueue('pdf');
+    }
+
+    public function handle(LoginCardRenderer $renderer): void
+    {
+        $print = LoginCardPrint::query()->with(['school', 'classroom', 'student'])->find($this->printId);
+        if ($print === null || $print->status !== LoginCardPrint::STATUS_QUEUED) {
+            return;
+        }
+
+        $print->update(['status' => LoginCardPrint::STATUS_RENDERING, 'error' => null]);
+
+        try {
+            $rows = $this->rows($print);
+            if ($rows === []) {
+                throw new \RuntimeException('ห้องนี้ยังไม่มีนักเรียน');
+            }
+
+            /** @var array<int, array{student: User, qr_token: string}> $issued */
+            $issued = [];
+            $cards = [];
+            foreach ($rows as $row) {
+                $qrToken = CredentialIssuer::randomQrToken();
+                $issued[] = ['student' => $row['student'], 'qr_token' => $qrToken];
+                $cards[] = [
+                    'student_number' => $row['student_number'],
+                    'name' => $row['student']->name,
+                    'classroom_name' => $row['classroom_name'],
+                    'class_code' => $row['class_code'],
+                    'qr_payload' => CredentialIssuer::qrPayload($qrToken),
+                ];
+            }
+
+            $pdf = $renderer->render($print->school->name, $cards);
+            $path = LoginCardPrintService::filePath($print);
+            Storage::disk('local')->put($path, $pdf);
+
+            DB::transaction(function () use ($issued, $print, $path) {
+                foreach ($issued as $item) {
+                    $item['student']->credential()->updateOrCreate(
+                        ['student_id' => $item['student']->id],
+                        [
+                            'qr_token_hash' => CredentialIssuer::hashQrToken($item['qr_token']),
+                            'qr_issued_at' => now(),
+                        ],
+                    );
+                    $item['student']->tokens()->delete();
+                }
+
+                $print->update(['status' => LoginCardPrint::STATUS_READY, 'file_path' => $path]);
+            });
+        } catch (Throwable $e) {
+            $print->update([
+                'status' => LoginCardPrint::STATUS_FAILED,
+                'error' => mb_substr($e->getMessage(), 0, 255),
+            ]);
+
+            report($e);
+        }
+    }
+
+    /**
+     * @return array<int, array{student: User, student_number: int, classroom_name: string, class_code: string}>
+     */
+    private function rows(LoginCardPrint $print): array
+    {
+        if ($print->classroom_id !== null) {
+            $classroom = $print->classroom;
+
+            return $classroom->students()->get()
+                ->map(fn (User $student) => [
+                    'student' => $student,
+                    'student_number' => (int) $student->pivot->student_number,
+                    'classroom_name' => $classroom->name,
+                    'class_code' => $classroom->class_code,
+                ])
+                ->all();
+        }
+
+        $student = $print->student;
+        if ($student === null) {
+            return [];
+        }
+
+        // A student normally belongs to one classroom; the newest wins when re-enrolled.
+        /** @var Classroom|null $classroom */
+        $classroom = $student->classrooms()->orderByDesc('classrooms.academic_year')->orderByDesc('classrooms.id')->first();
+        if ($classroom === null) {
+            return [];
+        }
+
+        return [[
+            'student' => $student,
+            'student_number' => (int) $classroom->pivot->student_number,
+            'classroom_name' => $classroom->name,
+            'class_code' => $classroom->class_code,
+        ]];
+    }
+}

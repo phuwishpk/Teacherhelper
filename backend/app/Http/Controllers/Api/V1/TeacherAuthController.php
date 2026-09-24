@@ -25,9 +25,9 @@ class TeacherAuthController extends Controller
     /**
      * POST /api/v1/auth/teacher/register -> 201 {user}
      *
-     * M0 stubs (KICKOFF Day 2 step 5):
-     *  (a) school_code is checked only against schools.teacher_join_code of the seeded school(s);
-     *  (b) the account becomes `active` immediately, no admin approval yet.
+     * school_code must match schools.teacher_join_code. The account is created
+     * `pending` (DESIGN §9.1) and can log in only after an admin approves it in
+     * Filament (UserResource "approve"), which sets status=active + approved_by.
      */
     public function register(TeacherRegisterRequest $request): JsonResponse
     {
@@ -49,7 +49,7 @@ class TeacherAuthController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => $data['password'],
-            'status' => User::STATUS_ACTIVE, // TODO(phase-2): set status=pending and approve via Filament
+            'status' => User::STATUS_PENDING,
         ]);
 
         return response()->json([
@@ -91,7 +91,7 @@ class TeacherAuthController extends Controller
         $token = $user->createToken(
             $data['device_name'] ?? 'app',
             ['teacher'],
-            now()->addDays(self::TOKEN_TTL_DAYS),
+            now()->addDays((int) config('eduvision.token_ttl_days.teacher', self::TOKEN_TTL_DAYS)),
         );
 
         return response()->json([

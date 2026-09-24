@@ -4,8 +4,8 @@ namespace App\Domain\Students;
 
 use App\Models\StudentCredential;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * Issues and rotates student credentials (DESIGN §7.4, §8.1).

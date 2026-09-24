@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -10,6 +11,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -22,6 +25,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Named limiter defined in AppServiceProvider; auth routes add a stricter one.
         $middleware->throttleApi();
+
+        // Sanctum token abilities (DESIGN §7.4: `teacher` vs `student`) and the
+        // account-status check that runs after authentication on every API route.
+        $middleware->alias([
+            'abilities' => CheckAbilities::class,
+            'ability' => CheckForAnyAbility::class,
+            'active' => EnsureUserIsActive::class,
+        ]);
 
         // There is no `login` route: the only web login is Filament's. API guests get
         // no redirect at all (null), so the AuthenticationException below renders the
