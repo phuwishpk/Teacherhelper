@@ -1427,6 +1427,7 @@ CNN ทำหน้าที่**ผู้อ่านคนที่สอง**
   - คิวเรียงตาม `review_priority` แบ่งเป็นแท็บ ต้องตรวจ, ควรดู และมั่นใจ
   - แต่ละข้อแสดง ภาพ crop, สิ่งที่ถอดได้, **เหตุผลของคะแนน** (กฎที่ทำงานจาก `fuzzy_trace`) และคำอธิบาย
   - ครูแก้ได้ทั้งคะแนน, ระดับความเข้าใจ, ประเภทข้อผิดพลาด และคำอธิบาย
+- **ถ้าไม่มี key ของ Gemini** (ทั้งของครูและของ server) ข้อจะเข้าคิวเป็น `manual` ด้วยเหตุผล `ai_key_missing` หน้าตรวจทานต้องแสดงแบนเนอร์ "ยังไม่ได้ใส่ Gemini API key" พร้อมปุ่มไปหน้าตั้งค่า และเมื่อใส่ key แล้วให้กด "ตรวจข้อที่ค้างใหม่" (requeue ข้อ `manual` ที่มีเหตุผลนี้)
 - **ถ้าคะแนนต่างจากที่ AI ให้ ต้องใส่เหตุผลทุกครั้ง** โดยเลือกจากรายการ เช่น AI อ่านผิด, เกณฑ์เข้มหรือหย่อนเกินไป หรือเหตุผลอื่น แล้วพิมพ์เพิ่มได้ ทุกครั้งบันทึกลง `score_events`
 - **อนุมัติแบบกลุ่ม** ใช้ได้เฉพาะข้อ `confident` ที่ไม่มีป้ายน่าสงสัยและไม่มีคำขอตรวจใหม่ค้าง บันทึกเป็น `bulk_approve`
 - **การขอตรวจใหม่**
@@ -1538,6 +1539,36 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
   - ทั้งหมดนี้รอยืนยันตอนทำจริง
 - **iOS** เขียน Swift ตาม interface ของ Pigeon ใน §6.2
 
+### 16.3 Phase 7: เชื่อม Google Classroom (ตัดสินใจ 25 ก.ย. 2569)
+
+ทำหลัง integration ของ Phase 1–6 ผ่านแล้ว หลักการ: **ครูเท่านั้นที่เชื่อมบัญชี Google** นักเรียนใช้ Classroom ตามปกติและใช้บัตร QR/PIN ในแอปเราเหมือนเดิม การประมวลผลภาพยังอยู่บนมือถือครู server ไม่แตะรูปดิบ
+
+**สามงานที่ทำได้**
+
+| งาน | ขั้นตอน | Google API ที่ใช้ |
+|---|---|---|
+| **สั่งงาน** | ครูกด "โพสต์ลง Classroom" ที่การบ้าน → server อัปโหลด PDF ใบงานขึ้น Drive ของครู → สร้าง `courseWork` ในคอร์สที่ผูกไว้ แนบไฟล์นั้น (ตั้ง `maxPoints` = คะแนนรวม) | Drive `files.create`, Classroom `courses.courseWork.create` |
+| **รับงาน** | นักเรียนทำบนกระดาษ ถ่ายรูป แนบใน Classroom → ครูกด "ดึงงานที่ส่ง" ในแอป → แอปดึงรายการ `studentSubmissions` ที่มีไฟล์แนบใหม่ ดาวน์โหลดรูปด้วย token ของครู → รัน pipeline สแกนบนมือถือเหมือนสแกนเอง (ArUco/QR/crop) → เข้าคิวอัปโหลดตามเดิมโดยระบุ `source = classroom` และ id ของ submission ถ้ารูปใช้ไม่ได้ (marker ไม่ครบ/เบลอ) แอปเสนอให้ครูกด "ตีกลับ" ซึ่งใส่ comment ขอถ่ายใหม่และ `return` งานใน Classroom | Classroom `studentSubmissions.list/return`, Drive `files.get?alt=media` |
+| **ส่งคะแนนกลับ** | เมื่อครูกดเผยแพร่ → server ตั้ง `assignedGrade` ของ submission นั้น, `return` งาน และเพิ่ม comment ที่มีข้อความสรุปจุดผิด (ไม่มีคะแนนรายข้อ) | Classroom `studentSubmissions.patch` (`assignedGrade`), `return` |
+
+**การผูกข้อมูล**
+
+- `classroom_google_links (classroom_id PK, course_id, course_name, owner_user_id, linked_at)` ห้องเรียนหนึ่งผูกได้หนึ่งคอร์ส
+- `assignment_google_links (assignment_id PK, course_work_id, drive_file_id, posted_at)`
+- `classroom_students` เพิ่ม `google_user_id NULL`, `google_email NULL` การจับคู่นักเรียน: ดึง roster ของคอร์สมาแล้วให้ครูจับคู่กับเลขที่ในแอป (เสนอคู่อัตโนมัติจากชื่อ ครูยืนยัน) นักเรียนที่ไม่มีคู่จะดึงงานไม่ได้และแอปเตือน
+- `google_accounts (user_id PK, google_sub, email, encrypted_refresh_token, scopes, connected_at)` เก็บเฉพาะ refresh token ของครู เข้ารหัสด้วย Laravel encrypter ส่วน access token ขอใหม่ทุกครั้งบน server
+- `scans.source ENUM('camera','classroom')` และ `scans.google_submission_id NULL`
+
+**การยืนยันตัวตน**
+
+- แอปใช้ `google_sign_in` ขอ **server auth code** แล้วส่งให้ `POST /google/connect {server_auth_code}` server แลกเป็น refresh token (client secret อยู่บน server เท่านั้น)
+- scope: `classroom.courses.readonly`, `classroom.rosters.readonly`, `classroom.coursework.students`, `classroom.student-submissions.students.readonly`, `drive.file` (อัปโหลด PDF), และ **`drive.readonly`** สำหรับดาวน์โหลดรูปที่นักเรียนแนบ (เป็น restricted scope: ใช้ได้ทันทีเมื่อ OAuth app อยู่ในโหมด Testing กับ test user ≤ 100 คน ถ้าจะเปิดสาธารณะต้องผ่าน Google verification)
+- ข้อจำกัดของ Classroom API: แอปแก้ไข submission ได้เฉพาะ `courseWork` ที่แอปสร้างเอง จึงต้อง "โพสต์ลง Classroom" ผ่านแอปเสมอ ไม่รองรับงานที่ครูสร้างในเว็บ Classroom เอง
+
+**API เพิ่ม (§9.10)**: `POST /google/connect`, `DELETE /google/disconnect`, `GET /google/courses`, `POST /classrooms/{id}/google-link {course_id}`, `GET /classrooms/{id}/google-roster` (คู่ที่เสนอ), `PUT /classrooms/{id}/google-roster` (คู่ที่ครูยืนยัน), `POST /assignments/{id}/google-post`, `GET /assignments/{id}/google-submissions` (รายการไฟล์แนบใหม่พร้อม URL ดาวน์โหลดชั่วคราวที่ server ออกให้จาก token ของครู), `POST /google-submissions/{id}/return {comment}`, และ hook ตอนเผยแพร่
+
+**สิ่งที่ผู้ใช้ต้องเตรียม**: Google Cloud project (ใช้ project เดียวกับ Firebase ได้) → เปิด Classroom API และ Drive API → OAuth consent screen แบบ External โหมด Testing ใส่อีเมลครูที่จะทดสอบเป็น test user → สร้าง OAuth client 2 ตัว (Android: package `com.eduvision.app` + SHA-1 ของ keystore; Web: สำหรับ server แลก code) → ใส่ `GOOGLE_OAUTH_CLIENT_ID/SECRET` ใน `backend/.env`
+
 ### 16.2 ข้อที่ยังเปิดอยู่
 
 | ข้อ | ต้องทำอะไร |
@@ -1584,3 +1615,4 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | 25 | สถาปัตยกรรมแอป | Riverpod + go_router + repository | override ใน test ง่าย ช่วยให้ถึง coverage 70% |
 | 26 | Gemini key ของครู | ครูใส่ key ตัวเองในแอปได้ (เก็บเข้ารหัสบน server) key กลางเป็นแค่ fallback | ครูคุมค่าใช้จ่ายและข้อมูลของตัวเอง โรงเรียนใช้ระบบได้โดยไม่ต้องมี key กลาง |
 | 27 | ลำดับความสำคัญ | ทำระบบตรวจด้วย Gemini ให้ใช้งานได้ก่อน CNN เทรนด้วยข้อมูลสังเคราะห์ให้ pipeline ครบ แล้วค่อยเทรนซ้ำด้วย dataset ของทีม | dataset จริงยังไม่มา แต่ระบบต้องใช้ได้ก่อน |
+| 28 | Google Classroom | เป็น Phase 7 หลัง integration ผ่าน ครูเท่านั้นที่เชื่อม Google สั่งงาน/รับงาน/ส่งคะแนนกลับผ่าน Classroom โดยรูปของนักเรียนประมวลผลบนมือถือครู (§16.3) | นักเรียนไม่ต้องมีบัญชี Google และ server บน shared hosting รัน OpenCV ไม่ได้ |
