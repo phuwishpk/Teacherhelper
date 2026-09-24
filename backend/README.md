@@ -99,7 +99,7 @@ tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest
 
 ทำตาม `docs/KICKOFF.md` B7 หลัง `tools/hosting-probe.php` ผ่าน สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work` และ migration ผ่าน Scheduled Task "Run now" `artisan migrate --force`
 
-โฟลเดอร์ `public/css/filament` และ `public/js/filament` ถูก commit ไว้จงใจ เพื่อให้ไปถึง Plesk ผ่าน Git โดยไม่ต้องรัน `filament:assets` บน server
+โฟลเดอร์ `public/css/filament`, `public/js/filament` และ `public/fonts/filament` ถูก commit ไว้จงใจ (ลบบรรทัด ignore ของ skeleton ออกจาก `.gitignore` แล้ว) เพื่อให้ไปถึง Plesk ผ่าน Git โดยไม่ต้องพึ่ง script `filament:upgrade` หลัง `composer install` หรือรัน `filament:assets` บน server เมื่ออัปเกรด Filament ให้รัน `php artisan filament:assets` แล้ว commit ไฟล์ที่เปลี่ยนด้วย
 
 ## ก่อน commit
 
