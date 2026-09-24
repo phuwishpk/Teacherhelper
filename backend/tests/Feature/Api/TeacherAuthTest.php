@@ -221,6 +221,17 @@ class TeacherAuthTest extends TestCase
         }
 
         $this->postJson('/api/v1/auth/teacher/login', ['email' => 'x@example.com', 'password' => 'bad-password'])
-            ->assertStatus(429);
+            ->assertStatus(429)
+            ->assertHeader('Retry-After')
+            ->assertJsonStructure(['message', 'errors', 'code'])
+            ->assertJsonPath('code', 'too_many_requests')
+            ->assertJsonMissingPath('exception');
+    }
+
+    public function test_me_without_a_token_and_without_an_accept_header_is_still_a_json_401(): void
+    {
+        $this->get('/api/v1/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 }
