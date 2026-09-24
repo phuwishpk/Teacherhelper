@@ -47,11 +47,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             password: _password.text,
           );
       if (!mounted) return;
-      // TODO(phase2): account is `pending` until a school admin approves it
-      // (DESIGN §7.4); change this message once the backend stops auto-activating.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('สมัครสำเร็จ กรุณาเข้าสู่ระบบ')),
+      // New accounts are `pending` until a school admin approves them
+      // (DESIGN §7.4), so login only works after that.
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('สมัครสำเร็จ'),
+          content: const Text(
+            'บัญชีของคุณอยู่ระหว่างรอผู้ดูแลโรงเรียนอนุมัติ '
+            'เมื่ออนุมัติแล้วจึงจะเข้าสู่ระบบได้',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('รับทราบ'),
+            ),
+          ],
+        ),
       );
+      if (!mounted) return;
       context.go(AppRoutes.login);
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e));

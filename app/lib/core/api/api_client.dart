@@ -24,25 +24,36 @@ Dio createDio({
     _AuthInterceptor(
       tokenStorage: tokenStorage,
       onUnauthorized: onUnauthorized,
+      apiOrigin: Uri.parse(baseUrl).origin,
     ),
   );
   return dio;
 }
 
 class _AuthInterceptor extends Interceptor {
-  _AuthInterceptor({required this.tokenStorage, required this.onUnauthorized});
+  _AuthInterceptor({
+    required this.tokenStorage,
+    required this.onUnauthorized,
+    required this.apiOrigin,
+  });
 
   final TokenStorage tokenStorage;
   final OnUnauthorized onUnauthorized;
+
+  /// Only requests to our own server carry the bearer token, so an absolute
+  /// download URL pointing elsewhere can never leak it.
+  final String apiOrigin;
 
   @override
   Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await tokenStorage.read();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
+    if (options.uri.origin == apiOrigin) {
+      final token = await tokenStorage.read();
+      if (token != null) {
+        options.headers['Authorization'] = 'Bearer $token';
+      }
     }
     handler.next(options);
   }
@@ -57,7 +68,7 @@ class _AuthInterceptor extends Interceptor {
 }
 
 /// Human-readable (Thai) message for any error thrown by the API layer.
-/// Laravel errors look like {"message": "...", "errors": {...}}.
+/// Laravel errors look like {"message": "...", "errors": {...}, "code": "..."}.
 String apiErrorMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
@@ -69,8 +80,23 @@ String apiErrorMessage(Object error) {
     }
     return 'เซิร์ฟเวอร์ตอบกลับผิดพลาด (${error.response?.statusCode})';
   }
+  if (error is FormatException) {
+    return 'ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง (${error.message})';
+  }
   return 'เกิดข้อผิดพลาดที่ไม่คาดคิด';
 }
+
+/// The machine-readable `code` from an error body (DESIGN §9), if any.
+String? apiErrorCode(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['code'] is String) return data['code'] as String;
+  }
+  return null;
+}
+
+int? apiStatusCode(Object error) =>
+    error is DioException ? error.response?.statusCode : null;
 
 /// Laravel API Resources may wrap payloads in {"data": ...}; accept both.
 Map<String, dynamic> unwrapJson(Object? body) {
@@ -80,6 +106,60 @@ Map<String, dynamic> unwrapJson(Object? body) {
     return body;
   }
   throw const FormatException('Expected a JSON object from the API');
+}
+
+/// A list payload, either bare `[...]` or wrapped as `{"data": [...]}`.
+List<Map<String, dynamic>> unwrapList(Object? body) {
+  final list = switch (body) {
+    List<dynamic> l => l,
+    Map<String, dynamic> m when m['data'] is List => m['data'] as List,
+    _ => throw const FormatException('Expected a JSON list from the API'),
+  };
+  return list.cast<Map<String, dynamic>>();
+}
+
+/// Cursor for the next page of a cursor-paginated list, if there is one.
+/// Laravel puts it at `next_cursor` or `meta.next_cursor`.
+String? nextCursorOf(Object? body) {
+  if (body is! Map<String, dynamic>) return null;
+  final direct = body['next_cursor'];
+  if (direct is String && direct.isNotEmpty) return direct;
+  final meta = body['meta'];
+  if (meta is Map && meta['next_cursor'] is String) {
+    final c = meta['next_cursor'] as String;
+    return c.isEmpty ? null : c;
+  }
+  return null;
+}
+
+/// Follows cursor pagination until the last page and concatenates the rows.
+Future<List<Map<String, dynamic>>> fetchAllPages(
+  Dio dio,
+  String path, {
+  Map<String, dynamic>? query,
+  int maxPages = 50,
+}) async {
+  final rows = <Map<String, dynamic>>[];
+  String? cursor;
+  for (var page = 0; page < maxPages; page++) {
+    final res = await dio.get<Object?>(
+      path,
+      queryParameters: {...?query, 'cursor': ?cursor},
+    );
+    rows.addAll(unwrapList(res.data));
+    cursor = nextCursorOf(res.data);
+    if (cursor == null) break;
+  }
+  return rows;
+}
+
+/// Turns a download link from the API into something this Dio can fetch:
+/// absolute URLs pass through, `/api/v1/...` loses the prefix (the base URL
+/// already has it) and bare paths are used as-is.
+String resolveApiPath(String url) {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith(apiPrefix)) return url.substring(apiPrefix.length);
+  return url;
 }
 
 final tokenStorageProvider = Provider<TokenStorage>(

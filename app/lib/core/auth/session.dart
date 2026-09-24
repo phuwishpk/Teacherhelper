@@ -23,6 +23,9 @@ class SignedIn extends SessionState {
   final User user;
 }
 
+/// Prefix of the payload printed on a student login card (DESIGN §5.4).
+const studentCardQrPrefix = 'EVL1.';
+
 class SessionNotifier extends Notifier<SessionState> {
   @override
   SessionState build() => const SessionRestoring();
@@ -38,7 +41,7 @@ class SessionNotifier extends Notifier<SessionState> {
       state = SignedIn(await ref.read(authRepositoryProvider).me());
     } on DioException {
       // 401 already cleared the token via the interceptor; network errors
-      // also fall back to the login screen in M0.
+      // also fall back to the login screen.
       state = const SignedOut();
     }
   }
@@ -46,9 +49,37 @@ class SessionNotifier extends Notifier<SessionState> {
   /// Throws DioException on failure; the screen shows apiErrorMessage().
   Future<void> signIn({required String email, required String password}) async {
     final repo = ref.read(authRepositoryProvider);
-    final token = await repo.login(email: email, password: password);
+    await _finishSignIn(repo.login(email: email, password: password));
+  }
+
+  /// [qrPayload] is the raw QR content (`EVL1.{token}`) or the bare token.
+  Future<void> signInStudentQr(String qrPayload) async {
+    final token = qrPayload.startsWith(studentCardQrPrefix)
+        ? qrPayload.substring(studentCardQrPrefix.length)
+        : qrPayload;
+    final repo = ref.read(authRepositoryProvider);
+    await _finishSignIn(repo.loginStudentQr(token.trim()));
+  }
+
+  Future<void> signInStudentPin({
+    required String classCode,
+    required int studentNumber,
+    required String pin,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    await _finishSignIn(
+      repo.loginStudentPin(
+        classCode: classCode,
+        studentNumber: studentNumber,
+        pin: pin,
+      ),
+    );
+  }
+
+  Future<void> _finishSignIn(Future<String> tokenFuture) async {
+    final token = await tokenFuture;
     await ref.read(tokenStorageProvider).write(token);
-    state = SignedIn(await repo.me());
+    state = SignedIn(await ref.read(authRepositoryProvider).me());
   }
 
   Future<void> signOut() async {
@@ -69,3 +100,11 @@ class SessionNotifier extends Notifier<SessionState> {
 final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(
   SessionNotifier.new,
 );
+
+/// The signed-in user, or null while restoring / signed out.
+final currentUserProvider = Provider<User?>((ref) {
+  return switch (ref.watch(sessionProvider)) {
+    SignedIn(:final user) => user,
+    _ => null,
+  };
+});

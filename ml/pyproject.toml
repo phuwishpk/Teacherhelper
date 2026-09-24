@@ -23,7 +23,7 @@ train = [
 notebook = [
     "pyBKT>=1.4.3",
     "pandas>=2.2",
-    "scikit-learn>=1.5",
+    "scikit-learn>=1.5,<1.8",  # pyBKT 1.4.3 probes every sklearn metric with lists; 1.8+ _log_loss raises AttributeError
     "notebook>=7",
     "nbclient>=0.10",
 ]
