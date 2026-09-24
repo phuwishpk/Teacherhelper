@@ -3,8 +3,10 @@
 Skipped when TensorFlow is not installed (plain ``uv sync``); ``uv sync --extra train`` enables it.
 """
 
+import csv
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +15,7 @@ import pytest
 tf = pytest.importorskip("tensorflow")
 
 from train import export  # noqa: E402
-from train.charset import BLANK, NUM_CLASSES, pad_labels  # noqa: E402
+from train.charset import BLANK, CONFIDENCE_THRESHOLD, NUM_CLASSES, pad_labels  # noqa: E402
 from train.evaluate import TFLiteRunner, evaluate_predictions  # noqa: E402
 from train.model import TIMESTEPS, build_crnn, compile_model, ctc_loss  # noqa: E402
 
@@ -70,17 +72,18 @@ def test_evaluate_predictions_reports_all_metrics():
     probs = np.full((3, TIMESTEPS, NUM_CLASSES), 0.01, np.float32)
     probs[:, :, BLANK] = 0.9
     probs[0, 3, :] = 0.01
-    probs[0, 3, 4] = 0.9  # "4" with high confidence
+    probs[0, 3, 4] = 0.9  # "4" emitted at 0.9 -> answered, correct
     probs[1, 5, :] = 0.01
-    probs[1, 5, 7] = 0.5  # "7" but a low-confidence timestep -> still answered (mean ~0.89)
-    probs[2, :, :] = 1 / NUM_CLASSES  # uniform -> abstain
+    probs[1, 5, 7] = 0.5  # "7" emitted at 0.5 -> abstain although the other 31 timesteps are confident blanks
+    probs[2, :, :] = 1 / NUM_CLASSES  # uniform -> argmax 0 everywhere -> "0" at 1/14 -> abstain
     result = evaluate_predictions(["4", "8", "9"], probs, threshold=0.8)
     assert result["n"] == 3
-    assert result["abstain_rate"] == pytest.approx(1 / 3)
+    assert result["abstain_rate"] == pytest.approx(2 / 3)
     assert result["exact_match"] == pytest.approx(1 / 3)
-    assert result["accuracy_when_answered"] == pytest.approx(1 / 2)
-    assert result["cer"] == pytest.approx(2 / 3)
-    assert result["worst_confident_errors"][0]["label"] == "8"
+    assert result["accuracy_when_answered"] == pytest.approx(1.0)
+    assert result["cer_when_answered"] == 0.0
+    assert result["cer"] == pytest.approx(2 / 3)  # abstentions still count as errors here ("8"->"7", "9"->"0")
+    assert result["worst_confident_errors"][0] == {"label": "8", "read": "7", "confidence": 0.5, "distance": 1}
 
 
 def test_exported_models_have_matching_sha256_and_contract():
@@ -95,6 +98,12 @@ def test_exported_models_have_matching_sha256_and_contract():
         assert record["input"]["shape"] == [1, 32, 128, 1]
         for key in ("cer", "exact_match", "abstain_rate", "accuracy_when_answered"):
             assert key in record["metrics"]
+        # The committed decode contract must be the one train.charset implements today (a definition change
+        # without a re-export would silently desynchronise the Dart decoder from metrics.json).
+        assert record["decode"] == export.contract(record["decode"]["abstain_below"])["decode"]
+        assert 0.0 < record["decode"]["abstain_below"] <= 1.0
+        assert record["metrics"]["threshold"] == record["decode"]["abstain_below"]
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["created_at"])
         sha_file = metrics_path.with_name("model.tflite.sha256").read_text().split()[0]
         assert sha_file == record["sha256"]
         tflite = metrics_path.with_name("model.tflite")
@@ -104,3 +113,57 @@ def test_exported_models_have_matching_sha256_and_contract():
             runner = TFLiteRunner(tflite)
             out = runner.predict(np.zeros((1, 32, 128, 1), np.float32))
             assert out.shape == (1, 32, 14)
+
+
+def _write_tiny_run(tmp_path: Path, model) -> tuple[Path, Path]:
+    """A 3-writer dataset (32x128 PNGs), a split.json and a run directory with best.keras + summary.json."""
+    import cv2
+
+    data_dir = tmp_path / "data"
+    (data_dir / "images").mkdir(parents=True)
+    rows = []
+    rng = np.random.default_rng(3)
+    for writer in ("w1", "w2", "w3"):
+        for i, label in enumerate(("12", "3.5")):
+            rel = f"images/{writer}_{i}.png"
+            image = np.full((32, 128), 255, np.uint8)
+            image[8:24, 10 + 20 * i : 40 + 20 * i] = rng.integers(0, 80, (16, 30), dtype=np.uint8)
+            assert cv2.imwrite(str(data_dir / rel), image)
+            rows.append((rel, label, writer))
+    with (data_dir / "labels.csv").open("w", newline="", encoding="utf-8") as fh:
+        writer_ = csv.writer(fh)
+        writer_.writerow(["path", "label", "writer_key"])
+        writer_.writerows(rows)
+    run_dir = tmp_path / "runs" / "tiny"
+    run_dir.mkdir(parents=True)
+    model.save(run_dir / "best.keras")
+    (run_dir / "split.json").write_text(
+        json.dumps({"seed": 0, "train_writers": ["w1"], "val_writers": ["w2"], "test_writers": ["w3"]}), encoding="utf-8"
+    )
+    (run_dir / "summary.json").write_text(
+        json.dumps({"run": "tiny", "rnn": "lstm", "epochs_run": 1, "finished_at": "2026-09-24T22:30:46+07:00"}),
+        encoding="utf-8",
+    )
+    return run_dir, data_dir / "labels.csv"
+
+
+def test_export_is_reproducible_and_created_at_comes_from_the_run(tmp_path, tiny_model):
+    """Re-exporting the same run must leave metrics.json and the sha256 file byte-identical (no wall-clock fields)."""
+    run_dir, labels_csv = _write_tiny_run(tmp_path, tiny_model)
+    first = export.export(run_dir, "0.0.1", [labels_csv], models_dir=tmp_path / "models_a", name="tiny")
+    second = export.export(run_dir, "0.0.1", [labels_csv], models_dir=tmp_path / "models_b", name="tiny")
+    assert (first / "metrics.json").read_bytes() == (second / "metrics.json").read_bytes()
+    assert (first / "model.tflite.sha256").read_bytes() == (second / "model.tflite.sha256").read_bytes()
+    record = json.loads((first / "metrics.json").read_text(encoding="utf-8"))
+    assert record["created_at"] == "2026-09-24T15:30:46Z"  # summary.json finished_at, normalised to UTC
+    assert record["decode"]["abstain_below"] == CONFIDENCE_THRESHOLD
+    assert record["metrics"]["n_test"] == 2 and record["val_metrics"]["n"] == 2
+    assert record["training"]["run"] == "tiny"
+    # --created-at overrides, --threshold flows into decode.abstain_below (the value the app must read)
+    third = export.export(
+        run_dir, "0.0.2", [labels_csv], models_dir=tmp_path / "models_c", name="tiny", threshold=0.9, created_at="2026-01-02T03:04:05Z"
+    )
+    record3 = json.loads((third / "metrics.json").read_text(encoding="utf-8"))
+    assert record3["created_at"] == "2026-01-02T03:04:05Z"
+    assert record3["decode"]["abstain_below"] == 0.9 == record3["metrics"]["threshold"]
+    assert record3["sha256"] == record["sha256"]  # the model bytes do not depend on the threshold

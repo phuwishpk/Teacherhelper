@@ -4,7 +4,7 @@
   "file": "model.tflite",
   "sha256": "b8c14f0bb50160a90cbde420dec791c3bc182c200e3eeb7487feec7691271ea0",
   "size_bytes": 1290896,
-  "created_at": "2026-09-24T17:46:06Z",
+  "created_at": "2026-09-24T15:30:46Z",
   "tensorflow": "2.21.0",
   "keras": "3.15.1",
   "quantization": "float16",
@@ -40,15 +40,17 @@
   "decode": {
     "method": "ctc_greedy",
     "steps": "argmax per timestep, collapse repeats, drop blank",
-    "confidence": "mean over timesteps of the max probability",
-    "abstain_below": 0.8
+    "confidence": "emitting_mean_max_prob",
+    "confidence_description": "mean, over the timesteps at which the greedy decoder emits a character (argmax != blank and argmax != previous timestep's argmax), of the max probability at that timestep; 0.0 when no character is emitted",
+    "abstain_below": 0.8,
+    "reference": "ml/train/charset.py::ctc_greedy_decode"
   },
   "metrics": {
     "cer": 0.05868249800205503,
     "exact_match": 0.8183333333333334,
-    "abstain_rate": 0.0,
-    "accuracy_when_answered": 0.8183333333333334,
-    "cer_when_answered": 0.05868249800205503,
+    "abstain_rate": 0.033333333333333326,
+    "accuracy_when_answered": 0.8288793103448275,
+    "cer_when_answered": 0.05397494438590329,
     "threshold": 0.8,
     "n_test": 2400,
     "test_writers": 6,
@@ -82,78 +84,78 @@
   "val_metrics": {
     "cer": 0.04282144479781917,
     "exact_match": 0.8641666666666666,
-    "abstain_rate": 0.0,
-    "accuracy_when_answered": 0.8641666666666666,
+    "abstain_rate": 0.03500000000000003,
+    "accuracy_when_answered": 0.8730569948186528,
     "n": 2400,
     "threshold_sweep": [
       {
         "threshold": 0.5,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2399,
+        "abstain_rate": 0.0004166666666666208,
+        "accuracy_when_answered": 0.8645268862025844
       },
       {
         "threshold": 0.6,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2390,
+        "abstain_rate": 0.004166666666666652,
+        "accuracy_when_answered": 0.8644351464435146
       },
       {
         "threshold": 0.7,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2377,
+        "abstain_rate": 0.009583333333333388,
+        "accuracy_when_answered": 0.8653765250315524
       },
       {
         "threshold": 0.8,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2316,
+        "abstain_rate": 0.03500000000000003,
+        "accuracy_when_answered": 0.8730569948186528
       },
       {
         "threshold": 0.85,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2225,
+        "abstain_rate": 0.07291666666666663,
+        "accuracy_when_answered": 0.8817977528089888
       },
       {
         "threshold": 0.9,
-        "n_answered": 2400,
-        "abstain_rate": 0.0,
-        "accuracy_when_answered": 0.8641666666666666
+        "n_answered": 2044,
+        "abstain_rate": 0.14833333333333332,
+        "accuracy_when_answered": 0.9001956947162426
       },
       {
         "threshold": 0.95,
-        "n_answered": 2344,
-        "abstain_rate": 0.023333333333333317,
-        "accuracy_when_answered": 0.8754266211604096
+        "n_answered": 1693,
+        "abstain_rate": 0.2945833333333333,
+        "accuracy_when_answered": 0.928529238038984
       },
       {
         "threshold": 0.97,
-        "n_answered": 2026,
-        "abstain_rate": 0.15583333333333338,
-        "accuracy_when_answered": 0.8958538993089832
+        "n_answered": 1472,
+        "abstain_rate": 0.3866666666666667,
+        "accuracy_when_answered": 0.9422554347826086
       },
       {
         "threshold": 0.98,
-        "n_answered": 1527,
-        "abstain_rate": 0.36375,
-        "accuracy_when_answered": 0.9187950229207597
+        "n_answered": 1322,
+        "abstain_rate": 0.4491666666666667,
+        "accuracy_when_answered": 0.9515885022692889
       },
       {
         "threshold": 0.99,
-        "n_answered": 769,
-        "abstain_rate": 0.6795833333333333,
-        "accuracy_when_answered": 0.951885565669701
+        "n_answered": 1127,
+        "abstain_rate": 0.5304166666666666,
+        "accuracy_when_answered": 0.9591836734693877
       },
       {
         "threshold": 0.995,
-        "n_answered": 401,
-        "abstain_rate": 0.8329166666666666,
-        "accuracy_when_answered": 0.9625935162094763
+        "n_answered": 945,
+        "abstain_rate": 0.60625,
+        "accuracy_when_answered": 0.9714285714285714
       }
     ],
-    "recommended_threshold": 0.99
+    "recommended_threshold": 0.98
   },
   "training": {
     "run": "smoke",
@@ -174,63 +176,63 @@
   },
   "worst_confident_errors": [
     {
-      "label": "8",
-      "read": "1",
+      "label": "383.4",
+      "read": "3834",
+      "confidence": 0.9999,
+      "distance": 1
+    },
+    {
+      "label": "3.457",
+      "read": "3457",
+      "confidence": 0.9998,
+      "distance": 1
+    },
+    {
+      "label": "67",
+      "read": "6",
+      "confidence": 0.9998,
+      "distance": 1
+    },
+    {
+      "label": "37.638",
+      "read": "37638",
+      "confidence": 0.9998,
+      "distance": 1
+    },
+    {
+      "label": "33.0",
+      "read": "330",
+      "confidence": 0.9998,
+      "distance": 1
+    },
+    {
+      "label": "-94.1",
+      "read": "-941",
+      "confidence": 0.9998,
+      "distance": 1
+    },
+    {
+      "label": "260.2",
+      "read": "20.2",
       "confidence": 0.9997,
       "distance": 1
     },
     {
-      "label": "48",
-      "read": "98",
-      "confidence": 0.9992,
-      "distance": 1
-    },
-    {
-      "label": "948",
-      "read": "998",
-      "confidence": 0.9989,
-      "distance": 1
-    },
-    {
-      "label": "-0.49",
-      "read": "-0.99",
-      "confidence": 0.9989,
-      "distance": 1
+      "label": "-945.0",
+      "read": "9450",
+      "confidence": 0.9997,
+      "distance": 2
     },
     {
       "label": "3.5",
       "read": "35",
-      "confidence": 0.9989,
+      "confidence": 0.9997,
       "distance": 1
     },
     {
-      "label": "4",
-      "read": "46",
-      "confidence": 0.9988,
-      "distance": 1
-    },
-    {
-      "label": "74.5",
-      "read": "745",
-      "confidence": 0.9984,
-      "distance": 1
-    },
-    {
-      "label": "5375",
-      "read": "5373",
-      "confidence": 0.9981,
-      "distance": 1
-    },
-    {
-      "label": "37",
-      "read": "57",
-      "confidence": 0.9981,
-      "distance": 1
-    },
-    {
-      "label": "0.37",
-      "read": "0.39",
-      "confidence": 0.9977,
+      "label": "75.113",
+      "read": "75113",
+      "confidence": 0.9996,
       "distance": 1
     }
   ]

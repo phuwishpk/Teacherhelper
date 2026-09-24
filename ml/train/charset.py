@@ -2,9 +2,20 @@
 
 The Dart decoder in the app must reproduce :func:`ctc_greedy_decode` exactly:
 same class order (``CHARSET`` then the blank as the last class), collapse
-repeated classes, drop blanks, and confidence = mean over all timesteps of the
-highest probability at that timestep. A result below ``CONFIDENCE_THRESHOLD``
-is *abstain* (the CNN does not answer).
+repeated classes, drop blanks, and confidence = mean, over the timesteps that
+*emit* a character (argmax != blank and != the previous timestep's argmax), of
+the highest probability at that timestep (``CONFIDENCE_DEFINITION``). When no
+character is emitted the confidence is 0.0. A result below
+``CONFIDENCE_THRESHOLD`` is *abstain* (the CNN does not answer).
+
+Why the emitting timesteps only: ~26 of the 32 timesteps of a typical read are
+blanks predicted at ~1.0, so a mean over all timesteps never drops below 0.8
+and the DESIGN 12.2 abstain rule becomes a no-op (digit_crnn 0.1.0: 0 %
+abstain at every threshold up to 0.9, worst errors at 0.998+). The mean over
+the emitting timesteps is the DESIGN wording ("mean of the max probability per
+timestep along the decoded path") applied to the characters that were actually
+decoded. The app reads the definition and the threshold from ``metrics.json``
+(``decode.confidence`` / ``decode.abstain_below``) rather than hard-coding them.
 """
 
 from __future__ import annotations
@@ -27,7 +38,16 @@ MAX_LABEL_LEN = 12
 """Longest label accepted for training; CTC needs timesteps >= length + repeats (32 timesteps)."""
 
 CONFIDENCE_THRESHOLD = 0.8
-"""Below this mean max-probability the reader abstains (DESIGN 12.2, tune on validation)."""
+"""Below this confidence the reader abstains (DESIGN 12.2 default; tune on validation, ship via metrics.json)."""
+
+CONFIDENCE_DEFINITION = "emitting_mean_max_prob"
+"""Identifier of the confidence formula, exported as ``decode.confidence`` so the app can assert it mirrors the right one."""
+
+CONFIDENCE_DESCRIPTION = (
+    "mean, over the timesteps at which the greedy decoder emits a character "
+    "(argmax != blank and argmax != previous timestep's argmax), of the max probability at that timestep; "
+    "0.0 when no character is emitted"
+)
 
 
 def is_valid_label(label: str) -> bool:
@@ -58,25 +78,35 @@ def pad_labels(labels: Sequence[str], length: int = MAX_LABEL_LEN) -> np.ndarray
 class Decoded:
     text: str
     confidence: float
+    """``CONFIDENCE_DEFINITION``: mean of ``char_confidences``, 0.0 when ``text`` is empty."""
+    char_confidences: tuple[float, ...] = ()
+    """Max probability at the timestep that emitted each character of ``text`` (same length as ``text``)."""
 
     def answered(self, threshold: float = CONFIDENCE_THRESHOLD) -> bool:
         return self.confidence >= threshold
 
 
 def ctc_greedy_decode(probs: np.ndarray, blank: int = BLANK) -> Decoded:
-    """Greedy (best path) CTC decode of one ``(timesteps, classes)`` probability matrix."""
+    """Greedy (best path) CTC decode of one ``(timesteps, classes)`` probability matrix.
+
+    Mirror of the Dart decoder: argmax per timestep, collapse repeats, drop blanks;
+    confidence = mean of the max probability at the emitting timesteps (``CONFIDENCE_DESCRIPTION``).
+    """
     probs = np.asarray(probs, dtype=np.float32)
     if probs.ndim != 2:
         raise ValueError(f"expected (timesteps, classes), got shape {probs.shape}")
     best = probs.argmax(axis=-1)
-    confidence = float(probs.max(axis=-1).mean())
+    top = probs.max(axis=-1)
     chars: list[str] = []
+    char_confidences: list[float] = []
     previous = -1
-    for index in best.tolist():
+    for t, index in enumerate(best.tolist()):
         if index != previous and index != blank:
             chars.append(CHARSET[index])
+            char_confidences.append(float(top[t]))
         previous = index
-    return Decoded("".join(chars), confidence)
+    confidence = float(np.mean(char_confidences)) if char_confidences else 0.0
+    return Decoded("".join(chars), confidence, tuple(char_confidences))
 
 
 def ctc_greedy_decode_batch(probs: np.ndarray, blank: int = BLANK) -> list[Decoded]:
