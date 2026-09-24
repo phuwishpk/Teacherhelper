@@ -42,7 +42,7 @@ php artisan test                                   # ใช้ SQLite in-memory 
 
 ## API (M0)
 
-base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุกตัวมีรูปแบบ `{message, errors, code}`
+base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุกตัว (4xx ทุกชั้น รวมถึงกรณีที่ client ไม่ส่ง `Accept: application/json`) มีรูปแบบ `{message, errors, code}` โดย `code` ที่แอปต้องจัดการเองมาจาก `ApiException` (ตาราง endpoint ด้านล่าง) ส่วน error ที่ framework สร้างเองใช้ code กลาง: `validation_failed` (422), `unauthenticated` (401), `forbidden` (403), `not_found` (404), `method_not_allowed` (405), `too_many_requests` (429 พร้อม header `Retry-After`) และ `http_<status>` สำหรับสถานะอื่น (ดู `app/Exceptions/ApiErrorResponse.php`) มีเพียง 500 ที่ยังเป็น body มาตรฐานของ Laravel
 
 | Method | Path | Body / Header | ตอบ |
 |---|---|---|---|
@@ -81,7 +81,8 @@ command นี้ (1) dispatch `QueueHeartbeatJob` ลง table `jobs` แล้
 
 ```
 app/Console/Commands/QueueWorkCommand.php    eduvision:queue-work
-app/Exceptions/ApiException.php              error ที่มี code ให้แอปจัดการ
+app/Exceptions/ApiException.php              error ที่มี code ให้แอปจัดการ (ไม่ถูกเขียนลง log)
+app/Exceptions/ApiErrorResponse.php          รูปแบบ {message, errors, code} + code กลางของ error จาก framework
 app/Http/Controllers/Api/V1/                 HealthController, TeacherAuthController, MeController
 app/Http/Requests/Api/V1/                    validation ของแต่ละ endpoint
 app/Http/Resources/UserResource.php
@@ -92,7 +93,7 @@ config/eduvision.php                         ค่าที่อ่านจ�
 database/migrations/                         0001_..._schools → users → cache → jobs → personal_access_tokens
 database/seeders/SchoolSeeder.php
 resources/worksheet/aruco/                   ArUco marker PNG + manifest สำหรับใบงาน (สร้างจาก ml/tools/gen_aruco.py)
-tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest, Console/QueueWorkCommandTest, AdminPanelTest
+tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest, Api/ErrorFormatTest, Console/QueueWorkCommandTest, AdminPanelTest
 ```
 
 ## Deploy บน Plesk
