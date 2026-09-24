@@ -93,7 +93,9 @@ def run(config: TrainConfig) -> dict:
         keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=max(1, config.patience // 2)),
     ]
     started = time.time()
-    history = model.fit(train_ds, validation_data=val_ds, epochs=config.epochs, callbacks=callbacks, verbose=2)
+    history = model.fit(
+        train_ds, validation_data=val_ds, epochs=config.epochs, callbacks=callbacks, verbose=2, shuffle=False
+    )  # shuffle=False: the tf.data pipeline already shuffles; True only triggers a Keras warning
     seconds = time.time() - started
 
     losses = history.history.get("val_loss", [])

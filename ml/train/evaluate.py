@@ -7,6 +7,11 @@ Metrics
     abstain_rate            fraction with confidence below the threshold (0.8, DESIGN 12.2)
     accuracy_when_answered  exact-match rate among the samples the reader did answer
     cer_when_answered       CER among answered samples
+    threshold_sweep         abstain_rate / accuracy_when_answered for every threshold in
+                            DEFAULT_SWEEP, and ``recommended_threshold`` = the smallest one
+                            whose accuracy_when_answered reaches TARGET_ACCURACY (DESIGN 12.2
+                            says to tune the 0.8 cut-off on the validation set; run with
+                            ``--part val`` for that)
 
 Usage:
     uv run python -m train.evaluate --data data/synth/labels.csv --split-file runs/smoke/split.json \
@@ -36,6 +41,10 @@ from train.dataset import (
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
+DEFAULT_SWEEP: tuple[float, ...] = (0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99, 0.995)
+TARGET_ACCURACY = 0.95
+"""A recommended threshold must make the reader right on at least this share of the samples it answers."""
+
 
 class TFLiteRunner:
     """Run the exported model with the TFLite interpreter bundled in TensorFlow."""
@@ -64,8 +73,48 @@ class TFLiteRunner:
         return np.concatenate(out) if out else np.zeros((0,) + tuple(self.output["shape"][1:]), np.float32)
 
 
+def _sweep(confidences: np.ndarray, correct: np.ndarray, thresholds: Sequence[float]) -> list[dict]:
+    rows = []
+    for t in thresholds:
+        answered = confidences >= t
+        n_answered = int(answered.sum())
+        rows.append(
+            {
+                "threshold": float(t),
+                "n_answered": n_answered,
+                "abstain_rate": float(1.0 - n_answered / len(confidences)),
+                "accuracy_when_answered": float(correct[answered].mean()) if n_answered else None,
+            }
+        )
+    return rows
+
+
+def threshold_sweep(labels: Sequence[str], probs: np.ndarray, thresholds: Sequence[float] = DEFAULT_SWEEP) -> list[dict]:
+    """Abstain rate and accuracy-when-answered for each candidate confidence threshold."""
+    decoded = ctc_greedy_decode_batch(probs)
+    if not labels:
+        raise ValueError("nothing to evaluate")
+    confidences = np.array([d.confidence for d in decoded], dtype=np.float64)
+    correct = np.array([d.text == label for d, label in zip(decoded, labels)], dtype=bool)
+    return _sweep(confidences, correct, thresholds)
+
+
+def recommend_threshold(sweep: Sequence[dict], target_accuracy: float = TARGET_ACCURACY) -> float | None:
+    """The smallest swept threshold whose accuracy_when_answered reaches the target, or None."""
+    for row in sorted(sweep, key=lambda r: r["threshold"]):
+        accuracy = row["accuracy_when_answered"]
+        if accuracy is not None and accuracy >= target_accuracy:
+            return row["threshold"]
+    return None
+
+
 def evaluate_predictions(
-    labels: Sequence[str], probs: np.ndarray, threshold: float = CONFIDENCE_THRESHOLD, max_examples: int = 25
+    labels: Sequence[str],
+    probs: np.ndarray,
+    threshold: float = CONFIDENCE_THRESHOLD,
+    max_examples: int = 25,
+    sweep: Sequence[float] | None = DEFAULT_SWEEP,
+    target_accuracy: float = TARGET_ACCURACY,
 ) -> dict:
     decoded = ctc_greedy_decode_batch(probs)
     n = len(labels)
@@ -76,6 +125,7 @@ def evaluate_predictions(
     answered = confidences >= threshold
     correct = np.array([t == label for t, label in zip(texts, labels)], dtype=bool)
     n_answered = int(answered.sum())
+    sweep_rows = _sweep(confidences, correct, sweep) if sweep else None
     answered_pairs = [(label, t) for label, t, a in zip(labels, texts, answered) if a]
     by_length: dict[int, dict[str, float]] = {}
     for label, t, ok in zip(labels, texts, correct):
@@ -102,6 +152,8 @@ def evaluate_predictions(
         "exact_match_by_length": {
             str(k): {"n": int(v["n"]), "exact_match": v["exact"] / v["n"]} for k, v in sorted(by_length.items())
         },
+        "threshold_sweep": sweep_rows,
+        "recommended_threshold": recommend_threshold(sweep_rows, target_accuracy) if sweep_rows else None,
         "worst_confident_errors": errors,
     }
 

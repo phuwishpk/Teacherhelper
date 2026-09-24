@@ -160,8 +160,21 @@ def export(
             "test_writers": metrics["writers"],
             "exact_match_by_length": metrics["exact_match_by_length"],
         },
+        # DESIGN 12.2: the 0.8 cut-off is tuned on the validation set; `recommended_threshold` is the
+        # smallest swept value at which the reader is right on >= TARGET_ACCURACY of what it answers.
         "val_metrics": (
-            {k: val_metrics[k] for k in ("cer", "exact_match", "abstain_rate", "accuracy_when_answered", "n")}
+            {
+                k: val_metrics[k]
+                for k in (
+                    "cer",
+                    "exact_match",
+                    "abstain_rate",
+                    "accuracy_when_answered",
+                    "n",
+                    "threshold_sweep",
+                    "recommended_threshold",
+                )
+            }
             if val_metrics
             else None
         ),
