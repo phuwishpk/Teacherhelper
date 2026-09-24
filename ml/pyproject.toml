@@ -1,0 +1,35 @@
+[project]
+name = "eduvision-ml"
+version = "0.1.0"
+description = "EduVision ML: ArUco marker generator, fuzzy-logic reference implementation (DESIGN §11) and, from Phase 5, CRNN digit-reader training"
+readme = "README.md"
+authors = [{ name = "phuwishpk" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "opencv-python-headless>=4.10,<5",
+    "numpy>=2.0",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+# Phase 5 only. Not installed by a plain `uv sync`; use `uv sync --extra train`.
+train = [
+    "tensorflow>=2.16,<3",
+    "tensorflow-metal>=1.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Flat layout: the importable package is ml/fuzzy (installed editable by `uv sync`).
+module-root = ""
+module-name = "fuzzy"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
