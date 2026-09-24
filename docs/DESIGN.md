@@ -482,7 +482,7 @@ backend/resources/prompts/     prompt แยกเป็นไฟล์พร้
 - **Document root:** `httpdocs/public`
 - **PHP-FPM:** 8.3 ขึ้นไป และใช้เวอร์ชันเดียวกันกับ Scheduled Task
 - **`.env`:** อยู่นอก document root มีค่าเหล่านี้
-  - `GEMINI_API_KEY`, `GEMINI_MODEL`
+  - `GEMINI_API_KEY` (key กลาง ไม่บังคับ ใช้เมื่อครูไม่ได้ใส่ key ของตัวเอง), `GEMINI_MODEL`
   - `FIREBASE_CREDENTIALS` เป็น path ไปยังไฟล์ service account ที่อยู่นอก document root
   - `QR_SIGNING_KEY`
 - **Cloudflare (ไม่บังคับ ทำภายหลัง):** ต้องย้าย nameserver ของ `phuwish.com` จาก Hostatom ไป Cloudflare และย้าย record ทั้งหมดตาม รวมถึง MX ของ `mail.phuwish.com`
@@ -560,6 +560,17 @@ CREATE TABLE device_tokens (
   user_id       BIGINT UNSIGNED NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   fcm_token     VARCHAR(255) NOT NULL UNIQUE,
   last_seen_at  TIMESTAMP NOT NULL
+);
+
+-- key ของ AI ที่ครูใส่เอง (เพิ่มเมื่อ 24 ก.ย. 2569) เก็บด้วย Laravel encrypter ไม่เคยส่งค่ากลับให้ client
+CREATE TABLE teacher_api_keys (
+  user_id           BIGINT UNSIGNED PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  provider          ENUM('gemini') NOT NULL DEFAULT 'gemini',
+  encrypted_key     TEXT NOT NULL,
+  key_last4         CHAR(4) NOT NULL,          -- ให้ครูจำได้ว่าใส่ key ไหนไว้
+  last_verified_at  TIMESTAMP NULL,            -- ทดสอบเรียก API สำเร็จล่าสุด
+  created_at        TIMESTAMP NOT NULL,
+  updated_at        TIMESTAMP NOT NULL
 );
 ```
 
@@ -760,6 +771,7 @@ CREATE TABLE ai_calls (
   skill_id        BIGINT UNSIGNED NULL REFERENCES skills(id),
   model           VARCHAR(64) NOT NULL,
   prompt_version  VARCHAR(20) NOT NULL,
+  key_source      ENUM('teacher','server') NOT NULL,
   input_tokens    INT UNSIGNED NULL,
   output_tokens   INT UNSIGNED NULL,
   latency_ms      INT UNSIGNED NULL,
@@ -877,6 +889,9 @@ CREATE TABLE training_samples (
 | POST | `/auth/logout` | ทุก role | ยกเลิก token ปัจจุบัน |
 | GET | `/me` | ทุก role | |
 | POST | `/devices` | ทุก role | `{fcm_token}` |
+| GET | `/me/ai-key` | ครู | `{configured, key_last4, last_verified_at}` ไม่มีค่า key จริง |
+| PUT | `/me/ai-key` | ครู | `{gemini_api_key}` server ทดสอบเรียก Gemini (list models) ก่อน ถ้าใช้ไม่ได้ตอบ 422 `code: ai_key_invalid` ถ้าผ่านเก็บแบบเข้ารหัส |
+| DELETE | `/me/ai-key` | ครู | ลบ key งานที่ค้างในคิวของครูคนนี้จะใช้ key กลางของ server ถ้ามี |
 
 ### 9.2 ห้องเรียนและนักเรียน (ครู)
 
@@ -1017,7 +1032,10 @@ CREATE TABLE training_samples (
 - `temperature`: `extract` = 0, `rubric_draft` = 0.2, `explanation` = 0.5, `practice_gen` = 0.8
 - timeout 30 วินาที ต่อคำขอ
 - **ใช้ paid tier** (ทีมมี API key แบบ paid อยู่แล้ว) เพราะ free tier อนุญาตให้ Google นำข้อมูลไปใช้ปรับปรุงผลิตภัณฑ์ กติกา: ห้ามสลับไปใช้ key แบบ free tier กับข้อมูลของนักเรียนจริงไม่ว่ากรณีใด และตั้ง **budget alert** ใน Google Cloud Billing ตั้งแต่วันแรก (เช่น 300 บาท/เดือน) พร้อมจำกัด key ให้ใช้ได้เฉพาะ Generative Language API
-- เก็บ key ไว้บน server เท่านั้น
+- **ครูใส่ key ของตัวเองได้** (ตัดสินใจ 24 ก.ย. 2569) ลำดับการเลือก key ตอนตรวจ (`GeminiKeyResolver`): (1) key ของครูเจ้าของห้อง จาก `teacher_api_keys` (2) key กลางของ server จาก `GEMINI_API_KEY` ถ้ามี (3) ไม่มีทั้งคู่ → ข้อนั้นเป็น `grading_state = manual` และแอปแสดงข้อความให้ครูไปใส่ key ที่หน้าตั้งค่า
+  - key ของครูเก็บด้วย Laravel encrypter (`APP_KEY`) ถอดรหัสเฉพาะตอนเรียก API ไม่ log ไม่ส่งกลับ client และแสดงแค่ 4 ตัวท้าย
+  - `ai_calls.key_source ENUM('teacher','server')` บันทึกว่าใช้ key ของใคร เพื่อแยกค่าใช้จ่ายและ debug
+  - key ทุกตัวอยู่บน server เท่านั้น แอปมือถือส่ง key ขึ้นไปครั้งเดียวผ่าน HTTPS ตอนตั้งค่า แล้วไม่เก็บไว้ในเครื่อง
 - server ตรวจ output เทียบกับ schema ซ้ำอีกรอบเสมอ ถ้าไม่ผ่านถือเป็น `invalid_output`
 
 **ค่าใช้จ่าย:** บันทึก token ของทุกคำขอลง `ai_calls` แล้วคำนวณราคาต่อการบ้านจากข้อมูลจริง อย่าประเมินล่วงหน้า เพราะราคาขึ้นกับรุ่นที่ใช้ตอนนั้น
@@ -1564,3 +1582,5 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | 23 | Login นักเรียน | บัตร QR เป็นทางหลัก และ class code + เลขที่ + PIN เป็นทางสำรอง | เด็กเล็กใช้ง่าย และครูยกเลิกได้ |
 | 24 | Admin | Filament บนเว็บ ครูสมัครด้วยรหัสโรงเรียนแล้วรอ admin อนุมัติ | งาน admin ทำบนมือถือไม่สะดวก |
 | 25 | สถาปัตยกรรมแอป | Riverpod + go_router + repository | override ใน test ง่าย ช่วยให้ถึง coverage 70% |
+| 26 | Gemini key ของครู | ครูใส่ key ตัวเองในแอปได้ (เก็บเข้ารหัสบน server) key กลางเป็นแค่ fallback | ครูคุมค่าใช้จ่ายและข้อมูลของตัวเอง โรงเรียนใช้ระบบได้โดยไม่ต้องมี key กลาง |
+| 27 | ลำดับความสำคัญ | ทำระบบตรวจด้วย Gemini ให้ใช้งานได้ก่อน CNN เทรนด้วยข้อมูลสังเคราะห์ให้ pipeline ครบ แล้วค่อยเทรนซ้ำด้วย dataset ของทีม | dataset จริงยังไม่มา แต่ระบบต้องใช้ได้ก่อน |
