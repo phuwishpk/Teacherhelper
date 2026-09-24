@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/user.dart';
-import 'placeholder_page.dart';
+import '../../core/router/app_router.dart';
+import '../assignments/assignments_providers.dart';
+import '../classrooms/classrooms_providers.dart';
 
 /// Teacher landing page: greeting, overview counts and the getting-started
-/// steps that mirror the main flow in DESIGN §4. Counts are zero in M0
-/// because no classroom/assignment endpoints exist yet.
-class DashboardPage extends StatelessWidget {
+/// steps that mirror the main flow in DESIGN §4. The review count stays 0
+/// until Phase 4 adds the review queue.
+class DashboardPage extends ConsumerWidget {
   const DashboardPage({
     super.key,
     required this.user,
@@ -19,8 +23,10 @@ class DashboardPage extends StatelessWidget {
   final ValueChanged<int> onNavigate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final classroomCount = ref.watch(classroomsProvider).value?.length ?? 0;
+    final assignmentCount = ref.watch(assignmentsProvider).value?.length ?? 0;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
@@ -53,14 +59,14 @@ class DashboardPage extends StatelessWidget {
                 _StatTile(
                   icon: Icons.groups_outlined,
                   label: 'ห้องเรียน',
-                  value: 0,
+                  value: classroomCount,
                   onTap: () => onNavigate(1),
                 ),
                 const SizedBox(width: 12),
                 _StatTile(
                   icon: Icons.assignment_outlined,
                   label: 'การบ้าน',
-                  value: 0,
+                  value: assignmentCount,
                   onTap: () => onNavigate(2),
                 ),
                 const SizedBox(width: 12),
@@ -98,7 +104,7 @@ class DashboardPage extends StatelessWidget {
                     number: 3,
                     title: 'สแกนใบงานที่นักเรียนทำแล้ว',
                     subtitle: 'ถ่ายด้วยกล้อง ทำได้แม้ไม่มีอินเทอร์เน็ต',
-                    onTap: () => showNotYet(context, 'สแกนใบงาน'),
+                    onTap: () => context.push(AppRoutes.scan),
                   ),
                   const Divider(height: 1),
                   _StepTile(

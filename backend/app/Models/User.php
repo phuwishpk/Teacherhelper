@@ -7,6 +7,9 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -77,9 +80,61 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    /** Classrooms this user teaches (role teacher). @return HasMany<Classroom, $this> */
+    public function taughtClassrooms(): HasMany
+    {
+        return $this->hasMany(Classroom::class, 'teacher_id');
+    }
+
+    /**
+     * Classrooms this user is enrolled in (role student), student_number on the pivot.
+     *
+     * @return BelongsToMany<Classroom, $this>
+     */
+    public function classrooms(): BelongsToMany
+    {
+        return $this->belongsToMany(Classroom::class, 'classroom_students', 'student_id', 'classroom_id')
+            ->using(ClassroomStudent::class)
+            ->withPivot('student_number')
+            ->withTimestamps();
+    }
+
+    /** @return HasOne<StudentCredential, $this> */
+    public function credential(): HasOne
+    {
+        return $this->hasOne(StudentCredential::class, 'student_id');
+    }
+
+    /** @return HasMany<DeviceToken, $this> */
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
+    /** @return HasOne<TeacherApiKey, $this> */
+    public function apiKey(): HasOne
+    {
+        return $this->hasOne(TeacherApiKey::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isTeacher(): bool
+    {
+        return $this->role === self::ROLE_TEACHER;
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->role === self::ROLE_STUDENT;
     }
 
     /**

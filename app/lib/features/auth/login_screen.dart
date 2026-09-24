@@ -109,6 +109,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         : () => context.go(AppRoutes.register),
                     child: const Text('ยังไม่มีบัญชี? สมัครใช้งาน'),
                   ),
+                  const Divider(height: 32),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => context.go(AppRoutes.studentLogin),
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('นักเรียนเข้าสู่ระบบ'),
+                  ),
                 ],
               ),
             ),

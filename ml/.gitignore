@@ -1,0 +1,4 @@
+# ml/ local outputs (data/, runs/ and *.tflite are already ignored at the repo root)
+notebooks/out/
+.ipynb_checkpoints/
+models/**/*.tflite

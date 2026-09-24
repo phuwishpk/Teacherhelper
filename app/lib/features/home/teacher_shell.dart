@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/router/app_router.dart';
+import '../../core/widgets/async_view.dart';
+import '../assignments/assignments_page.dart';
+import '../classrooms/classrooms_page.dart';
+import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
-import 'placeholder_page.dart';
 
 /// Teacher-side navigation shell: a bottom NavigationBar on phones and a
 /// NavigationRail from tablet width up (the review queue is meant for
-/// tablets, DESIGN §13). Only the dashboard has content in M0; the other
-/// destinations are empty states until Phase 2 adds real data.
+/// tablets, DESIGN §13). The review tab stays an empty state until Phase 4.
 class TeacherShell extends ConsumerStatefulWidget {
   const TeacherShell({super.key});
 
@@ -41,28 +45,15 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
 
   @override
   Widget build(BuildContext context) {
-    final user = switch (ref.watch(sessionProvider)) {
-      SignedIn(:final user) => user,
-      _ => null,
-    };
+    final user = ref.watch(currentUserProvider);
     final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
+    final queueOpen = ref.watch(uploadQueueOpenCountProvider);
 
     final pages = <Widget>[
       DashboardPage(user: user, onNavigate: _select),
-      const PlaceholderPage(
-        icon: Icons.groups_outlined,
-        title: 'ยังไม่มีห้องเรียน',
-        message:
-            'สร้างห้องเรียน เพิ่มรายชื่อนักเรียน แล้วพิมพ์บัตร QR สำหรับเข้าสู่ระบบ',
-        actionLabel: 'สร้างห้องเรียน',
-      ),
-      const PlaceholderPage(
-        icon: Icons.assignment_outlined,
-        title: 'ยังไม่มีการบ้าน',
-        message: 'สร้างการบ้าน เลือกตัวชี้วัด แล้วพิมพ์ใบงานแยกรายนักเรียน',
-        actionLabel: 'สร้างการบ้าน',
-      ),
-      const PlaceholderPage(
+      const ClassroomsPage(),
+      const AssignmentsPage(),
+      const EmptyView(
         icon: Icons.rate_review_outlined,
         title: 'ไม่มีงานรอตรวจทาน',
         message:
@@ -74,12 +65,14 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
 
     final scanButton = wide
         ? FloatingActionButton(
+            heroTag: 'scan_fab',
             tooltip: 'สแกนใบงาน',
-            onPressed: () => showNotYet(context, 'สแกนใบงาน'),
+            onPressed: () => context.push(AppRoutes.scan),
             child: const Icon(Icons.document_scanner_outlined),
           )
         : FloatingActionButton.extended(
-            onPressed: () => showNotYet(context, 'สแกนใบงาน'),
+            heroTag: 'scan_fab',
+            onPressed: () => context.push(AppRoutes.scan),
             icon: const Icon(Icons.document_scanner_outlined),
             label: const Text('สแกนใบงาน'),
           );
@@ -88,6 +81,15 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
       appBar: AppBar(
         title: const Text('EduVision'),
         actions: [
+          IconButton(
+            tooltip: 'คิวอัปโหลด',
+            icon: Badge.count(
+              count: queueOpen,
+              isLabelVisible: queueOpen > 0,
+              child: const Icon(Icons.cloud_upload_outlined),
+            ),
+            onPressed: () => context.push(AppRoutes.uploadQueue),
+          ),
           IconButton(
             tooltip: 'ออกจากระบบ',
             icon: const Icon(Icons.logout),
