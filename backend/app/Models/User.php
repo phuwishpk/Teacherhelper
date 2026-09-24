@@ -16,7 +16,7 @@ use Laravel\Sanctum\HasApiTokens;
  *
  * @property int $id
  * @property int|null $school_id
- * @property string $role   admin|teacher|student
+ * @property string $role admin|teacher|student
  * @property string $name
  * @property string|null $email
  * @property string|null $password

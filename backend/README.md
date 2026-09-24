@@ -1,58 +1,110 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# EduVision backend (Laravel 13)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API และ web admin ของ EduVision รันบน shared Plesk hosting (ไม่มี SSH, Docker, daemon หรือ Redis) ดู `docs/DESIGN.md` §7–§9 และ `docs/KICKOFF.md` ส่วนที่ 3 ก่อนแก้โค้ด
 
-## About Laravel
+สถานะ: **M0 "walking skeleton"** = สมัคร/login ครู, `GET /me`, logout, `GET /health` + heartbeat ของ queue และ Filament boot ได้ที่ `/admin/login` (ยังไม่มี resource)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## ส่วนประกอบ
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| ส่วน | เวอร์ชัน | หมายเหตุ |
+|---|---|---|
+| Laravel | 13.x (`php ^8.3`) | `composer.json` ล็อก `config.platform.php = 8.3.0` ให้ตรง PHP บน Plesk |
+| Sanctum | 4.3.x | token ของแอป (ครู: ability `teacher` อายุ 30 วัน) |
+| Filament | 4.13.x | panel `admin` ที่ `/admin` เข้าได้เฉพาะ `role=admin` และ `status=active` |
+| Queue / Cache / Session | driver `database` ทั้งหมด | ไม่มี Redis บน hosting |
+| MariaDB | 11 (container ในเครื่อง) | บน hosting ใช้เวอร์ชันที่ probe รายงาน |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## เริ่มงานในเครื่อง
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+ต้องมี PHP 8.3+ (เครื่องพัฒนาใช้ 8.5 จาก Homebrew), Composer 2 และ OrbStack/Docker
 
 ```bash
-composer require laravel/boost --dev
+# 1. MariaDB (ครั้งเดียว) port 3307 กันชนกับ MySQL อื่น
+docker run -d --name eduvision-mariadb --restart unless-stopped \
+  -e MARIADB_ROOT_PASSWORD=root -e MARIADB_DATABASE=eduvision \
+  -e MARIADB_USER=eduvision -e MARIADB_PASSWORD=eduvision \
+  -p 3307:3306 -v eduvision-mariadb:/var/lib/mysql mariadb:11
 
-php artisan boost:install
+# 2. โปรเจกต์
+cd backend
+composer install
+cp -n .env.example .env && php artisan key:generate
+php artisan migrate --seed          # สร้าง schools, users, cache, jobs, personal_access_tokens + โรงเรียนสาธิต 1 แห่ง
+
+# 3. รัน
+php artisan serve                                  # AVD: http://10.0.2.2:8000
+php artisan serve --host=0.0.0.0 --port=8000       # มือถือจริงใน Wi-Fi เดียวกัน: http://<IP ของ Mac>:8000
+php artisan eduvision:queue-work                   # รัน worker หนึ่งรอบ (แทน cron ของ Plesk)
+php artisan test                                   # ใช้ SQLite in-memory ไม่แตะ MariaDB
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+รหัสโรงเรียนสำหรับสมัครครูอ่านจาก `SEED_TEACHER_JOIN_CODE` ใน `.env` (ค่าเริ่มต้นในเครื่อง `DEMO2569`) **บน hosting ต้องตั้งเป็นรหัสสุ่ม 8 ตัว** เพราะ repo เป็น public และใน M0 รหัสนี้เป็นด่านเดียวที่กันคนแปลกหน้าสมัครเป็นครู
 
-## Contributing
+## API (M0)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุกตัวมีรูปแบบ `{message, errors, code}`
 
-## Code of Conduct
+| Method | Path | Body / Header | ตอบ |
+|---|---|---|---|
+| GET | `/health` | | `200 {status: ok\|degraded, db: ok\|error, queue_last_run_at}` (503 เมื่อต่อ DB ไม่ได้) |
+| POST | `/auth/teacher/register` | `{school_code, name, email, password}` | `201 {user}` รหัสผิด → `422 code: school_code_invalid` |
+| POST | `/auth/teacher/login` | `{email, password, device_name?}` | `200 {token, user}` ผิด → `422 code: invalid_credentials` บัญชีไม่ active → `403 code: account_not_active` |
+| GET | `/me` | `Authorization: Bearer <token>` | `200 {data: user}` |
+| POST | `/auth/logout` | `Authorization: Bearer <token>` | `204` ยกเลิกเฉพาะ token ที่ใช้เรียก |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+`user` = `{id, name, email, role, status, school: {id, name} | null}`
 
-## Security Vulnerabilities
+**stub ของ M0** (แก้ใน Phase 2, ดู `TODO(phase-2)` ใน `TeacherAuthController`): บัญชีที่สมัครใหม่เป็น `active` ทันที ยังไม่ผ่านการอนุมัติของ admin ใน Filament
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+ตัวอย่างด้วย curl (zsh)
 
-## License
+```bash
+H=(-H 'Content-Type: application/json' -H 'Accept: application/json')
+curl -s "${H[@]}" -X POST localhost:8000/api/v1/auth/teacher/register \
+  -d '{"school_code":"DEMO2569","name":"ครูทดสอบ","email":"t1@example.com","password":"secret1234"}'
+TOKEN=$(curl -s "${H[@]}" -X POST localhost:8000/api/v1/auth/teacher/login \
+  -d '{"email":"t1@example.com","password":"secret1234","device_name":"curl"}' | jq -r .token)
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhost:8000/api/v1/me
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Queue และ heartbeat
+
+Plesk ไม่มี process ค้าง จึงใช้ Scheduled Task ทุก 1 นาทีเรียก
+
+```
+php artisan eduvision:queue-work
+```
+
+command นี้ (1) dispatch `QueueHeartbeatJob` ลง table `jobs` แล้ว (2) รัน `queue:work --queue=grading,default,pdf --stop-when-empty --max-time=50` (option ตาม DESIGN §7.2) job เขียนเวลาไว้ใน cache key `queue.last_run_at` ซึ่ง `GET /health` อ่านออกมา ถ้าค่าเก่ากว่า `HEARTBEAT_MAX_AGE_MINUTES` (ค่าเริ่มต้น 3 นาที) `status` จะเป็น `degraded` แปลว่า cron + artisan + database queue ไม่ครบวงจร
+
+## โครงสร้างโค้ด (ตาม DESIGN §7.1)
+
+```
+app/Console/Commands/QueueWorkCommand.php    eduvision:queue-work
+app/Exceptions/ApiException.php              error ที่มี code ให้แอปจัดการ
+app/Http/Controllers/Api/V1/                 HealthController, TeacherAuthController, MeController
+app/Http/Requests/Api/V1/                    validation ของแต่ละ endpoint
+app/Http/Resources/UserResource.php
+app/Jobs/QueueHeartbeatJob.php
+app/Models/{School,User}.php
+app/Providers/Filament/AdminPanelProvider.php
+config/eduvision.php                         ค่าที่อ่านจาก .env (ห้ามใช้ env() นอก config เพราะ production ใช้ config:cache)
+database/migrations/                         0001_..._schools → users → cache → jobs → personal_access_tokens
+database/seeders/SchoolSeeder.php
+resources/worksheet/aruco/                   ArUco marker PNG + manifest สำหรับใบงาน (สร้างจาก ml/tools/gen_aruco.py)
+tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest, Console/QueueWorkCommandTest, AdminPanelTest
+```
+
+## Deploy บน Plesk
+
+ทำตาม `docs/KICKOFF.md` B7 หลัง `tools/hosting-probe.php` ผ่าน สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work` และ migration ผ่าน Scheduled Task "Run now" `artisan migrate --force`
+
+โฟลเดอร์ `public/css/filament` และ `public/js/filament` ถูก commit ไว้จงใจ เพื่อให้ไปถึง Plesk ผ่าน Git โดยไม่ต้องรัน `filament:assets` บน server
+
+## ก่อน commit
+
+```bash
+vendor/bin/pint --test && php artisan test
+```
+
+ห้าม commit `.env`, key ใดๆ หรือข้อมูลนักเรียนจริง (repo เป็น public; pre-commit hook กัน Google API key ไว้ชั้นหนึ่ง)
