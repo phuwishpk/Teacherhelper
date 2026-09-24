@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\LoginCardRenderer;
 use App\Jobs\RenderLoginCardsJob;
 use App\Models\LoginCardPrint;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -124,11 +126,42 @@ class StudentCredentialsTest extends TestCase
             'school_id' => $teacher->school_id, 'student_id' => $orphan->id, 'requested_by' => $teacher->id, 'status' => 'queued',
         ]);
         $this->withoutExceptionHandling();
-        (new RenderLoginCardsJob($print->id))->handle(app(LoginCardRenderer::class));
+        (new RenderLoginCardsJob($print->id))->handle(app(LoginCardRenderer::class), app(CredentialIssuer::class));
 
         $this->assertSame('failed', $print->fresh()->status);
         $this->assertNotNull($print->fresh()->error);
         $this->assertSame($hash, $a['student']->credential->fresh()->qr_token_hash);
+    }
+
+    public function test_a_job_killed_mid_render_still_leaves_the_print_in_a_terminal_state(): void
+    {
+        $teacher = $this->makeTeacher();
+        $classroom = $this->makeClassroom($teacher);
+        $a = $this->enrollStudent($classroom, 1);
+        $hash = $a['student']->credential->qr_token_hash;
+        $print = LoginCardPrint::create([
+            'school_id' => $teacher->school_id, 'classroom_id' => $classroom->id, 'requested_by' => $teacher->id, 'status' => 'rendering',
+        ]);
+
+        $job = new RenderLoginCardsJob($print->id);
+        $this->assertSame(1, $job->tries);
+        $this->assertLessThan(50, $job->timeout); // eduvision:queue-work runs with --max-time=50
+
+        // What the worker calls after killing the job on $timeout (tries=1: no retry).
+        $job->failed(new RuntimeException('killed by timeout'));
+
+        $this->assertSame('failed', $print->fresh()->status);
+        $this->assertSame('killed by timeout', $print->fresh()->error);
+        $this->assertSame($hash, $a['student']->credential->fresh()->qr_token_hash);
+
+        // A print that already finished is never touched.
+        $ready = LoginCardPrint::create([
+            'school_id' => $teacher->school_id, 'classroom_id' => $classroom->id, 'requested_by' => $teacher->id,
+            'status' => 'ready', 'file_path' => 'login-cards/x/y.pdf',
+        ]);
+        (new RenderLoginCardsJob($ready->id))->failed(new RuntimeException('late'));
+        $this->assertSame('ready', $ready->fresh()->status);
+        $this->assertNull($ready->fresh()->error);
     }
 
     public function test_pin_reset_returns_a_new_pin_once_and_revokes_sessions(): void
@@ -148,6 +181,7 @@ class StudentCredentialsTest extends TestCase
         $credential = $s['student']->credential->fresh();
         $this->assertSame(0, $credential->failed_pin_attempts);
         $this->assertNull($credential->locked_until);
+        $this->assertSame(CredentialIssuer::PIN_HASH_ROUNDS, password_get_info($credential->pin_hash)['options']['cost']);
 
         $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'PINPIN', 'student_number' => 4, 'pin' => $newPin])->assertOk();
         $this->forgetGuards();

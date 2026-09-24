@@ -50,13 +50,21 @@ class SchoolResource extends Resource
                     ->maxLength(255),
                 TextInput::make('teacher_join_code')
                     ->label('รหัสสมัครสำหรับครู (teacher_join_code)')
-                    ->helperText('ครูกรอกรหัสนี้ตอนสมัครในแอป 8 ตัวอักษร ตัวพิมพ์ใหญ่')
+                    ->helperText('ครูกรอกรหัสนี้ตอนสมัครในแอป 8 ตัว ใช้ได้เฉพาะ A–Z และ 0–9 (ระบบแปลงเป็นตัวพิมพ์ใหญ่ให้)')
                     ->default(fn () => School::randomJoinCode())
                     ->required()
+                    // Uppercase before validation: MariaDB's default collation makes
+                    // the UNIQUE index case-insensitive, so "abcd2345" next to an
+                    // existing "ABCD2345" must fail here with the Thai message, not
+                    // on the index with a 500. The stored value is uppercased too.
+                    ->mutateStateForValidationUsing(fn (?string $state) => self::normalizeJoinCode($state))
                     ->length(8)
-                    ->alphaNum()
+                    ->rule('regex:/^[A-Z0-9]{8}$/')
+                    ->validationMessages(['regex' => 'ใช้ได้เฉพาะ A–Z และ 0–9 จำนวน 8 ตัว'])
                     ->unique(ignoreRecord: true)
-                    ->dehydrateStateUsing(fn (?string $state) => strtoupper((string) $state))
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(fn (Set $set, ?string $state) => $set('teacher_join_code', self::normalizeJoinCode($state)))
+                    ->dehydrateStateUsing(fn (?string $state) => self::normalizeJoinCode($state))
                     ->suffixAction(
                         Action::make('regenerate')
                             ->label('สุ่มใหม่')
@@ -101,6 +109,12 @@ class SchoolResource extends Resource
             ->recordActions([
                 EditAction::make(),
             ]);
+    }
+
+    /** What is stored and compared: trimmed, uppercase (School::randomJoinCode() format). */
+    public static function normalizeJoinCode(?string $state): string
+    {
+        return strtoupper(trim((string) $state));
     }
 
     public static function getRelations(): array

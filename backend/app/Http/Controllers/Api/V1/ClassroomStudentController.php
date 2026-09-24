@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\StudentEnroller;
-use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BulkStoreStudentsRequest;
 use App\Http\Resources\RosterStudentResource;
@@ -22,30 +21,19 @@ class ClassroomStudentController extends Controller
 
     /**
      * POST /api/v1/classrooms/{id}/students {students: [{name, student_number}]}
-     * -> 201 {data: [{student_id, student_number, name, pin}]}
+     * -> 201 {data: [{student_id, student_number, name, status, pin}]}
      *
      * The PIN is returned exactly once (only its hash is stored); the teacher
      * reads it out to the student. The QR card comes from /login-cards.
+     * A student_number already in the classroom -> 422 student_number_taken
+     * (StudentEnroller, inside the transaction).
      */
     public function store(BulkStoreStudentsRequest $request, int $id): JsonResponse
     {
         $classroom = $this->ownClassroom($request, $id);
         Gate::authorize('manageStudents', $classroom);
 
-        $rows = $request->validated('students');
-
-        $taken = $this->enroller->takenNumbers($classroom, array_column($rows, 'student_number'));
-        if ($taken !== []) {
-            sort($taken);
-            throw new ApiException(
-                'เลขที่ '.implode(', ', $taken).' มีอยู่ในห้องนี้แล้ว',
-                'student_number_taken',
-                422,
-                ['students' => ['เลขที่ซ้ำกับนักเรียนที่มีอยู่แล้ว: '.implode(', ', $taken)]],
-            );
-        }
-
-        $created = $this->enroller->enroll($classroom, $rows);
+        $created = $this->enroller->enroll($classroom, $request->validated('students'));
 
         return response()->json([
             'data' => array_map(fn (array $row) => [

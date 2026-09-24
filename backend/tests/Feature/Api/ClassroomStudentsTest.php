@@ -2,8 +2,12 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Students\CredentialIssuer;
+use App\Http\Requests\Api\V1\BulkStoreStudentsRequest;
+use App\Models\StudentCredential;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
@@ -80,6 +84,56 @@ class ClassroomStudentsTest extends TestCase
         // Nothing partial was written.
         $this->assertSame(1, $classroom->students()->count());
         $this->assertSame(1, User::query()->where('role', 'student')->count());
+    }
+
+    public function test_pins_are_hashed_with_a_low_bcrypt_cost_so_a_full_payload_enrols_within_the_app_timeout(): void
+    {
+        $teacher = $this->makeTeacher();
+        $classroom = $this->makeClassroom($teacher);
+        $rows = [];
+        for ($n = 1; $n <= BulkStoreStudentsRequest::MAX_ROWS; $n++) {
+            $rows[] = ['name' => 'นักเรียน '.$n, 'student_number' => $n];
+        }
+
+        $started = hrtime(true);
+        $response = $this->asUser($teacher)->postJson("/api/v1/classrooms/{$classroom->id}/students", ['students' => $rows])
+            ->assertCreated()
+            ->assertJsonCount(BulkStoreStudentsRequest::MAX_ROWS, 'data');
+        $elapsed = (hrtime(true) - $started) / 1e9;
+
+        // The app gives up after 20 s (receiveTimeout); cost-12 hashing needed ~27 s for 100 rows.
+        $this->assertLessThan(10, $elapsed, sprintf('%d-row enrolment took %.1f s', BulkStoreStudentsRequest::MAX_ROWS, $elapsed));
+
+        $first = $response->json('data.0');
+        $hash = StudentCredential::query()->findOrFail($first['student_id'])->pin_hash;
+        $info = password_get_info($hash);
+        $this->assertSame('bcrypt', $info['algoName']);
+        $this->assertSame(CredentialIssuer::PIN_HASH_ROUNDS, $info['options']['cost']);
+        $this->assertTrue(Hash::check($first['pin'], $hash));
+    }
+
+    public function test_a_number_taken_between_the_check_and_the_insert_is_still_a_422(): void
+    {
+        $teacher = $this->makeTeacher();
+        $classroom = $this->makeClassroom($teacher);
+        $rival = User::factory()->student($teacher->school)->create();
+
+        // Simulates a concurrent bulk-add: number 5 lands after enroll()'s own
+        // check ran and before its attach(), so uq_class_number fires.
+        User::creating(function (User $user) use ($classroom, $rival) {
+            if ($user->role === User::ROLE_STUDENT && ! $classroom->students()->wherePivot('student_number', 5)->exists()) {
+                $classroom->students()->attach($rival->id, ['student_number' => 5]);
+            }
+        });
+
+        $this->asUser($teacher)->postJson("/api/v1/classrooms/{$classroom->id}/students", [
+            'students' => [['name' => 'ชนกัน', 'student_number' => 5]],
+        ])
+            ->assertStatus(422)
+            ->assertJsonStructure(['message', 'errors', 'code'])
+            ->assertJsonPath('code', 'student_number_taken');
+
+        $this->assertDatabaseMissing('users', ['name' => 'ชนกัน']);
     }
 
     public function test_roster_is_ordered_by_student_number_and_scoped_to_the_owner(): void

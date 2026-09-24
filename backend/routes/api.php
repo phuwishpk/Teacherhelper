@@ -17,12 +17,18 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::get('health', HealthController::class)->name('api.health');
 
-    // Public auth endpoints share the stricter limiter (DESIGN §7.4).
-    Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
-        Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
-        Route::post('teacher/login', [TeacherAuthController::class, 'login'])->name('api.auth.teacher.login');
-        Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
-        Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');
+    // Public auth endpoints (DESIGN §7.4). Teachers get the strict per-IP
+    // limiter; students the wider `student-auth` limiter (AppServiceProvider),
+    // because a whole class logs in from one school NAT address at once.
+    Route::prefix('auth')->group(function () {
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
+            Route::post('teacher/login', [TeacherAuthController::class, 'login'])->name('api.auth.teacher.login');
+        });
+        Route::middleware('throttle:student-auth')->group(function () {
+            Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
+            Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');
+        });
     });
 
     Route::middleware('auth:sanctum')->group(function () {

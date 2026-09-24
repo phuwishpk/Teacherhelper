@@ -62,7 +62,7 @@ class StudentAuthenticator
         }
 
         if (! Hash::check($pin, $credential->pin_hash)) {
-            $this->recordFailure($credential);
+            $credential = $this->recordFailure($credential);
 
             throw $credential->isLocked() ? self::locked($credential) : self::invalidCredentials();
         }
@@ -77,18 +77,26 @@ class StudentAuthenticator
     /**
      * Counts a wrong PIN; the 5th one (CredentialIssuer::MAX_FAILED_PIN_ATTEMPTS)
      * locks the student for 15 minutes and the counter starts over afterwards.
+     *
+     * The row is re-read under a row lock so parallel wrong PINs for one
+     * student cannot each see the same counter and slip past the 5 attempts
+     * (the lock is a no-op on SQLite). Returns the row as saved.
      */
-    private function recordFailure(StudentCredential $credential): void
+    private function recordFailure(StudentCredential $credential): StudentCredential
     {
-        DB::transaction(function () use ($credential) {
-            $credential->failed_pin_attempts++;
+        return DB::transaction(function () use ($credential) {
+            $row = StudentCredential::query()->lockForUpdate()->find($credential->student_id) ?? $credential;
 
-            if ($credential->failed_pin_attempts >= CredentialIssuer::MAX_FAILED_PIN_ATTEMPTS) {
-                $credential->failed_pin_attempts = 0;
-                $credential->locked_until = now()->addMinutes(CredentialIssuer::LOCKOUT_MINUTES);
+            $row->failed_pin_attempts++;
+
+            if ($row->failed_pin_attempts >= CredentialIssuer::MAX_FAILED_PIN_ATTEMPTS) {
+                $row->failed_pin_attempts = 0;
+                $row->locked_until = now()->addMinutes(CredentialIssuer::LOCKOUT_MINUTES);
             }
 
-            $credential->save();
+            $row->save();
+
+            return $row;
         });
     }
 

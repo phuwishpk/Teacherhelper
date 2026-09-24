@@ -58,6 +58,35 @@ class SchoolResourceTest extends TestCase
             ->assertHasFormErrors(['teacher_join_code']);
     }
 
+    public function test_a_join_code_that_differs_only_in_case_is_rejected_before_the_unique_index(): void
+    {
+        School::factory()->create(['name' => 'ต้นฉบับ', 'teacher_join_code' => 'ABCD2345']);
+
+        // MariaDB's UNIQUE index is case-insensitive: this must be a validation
+        // error, not a QueryException from the index.
+        Livewire::test(CreateSchool::class)
+            ->fillForm(['name' => 'ซ้ำแบบตัวเล็ก', 'teacher_join_code' => 'abcd2345'])
+            ->call('create')
+            ->assertHasFormErrors(['teacher_join_code']);
+
+        // Only A–Z / 0–9 (alpha_num would have accepted Thai letters).
+        Livewire::test(CreateSchool::class)
+            ->fillForm(['name' => 'ไทย', 'teacher_join_code' => 'กขคง2345'])
+            ->call('create')
+            ->assertHasFormErrors(['teacher_join_code']);
+
+        $this->assertDatabaseMissing('schools', ['name' => 'ซ้ำแบบตัวเล็ก']);
+        $this->assertDatabaseMissing('schools', ['name' => 'ไทย']);
+
+        // Editing the original with its own code (any case) is still allowed.
+        $school = School::query()->where('teacher_join_code', 'ABCD2345')->firstOrFail();
+        Livewire::test(EditSchool::class, ['record' => $school->getRouteKey()])
+            ->fillForm(['teacher_join_code' => 'abcd2345', 'name' => 'ต้นฉบับ (แก้ชื่อ)'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->assertDatabaseHas('schools', ['id' => $school->id, 'name' => 'ต้นฉบับ (แก้ชื่อ)', 'teacher_join_code' => 'ABCD2345']);
+    }
+
     public function test_admin_edits_retention_settings(): void
     {
         $school = School::factory()->create();
