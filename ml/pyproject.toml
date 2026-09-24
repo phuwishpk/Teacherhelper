@@ -13,9 +13,19 @@ dependencies = [
 
 [project.optional-dependencies]
 # Phase 5 only. Not installed by a plain `uv sync`; use `uv sync --extra train`.
+# CPU only on purpose: tensorflow-metal 1.2.0 (the latest Apple plugin, Jan 2025) only loads
+# against TensorFlow 2.18; with 2.21 `import tensorflow` fails in dlopen(libmetal_plugin.dylib).
+# The CRNN is ~0.4 M parameters, so CPU training on Apple Silicon is fast enough (see README).
 train = [
-    "tensorflow>=2.16,<3",
-    "tensorflow-metal>=1.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "tensorflow>=2.21,<3",
+]
+# ml/notebooks/bkt_vs_ewma (DESIGN §14.4): `uv sync --extra notebook`.
+notebook = [
+    "pyBKT>=1.4.3",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "notebook>=7",
+    "nbclient>=0.10",
 ]
 
 [dependency-groups]
