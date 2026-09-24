@@ -6,6 +6,7 @@ use Database\Factories\SchoolFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §8.1 `schools`.
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $teacher_join_code
  * @property bool $allow_training_data
- * @property \Illuminate\Support\Carbon|null $crop_retention_until
+ * @property Carbon|null $crop_retention_until
  */
 class School extends Model
 {
