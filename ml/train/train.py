@@ -6,7 +6,8 @@ Writes into the run directory
     train_config.json the CLI arguments
     history.csv       per-epoch loss, val_loss, val_cer, val_exact (CSVLogger)
     best.keras        weights of the best val_loss epoch (ModelCheckpoint)
-    summary.json      epochs run, best epoch and its metrics, timing
+    summary.json      epochs run, best epoch and its metrics, timing, finished_at (UTC; becomes
+                      metrics.json created_at on export so re-exports are reproducible)
 
 Usage:
     uv run python -m train.train --data data/synth/labels.csv --out runs/smoke --epochs 8 --subset 12000
@@ -21,6 +22,7 @@ import os
 import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -113,6 +115,7 @@ def run(config: TrainConfig) -> dict:
         "val_samples": len(split.val),
         "test_samples": len(split.test),
         "train_seconds": round(seconds, 1),
+        "finished_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "data": [str(p) for p in config.data],
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

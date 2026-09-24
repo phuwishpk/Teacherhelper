@@ -13,6 +13,15 @@ def one_hot_path(indices):
     return probs
 
 
+def path_with_probs(indices, top):
+    """Per-timestep argmax ``indices`` with max probability ``top[t]`` (the rest of the mass spread evenly)."""
+    probs = np.zeros((len(indices), charset.NUM_CLASSES), dtype=np.float32)
+    for t, (idx, p) in enumerate(zip(indices, top)):
+        probs[t, :] = (1.0 - p) / (charset.NUM_CLASSES - 1)
+        probs[t, idx] = p
+    return probs
+
+
 def test_charset_has_13_characters_and_blank_is_last():
     assert charset.CHARSET == "0123456789.-/"
     assert charset.NUM_CLASSES == 14
@@ -47,18 +56,52 @@ def test_greedy_decode_collapses_repeats_and_drops_blanks():
     assert decoded.answered()
 
 
-def test_confidence_is_mean_of_max_probability_per_timestep():
+def test_confidence_definition_is_the_one_the_app_mirrors():
+    assert charset.CONFIDENCE_DEFINITION == "emitting_mean_max_prob"
+    assert charset.CONFIDENCE_THRESHOLD == 0.8  # DESIGN 12.2 default
+    assert "emits a character" in charset.CONFIDENCE_DESCRIPTION
+
+
+def test_confidence_is_mean_of_max_probability_over_emitting_timesteps():
+    # t0 emits "0" at 0.6, t1 emits "2" at 0.6, t2 is a certain blank (1.0) that must NOT lift the confidence
     probs = np.array([[0.6, 0.4] + [0.0] * 12, [0.2, 0.2, 0.6] + [0.0] * 11, [0.0] * 13 + [1.0]], dtype=np.float32)
     decoded = charset.ctc_greedy_decode(probs)
     assert decoded.text == "02"
-    assert decoded.confidence == pytest.approx((0.6 + 0.6 + 1.0) / 3)
-    assert not decoded.answered()  # 0.733 < 0.8 -> abstain
-    assert decoded.answered(threshold=0.7)
+    assert decoded.char_confidences == pytest.approx((0.6, 0.6))
+    assert decoded.confidence == pytest.approx(0.6)
+    assert not decoded.answered()  # 0.6 < 0.8 -> abstain
+    assert decoded.answered(threshold=0.6)
 
 
-def test_all_blank_path_decodes_to_empty_string():
+def test_confidence_ignores_blanks_and_collapsed_repeats():
+    b = charset.BLANK
+    #            emit 1  rep 1  blank  emit 1  blank  blank  emit .  emit 3  rep 3  blank
+    indices = [1, 1, b, 1, b, b, 10, 3, 3, b]
+    top = [0.9, 0.3, 0.99, 0.7, 0.99, 0.99, 0.8, 0.6, 0.2, 0.99]
+    decoded = charset.ctc_greedy_decode(path_with_probs(indices, top))
+    assert decoded.text == "11.3"
+    assert decoded.char_confidences == pytest.approx((0.9, 0.7, 0.8, 0.6))  # first timestep of each run only
+    assert decoded.confidence == pytest.approx(0.75)
+
+
+def test_many_confident_blanks_do_not_mask_one_uncertain_character():
+    """The digit_crnn 0.1.0 failure mode: 31 blanks at ~1.0 and a single doubtful digit must still abstain."""
+    b = charset.BLANK
+    indices = [b] * 31 + [7]
+    top = [0.999] * 31 + [0.5]
+    decoded = charset.ctc_greedy_decode(path_with_probs(indices, top))
+    assert decoded.text == "7"
+    assert decoded.confidence == pytest.approx(0.5)
+    assert not decoded.answered()
+
+
+def test_all_blank_path_decodes_to_empty_string_with_zero_confidence():
     probs = one_hot_path([charset.BLANK] * 32)
-    assert charset.ctc_greedy_decode(probs).text == ""
+    decoded = charset.ctc_greedy_decode(probs)
+    assert decoded.text == ""
+    assert decoded.char_confidences == ()
+    assert decoded.confidence == 0.0
+    assert not decoded.answered()  # nothing read = no answer, whatever the threshold
 
 
 def test_batch_decode_matches_single():

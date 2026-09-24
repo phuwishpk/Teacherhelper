@@ -9,6 +9,11 @@ Writes ``models/<name>/<version>/``::
                           test-set metrics from the TFLite model, training summary (committed;
                           the backend imports it into model_versions.metrics)
 
+Re-exporting the same run is reproducible: the TFLite conversion is deterministic (same
+sha256) and ``created_at`` comes from the run (``summary.json`` ``finished_at``, else the
+mtime of ``best.keras``) or ``--created-at``, never from the wall clock, so an identical
+re-export leaves the committed files unchanged.
+
 Usage:
     uv run python -m train.export --run runs/smoke --version 0.1.0 --data data/synth/labels.csv
 """
@@ -25,7 +30,14 @@ from pathlib import Path
 
 import numpy as np
 
-from train.charset import BLANK, CHARSET, CONFIDENCE_THRESHOLD, NUM_CLASSES
+from train.charset import (
+    BLANK,
+    CHARSET,
+    CONFIDENCE_DEFINITION,
+    CONFIDENCE_DESCRIPTION,
+    CONFIDENCE_THRESHOLD,
+    NUM_CLASSES,
+)
 from train.dataset import load_images, load_split_json, read_many, split_from_writers
 from train.evaluate import TFLiteRunner, evaluate_samples
 from train.model import TIMESTEPS
@@ -69,8 +81,40 @@ def verify_tflite(blob: bytes, model, images: np.ndarray) -> float:
     return float(np.abs(lite - ref).max())
 
 
-def contract() -> dict:
-    """The part of metrics.json the app relies on (mirrors train.preprocess and train.charset)."""
+def run_created_at(run_dir: Path, summary: dict | None = None) -> str:
+    """Stable ``created_at`` for a run: ``summary.json`` ``finished_at`` if present, else the mtime of ``best.keras``.
+
+    Both are fixed once training finished, so re-exporting the run reproduces the committed metrics.json byte for byte.
+    """
+    run_dir = Path(run_dir)
+    if summary is None:
+        summary_path = run_dir / "summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+    finished_at = summary.get("finished_at")
+    if finished_at:
+        return parse_timestamp(str(finished_at))
+    return format_utc(datetime.fromtimestamp((run_dir / "best.keras").stat().st_mtime, tz=timezone.utc))
+
+
+def parse_timestamp(text: str) -> str:
+    """Normalise an ISO-8601 timestamp (``Z`` or an offset; naive = UTC) to the ``format_utc`` form."""
+    return format_utc(datetime.fromisoformat(text.strip().replace("Z", "+00:00")))
+
+
+def format_utc(moment: datetime) -> str:
+    """``2026-09-24T15:30:07Z`` (second precision, UTC; DESIGN: timestamps are stored in UTC)."""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def contract(threshold: float = CONFIDENCE_THRESHOLD) -> dict:
+    """The part of metrics.json the app relies on (mirrors train.preprocess and train.charset).
+
+    ``decode.confidence`` names the formula the Dart decoder must mirror and ``decode.abstain_below`` is the
+    threshold the app must read (not hard-code): DESIGN 12.2 says the 0.8 default is tuned on the validation set,
+    so a later version may ship a different value via ``--threshold``.
+    """
     return {
         "charset": CHARSET,
         "blank_index": BLANK,
@@ -90,8 +134,10 @@ def contract() -> dict:
         "decode": {
             "method": "ctc_greedy",
             "steps": "argmax per timestep, collapse repeats, drop blank",
-            "confidence": "mean over timesteps of the max probability",
-            "abstain_below": CONFIDENCE_THRESHOLD,
+            "confidence": CONFIDENCE_DEFINITION,
+            "confidence_description": CONFIDENCE_DESCRIPTION,
+            "abstain_below": threshold,
+            "reference": "ml/train/charset.py::ctc_greedy_decode",
         },
     }
 
@@ -105,6 +151,7 @@ def export(
     threshold: float = CONFIDENCE_THRESHOLD,
     allow_large: bool = False,
     float16: bool = True,
+    created_at: str | None = None,
 ) -> Path:
     import keras
     import tensorflow as tf
@@ -143,12 +190,12 @@ def export(
         "file": "model.tflite",
         "sha256": digest,
         "size_bytes": len(blob),
-        "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "created_at": created_at or run_created_at(run_dir, summary),
         "tensorflow": tf.__version__,
         "keras": keras.__version__,
         "quantization": "float16" if float16 else "none",
         "tflite_vs_keras_max_abs_diff": round(max_diff, 6),
-        **contract(),
+        **contract(threshold),
         "metrics": {
             "cer": metrics["cer"],
             "exact_match": metrics["exact_match"],
@@ -211,8 +258,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--threshold", type=float, default=CONFIDENCE_THRESHOLD)
     parser.add_argument("--allow-large", action="store_true", help="export even if larger than 2 MB")
     parser.add_argument("--no-float16", action="store_true")
+    parser.add_argument(
+        "--created-at",
+        help="ISO-8601 UTC timestamp for metrics.json (default: the run's finished_at, else the mtime of best.keras)",
+    )
     args = parser.parse_args(argv)
-    export(args.run, args.version, args.data, args.models_dir, args.name, args.threshold, args.allow_large, not args.no_float16)
+    created_at = parse_timestamp(args.created_at) if args.created_at else None
+    export(
+        args.run,
+        args.version,
+        args.data,
+        args.models_dir,
+        args.name,
+        args.threshold,
+        args.allow_large,
+        not args.no_float16,
+        created_at,
+    )
     return 0
 
 

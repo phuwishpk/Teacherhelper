@@ -4,7 +4,8 @@
 Metrics
     cer                     character error rate over all samples (abstentions count as empty)
     exact_match             fraction of samples read exactly right
-    abstain_rate            fraction with confidence below the threshold (0.8, DESIGN 12.2)
+    abstain_rate            fraction with confidence below the threshold (0.8, DESIGN 12.2); confidence =
+                            mean max-prob over the emitting timesteps (train.charset.CONFIDENCE_DEFINITION)
     accuracy_when_answered  exact-match rate among the samples the reader did answer
     cer_when_answered       CER among answered samples
     threshold_sweep         abstain_rate / accuracy_when_answered for every threshold in
