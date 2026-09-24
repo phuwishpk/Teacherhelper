@@ -35,14 +35,14 @@ class TeacherAuthTest extends TestCase
         ], $overrides);
     }
 
-    public function test_register_with_valid_school_code_creates_an_active_teacher(): void
+    public function test_register_with_valid_school_code_creates_a_pending_teacher(): void
     {
         $response = $this->postJson('/api/v1/auth/teacher/register', $this->registration())
             ->assertCreated()
             ->assertJsonPath('user.name', 'ครูทดสอบ')
             ->assertJsonPath('user.email', 't1@example.com')
             ->assertJsonPath('user.role', 'teacher')
-            ->assertJsonPath('user.status', 'active') // M0 stub, see TeacherAuthController::register
+            ->assertJsonPath('user.status', 'pending') // DESIGN §9.1: admin approves in Filament
             ->assertJsonPath('user.school.name', 'โรงเรียนสาธิต EduVision')
             ->assertJsonMissingPath('user.password');
 
@@ -51,8 +51,67 @@ class TeacherAuthTest extends TestCase
             'id' => $response->json('user.id'),
             'school_id' => $school->id,
             'role' => 'teacher',
-            'status' => 'active',
+            'status' => 'pending',
+            'approved_by' => null,
         ]);
+    }
+
+    public function test_a_freshly_registered_teacher_cannot_log_in_until_approved(): void
+    {
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+
+        $this->postJson('/api/v1/auth/teacher/login', [
+            'email' => 't1@example.com',
+            'password' => 'secret1234',
+        ])
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'account_not_active')
+            ->assertJsonMissingPath('token');
+
+        $this->approve('t1@example.com');
+
+        $this->postJson('/api/v1/auth/teacher/login', [
+            'email' => 't1@example.com',
+            'password' => 'secret1234',
+        ])->assertOk()->assertJsonPath('user.status', 'active');
+    }
+
+    public function test_a_disabled_teacher_token_is_rejected_on_every_route(): void
+    {
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+        $this->approve('t1@example.com');
+        $token = $this->postJson('/api/v1/auth/teacher/login', [
+            'email' => 't1@example.com',
+            'password' => 'secret1234',
+        ])->json('token');
+
+        User::query()->where('email', 't1@example.com')->update(['status' => 'disabled']);
+
+        $this->withToken($token)->getJson('/api/v1/me')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'account_not_active');
+
+        $this->forgetGuards();
+        $this->withToken($token)->getJson('/api/v1/classrooms')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'account_not_active');
+
+        // Logout still works so the app can drop the token cleanly.
+        $this->forgetGuards();
+        $this->withToken($token)->postJson('/api/v1/auth/logout')->assertNoContent();
+    }
+
+    /** What the Filament "approve" action does (UserResource). */
+    private function approve(string $email): void
+    {
+        User::query()->where('email', $email)->update(['status' => 'active']);
+    }
+
+    /** Registers and approves, like a teacher whose admin already clicked "approve". */
+    private function registerApproved(array $overrides = []): void
+    {
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration($overrides))->assertCreated();
+        $this->approve($overrides['email'] ?? 't1@example.com');
     }
 
     public function test_register_with_wrong_school_code_is_rejected_with_a_code(): void
@@ -91,7 +150,7 @@ class TeacherAuthTest extends TestCase
 
     public function test_login_returns_a_teacher_token_and_the_user(): void
     {
-        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+        $this->registerApproved();
 
         $response = $this->postJson('/api/v1/auth/teacher/login', [
             'email' => 't1@example.com',
@@ -116,7 +175,7 @@ class TeacherAuthTest extends TestCase
 
     public function test_login_uses_device_name_when_given(): void
     {
-        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+        $this->registerApproved();
 
         $this->postJson('/api/v1/auth/teacher/login', [
             'email' => 't1@example.com',
@@ -168,7 +227,7 @@ class TeacherAuthTest extends TestCase
 
     public function test_me_returns_the_authenticated_user_wrapped_in_data(): void
     {
-        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+        $this->registerApproved();
         $token = $this->postJson('/api/v1/auth/teacher/login', [
             'email' => 't1@example.com',
             'password' => 'secret1234',
@@ -191,7 +250,7 @@ class TeacherAuthTest extends TestCase
 
     public function test_logout_revokes_only_the_current_token(): void
     {
-        $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();
+        $this->registerApproved();
         $login = fn (string $device) => $this->postJson('/api/v1/auth/teacher/login', [
             'email' => 't1@example.com',
             'password' => 'secret1234',

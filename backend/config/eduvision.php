@@ -17,4 +17,16 @@ return [
     // minutes. The Plesk Scheduled Task runs every minute, so 3 tolerates two
     // missed runs before /api/v1/health reports "degraded".
     'heartbeat_max_age_minutes' => (int) env('HEARTBEAT_MAX_AGE_MINUTES', 3),
+
+    // System admin created by AdminSeeder (`php artisan db:seed`). Both values
+    // empty = the seeder does nothing, so a deploy never creates an account
+    // with a known password.
+    'admin_email' => env('ADMIN_EMAIL'),
+    'admin_password' => env('ADMIN_PASSWORD'),
+
+    // Sanctum token lifetimes in days per DESIGN §7.4.
+    'token_ttl_days' => [
+        'teacher' => 30,
+        'student' => 180,
+    ],
 ];

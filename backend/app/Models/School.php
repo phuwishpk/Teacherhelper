@@ -45,4 +45,28 @@ class School extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    /** @return HasMany<User, $this> */
+    public function teachers(): HasMany
+    {
+        return $this->hasMany(User::class)->where('role', User::ROLE_TEACHER);
+    }
+
+    /** @return HasMany<Classroom, $this> */
+    public function classrooms(): HasMany
+    {
+        return $this->hasMany(Classroom::class);
+    }
+
+    /** 8 uppercase letters/digits without 0/O/1/I, the code teachers type at sign-up. */
+    public static function randomJoinCode(): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $code = '';
+        for ($i = 0; $i < 8; $i++) {
+            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+
+        return $code;
+    }
 }

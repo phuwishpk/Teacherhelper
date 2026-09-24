@@ -44,6 +44,18 @@ class UserFactory extends Factory
         ]);
     }
 
+    /** A student: no email, no password, active (DESIGN §8.1). */
+    public function student(?School $school = null): static
+    {
+        return $this->state(fn () => [
+            'role' => User::ROLE_STUDENT,
+            'school_id' => $school?->id ?? School::factory(),
+            'email' => null,
+            'password' => null,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+    }
+
     public function admin(): static
     {
         return $this->state(fn () => [
