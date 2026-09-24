@@ -29,12 +29,18 @@ class RenderLoginCardsJob implements ShouldQueue
     /** One attempt: a retry would rotate the tokens a second time. */
     public int $tries = 1;
 
+    /**
+     * Seconds before the worker kills a render (eduvision:queue-work runs with
+     * --max-time=50 every minute). A killed job ends in failed() below.
+     */
+    public int $timeout = 45;
+
     public function __construct(public readonly int $printId)
     {
         $this->onQueue('pdf');
     }
 
-    public function handle(LoginCardRenderer $renderer): void
+    public function handle(LoginCardRenderer $renderer, CredentialIssuer $issuer): void
     {
         $print = LoginCardPrint::query()->with(['school', 'classroom', 'student'])->find($this->printId);
         if ($print === null || $print->status !== LoginCardPrint::STATUS_QUEUED) {
@@ -68,16 +74,9 @@ class RenderLoginCardsJob implements ShouldQueue
             $path = LoginCardPrintService::filePath($print);
             Storage::disk('local')->put($path, $pdf);
 
-            DB::transaction(function () use ($issued, $print, $path) {
+            DB::transaction(function () use ($issued, $issuer, $print, $path) {
                 foreach ($issued as $item) {
-                    $item['student']->credential()->updateOrCreate(
-                        ['student_id' => $item['student']->id],
-                        [
-                            'qr_token_hash' => CredentialIssuer::hashQrToken($item['qr_token']),
-                            'qr_issued_at' => now(),
-                        ],
-                    );
-                    $item['student']->tokens()->delete();
+                    $issuer->rotateQrToken($item['student'], $item['qr_token']);
                 }
 
                 $print->update(['status' => LoginCardPrint::STATUS_READY, 'file_path' => $path]);
@@ -90,6 +89,25 @@ class RenderLoginCardsJob implements ShouldQueue
 
             report($e);
         }
+    }
+
+    /**
+     * Called by the worker when the job dies outside handle()'s own catch, for
+     * example killed by $timeout in the middle of mPDF. The print must still
+     * reach a terminal state or the app would poll it forever; nothing was
+     * rotated because the token rotation is the last step of handle().
+     */
+    public function failed(?Throwable $e): void
+    {
+        $print = LoginCardPrint::query()->find($this->printId);
+        if ($print === null || ! in_array($print->status, [LoginCardPrint::STATUS_QUEUED, LoginCardPrint::STATUS_RENDERING], true)) {
+            return;
+        }
+
+        $print->update([
+            'status' => LoginCardPrint::STATUS_FAILED,
+            'error' => mb_substr($e?->getMessage() ?: 'การสร้าง PDF ถูกยกเลิก', 0, 255),
+        ]);
     }
 
     /**

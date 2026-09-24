@@ -21,6 +21,16 @@ class CredentialIssuer
 
     public const PIN_LENGTH = 6;
 
+    /**
+     * bcrypt cost of PIN hashes. A 6-digit PIN has only 10^6 values, so a high
+     * cost buys nothing (the 5-attempt lockout below is the real guard), while
+     * a bulk enrolment hashes one PIN per row inside a single request: at
+     * BCRYPT_ROUNDS=12 that was ~270 ms per row (100 rows = 27 s, past the
+     * app's 20 s timeout), at cost 8 it is ~15 ms. Teacher passwords keep the
+     * configured BCRYPT_ROUNDS.
+     */
+    public const PIN_HASH_ROUNDS = 8;
+
     /** Failed PIN attempts before the lockout (DESIGN §7.4). */
     public const MAX_FAILED_PIN_ATTEMPTS = 5;
 
@@ -41,7 +51,7 @@ class CredentialIssuer
             'student_id' => $student->id,
             'qr_token_hash' => self::hashQrToken($qrToken),
             'qr_issued_at' => now(),
-            'pin_hash' => Hash::make($pin),
+            'pin_hash' => self::hashPin($pin),
             'failed_pin_attempts' => 0,
             'locked_until' => null,
         ]);
@@ -57,18 +67,27 @@ class CredentialIssuer
     {
         $qrToken = self::randomQrToken();
 
-        DB::transaction(function () use ($student, $qrToken) {
-            $student->credential()->updateOrCreate(
-                ['student_id' => $student->id],
-                [
-                    'qr_token_hash' => self::hashQrToken($qrToken),
-                    'qr_issued_at' => now(),
-                ],
-            );
-            $student->tokens()->delete();
-        });
+        DB::transaction(fn () => $this->rotateQrToken($student, $qrToken));
 
         return $qrToken;
+    }
+
+    /**
+     * Stores the hash of a freshly generated QR token and revokes every session
+     * of the student (DESIGN §7.4). This is the only place that rule lives:
+     * RenderLoginCardsJob calls it, inside its own transaction, after the PDF
+     * with the plain token has been rendered and stored.
+     */
+    public function rotateQrToken(User $student, string $plainToken): void
+    {
+        $student->credential()->updateOrCreate(
+            ['student_id' => $student->id],
+            [
+                'qr_token_hash' => self::hashQrToken($plainToken),
+                'qr_issued_at' => now(),
+            ],
+        );
+        $student->tokens()->delete();
     }
 
     /**
@@ -83,7 +102,7 @@ class CredentialIssuer
             $student->credential()->updateOrCreate(
                 ['student_id' => $student->id],
                 [
-                    'pin_hash' => Hash::make($pin),
+                    'pin_hash' => self::hashPin($pin),
                     'failed_pin_attempts' => 0,
                     'locked_until' => null,
                 ],
@@ -97,6 +116,12 @@ class CredentialIssuer
     public static function hashQrToken(string $token): string
     {
         return hash('sha256', $token);
+    }
+
+    /** bcrypt at PIN_HASH_ROUNDS; verified with Hash::check() like any bcrypt hash. */
+    public static function hashPin(string $pin): string
+    {
+        return Hash::make($pin, ['rounds' => self::PIN_HASH_ROUNDS]);
     }
 
     /** `EVL1.{token}` as printed on the card (DESIGN §5.4). */

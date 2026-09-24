@@ -160,15 +160,52 @@ class StudentAuthTest extends TestCase
         $this->assertSame(0, $this->student->credential->fresh()->failed_pin_attempts);
     }
 
-    public function test_student_auth_endpoints_are_rate_limited(): void
+    public function test_a_whole_class_can_log_in_by_qr_from_one_ip_within_a_minute(): void
     {
-        for ($i = 0; $i < 10; $i++) {
+        // A class behind one school NAT address; the teacher limiter (10/min)
+        // would have locked out student 11 onwards.
+        $qrTokens = [];
+        for ($n = 1; $n <= 30; $n++) {
+            $qrTokens[] = $this->enrollStudent($this->classroom, 100 + $n)['qr_token'];
+        }
+
+        foreach ($qrTokens as $qrToken) {
+            $this->postJson('/api/v1/auth/student/qr', ['qr_token' => 'EVL1.'.$qrToken])->assertOk();
+        }
+    }
+
+    public function test_student_qr_logins_from_one_ip_are_limited_only_beyond_120_per_minute(): void
+    {
+        for ($i = 0; $i < 120; $i++) {
             $this->postJson('/api/v1/auth/student/qr', ['qr_token' => 'nope'])->assertStatus(422);
         }
 
         $this->postJson('/api/v1/auth/student/qr', ['qr_token' => 'nope'])
             ->assertStatus(429)
+            ->assertHeader('Retry-After')
+            ->assertJsonStructure(['message', 'errors', 'code'])
             ->assertJsonPath('code', 'too_many_requests');
+    }
+
+    public function test_pin_logins_are_limited_per_credential_without_blocking_classmates(): void
+    {
+        $classmate = $this->enrollStudent($this->classroom, 8);
+
+        // 10 tries for (ip, class_code, student_number) per minute; the key is
+        // normalised like the class code itself, so "abc 234" counts as ABC234.
+        for ($i = 0; $i < 10; $i++) {
+            $status = $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'abc 234', 'student_number' => 7, 'pin' => $this->wrongPin()])->status();
+            $this->assertContains($status, [422, 423]);
+        }
+
+        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'too_many_requests');
+
+        // Same IP, another student of the same class: not throttled.
+        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 8, 'pin' => $classmate['pin']])
+            ->assertOk()
+            ->assertJsonPath('user.id', $classmate['student']->id);
     }
 
     public function test_a_student_token_reaches_me_but_not_teacher_routes(): void
