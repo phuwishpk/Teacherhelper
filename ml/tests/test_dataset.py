@@ -67,7 +67,7 @@ def test_read_labels_csv_resolves_relative_paths(tmp_path: Path):
     "row, message",
     [
         ("images/a.png,,w1", "empty label"),
-        ("images/a.png,๓,w1", "must be 1-12 characters"),
+        ("images/a.png,๓,w1", "label '๓' must be 1-12 characters"),
         ("images/a.png,12,", "empty writer_key"),
         (",12,w1", "empty path"),
     ],
