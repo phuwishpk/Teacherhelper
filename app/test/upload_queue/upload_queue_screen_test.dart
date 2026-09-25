@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:eduvision/core/auth/auth_repository.dart';
 import 'package:eduvision/core/db/app_database.dart';
 import 'package:eduvision/core/db/database_provider.dart';
+import 'package:eduvision/features/scan/scan_processor.dart';
 import 'package:eduvision/features/upload_queue/scan_queue_repository.dart';
 import 'package:eduvision/features/upload_queue/upload_queue_screen.dart';
 import 'package:eduvision/features/upload_queue/upload_worker.dart';
@@ -10,6 +11,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fake_http_adapter.dart';
 import '../helpers/pump_screen.dart';
+
+class _FakeProcessor extends Fake implements ScanProcessor {
+  _FakeProcessor(this.onRun);
+
+  final Future<NeedsLayoutRun> Function() onRun;
+  int runs = 0;
+
+  @override
+  Future<NeedsLayoutRun> processNeedsLayout() {
+    runs++;
+    return onRun();
+  }
+}
 
 class _RecordingScheduler implements UploadScheduler {
   final events = <String>[];
@@ -236,6 +250,57 @@ void main() {
     );
     expect((await repo.find('c'))!.state, ScanState.done);
     expect(find.text('ส่งแล้ว'), findsOneWidget);
+    await unmountScreen(tester);
+  });
+
+  testWidgets('a needs_layout scan offers "ประมวลผลต่อ"', (tester) async {
+    await enqueue('nl', state: ScanState.needsLayout);
+    final processor = _FakeProcessor(() async {
+      await repo.setState('nl', ScanState.pending);
+      return const NeedsLayoutRun(processed: 1, waiting: 0, failed: 0);
+    });
+    await pumpScreen(
+      tester,
+      const UploadQueueScreen(),
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        uploadSchedulerProvider.overrideWithValue(_RecordingScheduler()),
+        scanProcessorProvider.overrideWithValue(processor),
+      ],
+    );
+    expect(find.text('รอ layout'), findsOneWidget);
+    expect(find.textContaining('ยังไม่มี layout'), findsOneWidget);
+    expect(find.text('ลองใหม่'), findsNothing);
+
+    await tester.tap(find.text('ประมวลผลต่อ'));
+    await tester.pumpAndSettle();
+
+    expect(processor.runs, 1);
+    expect(find.text('ตัดภาพแล้ว 1 หน้า กำลังอัปโหลด'), findsOneWidget);
+    expect(find.text('รออัปโหลด'), findsOneWidget);
+    await unmountScreen(tester);
+  });
+
+  testWidgets('"ประมวลผลต่อ" while still offline says so', (tester) async {
+    await enqueue('nl', state: ScanState.needsLayout);
+    final processor = _FakeProcessor(
+      () async => const NeedsLayoutRun(processed: 0, waiting: 1, failed: 0),
+    );
+    await pumpScreen(
+      tester,
+      const UploadQueueScreen(),
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        uploadSchedulerProvider.overrideWithValue(_RecordingScheduler()),
+        scanProcessorProvider.overrideWithValue(processor),
+      ],
+    );
+
+    await tester.tap(find.text('ประมวลผลต่อ'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('ยังดาวน์โหลด layout ไม่ได้'), findsOneWidget);
+    expect(find.text('รอ layout'), findsOneWidget);
     await unmountScreen(tester);
   });
 }

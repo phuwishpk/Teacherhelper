@@ -7,6 +7,7 @@ environment:
   sdk: ^3.12.2
 
 dependencies:
+  camera: ^0.12.1
   dio: ^5.11.1
   drift: ^2.35.0
   drift_flutter: ^0.3.1
@@ -29,6 +30,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   drift_dev: ^2.35.0
   build_runner: ^2.15.1
+  pigeon: ^29.0.4
 
 flutter:
   uses-material-design: true

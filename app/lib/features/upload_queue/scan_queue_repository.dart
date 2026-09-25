@@ -262,6 +262,34 @@ class ScanQueueRepository {
         );
   }
 
+  /// A `needs_layout` scan was cropped now that its layout is on the device:
+  /// store the real `meta` and files and queue it for upload. Returns false
+  /// (and changes nothing) unless the row is still `needs_layout`.
+  Future<bool> completeLayout(
+    String clientScanId, {
+    required Map<String, dynamic> meta,
+    required Map<String, String> files,
+  }) async {
+    final changed =
+        await (_db.update(_db.scanQueue)..where(
+              (t) =>
+                  t.clientScanId.equals(clientScanId) &
+                  t.state.equalsValue(ScanState.needsLayout),
+            ))
+            .write(
+              ScanQueueCompanion(
+                state: const Value(ScanState.pending),
+                metaJson: Value(jsonEncode(meta)),
+                filesJson: Value(jsonEncode(files)),
+                attempts: const Value(0),
+                lastError: const Value(null),
+                nextAttemptAt: const Value(null),
+                updatedAt: Value(_clock()),
+              ),
+            );
+    return changed > 0;
+  }
+
   Future<void> setState(String clientScanId, ScanState state) =>
       _update(clientScanId, ScanQueueCompanion(state: Value(state)));
 
@@ -310,12 +338,28 @@ class ScanQueueRepository {
   }
 
   Future<void> _deleteFiles(QueuedScan scan) async {
+    final folders = <String>{};
     for (final path in scan.files.values) {
       final file = File(path);
       try {
         if (await file.exists()) await file.delete();
       } on FileSystemException {
         // Best effort; a leftover temp file is harmless.
+      }
+      folders.add(file.parent.path);
+    }
+    // Confirmed scans live in a folder named after their id
+    // (ScanFileStore); drop it once it is empty.
+    for (final folder in folders) {
+      final dir = Directory(folder);
+      if (dir.uri.pathSegments.where((s) => s.isNotEmpty).lastOrNull !=
+          scan.clientScanId) {
+        continue;
+      }
+      try {
+        if (await dir.exists() && await dir.list().isEmpty) await dir.delete();
+      } on FileSystemException {
+        // Same as above.
       }
     }
   }
