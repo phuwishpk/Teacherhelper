@@ -25,6 +25,19 @@ class User {
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
 
+  /// Round-trips through [fromJson]; used to cache the last `/me` payload so
+  /// the app can start offline (DESIGN §6.3 offline scanning).
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'role': role,
+    'email': email,
+    'status': status,
+    'school': schoolId == null && schoolName == null
+        ? null
+        : {'id': schoolId, 'name': schoolName},
+  };
+
   factory User.fromJson(Map<String, dynamic> json) {
     final school = json['school'] as Map<String, dynamic>?;
     return User(

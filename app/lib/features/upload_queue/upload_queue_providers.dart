@@ -31,11 +31,17 @@ class UploadQueueActions extends Notifier<bool> {
       return const DrainResult(done: 0, conflict: 0, failed: 0, retry: 0);
     }
     state = true;
+    final scheduler = ref.read(uploadSchedulerProvider);
     try {
+      // Do not let the WorkManager isolate pick the same rows meanwhile.
+      await scheduler.cancelPending();
       final result = await ref.read(scanUploaderProvider).drain();
-      if (!result.settled) {
-        await ref.read(uploadSchedulerProvider).requestUpload();
-      }
+      // Anything still pending (this drain's retries, or scans whose backoff
+      // has not elapsed) goes back to WorkManager.
+      final pending = await ref
+          .read(scanQueueRepositoryProvider)
+          .countByState(ScanState.pending);
+      if (pending > 0) await scheduler.requestUpload();
       return result;
     } finally {
       state = false;

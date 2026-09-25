@@ -8,9 +8,20 @@ import '../../core/db/app_database.dart';
 import '../../core/db/database_provider.dart';
 import 'queued_scan.dart';
 
+/// A scan left in `uploading` longer than this is assumed to belong to a
+/// dead isolate (app killed mid-upload) and is picked up again. Anything
+/// younger is probably a live upload in the other isolate (foreground drain
+/// vs. WorkManager) and must not be sent twice.
+const staleUploadingAfter = Duration(minutes: 10);
+
 /// Local persistence for the upload queue (DESIGN §6.4 `scan_queue`).
 /// All state transitions of a queued scan go through here so the uploader,
 /// the scan screen and the queue screen agree on the rules.
+///
+/// `done` and `conflict` are sticky: once the server has accepted a scan a
+/// late failure from a concurrent upload of the same row (the other isolate
+/// losing its multipart stream because the files were just deleted) must
+/// not turn it back into `pending` or `failed`.
 class ScanQueueRepository {
   ScanQueueRepository(this._db, {DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
@@ -68,21 +79,41 @@ class ScanQueueRepository {
   }
 
   /// Pending scans whose backoff delay has elapsed, oldest first. A scan left
-  /// in `uploading` (app killed mid-upload) is picked up again too.
+  /// in `uploading` for longer than [staleUploadingAfter] (app killed
+  /// mid-upload) is picked up again too; a younger one is left alone.
   Future<List<QueuedScan>> dueForUpload({DateTime? now}) async {
     final at = now ?? _clock();
+    final staleBefore = at.subtract(staleUploadingAfter);
     final rows =
         await (_db.select(_db.scanQueue)
               ..where(
                 (t) =>
-                    (t.state.equalsValue(ScanState.pending) |
-                        t.state.equalsValue(ScanState.uploading)) &
-                    (t.nextAttemptAt.isNull() |
-                        t.nextAttemptAt.isSmallerOrEqualValue(at)),
+                    (t.state.equalsValue(ScanState.pending) &
+                        (t.nextAttemptAt.isNull() |
+                            t.nextAttemptAt.isSmallerOrEqualValue(at))) |
+                    (t.state.equalsValue(ScanState.uploading) &
+                        t.updatedAt.isSmallerOrEqualValue(staleBefore)),
               )
               ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
             .get();
     return rows.map(QueuedScan.fromRow).toList();
+  }
+
+  /// Earliest `next_attempt_at` among pending scans that are not due yet at
+  /// [now]; null when nothing is waiting on its backoff.
+  Future<DateTime?> earliestPendingRetry({DateTime? now}) async {
+    final at = now ?? _clock();
+    final row =
+        await (_db.select(_db.scanQueue)
+              ..where(
+                (t) =>
+                    t.state.equalsValue(ScanState.pending) &
+                    t.nextAttemptAt.isBiggerThanValue(at),
+              )
+              ..orderBy([(t) => OrderingTerm.asc(t.nextAttemptAt)])
+              ..limit(1))
+            .getSingleOrNull();
+    return row?.nextAttemptAt;
   }
 
   Future<int> countByState(ScanState state) async {
@@ -93,13 +124,16 @@ class ScanQueueRepository {
     return (await q.getSingle()).read(count) ?? 0;
   }
 
-  Future<void> markUploading(String clientScanId) => _update(
-    clientScanId,
-    ScanQueueCompanion(
-      state: const Value(ScanState.uploading),
-      attempts: Value.absent(),
-    ),
-  );
+  /// Claims the row for an upload. Returns false when the row is gone or
+  /// already settled (`done` / `conflict`), in which case the caller must
+  /// not send it.
+  Future<bool> markUploading(String clientScanId) async {
+    final changed = await _updateUnlessSettled(
+      clientScanId,
+      const ScanQueueCompanion(state: Value(ScanState.uploading)),
+    );
+    return changed > 0;
+  }
 
   /// Upload accepted: delete the local files and keep the row for the log.
   Future<void> markDone(String clientScanId, {int? serverScanId}) async {
@@ -116,21 +150,32 @@ class ScanQueueRepository {
   }
 
   /// 202 pending_confirm: the submission was already published, so the
-  /// teacher has to confirm the replacement (DESIGN §9.4).
-  Future<void> markConflict(String clientScanId, {required int serverScanId}) =>
-      _update(
-        clientScanId,
-        ScanQueueCompanion(
-          state: const Value(ScanState.conflict),
-          serverScanId: Value(serverScanId),
-          lastError: const Value(null),
-          nextAttemptAt: const Value(null),
-        ),
-      );
+  /// teacher has to confirm the replacement (DESIGN §9.4). Ignored once the
+  /// row is `done`.
+  Future<void> markConflict(
+    String clientScanId, {
+    required int serverScanId,
+  }) async {
+    await (_db.update(_db.scanQueue)..where(
+          (t) =>
+              t.clientScanId.equals(clientScanId) &
+              t.state.equalsValue(ScanState.done).not(),
+        ))
+        .write(
+          ScanQueueCompanion(
+            state: const Value(ScanState.conflict),
+            serverScanId: Value(serverScanId),
+            lastError: const Value(null),
+            nextAttemptAt: const Value(null),
+            updatedAt: Value(_clock()),
+          ),
+        );
+  }
 
-  /// 422: the server rejected the scan for good (qr_invalid, ...).
+  /// 422: the server rejected the scan for good (qr_invalid, ...). Ignored
+  /// once the row is `done` or `conflict`.
   Future<void> markFailed(String clientScanId, {required String reason}) =>
-      _update(
+      _updateUnlessSettled(
         clientScanId,
         ScanQueueCompanion(
           state: const Value(ScanState.failed),
@@ -139,18 +184,20 @@ class ScanQueueRepository {
         ),
       );
 
-  /// Transient error: back to pending with a later retry time.
+  /// Transient error: back to pending with a later retry time. Ignored once
+  /// the row is `done` or `conflict` (the other isolate already succeeded).
   Future<void> scheduleRetry(
     String clientScanId, {
     required String error,
     required DateTime nextAttemptAt,
   }) async {
     final current = await find(clientScanId);
-    await _update(
+    if (current == null || current.isSettled) return;
+    await _updateUnlessSettled(
       clientScanId,
       ScanQueueCompanion(
         state: const Value(ScanState.pending),
-        attempts: Value((current?.attempts ?? 0) + 1),
+        attempts: Value(current.attempts + 1),
         lastError: Value(error),
         nextAttemptAt: Value(nextAttemptAt),
       ),
@@ -158,16 +205,23 @@ class ScanQueueRepository {
   }
 
   /// Manual "retry now" from the queue screen, or a scan that was waiting
-  /// for a layout and can now be processed.
-  Future<void> resetToPending(String clientScanId) => _update(
-    clientScanId,
-    const ScanQueueCompanion(
-      state: Value(ScanState.pending),
-      attempts: Value(0),
-      lastError: Value(null),
-      nextAttemptAt: Value(null),
-    ),
-  );
+  /// for a layout and can now be processed. A `done` row is never re-sent.
+  Future<void> resetToPending(String clientScanId) async {
+    await (_db.update(_db.scanQueue)..where(
+          (t) =>
+              t.clientScanId.equals(clientScanId) &
+              t.state.equalsValue(ScanState.done).not(),
+        ))
+        .write(
+          ScanQueueCompanion(
+            state: const Value(ScanState.pending),
+            attempts: const Value(0),
+            lastError: const Value(null),
+            nextAttemptAt: const Value(null),
+            updatedAt: Value(_clock()),
+          ),
+        );
+  }
 
   Future<void> setState(String clientScanId, ScanState state) =>
       _update(clientScanId, ScanQueueCompanion(state: Value(state)));
@@ -187,6 +241,19 @@ class ScanQueueRepository {
   Future<void> _update(String clientScanId, ScanQueueCompanion values) =>
       (_db.update(_db.scanQueue)
             ..where((t) => t.clientScanId.equals(clientScanId)))
+          .write(values.copyWith(updatedAt: Value(_clock())));
+
+  /// Like [_update] but leaves `done` / `conflict` rows untouched. Returns
+  /// the number of rows written (0 or 1).
+  Future<int> _updateUnlessSettled(
+    String clientScanId,
+    ScanQueueCompanion values,
+  ) =>
+      (_db.update(_db.scanQueue)..where(
+            (t) =>
+                t.clientScanId.equals(clientScanId) &
+                t.state.isNotInValues([ScanState.done, ScanState.conflict]),
+          ))
           .write(values.copyWith(updatedAt: Value(_clock())));
 
   Future<void> _deleteFilesOf(String clientScanId) async {

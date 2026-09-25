@@ -4,9 +4,47 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import 'classroom.dart';
 import 'classrooms_providers.dart';
+
+/// `/classrooms/:id/edit`: uses the classroom handed over as route `extra`
+/// when there is one, otherwise loads it by id so a deep link or a restored
+/// route never silently opens the form in create mode.
+class ClassroomEditScreen extends ConsumerWidget {
+  const ClassroomEditScreen({
+    super.key,
+    required this.classroomId,
+    this.initial,
+  });
+
+  final int classroomId;
+  final Classroom? initial;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (initial case final c? when c.id == classroomId) {
+      return ClassroomFormScreen(existing: c);
+    }
+    final classroom = ref.watch(classroomProvider(classroomId));
+    return classroom.when(
+      skipLoadingOnRefresh: true,
+      data: (c) => ClassroomFormScreen(existing: c),
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('แก้ไขห้องเรียน')),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        appBar: AppBar(title: const Text('แก้ไขห้องเรียน')),
+        body: ErrorView(
+          message: apiErrorMessage(e),
+          onRetry: () => ref.invalidate(classroomProvider(classroomId)),
+        ),
+      ),
+    );
+  }
+}
 
 /// Create (when [existing] is null) or edit a classroom.
 class ClassroomFormScreen extends ConsumerStatefulWidget {

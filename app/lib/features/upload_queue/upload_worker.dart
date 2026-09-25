@@ -30,16 +30,31 @@ void uploadCallbackDispatcher() {
         tokenStorage: SecureTokenStorage(),
         onUnauthorized: () {},
       );
-      final uploader = ScanUploader(
-        dio: dio,
-        repository: ScanQueueRepository(db),
+      final repository = ScanQueueRepository(db);
+      return runBackgroundDrain(
+        ScanUploader(dio: dio, repository: repository),
+        repository,
       );
-      final result = await uploader.drain();
-      return result.settled;
     } finally {
       await db.close();
     }
   });
+}
+
+/// One background run: drain what is due, then tell WorkManager whether the
+/// task is finished (`true`) or should be retried with backoff (`false`).
+///
+/// `DrainResult.settled` alone is not enough: when every pending scan still
+/// has `next_attempt_at` in the future the drain visits nothing, and a
+/// `true` here would let the scan sit in `pending` until the app is
+/// reopened. So the answer is "retry" whenever anything is still pending.
+Future<bool> runBackgroundDrain(
+  ScanUploader uploader,
+  ScanQueueRepository repository,
+) async {
+  await uploader.drain();
+  final pending = await repository.countByState(ScanState.pending);
+  return pending == 0;
 }
 
 /// Schedules background uploads; abstract so tests and the Chrome preview
@@ -49,6 +64,11 @@ abstract class UploadScheduler {
 
   /// Ask the OS to run the upload task as soon as the network is available.
   Future<void> requestUpload();
+
+  /// Drop the queued one-off task so a foreground drain does not race the
+  /// background isolate on the same rows. Call [requestUpload] again after
+  /// the drain if anything is still pending.
+  Future<void> cancelPending();
 }
 
 class NoopUploadScheduler implements UploadScheduler {
@@ -59,6 +79,9 @@ class NoopUploadScheduler implements UploadScheduler {
 
   @override
   Future<void> requestUpload() async {}
+
+  @override
+  Future<void> cancelPending() async {}
 }
 
 class WorkmanagerUploadScheduler implements UploadScheduler {
@@ -77,6 +100,10 @@ class WorkmanagerUploadScheduler implements UploadScheduler {
     backoffPolicy: BackoffPolicy.exponential,
     backoffPolicyDelay: const Duration(seconds: 30),
   );
+
+  @override
+  Future<void> cancelPending() =>
+      Workmanager().cancelByUniqueName(uploadTaskUniqueName);
 }
 
 bool get _backgroundUploadsSupported => !kIsWeb && Platform.isAndroid;

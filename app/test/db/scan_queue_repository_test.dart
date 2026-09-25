@@ -106,21 +106,15 @@ void main() {
     expect(await repo.countByState(ScanState.done), 1);
   });
 
-  test('conflict, failed, reset and remove transitions', () async {
+  test('failed, reset, conflict and remove transitions', () async {
     final page = await crop('page');
     await repo.enqueue(
       clientScanId: 'c',
       meta: meta('c'),
       files: {'page': page.path},
     );
-    await repo.markConflict('c', serverScanId: 5);
-    var scan = (await repo.find('c'))!;
-    expect(scan.state, ScanState.conflict);
-    expect(scan.serverScanId, 5);
-    expect(await page.exists(), isTrue, reason: 'files stay until confirmed');
-
     await repo.markFailed('c', reason: 'qr_invalid');
-    scan = (await repo.find('c'))!;
+    var scan = (await repo.find('c'))!;
     expect(scan.state, ScanState.failed);
     expect(scan.lastError, 'qr_invalid');
 
@@ -130,9 +124,123 @@ void main() {
     expect(scan.attempts, 0);
     expect(scan.lastError, isNull);
 
+    await repo.markConflict('c', serverScanId: 5);
+    scan = (await repo.find('c'))!;
+    expect(scan.state, ScanState.conflict);
+    expect(scan.serverScanId, 5);
+    expect(await page.exists(), isTrue, reason: 'files stay until confirmed');
+
     await repo.remove('c');
     expect(await repo.find('c'), isNull);
     expect(await page.exists(), isFalse);
+  });
+
+  group('done and conflict are sticky', () {
+    test(
+      'markDone then scheduleRetry / markFailed leaves the row done',
+      () async {
+        final page = await crop('page');
+        await repo.enqueue(
+          clientScanId: 's',
+          meta: meta('s'),
+          files: {'page': page.path},
+        );
+        await repo.markDone('s', serverScanId: 7);
+
+        await repo.scheduleRetry(
+          's',
+          error: 'stream closed',
+          nextAttemptAt: now.add(const Duration(seconds: 30)),
+        );
+        var scan = (await repo.find('s'))!;
+        expect(scan.state, ScanState.done);
+        expect(scan.attempts, 0);
+        expect(scan.lastError, isNull);
+        expect(scan.serverScanId, 7);
+
+        await repo.markFailed('s', reason: 'ไฟล์ภาพหายไปจากเครื่อง');
+        scan = (await repo.find('s'))!;
+        expect(scan.state, ScanState.done);
+        expect(scan.lastError, isNull);
+
+        expect(await repo.markUploading('s'), isFalse);
+        expect((await repo.find('s'))!.state, ScanState.done);
+
+        await repo.markConflict('s', serverScanId: 8);
+        scan = (await repo.find('s'))!;
+        expect(scan.state, ScanState.done);
+        expect(scan.serverScanId, 7);
+
+        await repo.resetToPending('s');
+        expect((await repo.find('s'))!.state, ScanState.done);
+        expect(
+          await repo.dueForUpload(now: now.add(const Duration(days: 1))),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'conflict ignores retry/failed but confirm-replace can finish it',
+      () async {
+        await repo.enqueue(clientScanId: 'k', meta: meta('k'), files: {});
+        await repo.markConflict('k', serverScanId: 42);
+
+        await repo.scheduleRetry('k', error: 'x', nextAttemptAt: now);
+        expect((await repo.find('k'))!.state, ScanState.conflict);
+        await repo.markFailed('k', reason: 'x');
+        expect((await repo.find('k'))!.state, ScanState.conflict);
+        expect(await repo.markUploading('k'), isFalse);
+
+        await repo.markDone('k', serverScanId: 42);
+        expect((await repo.find('k'))!.state, ScanState.done);
+      },
+    );
+
+    test('markUploading claims a pending row exactly once per drain', () async {
+      await repo.enqueue(clientScanId: 'u', meta: meta('u'), files: {});
+      expect(await repo.markUploading('u'), isTrue);
+      expect((await repo.find('u'))!.state, ScanState.uploading);
+      expect(await repo.markUploading('missing'), isFalse);
+    });
+  });
+
+  test('a live uploading row is not re-picked until it is stale', () async {
+    await repo.enqueue(clientScanId: 'live', meta: meta('live'), files: {});
+    await repo.markUploading('live');
+
+    expect(await repo.dueForUpload(now: now), isEmpty);
+    expect(
+      await repo.dueForUpload(now: now.add(const Duration(minutes: 9))),
+      isEmpty,
+      reason: 'younger than staleUploadingAfter: another isolate owns it',
+    );
+    final stale = await repo.dueForUpload(now: now.add(staleUploadingAfter));
+    expect(stale.map((s) => s.clientScanId), ['live']);
+  });
+
+  test('earliestPendingRetry reports the next backoff time', () async {
+    expect(await repo.earliestPendingRetry(now: now), isNull);
+    await repo.enqueue(clientScanId: 'a', meta: meta('a'), files: {});
+    await repo.enqueue(clientScanId: 'b', meta: meta('b'), files: {});
+    await repo.scheduleRetry(
+      'a',
+      error: 'x',
+      nextAttemptAt: now.add(const Duration(minutes: 5)),
+    );
+    await repo.scheduleRetry(
+      'b',
+      error: 'x',
+      nextAttemptAt: now.add(const Duration(minutes: 2)),
+    );
+    expect(
+      await repo.earliestPendingRetry(now: now),
+      now.add(const Duration(minutes: 2)),
+    );
+    expect(
+      await repo.earliestPendingRetry(now: now.add(const Duration(minutes: 3))),
+      now.add(const Duration(minutes: 5)),
+    );
   });
 
   test(

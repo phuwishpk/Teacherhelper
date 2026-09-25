@@ -95,6 +95,31 @@ void main() {
     expect(await repo.cachedLayoutCount(), 3);
   });
 
+  test('findStudent copes with a student cached in two classrooms', () async {
+    // Last year's room (id 1) and this year's room (id 2) both list 4567.
+    await repo.replaceRoster(1, const [
+      RosterStudent(studentId: 4567, studentNumber: 12, name: 'ด.ญ. สมหญิง'),
+    ]);
+    await repo.replaceRoster(2, const [
+      RosterStudent(studentId: 4567, studentNumber: 3, name: 'ด.ญ. สมหญิง'),
+      RosterStudent(studentId: 4568, studentNumber: 4, name: 'ด.ช. สมชาย'),
+    ]);
+
+    final any = await repo.findStudent(4567);
+    expect(any, isNotNull);
+    expect(any!.name, 'ด.ญ. สมหญิง');
+    expect(any.studentNumber, 3, reason: 'newest classroom wins by default');
+
+    expect((await repo.findStudent(4567, classroomId: 1))?.studentNumber, 12);
+    expect((await repo.findStudent(4567, classroomId: 2))?.studentNumber, 3);
+    expect(
+      (await repo.findStudent(4567, classroomId: 99))?.studentNumber,
+      3,
+      reason: 'unknown classroom falls back to any row',
+    );
+    expect(await repo.findStudent(1, classroomId: 2), isNull);
+  });
+
   test('re-preparing replaces the roster instead of duplicating it', () async {
     await repo.prepareClassroom(1);
     await repo.prepareClassroom(1);

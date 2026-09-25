@@ -129,8 +129,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'edit',
-            builder: (context, state) =>
-                ClassroomFormScreen(existing: state.extra as Classroom?),
+            builder: (context, state) => ClassroomEditScreen(
+              classroomId: _id(state, 'id'),
+              initial: state.extra is Classroom
+                  ? state.extra as Classroom
+                  : null,
+            ),
           ),
           GoRoute(
             path: 'students/add',
@@ -154,8 +158,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'edit',
-            builder: (context, state) =>
-                AssignmentFormScreen(existing: state.extra as Assignment?),
+            builder: (context, state) => AssignmentEditScreen(
+              assignmentId: _id(state, 'id'),
+              initial: state.extra is Assignment
+                  ? state.extra as Assignment
+                  : null,
+            ),
           ),
           GoRoute(
             path: 'questions/new',

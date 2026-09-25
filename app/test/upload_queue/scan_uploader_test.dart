@@ -197,6 +197,47 @@ void main() {
     expect(scan.attempts, 1);
   });
 
+  test(
+    'a failure arriving after another isolate succeeded keeps the row done',
+    () async {
+      // Isolate A (WorkManager) and isolate B (foreground) both picked scan
+      // 'race'. A's 201 lands and deletes the files while B's multipart
+      // stream is still open; B then fails. The row must stay `done`.
+      await enqueue('race');
+      final scan = (await repo.find('race'))!;
+      final adapter = FakeHttpAdapter((options) async {
+        await repo.markDone('race', serverScanId: 500); // isolate A wins
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'stream closed',
+        );
+      });
+      final outcome = await uploader(adapter).uploadOne(scan);
+
+      expect(outcome, UploadOutcome.retry, reason: 'B saw its own failure');
+      final after = (await repo.find('race'))!;
+      expect(after.state, ScanState.done);
+      expect(after.serverScanId, 500);
+      expect(after.attempts, 0);
+      expect(after.lastError, isNull);
+      expect(
+        await repo.dueForUpload(now: now.add(const Duration(days: 1))),
+        isEmpty,
+      );
+    },
+  );
+
+  test('a row settled before the attempt is skipped, not sent', () async {
+    await enqueue('late');
+    final scan = (await repo.find('late'))!;
+    await repo.markDone('late', serverScanId: 9);
+    final adapter = FakeHttpAdapter((_) async => jsonResponse(201, {}));
+
+    expect(await uploader(adapter).uploadOne(scan), UploadOutcome.skipped);
+    expect(adapter.requests, isEmpty);
+    expect((await repo.find('late'))!.state, ScanState.done);
+  });
+
   test('missing crop file fails the scan instead of looping forever', () async {
     await enqueue('gone');
     File((await repo.find('gone'))!.files['crop_q501']!).deleteSync();

@@ -15,15 +15,33 @@ class EduVisionApp extends ConsumerStatefulWidget {
   ConsumerState<EduVisionApp> createState() => _EduVisionAppState();
 }
 
-class _EduVisionAppState extends ConsumerState<EduVisionApp> {
+class _EduVisionAppState extends ConsumerState<EduVisionApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Read the stored token once; the router shows /splash until this settles.
     Future.microtask(() => ref.read(sessionProvider.notifier).restore());
     // A teacher who was offline may have scans waiting: make sure WorkManager
     // has an upload task queued (it runs once the network is back, §6.4).
     Future.microtask(_resumePendingUploads);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // After an offline start, pick up the real /me once the app comes back
+      // to the foreground (best effort; a failure keeps the cached user).
+      ref.read(sessionProvider.notifier).refreshUser();
+      _resumePendingUploads();
+    }
   }
 
   Future<void> _resumePendingUploads() async {
