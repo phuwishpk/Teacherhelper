@@ -42,6 +42,36 @@ class ExtractionValidatorTest extends TestCase
         }
     }
 
+    public function test_a_blank_open_answer_may_list_no_or_some_criteria(): void
+    {
+        // A blank answer scores 0 without reading the criteria (§11.1): a real
+        // model answering blank with criteria [] must not burn retries.
+        $blank = ['blank' => true, 'criteria' => [], 'error_types' => []] + self::open([]);
+        $normalized = ExtractionValidator::normalize('open', $blank, 3);
+        $this->assertSame([
+            ['criterion_id' => 1, 'level' => 'not_met'],
+            ['criterion_id' => 2, 'level' => 'not_met'],
+            ['criterion_id' => 3, 'level' => 'not_met'],
+        ], $normalized['criteria']);
+        $this->assertSame(['no_answer'], $normalized['error_types']);
+
+        // A partial or odd list: known ids keep their note but are not_met, unknown ids go.
+        $blank['criteria'] = [
+            ['criterion_id' => 2, 'level' => 'met', 'evidence_th' => 'ไม่มีคำตอบ'],
+            ['criterion_id' => 2, 'level' => 'not_met'],
+            ['criterion_id' => 7, 'level' => 'not_met'],
+        ];
+        $this->assertSame([
+            ['criterion_id' => 1, 'level' => 'not_met'],
+            ['criterion_id' => 2, 'level' => 'not_met', 'evidence_th' => 'ไม่มีคำตอบ'],
+            ['criterion_id' => 3, 'level' => 'not_met'],
+        ], ExtractionValidator::normalize('open', $blank, 3)['criteria']);
+
+        // Not blank: the strict 1..n rule still holds for an empty list.
+        $this->expectException(GeminiException::class);
+        ExtractionValidator::normalize('open', ['blank' => false] + $blank, 3);
+    }
+
     public function test_a_blank_answer_is_tagged_no_answer_and_long_text_is_invalid(): void
     {
         $blank = ['blank' => true, 'suspicious_instruction' => false, 'legibility' => 'clear', 'answer_text' => '', 'key_match' => 'missing', 'error_types' => []];

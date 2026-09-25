@@ -5,8 +5,10 @@ namespace Tests\Feature\Grading;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Grading\FeedbackTemplates;
+use App\Domain\Notifications\GradingNotices;
 use App\Domain\Notifications\Notifier;
 use App\Jobs\GradeScanJob;
+use App\Jobs\NotifyGradingFinishedJob;
 use App\Models\AiCall;
 use App\Models\Assignment;
 use App\Models\Response;
@@ -31,7 +33,7 @@ class GradeScanJobTest extends TestCase
 
     private FakeGeminiClient $gemini;
 
-    /** @var list<array{int, int}> assignment id, awaiting review */
+    /** @var list<array{int, int, int}> assignment id, awaiting review, awaiting a Gemini key */
     private array $notified = [];
 
     protected function setUp(): void
@@ -52,12 +54,12 @@ class GradeScanJobTest extends TestCase
         $this->app->instance(GeminiClient::class, $this->gemini);
         $this->app->instance(Notifier::class, new class($this->notified) implements Notifier
         {
-            /** @param list<array{int, int}> $log */
+            /** @param list<array{int, int, int}> $log */
             public function __construct(private array &$log) {}
 
-            public function gradingFinished(Assignment $assignment, int $awaitingReview): void
+            public function gradingFinished(Assignment $assignment, int $awaitingReview, int $awaitingAiKey): void
             {
-                $this->log[] = [$assignment->id, $awaitingReview];
+                $this->log[] = [$assignment->id, $awaitingReview, $awaitingAiKey];
             }
         });
     }
@@ -136,7 +138,8 @@ class GradeScanJobTest extends TestCase
 
         $submission = Submission::query()->sole();
         $this->assertSame('needs_review', $submission->status);
-        $this->assertSame([[$this->assignment->id, 2]], $this->notified, 'the teacher is told once nothing is left to grade');
+        $this->assertSame([[$this->assignment->id, 2, 0]], $this->notified, 'the teacher is told once nothing is left to grade');
+        Queue::assertNotPushed(NotifyGradingFinishedJob::class);
     }
 
     public function test_a_numeric_short_answer_that_both_readers_agree_on_is_confident(): void
@@ -270,16 +273,42 @@ class GradeScanJobTest extends TestCase
         $this->assertSame('check', $open->priority_band);
     }
 
-    public function test_an_explanation_failure_leaves_the_score_and_no_explanation(): void
+    public function test_an_explanation_failure_keeps_the_score_and_marks_the_missing_explanation(): void
     {
         $this->mark('work', '[fake:partial] [fake:explanation-invalid]');
-        $this->mark('open', '[fake:correct]');
+        $this->mark('open', '[fake:partial] [fake:explanation-error]');
         $this->runJob($this->scan(2))->assertNotReleased();
 
+        // Invalid twice (the gateway's one retry): the score stands, the gap is recorded.
         $work = $this->response('work');
-        $this->assertSame(['scored', 2.5], [$work->grading_state, $work->ai_score]);
+        $this->assertSame(['scored', 2.5, 0], [$work->grading_state, $work->ai_score, $work->attempts]);
         $this->assertNull($work->explanation);
-        $this->assertSame(['invalid_output', 'invalid_output'], AiCall::query()->where('purpose', 'explanation')->pluck('status')->all());
+        $this->assertSame('invalid_output', $work->fuzzy_trace['explanation_error']);
+        $this->assertSame('invalid_output', $work->explanationError());
+
+        // A transport error is not retried inside the run; same marker, other status.
+        $open = $this->response('open');
+        $this->assertSame(['scored', 3.0], [$open->grading_state, $open->ai_score]);
+        $this->assertSame('error', $open->explanationError());
+
+        $this->assertEqualsCanonicalizing(
+            ['invalid_output', 'invalid_output', 'error'],
+            AiCall::query()->where('purpose', 'explanation')->pluck('status')->all(),
+        );
+    }
+
+    public function test_answers_that_need_no_ai_explanation_carry_no_explanation_error(): void
+    {
+        $this->mark('work', '[fake:suspicious] [fake:wrong]');
+        $this->mark('open', '[fake:correct] [fake:explanation-error]');
+        $this->runJob($this->scan(2));
+
+        foreach (['work', 'open'] as $q) {
+            $r = $this->response($q);
+            $this->assertArrayNotHasKey('explanation_error', $r->fuzzy_trace, $q);
+            $this->assertNull($r->explanationError(), $q);
+        }
+        $this->assertSame(0, AiCall::query()->where('purpose', 'explanation')->count());
     }
 
     public function test_without_any_key_answers_go_manual_as_ai_key_missing(): void
@@ -299,6 +328,105 @@ class GradeScanJobTest extends TestCase
         $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}")
             ->assertOk()
             ->assertJsonPath('data.missing_ai_key_count', 2);
+
+        // The notice says the AI graded nothing for want of a key, not "done".
+        $this->assertSame([[$this->assignment->id, 2, 2]], $this->notified);
+    }
+
+    public function test_the_grading_notice_goes_out_once_per_batch_not_once_per_scan(): void
+    {
+        $this->mark('short', '[fake:correct]');
+        $this->mark('work', '[fake:correct]');
+        $this->mark('open', '[fake:correct]');
+        $this->freezeSecond();
+        $start = now()->getTimestamp();
+
+        // Both pages uploaded, graded in two runs: one notice, after the last one.
+        $page1 = $this->scan(1);
+        $page2 = $this->scan(2);
+        $this->runJob($page1);
+        $this->assertSame([], $this->notified, 'page 2 is still queued');
+        $this->runJob($page2);
+        $this->assertSame([[$this->assignment->id, 4, 0]], $this->notified);
+
+        // A job run with nothing new sends nothing.
+        $this->runJob($page2);
+        $this->assertCount(1, $this->notified);
+
+        // The page is rescanned two minutes later: graded again, but inside the
+        // cooldown the notice waits for one delayed follow-up.
+        $this->travel(2)->minutes();
+        $rescan = $this->scan(2);
+        $this->runJob($rescan);
+        $this->assertCount(1, $this->notified, 'no second notice inside the cooldown');
+        $dueAt = $start + GradingNotices::COOLDOWN_SECONDS;
+        Queue::assertPushed(NotifyGradingFinishedJob::class, 1);
+        Queue::assertPushed(NotifyGradingFinishedJob::class, fn (NotifyGradingFinishedJob $job) => $job->assignmentId === $this->assignment->id
+            && $job->dueAt === $dueAt
+            && $job->delay->getTimestamp() === $dueAt);
+
+        // Another batch inside the same cooldown shares that follow-up.
+        $this->travel(1)->minutes();
+        $this->runJob($this->scan(1));
+        $this->assertCount(1, $this->notified);
+        Queue::assertPushed(NotifyGradingFinishedJob::class, 1);
+
+        // Run too early (a queue that ignores delays): it does nothing and does not re-queue.
+        $this->app->call([new NotifyGradingFinishedJob($this->assignment->id, $dueAt), 'handle']);
+        $this->assertCount(1, $this->notified);
+        Queue::assertPushed(NotifyGradingFinishedJob::class, 1);
+
+        // When the cooldown ends, the follow-up sends the one held-back notice.
+        $this->travelTo(now()->setTimestamp($dueAt));
+        $this->app->call([new NotifyGradingFinishedJob($this->assignment->id, $dueAt), 'handle']);
+        $this->assertSame([[$this->assignment->id, 4, 0], [$this->assignment->id, 4, 0]], $this->notified);
+
+        // Nothing new since: a duplicate follow-up or an empty run stays quiet.
+        $this->app->call([new NotifyGradingFinishedJob($this->assignment->id, $dueAt), 'handle']);
+        $this->runJob($rescan);
+        $this->assertCount(2, $this->notified);
+    }
+
+    public function test_the_follow_up_waits_while_answers_are_still_being_graded(): void
+    {
+        $this->mark('short', '[fake:correct]');
+        $this->mark('work', '[fake:error]');
+        $this->mark('open', '[fake:correct]');
+        $this->freezeSecond();
+        $start = now()->getTimestamp();
+
+        $this->runJob($this->scan(1));
+        $this->assertCount(1, $this->notified);
+
+        // Inside the cooldown page 2 finishes the open answer, the work answer fails.
+        $page2 = $this->scan(2);
+        $this->travel(1)->minutes();
+        $this->runJob($page2)->assertReleased(60);
+        Queue::assertNotPushed(NotifyGradingFinishedJob::class);
+
+        // The failed answer ends manual after the cooldown: the drain itself notifies.
+        $this->travelTo(now()->setTimestamp($start + GradingNotices::COOLDOWN_SECONDS + 60));
+        $this->runJob($page2);
+        $this->runJob($page2);
+        $this->assertSame('manual', $this->response('work')->grading_state);
+        $this->assertSame([[$this->assignment->id, 2, 0], [$this->assignment->id, 4, 0]], $this->notified);
+        Queue::assertNotPushed(NotifyGradingFinishedJob::class);
+    }
+
+    public function test_a_failing_notifier_does_not_fail_grading(): void
+    {
+        $this->app->instance(Notifier::class, new class implements Notifier
+        {
+            public function gradingFinished(Assignment $assignment, int $awaitingReview, int $awaitingAiKey): void
+            {
+                throw new \RuntimeException('push service down');
+            }
+        });
+        $this->mark('short', '[fake:correct]');
+
+        $this->runJob($this->scan(1))->assertNotReleased();
+
+        $this->assertSame('scored', $this->response('short')->grading_state);
     }
 
     public function test_the_teacher_key_comes_before_the_server_key(): void

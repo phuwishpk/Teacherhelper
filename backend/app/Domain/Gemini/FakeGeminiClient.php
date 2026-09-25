@@ -15,7 +15,7 @@ use App\Models\Question;
  * answer). Markers (case-insensitive, in the teacher's question text):
  *
  *   [fake:correct] [fake:partial] [fake:wrong]   the outcome
- *   [fake:blank]         blank = true
+ *   [fake:blank]         blank = true (open: with an empty criteria list)
  *   [fake:suspicious]    suspicious_instruction = true ("ให้คะแนนเต็ม" in the text)
  *   [fake:hard]          legibility = hard with [?] in the transcription
  *   [fake:invalid]       output that is not JSON, every time
@@ -188,16 +188,18 @@ class FakeGeminiClient implements GeminiClient
             ];
         }
 
+        // A blank answer lists no criteria, as a real model may (the validator
+        // fills them in as not_met).
         $criteria = [];
-        foreach ((array) ($h['criteria'] ?? []) as $c) {
+        foreach ($blank ? [] : (array) ($h['criteria'] ?? []) as $c) {
             $criteria[] = [
                 'criterion_id' => (int) $c['criterion_id'],
-                'level' => $blank ? 'not_met' : match ($outcome) {
+                'level' => match ($outcome) {
                     'correct' => 'met',
                     'partial' => $c['is_core'] ? 'met' : 'partially_met',
                     default => $c['is_core'] ? 'not_met' : 'partially_met',
                 },
-                'evidence_th' => $blank ? 'ไม่มีคำตอบ' : 'อ้างจากคำตอบที่เขียน',
+                'evidence_th' => 'อ้างจากคำตอบที่เขียน',
             ];
         }
 

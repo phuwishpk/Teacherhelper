@@ -35,7 +35,8 @@ return [
     | to the teacher as `manual` / ai_key_missing (GeminiKeyResolver).
     | fake = true swaps in FakeGeminiClient: offline, deterministic, free. It
     | still needs "a key" (any teacher key or GEMINI_API_KEY value) so the
-    | missing-key flow behaves like production.
+    | missing-key flow behaves like production. Ignored in production
+    | (AppServiceProvider binds the real client and logs an error).
     */
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),

@@ -12,6 +12,7 @@ use App\Domain\Notifications\Notifier;
 use App\Domain\Worksheets\QrSigner;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,10 +21,19 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         // Gemini transport (DESIGN §10): the real REST client, or the offline
-        // deterministic fake when GEMINI_FAKE=true (tests, local demo).
-        $this->app->singleton(GeminiClient::class, fn () => config('services.gemini.fake')
-            ? new FakeGeminiClient((string) config('services.gemini.model'))
-            : HttpGeminiClient::fromConfig());
+        // deterministic fake when GEMINI_FAKE=true (tests, local demo). The
+        // fake scores real students from an image hash and accepts any key, so
+        // production never gets it: the flag is ignored there with an error log.
+        $this->app->singleton(GeminiClient::class, function ($app) {
+            if (config('services.gemini.fake')) {
+                if (! $app->environment('production')) {
+                    return new FakeGeminiClient((string) config('services.gemini.model'));
+                }
+                Log::error('gemini.fake_refused', ['message' => 'GEMINI_FAKE=true is ignored in production; using the real Gemini API. Set GEMINI_FAKE=false in .env.']);
+            }
+
+            return HttpGeminiClient::fromConfig();
+        });
         $this->app->singleton(PromptRepository::class);
 
         // Push notifications (DESIGN §9.9): logged until the FCM notifier lands.

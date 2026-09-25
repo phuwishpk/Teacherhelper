@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiKey;
@@ -27,9 +28,15 @@ class GeminiCheckCommand extends Command
 
     public function handle(GeminiClient $client, GeminiKeyResolver $keys): int
     {
-        $fake = (bool) config('services.gemini.fake');
+        $fake = $client instanceof FakeGeminiClient;
         $this->line('client: '.($fake ? 'FakeGeminiClient (GEMINI_FAKE=true, offline)' : 'HttpGeminiClient'));
         $this->line('model:  '.$client->model());
+        if ($fake && ! app()->environment(['local', 'testing'])) {
+            $this->warn('GEMINI_FAKE=true outside local/testing: scores are made up from an image hash and any key is accepted. Set GEMINI_FAKE=false.');
+        }
+        if (! $fake && config('services.gemini.fake')) {
+            $this->warn('GEMINI_FAKE=true is ignored in production: the real Gemini API is used. Set GEMINI_FAKE=false in .env.');
+        }
 
         $teacherId = $this->option('teacher');
         $key = $teacherId !== null ? $keys->teacherKey((int) $teacherId) : $keys->serverKey();

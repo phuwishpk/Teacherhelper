@@ -9,7 +9,7 @@ use App\Domain\Gemini\ExtractionRequests;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDraftRequest;
-use App\Domain\Notifications\Notifier;
+use App\Domain\Notifications\GradingNotices;
 use App\Domain\Scans\SubmissionStatus;
 use App\Models\Assignment;
 use App\Models\Question;
@@ -30,13 +30,16 @@ use Illuminate\Support\Facades\DB;
  * 4. fuzzy systems 1 and 2 (ResponseGrader);
  * 5. `explanation` (text only) for answers below full marks, template praise
  *    for full marks, a template for blank answers; none for suspicious ones
- *    (the teacher must look at those first anyway);
+ *    (the teacher must look at those first anyway). An explanation that
+ *    fails (after the gateway's one retry) leaves the score standing and
+ *    records fuzzy_trace.explanation_error = the call status, so the review
+ *    queue can offer "regenerate explanation" before publishing;
  * 6. one transaction under the submission lock writes the results, logs
  *    `ai_scored`, and counts failures: attempts++, `failed` while attempts < 3,
  *    then `manual`. A response a rescan moved to another scan meanwhile is
  *    left alone;
- * 7. when no answer of the assignment is still being graded, the teacher is
- *    notified.
+ * 7. GradingNotices tells the teacher once nothing of the assignment is left
+ *    to grade (at most once per cooldown, not once per scan).
  *
  * Gemini runs outside the transaction; only the final write holds locks.
  */
@@ -67,7 +70,7 @@ final class ScanGrader
         private readonly GeminiKeyResolver $keys,
         private readonly ExtractionRequests $extractions,
         private readonly ExplanationRequests $explanations,
-        private readonly Notifier $notifier,
+        private readonly GradingNotices $notices,
     ) {}
 
     public function grade(int $scanId): ScanGradingResult
@@ -162,15 +165,20 @@ final class ScanGrader
                 );
             }
         }
+        $explanationErrors = [];
         if ($explainCalls !== []) {
-            foreach ($this->gateway->run($explainCalls, $key) as $id => $outcome) {
-                if ($outcome->isOk()) {
+            $explained = $this->gateway->run($explainCalls, $key);
+            foreach (array_keys($explainCalls) as $id) {
+                $outcome = $explained[$id] ?? null;
+                if ($outcome?->isOk()) {
                     $explanations[$id] = ExplanationRequests::text((array) $outcome->data);
+                } else {
+                    $explanationErrors[$id] = $outcome->status ?? CallOutcome::ERROR;
                 }
             }
         }
 
-        return $this->write($scan, $assignment, $responses, $outcomes, $graded, $explanations, $manual);
+        return $this->write($scan, $assignment, $responses, $outcomes, $graded, $explanations, $manual, $explanationErrors);
     }
 
     /**
@@ -200,6 +208,7 @@ final class ScanGrader
      * @param  array<int, GradeOutcome>  $graded
      * @param  array<int, string>  $explanations
      * @param  array<int, string>  $manual  response id => manual reason
+     * @param  array<int, string>  $explanationErrors  response id => status of the failed explanation call
      */
     private function write(
         Scan $scan,
@@ -209,9 +218,10 @@ final class ScanGrader
         array $graded,
         array $explanations,
         array $manual,
+        array $explanationErrors = [],
         bool $anyState = false,
     ): ScanGradingResult {
-        $counts = DB::transaction(function () use ($scan, $responses, $outcomes, $graded, $explanations, $manual, $anyState) {
+        $counts = DB::transaction(function () use ($scan, $responses, $outcomes, $graded, $explanations, $manual, $explanationErrors, $anyState) {
             $submission = Submission::query()->lockForUpdate()->find($scan->submission_id);
             $counts = ['scored' => 0, 'failed' => 0, 'manual' => 0, 'skipped' => 0];
 
@@ -231,7 +241,13 @@ final class ScanGrader
                     self::markManual($response, $manual[$response->id]);
                     $counts['manual']++;
                 } elseif (isset($graded[$response->id])) {
-                    $state = $this->applyGrade($response, $graded[$response->id], (array) $outcomes[$response->id]->data, $explanations[$response->id] ?? null);
+                    $state = $this->applyGrade(
+                        $response,
+                        $graded[$response->id],
+                        (array) $outcomes[$response->id]->data,
+                        $explanations[$response->id] ?? null,
+                        $explanationErrors[$response->id] ?? null,
+                    );
                     $counts[$state === Response::STATE_SCORED ? 'scored' : 'manual']++;
                 } elseif (isset($outcomes[$response->id])) {
                     $state = self::applyFailure($response, $outcomes[$response->id]);
@@ -248,19 +264,23 @@ final class ScanGrader
             return $counts;
         });
 
-        if ($counts['scored'] + $counts['manual'] > 0 && $counts['failed'] === 0) {
-            $this->notifyWhenDone($assignment);
+        if ($counts['scored'] + $counts['manual'] > 0) {
+            $this->notices->answersFinished($assignment);
         }
 
         return new ScanGradingResult($counts['scored'], $counts['failed'], $counts['manual'], $counts['skipped'], $counts['failed'] > 0);
     }
 
-    private function applyGrade(Response $response, GradeOutcome $grade, array $extraction, ?string $explanation): string
+    private function applyGrade(Response $response, GradeOutcome $grade, array $extraction, ?string $explanation, ?string $explanationError): string
     {
+        $trace = $grade->trace;
+        if ($explanationError !== null && ! $response->explanation_edited) {
+            $trace['explanation_error'] = $explanationError; // the teacher's own text stays; nothing is missing then
+        }
         $response->forceFill([
             'grading_state' => $grade->isScored() ? Response::STATE_SCORED : Response::STATE_MANUAL,
             'extraction' => $extraction,
-            'fuzzy_trace' => $grade->trace,
+            'fuzzy_trace' => $trace,
             'ai_score' => $grade->score,
             'ai_understanding' => $grade->understanding,
             'ai_error_types' => $grade->errorTypes,
@@ -320,24 +340,5 @@ final class ScanGrader
             'review_priority' => $priority->storedP(),
             'priority_band' => $priority->band,
         ])->save();
-    }
-
-    /** DESIGN §7.2 step 7 / §9.9: tell the teacher once nothing of the assignment is left to grade. */
-    private function notifyWhenDone(Assignment $assignment): void
-    {
-        $inProgress = Response::query()
-            ->whereIn('submission_id', $assignment->submissions()->select('id'))
-            ->whereIn('grading_state', Response::IN_PROGRESS_STATES)
-            ->exists();
-        if ($inProgress) {
-            return;
-        }
-
-        $awaitingReview = Response::query()
-            ->whereIn('submission_id', $assignment->submissions()->where('status', '!=', Submission::STATUS_PUBLISHED)->select('id'))
-            ->whereNull('reviewed_at')
-            ->count();
-
-        $this->notifier->gradingFinished($assignment, $awaitingReview);
     }
 }
