@@ -14,7 +14,9 @@ use Illuminate\Support\Carbon;
  * scan of the same (assignment, student, page); `pending_confirm` is a rescan
  * of a published submission that waits for the teacher's
  * POST /scans/{id}/confirm-replace. Its crops and readings wait on the
- * private disk (App\Domain\Scans\ScanFiles::pendingDirectory).
+ * private disk (App\Domain\Scans\ScanFiles::pendingDirectory). A rescan the
+ * teacher never confirms expires (App\Domain\Scans\ScanRetention): its files
+ * are deleted and it becomes `superseded`, since it can no longer be used.
  *
  * @property int $id
  * @property string $client_scan_id

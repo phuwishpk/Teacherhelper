@@ -10,7 +10,6 @@ use App\Models\Scan;
 use App\Models\ScoreEvent;
 use App\Models\Submission;
 use App\Models\User;
-use Throwable;
 
 /**
  * Writes the answers of one active scan into `responses` (DESIGN §8.4, §9.4).
@@ -28,7 +27,9 @@ use Throwable;
  * - a region whose printed kind no longer fits the question (the teacher
  *   changed the type after printing) becomes `manual`.
  *
- * Must run inside the transaction that holds the submission row lock.
+ * Must run inside the transaction that holds the submission row lock. The
+ * crop files go through the caller's CropSwap, which the caller commits
+ * after the transaction or rolls back when anything failed.
  */
 final class ResponseWriter
 {
@@ -63,9 +64,11 @@ final class ResponseWriter
         array $regions,
         CropSource $crops,
         User $actor,
+        CropSwap $swap,
     ): int {
         $queued = 0;
         $fileOps = [];
+        $stale = [];
 
         foreach ($regions as $matched) {
             $response = Response::query()
@@ -75,8 +78,10 @@ final class ResponseWriter
 
             $previous = null;
             $previousScanId = null;
+            $previousFiles = [];
             if ($response !== null) {
                 $previousScanId = $response->scan_id;
+                $previousFiles = array_filter([$response->crop_path, $response->final_crop_path]);
                 if ($response->effectiveScore() !== null || $response->effectiveUnderstanding() !== null) {
                     $previous = [$response->effectiveScore(), $response->effectiveUnderstanding()];
                 }
@@ -108,9 +113,13 @@ final class ResponseWriter
                 : null;
             $response->save();
 
-            $fileOps[] = [$region, false, $response->crop_path, $previousScanId === null];
+            $fileOps[] = [$region, false, $response->crop_path];
             if ($withFinal) {
-                $fileOps[] = [$region, true, $response->final_crop_path, $previousScanId === null];
+                $fileOps[] = [$region, true, $response->final_crop_path];
+            }
+            // e.g. the rescan no longer has the final-answer box: its old file goes.
+            foreach (array_diff($previousFiles, [$response->crop_path, $response->final_crop_path]) as $path) {
+                $stale[] = $path;
             }
 
             if ($previous !== null) {
@@ -146,7 +155,12 @@ final class ResponseWriter
             }
         }
 
-        $this->storeCrops($fileOps, $crops);
+        foreach ($fileOps as [$region, $final, $target]) {
+            $swap->write($crops, $region, $final, $target);
+        }
+        foreach ($stale as $path) {
+            $swap->remove($path);
+        }
 
         return $queued;
     }
@@ -210,31 +224,5 @@ final class ResponseWriter
         }
 
         return $out;
-    }
-
-    /**
-     * Files are written after every row is saved, as the last step of the
-     * transaction. If a write fails the transaction rolls back and the files
-     * this call created for brand-new responses are removed again.
-     *
-     * @param  list<array{0: ScanRegion, 1: bool, 2: string, 3: bool}>  $fileOps
-     */
-    private function storeCrops(array $fileOps, CropSource $crops): void
-    {
-        $created = [];
-        try {
-            foreach ($fileOps as [$region, $final, $target, $isNew]) {
-                $crops->store($region, $final, $target);
-                if ($isNew) {
-                    $created[] = $target;
-                }
-            }
-        } catch (Throwable $e) {
-            if ($created !== []) {
-                ScanFiles::disk()->delete($created);
-            }
-
-            throw $e;
-        }
     }
 }

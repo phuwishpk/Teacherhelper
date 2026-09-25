@@ -31,7 +31,8 @@ use Throwable;
  * layout version exists (422 layout_unknown); the page is in that layout and
  * the regions are that page's (422 page_mismatch); the student is enrolled
  * (422 student_unknown, also for the anonymous spare sheet of §18.3 when it
- * comes from the camera); then the images (422 validation_failed).
+ * comes from the camera); then the images (422 validation_failed, or
+ * 503 too_many_files when PHP dropped files past max_file_uploads).
  *
  * Duplicate rule, keyed by (assignment, student, page):
  * - submission not published: the new scan is `active`, earlier scans of the
@@ -119,35 +120,18 @@ final class ScanIngestor
         Gate::forUser($user)->authorize('confirmReplace', $scan);
         $assignment = $scan->submission->assignment;
         $pendingDirectory = ScanFiles::pendingDirectory($assignment->school_id, $assignment->id, $scan->id);
+        $swap = new CropSwap(ScanFiles::replacedDirectory($assignment->school_id, $assignment->id, $scan->id));
 
-        [$scan, $queued, $stalePending, $confirmed] = DB::transaction(function () use ($user, $scan, $assignment, $pendingDirectory) {
-            $submission = Submission::query()->lockForUpdate()->findOrFail($scan->submission_id);
-            $scan = Scan::query()->lockForUpdate()->findOrFail($scan->id);
+        try {
+            [$scan, $queued, $stalePending, $confirmed] = DB::transaction(
+                fn () => $this->applyConfirmation($user, $scan, $assignment, $pendingDirectory, $swap),
+            );
+        } catch (Throwable $e) {
+            $swap->rollback();
 
-            if ($scan->isActive()) {
-                return [$scan, 0, [], false];
-            }
-            if ($scan->isSuperseded()) {
-                throw new ApiException('มีการสแกนหน้านี้ใหม่กว่านี้แล้ว ใช้สแกนนี้แทนไม่ได้', 'scan_superseded', 409);
-            }
-
-            $regions = $this->readPending($pendingDirectory);
-            $layout = $assignment->layouts()->where('version', $scan->layout_version)->first();
-            $page = $layout instanceof Layout ? LayoutPageMatcher::page($layout, $scan->page_no) : null;
-            if ($regions === null || $page === null) {
-                throw new ApiException('ไม่พบไฟล์ของสแกนนี้แล้ว กรุณาสแกนหน้านี้ใหม่', 'scan_files_missing', 409);
-            }
-            $matched = LayoutPageMatcher::match($page, $regions, $assignment, strict: false);
-
-            $stalePending = $this->supersedeOthers($submission, $scan);
-            $scan->state = Scan::STATE_ACTIVE;
-            $scan->save();
-
-            $queued = $this->writer->write($submission, $scan, $assignment, $matched, new PendingCropSource($pendingDirectory), $user);
-            SubmissionStatus::refresh($submission, reopen: true);
-
-            return [$scan, $queued, $stalePending, true];
-        });
+            throw $e;
+        }
+        $swap->commit();
 
         if ($confirmed) {
             ScanFiles::disk()->deleteDirectory($pendingDirectory);
@@ -156,6 +140,51 @@ final class ScanIngestor
         }
 
         return new ScanOutcome($scan, 200);
+    }
+
+    /**
+     * The transactional part of confirmReplace().
+     *
+     * @return array{0: Scan, 1: int, 2: list<int>, 3: bool} scan, queued, stale pending ids, confirmed now
+     */
+    private function applyConfirmation(User $user, Scan $scan, Assignment $assignment, string $pendingDirectory, CropSwap $swap): array
+    {
+        $submission = Submission::query()->lockForUpdate()->findOrFail($scan->submission_id);
+        $scan = Scan::query()->lockForUpdate()->findOrFail($scan->id);
+
+        if ($scan->isActive()) {
+            return [$scan, 0, [], false];
+        }
+        if ($scan->isSuperseded()) {
+            $newer = Scan::query()
+                ->where('submission_id', $scan->submission_id)
+                ->where('page_no', $scan->page_no)
+                ->where('id', '>', $scan->id)
+                ->exists();
+            if (! $newer) {
+                // Expired by eduvision:purge-images (ScanRetention) before the teacher decided.
+                throw new ApiException('สแกนนี้รอการยืนยันนานเกินไปจนไฟล์ถูกลบแล้ว กรุณาสแกนหน้านี้ใหม่', 'scan_files_missing', 409);
+            }
+
+            throw new ApiException('มีการสแกนหน้านี้ใหม่กว่านี้แล้ว ใช้สแกนนี้แทนไม่ได้', 'scan_superseded', 409);
+        }
+
+        $regions = $this->readPending($pendingDirectory);
+        $layout = $assignment->layouts()->where('version', $scan->layout_version)->first();
+        $page = $layout instanceof Layout ? LayoutPageMatcher::page($layout, $scan->page_no) : null;
+        if ($regions === null || $page === null) {
+            throw new ApiException('ไม่พบไฟล์ของสแกนนี้แล้ว กรุณาสแกนหน้านี้ใหม่', 'scan_files_missing', 409);
+        }
+        $matched = LayoutPageMatcher::match($page, $regions, $assignment, strict: false);
+
+        $stalePending = $this->supersedeOthers($submission, $scan);
+        $scan->state = Scan::STATE_ACTIVE;
+        $scan->save();
+
+        $queued = $this->writer->write($submission, $scan, $assignment, $matched, new PendingCropSource($pendingDirectory), $user, $swap);
+        SubmissionStatus::refresh($submission, reopen: true);
+
+        return [$scan, $queued, $stalePending, true];
     }
 
     private function replay(User $user, string $clientScanId): ?ScanOutcome
@@ -228,6 +257,8 @@ final class ScanIngestor
         $rules = [ScanMeta::PAGE_FIELD => ['required', 'file', 'mimes:webp', 'max:'.$pageKb]];
         $messages = [
             ScanMeta::PAGE_FIELD.'.required' => 'ไม่มีภาพหน้ากระดาษ (page)',
+            ScanMeta::PAGE_FIELD.'.file' => 'ภาพหน้ากระดาษ (page) ต้องส่งเป็นไฟล์',
+            ScanMeta::PAGE_FIELD.'.uploaded' => 'อัปโหลดภาพหน้ากระดาษไม่สำเร็จ (อาจใหญ่เกินที่เซิร์ฟเวอร์รับได้)',
             ScanMeta::PAGE_FIELD.'.mimes' => 'ภาพหน้ากระดาษต้องเป็น WebP',
             ScanMeta::PAGE_FIELD.'.max' => "ภาพหน้ากระดาษใหญ่เกิน {$pageKb} KB",
         ];
@@ -239,13 +270,15 @@ final class ScanIngestor
             foreach ($fields as $field) {
                 $rules[$field] = ['required', 'file', 'mimes:webp', 'max:'.$cropKb];
                 $messages["{$field}.required"] = "ไม่มีไฟล์ {$field}";
+                $messages["{$field}.file"] = "{$field} ต้องส่งเป็นไฟล์";
+                $messages["{$field}.uploaded"] = "อัปโหลดไฟล์ {$field} ไม่สำเร็จ (อาจใหญ่เกินที่เซิร์ฟเวอร์รับได้)";
                 $messages["{$field}.mimes"] = "ไฟล์ {$field} ต้องเป็นภาพ WebP";
                 $messages["{$field}.max"] = "ไฟล์ {$field} ใหญ่เกิน {$cropKb} KB";
             }
         }
 
         $uploaded = $request->allFiles();
-        $this->assertUploadNotTruncated($uploaded, array_keys($rules));
+        self::assertUploadNotTruncated($uploaded, array_keys($rules), (int) ini_get('max_file_uploads'));
 
         $validator = Validator::make($uploaded, $rules, $messages);
         $validator->validate();
@@ -260,14 +293,18 @@ final class ScanIngestor
 
     /**
      * PHP silently drops every file past max_file_uploads. Say so, instead of
-     * reporting the dropped crops as "missing" (the fix is a server setting).
+     * reporting the dropped crops as "missing". The fix is a server setting,
+     * so the answer is 503 (retryable): the app keeps the scan and sends it
+     * again once the administrator has raised the limit, whereas a 4xx would
+     * make the app give the scan up for good.
      *
      * @param  array<string, mixed>  $uploaded
      * @param  list<string>  $needed
+     *
+     * @throws ApiException 503 too_many_files
      */
-    private function assertUploadNotTruncated(array $uploaded, array $needed): void
+    public static function assertUploadNotTruncated(array $uploaded, array $needed, int $limit): void
     {
-        $limit = (int) ini_get('max_file_uploads');
         $received = count($uploaded, COUNT_RECURSIVE) - count(array_filter($uploaded, 'is_array'));
         if ($limit <= 0 || $received < $limit || count($needed) <= $limit) {
             return;
@@ -276,9 +313,9 @@ final class ScanIngestor
         Log::warning('scans.upload_truncated', ['max_file_uploads' => $limit, 'needed' => count($needed)]);
 
         throw new ApiException(
-            "เซิร์ฟเวอร์รับไฟล์ได้ครั้งละ {$limit} ไฟล์ แต่หน้านี้มี ".count($needed).' ไฟล์ แจ้งผู้ดูแลให้เพิ่มค่า max_file_uploads ของ PHP',
+            "เซิร์ฟเวอร์รับไฟล์ได้ครั้งละ {$limit} ไฟล์ แต่หน้านี้มี ".count($needed).' ไฟล์ แจ้งผู้ดูแลให้เพิ่มค่า max_file_uploads ของ PHP แอปจะส่งสแกนนี้ใหม่อัตโนมัติ',
             'too_many_files',
-            413,
+            503,
         );
     }
 
@@ -296,28 +333,30 @@ final class ScanIngestor
             'student_id' => $qr->studentId,
         ])->id;
 
-        return DB::transaction(function () use ($user, $assignment, $qr, $meta, $matched, $files, $submissionId) {
-            $submission = Submission::query()->lockForUpdate()->findOrFail($submissionId);
-            $published = $submission->isPublished();
+        // Files written so far, undone when the transaction or its commit fails.
+        $written = [];
+        $swap = null;
+        try {
+            $result = DB::transaction(function () use ($user, $assignment, $qr, $meta, $matched, $files, $submissionId, &$written, &$swap) {
+                $submission = Submission::query()->lockForUpdate()->findOrFail($submissionId);
+                $published = $submission->isPublished();
 
-            $scan = Scan::create([
-                'client_scan_id' => $meta->clientScanId,
-                'submission_id' => $submission->id,
-                'page_no' => $qr->page,
-                'layout_version' => $qr->layoutVersion,
-                'uploaded_by' => $user->id,
-                'scanned_at' => $meta->scannedAt,
-                'blur_score' => $meta->blurScore,
-                'state' => $published ? Scan::STATE_PENDING_CONFIRM : Scan::STATE_ACTIVE,
-            ]);
-            $pagePath = ScanFiles::pagePath($assignment->school_id, $assignment->id, $scan->id);
-            $scan->page_image_path = $pagePath;
-            $scan->save();
+                $scan = Scan::create([
+                    'client_scan_id' => $meta->clientScanId,
+                    'submission_id' => $submission->id,
+                    'page_no' => $qr->page,
+                    'layout_version' => $qr->layoutVersion,
+                    'uploaded_by' => $user->id,
+                    'scanned_at' => $meta->scannedAt,
+                    'blur_score' => $meta->blurScore,
+                    'state' => $published ? Scan::STATE_PENDING_CONFIRM : Scan::STATE_ACTIVE,
+                ]);
+                $pagePath = ScanFiles::pagePath($assignment->school_id, $assignment->id, $scan->id);
+                $scan->page_image_path = $pagePath;
+                $scan->save();
 
-            $written = [];
-            try {
-                UploadedCropSource::put($files[ScanMeta::PAGE_FIELD], $pagePath);
                 $written[] = $pagePath;
+                UploadedCropSource::put($files[ScanMeta::PAGE_FIELD], $pagePath);
 
                 if ($published) {
                     // Only an older rescan still waiting for the teacher is replaced;
@@ -329,20 +368,25 @@ final class ScanIngestor
                     $queued = 0;
                 } else {
                     $stalePending = $this->supersedeOthers($submission, $scan);
-                    $queued = $this->writer->write($submission, $scan, $assignment, $matched, new UploadedCropSource($files), $user);
+                    $swap = new CropSwap(ScanFiles::replacedDirectory($assignment->school_id, $assignment->id, $scan->id));
+                    $queued = $this->writer->write($submission, $scan, $assignment, $matched, new UploadedCropSource($files), $user, $swap);
                     SubmissionStatus::refresh($submission);
                 }
-            } catch (Throwable $e) {
-                $disk = ScanFiles::disk();
-                foreach ($written as $path) {
-                    str_ends_with($path, '.webp') ? $disk->delete($path) : $disk->deleteDirectory($path);
-                }
 
-                throw $e;
+                return [$scan, $queued, $stalePending];
+            });
+        } catch (Throwable $e) {
+            $swap?->rollback();
+            $disk = ScanFiles::disk();
+            foreach ($written as $path) {
+                str_ends_with($path, '.webp') ? $disk->delete($path) : $disk->deleteDirectory($path);
             }
 
-            return [$scan, $queued, $stalePending];
-        });
+            throw $e;
+        }
+        $swap?->commit();
+
+        return $result;
     }
 
     /**

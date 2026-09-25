@@ -22,7 +22,11 @@ return new class extends Migration
             $table->unsignedTinyInteger('page_no');
             $table->unsignedSmallInteger('layout_version');
             $table->foreignId('uploaded_by')->constrained('users')->restrictOnDelete();
-            $table->timestamp('scanned_at');
+            // An explicit default keeps MariaDB (explicit_defaults_for_timestamp=OFF,
+            // the default before 10.10) from adding ON UPDATE CURRENT_TIMESTAMP to
+            // the first NOT NULL TIMESTAMP, which would overwrite the phone's time
+            // on every later update of the row. The app always sends the value.
+            $table->timestamp('scanned_at')->useCurrent();
             $table->float('blur_score');
             $table->string('page_image_path')->nullable();
             $table->enum('state', ['active', 'superseded', 'pending_confirm']);

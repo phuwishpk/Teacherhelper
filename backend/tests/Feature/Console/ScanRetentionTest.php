@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Domain\Scans\ScanRetention;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\Submission;
@@ -13,7 +14,8 @@ use Tests\TestCase;
 
 /**
  * DESIGN §7.3 via `eduvision:purge-images`: page images go once the
- * submission is published, crops after schools.crop_retention_until.
+ * submission is published, crops after schools.crop_retention_until, and a
+ * rescan the teacher never confirms expires with its page image.
  */
 class ScanRetentionTest extends TestCase
 {
@@ -104,12 +106,105 @@ class ScanRetentionTest extends TestCase
         // A stash left behind by a crash after the scan was superseded.
         $disk->put("{$directory}/{$first->json('scan_id')}/regions.json", '{}');
 
-        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Pending rescan stashes deleted: 0')->assertSuccessful();
+        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Leftover rescan files swept: 0')->assertSuccessful();
 
         $this->travel(25)->hours();
-        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Pending rescan stashes deleted: 1')->assertSuccessful();
+        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Leftover rescan files swept: 1')->assertSuccessful();
 
         $this->assertFalse($disk->exists("{$directory}/{$first->json('scan_id')}/regions.json"));
         $this->assertTrue($disk->exists("{$directory}/{$waiting}/regions.json"));
+    }
+
+    public function test_an_unconfirmed_rescan_expires_with_its_page_image(): void
+    {
+        $first = $this->postScan($this->metaFor(1))->assertStatus(201);
+        Submission::query()->whereKey($first->json('submission_id'))->update(['status' => 'published', 'published_at' => now()]);
+        $pendingId = $this->postScan($this->metaFor(1))->assertStatus(202)->json('scan_id');
+        $pagePath = Scan::query()->findOrFail($pendingId)->page_image_path;
+        $stash = "scans/{$this->assignment->school_id}/{$this->assignment->id}/pending/{$pendingId}";
+        $disk = Storage::disk('local');
+        $published = Response::query()->orderBy('id')->get(['id', 'scan_id', 'crop_path'])->toArray();
+
+        $this->travel(ScanRetention::PENDING_RESCAN_DAYS - 1)->days();
+        $this->artisan('eduvision:purge-images')
+            ->expectsOutputToContain('Unconfirmed rescans expired (page image and crops deleted): 0')
+            ->assertSuccessful();
+        $this->assertTrue($disk->exists($pagePath));
+        $this->assertTrue($disk->exists("{$stash}/regions.json"));
+
+        $this->travel(2)->days();
+        $this->artisan('eduvision:purge-images')
+            ->expectsOutputToContain('Unconfirmed rescans expired (page image and crops deleted): 1')
+            ->assertSuccessful();
+
+        $scan = Scan::query()->findOrFail($pendingId);
+        $this->assertNull($scan->page_image_path);
+        $this->assertSame('superseded', $scan->state);
+        $this->assertFalse($disk->exists($pagePath));
+        $this->assertSame([], $disk->allFiles($stash));
+        // The published answers are untouched.
+        $this->assertSame($published, Response::query()->orderBy('id')->get(['id', 'scan_id', 'crop_path'])->toArray());
+        $this->assertSame('active', Scan::query()->findOrFail($first->json('scan_id'))->state);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/scans/{$pendingId}/confirm-replace")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'scan_files_missing');
+
+        $this->artisan('eduvision:purge-images')
+            ->expectsOutputToContain('Unconfirmed rescans expired (page image and crops deleted): 0')
+            ->assertSuccessful();
+    }
+
+    public function test_an_unconfirmed_rescan_expires_at_the_crop_retention_date(): void
+    {
+        $this->travelTo(now()->setDate(2027, 3, 25));
+        $first = $this->postScan($this->metaFor(2))->assertStatus(201);
+        Submission::query()->whereKey($first->json('submission_id'))->update(['status' => 'published', 'published_at' => now()]);
+        $pendingId = $this->postScan($this->metaFor(2))->assertStatus(202)->json('scan_id');
+        $pagePath = Scan::query()->findOrFail($pendingId)->page_image_path;
+        $this->assignment->school->update(['crop_retention_until' => '2027-03-31']);
+        $this->travelTo(now()->setDate(2027, 4, 2)); // 8 days later, before PENDING_RESCAN_DAYS
+
+        $this->artisan('eduvision:purge-images')
+            ->expectsOutputToContain('Crop images deleted (past crop_retention_until): 3')
+            ->expectsOutputToContain('Unconfirmed rescans expired (page image and crops deleted): 1')
+            ->assertSuccessful();
+
+        $this->assertFalse(Storage::disk('local')->exists($pagePath));
+        $this->assertSame([], Storage::disk('local')->allFiles("scans/{$this->assignment->school_id}/{$this->assignment->id}/pending"));
+        $this->assertNull(Scan::query()->findOrFail($pendingId)->page_image_path);
+        $this->assertSame('superseded', Scan::query()->findOrFail($pendingId)->state);
+    }
+
+    public function test_a_confirmed_rescan_is_not_expired(): void
+    {
+        $first = $this->postScan($this->metaFor(1))->assertStatus(201);
+        Submission::query()->whereKey($first->json('submission_id'))->update(['status' => 'published', 'published_at' => now()]);
+        $pendingId = $this->postScan($this->metaFor(1))->assertStatus(202)->json('scan_id');
+        $this->asUser($this->teacher)->postJson("/api/v1/scans/{$pendingId}/confirm-replace")->assertOk();
+
+        $this->travel(ScanRetention::PENDING_RESCAN_DAYS + 1)->days();
+        $this->artisan('eduvision:purge-images')
+            ->expectsOutputToContain('Unconfirmed rescans expired (page image and crops deleted): 0')
+            ->assertSuccessful();
+
+        $scan = Scan::query()->findOrFail($pendingId);
+        $this->assertSame('active', $scan->state);
+        // Back to grading after the confirmation, so its page image stays for review.
+        $this->assertTrue(Storage::disk('local')->exists($scan->page_image_path));
+    }
+
+    public function test_leftover_crop_backups_of_an_interrupted_rescan_are_swept_after_a_day(): void
+    {
+        $directory = "crops/{$this->assignment->school_id}/{$this->assignment->id}/replaced/99";
+        $disk = Storage::disk('local');
+        $disk->put("{$directory}/5.webp", 'old crop');
+
+        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Leftover rescan files swept: 0')->assertSuccessful();
+        $this->assertTrue($disk->exists("{$directory}/5.webp"));
+
+        $this->travel(25)->hours();
+        $this->artisan('eduvision:purge-images')->expectsOutputToContain('Leftover rescan files swept: 1')->assertSuccessful();
+        $this->assertFalse($disk->exists("{$directory}/5.webp"));
     }
 }
