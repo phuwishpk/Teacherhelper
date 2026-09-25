@@ -174,6 +174,19 @@ class Response extends Model
     }
 
     /**
+     * Status of the explanation call that failed for this AI-scored answer
+     * below full marks (fuzzy_trace.explanation_error: error | invalid_output |
+     * key_invalid), null when it has one or needs none. The review queue shows
+     * "regenerate explanation" for it (POST /responses/{id}/regenerate-explanation).
+     */
+    public function explanationError(): ?string
+    {
+        $status = $this->fuzzy_trace['explanation_error'] ?? null;
+
+        return is_string($status) && $this->explanation === null ? $status : null;
+    }
+
+    /**
      * `manual` because there was no usable Gemini key, and not yet graded by
      * the teacher: what the missing-key banner counts and requeues (§13).
      *

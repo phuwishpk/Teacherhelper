@@ -10,7 +10,10 @@ use App\Models\Question;
  *
  * - text fields have sane lengths;
  * - open: exactly one entry per rubric criterion_id 1..n (a missing or
- *   unknown criterion would silently change the score);
+ *   unknown criterion would silently change the score). A blank answer
+ *   scores 0 without reading the criteria (§11.1), so there a short or empty
+ *   list is accepted and every criterion is stored as not_met: a model that
+ *   answers blank = true with criteria [] is right, not invalid;
  * - error_types without duplicates; a blank answer is tagged no_answer.
  *
  * Anything wrong throws GeminiException::invalidOutput().
@@ -42,17 +45,14 @@ final class ExtractionValidator
         }
 
         if ($type === Question::TYPE_OPEN) {
-            $ids = array_map(fn (array $c) => (int) $c['criterion_id'], $data['criteria']);
-            sort($ids);
-            if ($criteriaCount < 1 || $ids !== range(1, $criteriaCount)) {
-                throw GeminiException::invalidOutput("criteria must list criterion_id 1..{$criteriaCount} exactly once, got [".implode(',', $ids).']');
-            }
             foreach ($data['criteria'] as $i => $c) {
                 if (mb_strlen((string) ($c['evidence_th'] ?? ''), 'UTF-8') > self::MAX_NOTE) {
                     throw GeminiException::invalidOutput("criteria[{$i}].evidence_th is too long");
                 }
             }
-            usort($data['criteria'], fn (array $a, array $b) => $a['criterion_id'] <=> $b['criterion_id']);
+            $data['criteria'] = $data['blank']
+                ? self::blankCriteria($data['criteria'], $criteriaCount)
+                : self::everyCriterion($data['criteria'], $criteriaCount);
         }
 
         $errors = array_values(array_unique($data['error_types']));
@@ -62,5 +62,43 @@ final class ExtractionValidator
         $data['error_types'] = $errors;
 
         return $data;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $criteria
+     * @return list<array<string, mixed>> sorted by criterion_id
+     */
+    private static function everyCriterion(array $criteria, int $count): array
+    {
+        $ids = array_map(fn (array $c) => (int) $c['criterion_id'], $criteria);
+        sort($ids);
+        if ($count < 1 || $ids !== range(1, $count)) {
+            throw GeminiException::invalidOutput("criteria must list criterion_id 1..{$count} exactly once, got [".implode(',', $ids).']');
+        }
+        usort($criteria, fn (array $a, array $b) => $a['criterion_id'] <=> $b['criterion_id']);
+
+        return $criteria;
+    }
+
+    /**
+     * A blank answer: one not_met entry per criterion 1..n, keeping the
+     * model's evidence note where it gave one. Ids outside 1..n are dropped.
+     *
+     * @param  list<array<string, mixed>>  $criteria
+     * @return list<array<string, mixed>>
+     */
+    private static function blankCriteria(array $criteria, int $count): array
+    {
+        $given = [];
+        foreach ($criteria as $c) {
+            $given[(int) $c['criterion_id']] ??= $c;
+        }
+        $out = [];
+        for ($id = 1; $id <= $count; $id++) {
+            $evidence = (string) ($given[$id]['evidence_th'] ?? '');
+            $out[] = ['criterion_id' => $id, 'level' => 'not_met'] + ($evidence !== '' ? ['evidence_th' => $evidence] : []);
+        }
+
+        return $out;
     }
 }
