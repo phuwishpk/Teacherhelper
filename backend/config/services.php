@@ -54,6 +54,20 @@ return [
         'send_temperature' => (bool) env('GEMINI_SEND_TEMPERATURE', false),
     ],
 
+    /*
+    | Firebase Cloud Messaging (DESIGN §7.6, §9.9), HTTP v1 API with a service
+    | account (firebase/php-jwt signs the OAuth assertion; no Firebase SDK).
+    | credentials: path to the service-account JSON key, outside the document
+    | root (relative paths resolve against the Laravel base path). Empty = no
+    | pushes: LogNotifier writes them to the log instead.
+    | project_id: optional override of the key file's project_id.
+    */
+    'firebase' => [
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'timeout' => (int) env('FIREBASE_TIMEOUT', 10),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

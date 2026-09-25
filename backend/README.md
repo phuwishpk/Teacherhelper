@@ -104,6 +104,34 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 ทดสอบในเครื่องด้วย curl ต้องรัน server ที่ตั้ง ini เหล่านี้ เช่น `cd public && php -d max_file_uploads=100 -d upload_max_filesize=8M -d post_max_size=16M -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php`
 
+## ตรวจทาน เผยแพร่ และขอตรวจใหม่ (DESIGN §9.5, §9.7, §13)
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| GET | `/assignments/{id}/review-queue?band=check\|look\|confident&cursor=&per_page=` | ครู | ทุกข้อของการบ้าน เรียง `manual` ก่อน → ข้อที่ติดป้าย (`suspicious`, `identity_mismatch`) → `review_priority` มากไปน้อย (ข้อที่ยังตรวจไม่เสร็จอยู่ท้าย) แต่ละแถวมี `manual_reason` (เช่น `ai_key_missing`), `flags`, `tab`, `bulk_approvable` ส่วน `meta` มี `missing_ai_key_count` (แบนเนอร์ §13), `counts` ต่อแท็บ, `bulk_approvable_count`, `submissions` (ความคืบหน้าต่อนักเรียน) และ `pending_confirm_scans` แบ่งหน้าด้วย `meta.next_cursor` (keyset ตามลำดับคิว) |
+| GET | `/responses/{id}` | ครู | extraction, `fuzzy_trace` ดิบ, `why` (ประโยคภาษาไทยที่อ่านจาก trace), คำอธิบาย, `crop_url` / `final_crop_url`, คำขอตรวจใหม่ และประวัติ `score_events` (`question.rubric_criteria[].criterion_id` คือเลขที่ `extraction.criteria[].criterion_id` อ้าง) |
+| PATCH | `/responses/{id}` | ครู | `{final_score, final_understanding, final_error_types?, explanation?, reason?}` ทำเครื่องหมายว่าตรวจทานแล้ว คะแนนต่างจาก `ai_score` ต้องมี `reason` (`422 errors.reason`) คะแนน 0 ถึงเต็มทีละ 0.25 ทุกการเปลี่ยนคะแนน/ระดับความเข้าใจบันทึก `score_events` `override` แก้หลังเผยแพร่ไม่ได้ (`409 submission_published`) ข้อที่ AI ยังตรวจไม่เสร็จ `409 response_grading` |
+| POST | `/responses/{id}/regenerate-explanation` | ครู | เรียก Gemini ทันที (ส่งแค่ข้อความที่ถอดได้ + ประเภทข้อผิดพลาดของครู) ข้อที่ได้เต็มหรือเว้นว่างใช้ template `422 explanation_unavailable` / `ai_key_missing` / `ai_key_invalid`, `502 ai_unavailable` จำกัด 20 ครั้ง/นาที |
+| POST | `/assignments/{id}/approve-confident` | ครู | `{data: {approved}}` อนุมัติเฉพาะข้อ `confident` ที่ AI ตรวจแล้ว ไม่ติดป้าย ยังไม่ตรวจทาน ไม่มีคำขอตรวจใหม่ค้าง และยังไม่เผยแพร่ บันทึก `bulk_approve` |
+| POST | `/submissions/{id}/publish` | ครู | ทุกข้อต้องตรวจทานแล้ว (`409 submission_not_reviewed`) ตั้ง `total_score`, `published_at/by` แล้วยิง event `SubmissionPublished` เรียกซ้ำได้ |
+| POST | `/assignments/{id}/publish` | ครู | `{data: {published, already_published, skipped}}` เผยแพร่ทุก submission ที่ตรวจทานครบ |
+| GET | `/appeals?status=open\|accepted\|rejected&assignment_id=` | ครู | คำขอของห้องตัวเอง พร้อมชื่อการบ้าน ข้อ คะแนนตอนนี้ และเลขที่นักเรียน |
+| PATCH | `/appeals/{id}` | ครู | `{status: accepted\|rejected, teacher_note?, final_score?, final_understanding?}` คะแนนใหม่ได้เฉพาะ `accepted` บันทึก `appeal_accepted` / `appeal_rejected` คำนวณ `total_score` ใหม่ ตอบแล้วตอบซ้ำไม่ได้ (`409 appeal_resolved`) |
+| GET | `/student/results` | นักเรียน | เฉพาะของตัวเองที่เผยแพร่แล้ว `{submission_id, title, subject_name, total_score, max_score, published_at}` |
+| GET | `/student/results/{submission_id}` | นักเรียน | รายข้อ: คะแนน, ระดับความเข้าใจ, ประเภทข้อผิดพลาด, คำอธิบาย, `crop_url`, คำขอตรวจใหม่, `can_appeal` (ไม่มีค่าของ AI) อย่างอื่น `404` |
+| POST | `/student/responses/{id}/appeal` | นักเรียน | `{reason?}` ข้อละครั้ง (`409 appeal_exists`) |
+| GET | `/student/mastery` | นักเรียน | ยังเป็น placeholder `{data: []}` (Phase 6) |
+
+โค้ดอยู่ใน `app/Domain/Review/` (`ReviewQueue`, `ResponseReviewer`, `Publisher`, `Appeals`, `ScoreExplainer`, `ReviewFlags`, `ScoreRules`) ป้าย `suspicious` / `identity_mismatch` ไม่ใช่คอลัมน์ อ่านจาก `fuzzy_trace` / `extraction`
+
+## Push notification (FCM, DESIGN §9.9)
+
+- `Notifier` ผูกเป็น `FcmNotifier` เมื่อ `FIREBASE_CREDENTIALS` ชี้ไปที่ไฟล์ service account ที่ใช้ได้ (อยู่นอก document root) ไม่งั้นเป็น `LogNotifier` ที่เขียน `notify.*` ลง log แทน
+- FCM HTTP v1 เรียกด้วย Laravel HTTP client: เซ็น JWT ของ service account ด้วย `firebase/php-jwt` (RS256) แลก access token ที่ `oauth2.googleapis.com/token` แล้ว cache แบบเข้ารหัสจนเกือบหมดอายุ ส่งทีละเครื่อง token ที่ FCM บอกว่าใช้ไม่ได้ (`UNREGISTERED`, `INVALID_ARGUMENT`, `SENDER_ID_MISMATCH`) ถูกลบจาก `device_tokens` ได้ `401` จะขอ token ใหม่แล้วลองอีกครั้งเดียว
+- ข้อความ 4 แบบของ §9.9 (ไม่มีคะแนน) และ `data.type` ที่แอปใช้เปิดหน้า: `grading_done` {assignment_id}, `results_published` {submission_id, assignment_id}, `appeal_opened`, `appeal_resolved` {submission_id, appeal_id}
+- ส่งจาก queued listener บน queue `default` (worker ของ cron): `SubmissionPublished` → `NotifyStudentOfPublishedResult`, `AppealOpened` → `NotifyTeacherOfAppeals` (หน่วง 60 วินาทีแล้วส่งครั้งเดียวต่อชุดพร้อมจำนวนรวม), `AppealResolved` → `NotifyStudentOfAppealResolution`
+- ตรวจบน server: Scheduled Task "Run now" `artisan eduvision:fcm-check` (ขอ access token) หรือ `artisan eduvision:fcm-check --user=<id>` (ส่งข้อความทดสอบไปทุกเครื่องของผู้ใช้นั้น)
+
 ## Queue และ heartbeat
 
 Plesk ไม่มี process ค้าง จึงใช้ Scheduled Task ทุก 1 นาทีเรียก
@@ -145,6 +173,10 @@ app/Domain/Assignments/                      QuestionData (ตรวจ answer_k
 app/Domain/Gemini/                           GeminiClient (interface), FakeGeminiClient, RubricDraft
 app/Domain/Scans/                            ScanIngestor (POST /scans, confirm-replace), ScanMeta, LayoutPageMatcher, ResponseWriter, SubmissionStatus, ScanFiles, ScanRetention
 app/Domain/Grading/                          McqGrader (§11.6), ReviewPriority (§11.8), Understanding, ScoreRounding (§11.7)
+app/Domain/Review/                           ReviewQueue, ResponseReviewer, Publisher, Appeals, ScoreExplainer (§9.5, §13)
+app/Domain/Notifications/                    Notifier, PushNotifier, FcmNotifier + Fcm/ (HTTP v1, service-account JWT), LogNotifier, NoticeTexts (§9.9)
+app/Events/, app/Listeners/                  SubmissionPublished, AppealOpened, AppealResolved และ listener ที่ส่ง push (queue default)
+app/Console/Commands/FcmCheckCommand.php     eduvision:fcm-check
 app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob}.php
 resources/fonts/                             Sarabun (OFL) ที่เพิ่ม glyph U+200B ดู README ในโฟลเดอร์
 app/Providers/Filament/AdminPanelProvider.php

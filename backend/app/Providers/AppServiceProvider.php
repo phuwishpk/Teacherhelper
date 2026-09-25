@@ -7,6 +7,11 @@ use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\HttpGeminiClient;
 use App\Domain\Gemini\PromptRepository;
+use App\Domain\Notifications\Fcm\AccessTokens;
+use App\Domain\Notifications\Fcm\FcmClient;
+use App\Domain\Notifications\Fcm\FirebaseCredentialsInvalid;
+use App\Domain\Notifications\Fcm\ServiceAccount;
+use App\Domain\Notifications\FcmNotifier;
 use App\Domain\Notifications\LogNotifier;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Worksheets\QrSigner;
@@ -36,8 +41,26 @@ class AppServiceProvider extends ServiceProvider
         });
         $this->app->singleton(PromptRepository::class);
 
-        // Push notifications (DESIGN §9.9): logged until the FCM notifier lands.
-        $this->app->bind(Notifier::class, LogNotifier::class);
+        // Push notifications (DESIGN §9.9): FCM HTTP v1 when FIREBASE_CREDENTIALS
+        // points at a usable service-account key, otherwise only logged. A
+        // broken key file logs an error (never its contents) and falls back to
+        // the log, so grading and publishing never fail over pushes.
+        $this->app->singleton(Notifier::class, function () {
+            $path = trim((string) config('services.firebase.credentials'));
+            if ($path === '') {
+                return new LogNotifier;
+            }
+            try {
+                $account = ServiceAccount::fromFile($path, config('services.firebase.project_id') ?: null);
+            } catch (FirebaseCredentialsInvalid $e) {
+                Log::error('fcm.credentials_invalid', ['message' => $e->getMessage()]);
+
+                return new LogNotifier;
+            }
+            $timeout = (int) config('services.firebase.timeout', 10);
+
+            return new FcmNotifier(new FcmClient($account, new AccessTokens($account, $timeout), $timeout));
+        });
 
         // Resolved lazily: a missing QR_SIGNING_KEY only fails the code paths
         // that sign or verify worksheet QRs, with a clear message.

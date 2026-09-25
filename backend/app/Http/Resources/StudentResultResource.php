@@ -1,0 +1,91 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Models\Appeal;
+use App\Models\Response;
+use App\Models\Submission;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/**
+ * A published submission as its student sees it (DESIGN §9.7). Only the
+ * teacher-approved values: no AI score, extraction, trace or priority.
+ *
+ * {id, submission_id, assignment_id, title, subject_name,
+ *  assignment: {id, title, subject: {id, code, name}|null},
+ *  total_score, max_score, published_at}
+ * and, for GET /student/results/{submission_id} (responses loaded):
+ * responses: [{id, response_id, question_id, position, type, max_points,
+ *   prompt_text, final_score, final_understanding, final_error_types,
+ *   explanation, has_crop, has_final_crop, crop_url, final_crop_url,
+ *   appeal: {id, status, reason, teacher_note, ...}|null, can_appeal}]
+ *
+ * max_score is the assignment's full marks (Σ questions.max_points, loaded
+ * as the `max_score` attribute by the controller).
+ *
+ * @mixin Submission
+ */
+class StudentResultResource extends JsonResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        /** @var Submission $submission */
+        $submission = $this->resource;
+        $assignment = $submission->assignment;
+        $subject = $assignment?->subject;
+
+        return [
+            'id' => $submission->id,
+            'submission_id' => $submission->id,
+            'assignment_id' => $submission->assignment_id,
+            'title' => $assignment?->title,
+            'subject_name' => $subject?->name,
+            'assignment' => $assignment === null ? null : [
+                'id' => $assignment->id,
+                'title' => $assignment->title,
+                'subject' => $subject === null ? null : ['id' => $subject->id, 'code' => $subject->code, 'name' => $subject->name],
+            ],
+            'total_score' => $submission->total_score,
+            'max_score' => $submission->getAttribute('max_score') === null ? null : round((float) $submission->getAttribute('max_score'), 2),
+            'published_at' => $submission->published_at?->toIso8601String(),
+            'responses' => $this->whenLoaded('responses', fn () => $submission->responses
+                ->sortBy(fn (Response $r) => [(int) $r->question?->position, $r->id])
+                ->values()
+                ->map(fn (Response $r) => self::answer($r))
+                ->all()),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function answer(Response $response): array
+    {
+        $question = $response->question;
+        $appeal = $response->appeal;
+
+        return [
+            'id' => $response->id,
+            'response_id' => $response->id,
+            'question_id' => $response->question_id,
+            'position' => (int) $question->position,
+            'type' => $question->type,
+            'max_points' => (float) $question->max_points,
+            'prompt_text' => $question->prompt_text,
+            'final_score' => $response->effectiveScore(),
+            'final_understanding' => $response->effectiveUnderstanding(),
+            'final_error_types' => $response->final_error_types ?? [],
+            'explanation' => $response->explanation,
+            'has_crop' => $response->crop_path !== null,
+            'has_final_crop' => $response->final_crop_path !== null,
+            'crop_url' => $response->crop_path !== null ? route('api.responses.crop', $response->id, false) : null,
+            'final_crop_url' => $response->final_crop_path !== null ? route('api.responses.crop', ['id' => $response->id, 'part' => 'final'], false) : null,
+            'appeal' => $appeal instanceof Appeal ? AppealResource::summary($appeal) : null,
+            'can_appeal' => $appeal === null,
+        ];
+    }
+}

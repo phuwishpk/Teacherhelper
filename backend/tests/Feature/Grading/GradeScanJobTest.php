@@ -7,6 +7,8 @@ use App\Domain\Gemini\GeminiClient;
 use App\Domain\Grading\FeedbackTemplates;
 use App\Domain\Notifications\GradingNotices;
 use App\Domain\Notifications\Notifier;
+use App\Domain\Notifications\PushMessage;
+use App\Domain\Notifications\PushNotifier;
 use App\Jobs\GradeScanJob;
 use App\Jobs\NotifyGradingFinishedJob;
 use App\Models\AiCall;
@@ -52,7 +54,7 @@ class GradeScanJobTest extends TestCase
 
         $this->gemini = new FakeGeminiClient('gemini-3.8-flash');
         $this->app->instance(GeminiClient::class, $this->gemini);
-        $this->app->instance(Notifier::class, new class($this->notified) implements Notifier
+        $this->app->instance(Notifier::class, new class($this->notified) extends PushNotifier
         {
             /** @param list<array{int, int, int}> $log */
             public function __construct(private array &$log) {}
@@ -61,6 +63,8 @@ class GradeScanJobTest extends TestCase
             {
                 $this->log[] = [$assignment->id, $awaitingReview, $awaitingAiKey];
             }
+
+            protected function push(array $userIds, PushMessage $message): void {}
         });
     }
 
@@ -415,9 +419,9 @@ class GradeScanJobTest extends TestCase
 
     public function test_a_failing_notifier_does_not_fail_grading(): void
     {
-        $this->app->instance(Notifier::class, new class implements Notifier
+        $this->app->instance(Notifier::class, new class extends PushNotifier
         {
-            public function gradingFinished(Assignment $assignment, int $awaitingReview, int $awaitingAiKey): void
+            protected function push(array $userIds, PushMessage $message): void
             {
                 throw new \RuntimeException('push service down');
             }
