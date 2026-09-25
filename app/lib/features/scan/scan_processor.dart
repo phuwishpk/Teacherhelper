@@ -31,12 +31,16 @@ sealed class ScanAnalysis {
     required this.imagePath,
     required this.capturedAt,
     this.detection,
+    this.source = const ScanSource.camera(),
   });
 
   /// The photo from the camera (cache directory).
   final String imagePath;
   final DateTime capturedAt;
   final PageDetection? detection;
+
+  /// Camera or Google Classroom attachment; sent along in `meta`.
+  final ScanSource source;
 }
 
 /// The photo cannot be used; [issues] say why.
@@ -45,6 +49,7 @@ final class ScanRejected extends ScanAnalysis {
     required super.imagePath,
     required super.capturedAt,
     super.detection,
+    super.source,
     required this.issues,
   });
 
@@ -61,6 +66,7 @@ final class ScanNeedsLayout extends ScanAnalysis {
     required super.imagePath,
     required super.capturedAt,
     required PageDetection super.detection,
+    super.source,
     required this.qr,
     required this.student,
     required this.reason,
@@ -80,6 +86,7 @@ final class ScanReady extends ScanAnalysis {
     required super.imagePath,
     required super.capturedAt,
     required PageDetection super.detection,
+    super.source,
     required this.qr,
     required this.layout,
     required this.crops,
@@ -140,8 +147,10 @@ class NeedsLayoutRun {
 
 /// Turns camera photos into queued scans: detect -> check -> layout ->
 /// crop -> confirm -> `scan_queue` (DESIGN §6.2–§6.4, §9.4). Independent of
-/// the camera, so Google Classroom attachments (DESIGN §18.2) can go through
-/// the same steps.
+/// the camera, so Google Classroom attachments (DESIGN §18.2) go through the
+/// same steps with `source: ScanSource.classroom(...)`, which also accepts
+/// the anonymous spare worksheet (§18.3) and adds `source` /
+/// `google_submission_id` to `meta`.
 class ScanProcessor {
   ScanProcessor({
     required this._pipeline,
@@ -175,8 +184,12 @@ class ScanProcessor {
 
   bool get isSupported => _pipeline.isSupported;
 
-  /// Runs the whole check on a photo.
-  Future<ScanAnalysis> analyze(String imagePath) async {
+  /// Runs the whole check on a photo. [source] tells a Google Classroom
+  /// attachment from a camera photo (DESIGN §18.2, §18.3).
+  Future<ScanAnalysis> analyze(
+    String imagePath, {
+    ScanSource source = const ScanSource.camera(),
+  }) async {
     final capturedAt = _clock();
     final PageDetection detection;
     try {
@@ -185,19 +198,25 @@ class ScanProcessor {
       return ScanRejected(
         imagePath: imagePath,
         capturedAt: capturedAt,
+        source: source,
         issues: [ProcessingFailed(e.message)],
       );
     }
-    final issues = checkDetection(detection, minBlurScore: _minBlurScore);
+    final issues = checkDetection(
+      detection,
+      minBlurScore: _minBlurScore,
+      allowSpareWorksheet: source.allowsSpareWorksheet,
+    );
     if (issues.isNotEmpty) {
       return ScanRejected(
         imagePath: imagePath,
         capturedAt: capturedAt,
         detection: detection,
+        source: source,
         issues: issues,
       );
     }
-    return _afterDetection(imagePath, capturedAt, detection);
+    return _afterDetection(imagePath, capturedAt, detection, source);
   }
 
   /// The teacher keeps a photo that only failed the blur check.
@@ -206,19 +225,26 @@ class ScanProcessor {
     if (!rejected.canOverride || detection == null) {
       return Future.value(rejected);
     }
-    return _afterDetection(rejected.imagePath, rejected.capturedAt, detection);
+    return _afterDetection(
+      rejected.imagePath,
+      rejected.capturedAt,
+      detection,
+      rejected.source,
+    );
   }
 
   Future<ScanAnalysis> _afterDetection(
     String imagePath,
     DateTime capturedAt,
     PageDetection detection,
+    ScanSource source,
   ) async {
     final qr = WorksheetQr.tryParse(detection.qrPayload)!;
     ScanRejected reject(ScanIssue issue) => ScanRejected(
       imagePath: imagePath,
       capturedAt: capturedAt,
       detection: detection,
+      source: source,
       issues: [issue],
     );
 
@@ -233,6 +259,7 @@ class ScanProcessor {
           imagePath: imagePath,
           capturedAt: capturedAt,
           detection: detection,
+          source: source,
           qr: qr,
           student: student,
           reason: reason,
@@ -252,11 +279,12 @@ class ScanProcessor {
           imagePath: imagePath,
           capturedAt: capturedAt,
           detection: detection,
+          source: source,
           qr: qr,
           layout: layout,
           crops: crops,
           student: student,
-          alreadyQueued: await _hasOpenScanFor(qr),
+          alreadyQueued: await _hasOpenScanFor(qr, source),
         );
     }
   }
@@ -315,6 +343,12 @@ class ScanProcessor {
       await _offlineCache.cacheLayout(qr.assignmentId, qr.layoutVersion, pages);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
+      if (status == 404 && apiErrorCode(e) == 'layout_unknown') {
+        // The teacher owns the assignment; only this version is gone.
+        return LayoutRejected(
+          LayoutPageUnknown(page: qr.page, version: qr.layoutVersion),
+        );
+      }
       if (status == 403 || status == 404) {
         return LayoutRejected(
           AssignmentUnknown(qr.assignmentId, apiErrorMessage(e)),
@@ -347,8 +381,11 @@ class ScanProcessor {
 
   /// Name from the cached roster (the QR carries only the id, DESIGN §5.4).
   /// When the student is not cached, the assignment's roster is fetched
-  /// once per session if the server is reachable.
+  /// once per session if the server is reachable. A spare worksheet
+  /// (`student_id = 0`) names nobody: the server matches it through the
+  /// Classroom submission (§18.3).
   Future<RosterStudent?> findStudent(WorksheetQr qr) async {
+    if (qr.studentId == 0) return null;
     final cached = await _offlineCache.findStudent(qr.studentId);
     if (cached != null || !_rosterFetched.add(qr.assignmentId)) return cached;
     try {
@@ -365,14 +402,17 @@ class ScanProcessor {
     }
   }
 
-  Future<bool> _hasOpenScanFor(WorksheetQr qr) async {
+  Future<bool> _hasOpenScanFor(WorksheetQr qr, ScanSource source) async {
     for (final scan in await _queue.listAll()) {
       if (scan.state == ScanState.done) continue;
       final other = scan.qr;
       if (other != null &&
           other.assignmentId == qr.assignmentId &&
           other.studentId == qr.studentId &&
-          other.page == qr.page) {
+          other.page == qr.page &&
+          // Spare worksheets of different students share student_id 0;
+          // only the same Classroom submission is the same page.
+          (qr.studentId != 0 || ScanSource.fromMeta(scan.meta) == source)) {
         return true;
       }
     }
@@ -391,6 +431,7 @@ class ScanProcessor {
       layout: ready.layout,
       crops: ready.crops,
       cnn: await _readDigits(ready.crops),
+      extraMeta: ready.source.toMeta(),
     );
     final files = await _files.adopt(id, upload.files);
     await _queue.enqueue(clientScanId: id, meta: upload.meta, files: files);
@@ -406,12 +447,16 @@ class ScanProcessor {
     final files = await _files.adopt(id, {rawFileField: scan.imagePath});
     await _queue.enqueue(
       clientScanId: id,
-      meta: scanMetaHeader(
-        clientScanId: id,
-        qrPayload: scan.detection.qrPayload!,
-        scannedAt: scan.capturedAt,
-        blurScore: scan.detection.blurScore,
-      ),
+      meta: {
+        ...scanMetaHeader(
+          clientScanId: id,
+          qrPayload: scan.detection.qrPayload!,
+          scannedAt: scan.capturedAt,
+          blurScore: scan.detection.blurScore,
+        ),
+        // Kept so the page is cropped later with the same source.
+        ...scan.source.toMeta(),
+      },
       files: files,
       state: ScanState.needsLayout,
     );
@@ -492,9 +537,14 @@ class ScanProcessor {
     String raw,
     PageLayout layout,
   ) async {
+    final source = ScanSource.fromMeta(scan.meta);
     try {
       final detection = await _pipeline.detectPage(raw);
-      final issues = checkDetection(detection, minBlurScore: 0);
+      final issues = checkDetection(
+        detection,
+        minBlurScore: 0,
+        allowSpareWorksheet: source.allowsSpareWorksheet,
+      );
       if (issues.isNotEmpty) {
         await _queue.markFailed(
           scan.clientScanId,
@@ -515,6 +565,7 @@ class ScanProcessor {
         layout: layout,
         crops: crops,
         cnn: await _readDigits(crops),
+        extraMeta: source.toMeta(),
       );
       final files = await _files.adopt(scan.clientScanId, upload.files);
       final updated = await _queue.completeLayout(

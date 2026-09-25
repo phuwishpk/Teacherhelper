@@ -12,8 +12,11 @@ const defaultMinBlurScore = 60.0;
 /// it as filled. Display only: the server decides the answer from `mcq_fill`.
 const bubbleFilledShare = 0.5;
 
-/// Ink share below which a box is shown as empty on the confirm screen.
-const emptyInkRatio = 0.003;
+/// `ink_ratio` at or below which an answer area counts as blank: the same
+/// line DESIGN §11.8 (rule D) uses to question a `blank` from Gemini. The
+/// pipeline reads 0 for a blank area and about 0.05 for one written digit
+/// in a box (RegionCrop.inkRatio). Display only on the confirm screen.
+const emptyInkRatio = 0.02;
 
 /// Corner of an ArUco marker (ids of DESIGN §5.2; manifest.json of
 /// backend/resources/worksheet/aruco).
@@ -88,7 +91,7 @@ final class NotAWorksheet extends ScanIssue {
 }
 
 /// `student_id = 0`: the anonymous spare worksheet, accepted only through
-/// Google Classroom (DESIGN §18.3).
+/// Google Classroom (DESIGN §18.3). Raised for camera scans only.
 final class SpareWorksheet extends ScanIssue {
   const SpareWorksheet();
 
@@ -139,10 +142,13 @@ final class ProcessingFailed extends ScanIssue {
 }
 
 /// Checks a detection result before any layout lookup. Returns an empty
-/// list when the photo is usable.
+/// list when the photo is usable. [allowSpareWorksheet] accepts the
+/// anonymous spare worksheet, which only a Google Classroom submission can
+/// identify (ScanSource.allowsSpareWorksheet).
 List<ScanIssue> checkDetection(
   PageDetection detection, {
   double minBlurScore = defaultMinBlurScore,
+  bool allowSpareWorksheet = false,
 }) {
   final issues = <ScanIssue>[];
   final missing = detection.missingMarkerIds.toSet().toList()..sort();
@@ -155,7 +161,7 @@ List<ScanIssue> checkDetection(
     final qr = WorksheetQr.tryParse(payload);
     if (qr == null) {
       issues.add(NotAWorksheet(payload));
-    } else if (qr.studentId == 0) {
+    } else if (qr.studentId == 0 && !allowSpareWorksheet) {
       issues.add(const SpareWorksheet());
     }
   }

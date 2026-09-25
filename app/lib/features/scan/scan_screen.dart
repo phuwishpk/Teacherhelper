@@ -591,7 +591,7 @@ class _ReadyView extends StatelessWidget {
         _ => 'ฝนหลายตัวเลือก: ${filled.join(', ')}',
       };
     }
-    return crop.inkRatio < emptyInkRatio ? 'ว่าง' : 'มีคำตอบ';
+    return crop.inkRatio <= emptyInkRatio ? 'ว่าง' : 'มีคำตอบ';
   }
 }
 

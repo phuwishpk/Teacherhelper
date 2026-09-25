@@ -281,8 +281,10 @@ data class RegionCrop (
   /** WebP (quality 80) in the app cache directory. */
   val imagePath: String,
   /**
-   * Share of handwriting pixels inside the rect, with printed borders and
-   * ruling lines removed (0..1). 0 for `mcq` regions.
+   * `ink_ratio` (DESIGN §9.4, §11.8): share of the rect (without its printed
+   * border, ruling and line-number gutter) that lies within 2 mm of
+   * handwriting, specks ignored (0..1). Blank reads 0, one written digit in
+   * a box about 0.05; above 0.02 means something is written. 0 for `mcq`.
    */
   val inkRatio: Double,
   /**

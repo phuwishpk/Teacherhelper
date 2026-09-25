@@ -19,14 +19,14 @@ import 'package:path/path.dart' as p;
 
 import 'scan_fixtures.dart';
 
-DioException _http(int? status) => DioException(
+DioException _http(int? status, {String code = 'not_found'}) => DioException(
   requestOptions: RequestOptions(path: '/assignments/123/layouts'),
   response: status == null
       ? null
       : Response(
           requestOptions: RequestOptions(path: '/assignments/123/layouts'),
           statusCode: status,
-          data: {'message': 'ไม่พบข้อมูล', 'code': 'not_found'},
+          data: {'message': 'ไม่พบข้อมูล', 'errors': null, 'code': code},
         ),
   type: status == null
       ? DioExceptionType.connectionError
@@ -40,13 +40,14 @@ class FakeAssignments extends Fake implements AssignmentsRepository {
     sampleLayoutPage(page: 2),
   ];
   int? failStatus;
+  String failCode = 'not_found';
   final layoutCalls = <int?>[];
   final getCalls = <int>[];
 
   @override
   Future<List<LayoutVersion>> layouts(int assignmentId, {int? version}) async {
     layoutCalls.add(version);
-    if (failStatus case final s?) throw _http(s);
+    if (failStatus case final s?) throw _http(s, code: failCode);
     final served = pages;
     if (served == null) throw _http(null);
     return [LayoutVersion(version: 2, pages: served)];
@@ -186,6 +187,35 @@ void main() {
 
       expect(result.issues.single, isA<AssignmentUnknown>());
       expect(result.canOverride, isFalse);
+    });
+
+    test('a layout version the server does not have is not blamed on '
+        'another teacher', () async {
+      // LayoutController: 404 layout_unknown when the teacher owns the
+      // assignment but not this layout version.
+      assignments
+        ..failStatus = 404
+        ..failCode = 'layout_unknown';
+
+      final result = await processor.analyze(await photo()) as ScanRejected;
+
+      final issue = result.issues.single as LayoutPageUnknown;
+      expect((issue.page, issue.version), (1, 2));
+      expect(issue.message, isNot(contains('ครูคนอื่น')));
+      expect(
+        await cache.layoutPage(assignmentId: 123, version: 2, page: 1),
+        isNull,
+      );
+    });
+
+    test('403 on the layouts is still an unknown assignment', () async {
+      assignments
+        ..failStatus = 403
+        ..failCode = 'forbidden';
+
+      final result = await processor.analyze(await photo()) as ScanRejected;
+
+      expect(result.issues.single, isA<AssignmentUnknown>());
     });
 
     test('a page that is not in the layout version is rejected', () async {
@@ -341,6 +371,118 @@ void main() {
       );
       expect(await queue.listAll(), isEmpty);
     });
+  });
+
+  group('Google Classroom source', () {
+    const spareQr = 'EV1.123.0.1.2.K7Q3M2PA';
+    const source = ScanSource.classroom(googleSubmissionId: 'sub-1');
+
+    test('the camera still refuses a spare worksheet', () async {
+      await cacheSampleLayout();
+      pipeline.detection = goodDetection(qr: spareQr);
+
+      final result = await processor.analyze(await photo()) as ScanRejected;
+
+      expect(result.issues.single, isA<SpareWorksheet>());
+      expect(pipeline.cropCalls, isEmpty);
+    });
+
+    test('a spare worksheet from a submission is cropped and queued with '
+        'its source', () async {
+      await cacheSampleLayout();
+      pipeline.detection = goodDetection(qr: spareQr);
+
+      final ready =
+          await processor.analyze(await photo(), source: source) as ScanReady;
+
+      expect(ready.source, source);
+      expect(ready.qr.studentId, 0);
+      expect(ready.student, isNull);
+      expect(assignments.getCalls, isEmpty, reason: 'no roster lookup for 0');
+
+      final row = (await queue.find(await processor.confirm(ready)))!;
+      expect(row.state, ScanState.pending);
+      expect(row.meta['qr'], spareQr);
+      expect(row.meta['source'], 'classroom');
+      expect(row.meta['google_submission_id'], 'sub-1');
+      expect(row.meta['regions'], hasLength(3));
+    });
+
+    test('camera scans carry no source field', () async {
+      await cacheSampleLayout();
+      final ready = await processor.analyze(await photo()) as ScanReady;
+      final row = (await queue.find(await processor.confirm(ready)))!;
+      expect(row.meta.containsKey('source'), isFalse);
+      expect(row.meta.containsKey('google_submission_id'), isFalse);
+    });
+
+    test(
+      'spare worksheets of different submissions are not duplicates',
+      () async {
+        await cacheSampleLayout();
+        pipeline.detection = goodDetection(qr: spareQr);
+        final first =
+            await processor.analyze(await photo('a.jpg'), source: source)
+                as ScanReady;
+        await processor.confirm(first);
+
+        final other =
+            await processor.analyze(
+                  await photo('b.jpg'),
+                  source: const ScanSource.classroom(
+                    googleSubmissionId: 'sub-2',
+                  ),
+                )
+                as ScanReady;
+        expect(other.alreadyQueued, isFalse);
+
+        final same =
+            await processor.analyze(await photo('c.jpg'), source: source)
+                as ScanReady;
+        expect(same.alreadyQueued, isTrue);
+      },
+    );
+
+    test('the blur override keeps the source', () async {
+      await cacheSampleLayout();
+      pipeline.detection = goodDetection(qr: spareQr, blur: 10);
+
+      final rejected =
+          await processor.analyze(await photo(), source: source)
+              as ScanRejected;
+      expect(rejected.source, source);
+
+      final kept = await processor.acceptDespiteBlur(rejected);
+      expect(kept, isA<ScanReady>());
+      expect(kept.source, source);
+    });
+
+    test(
+      'an offline spare worksheet keeps its source until it is cropped',
+      () async {
+        assignments.pages = null;
+        pipeline.detection = goodDetection(qr: spareQr);
+        final offline =
+            await processor.analyze(await photo(), source: source)
+                as ScanNeedsLayout;
+        expect(offline.source, source);
+
+        final id = await processor.keepForLater(offline);
+        var row = (await queue.find(id))!;
+        expect(row.meta['source'], 'classroom');
+        expect(row.meta['google_submission_id'], 'sub-1');
+
+        assignments.pages = [sampleLayoutPage()];
+        final run = await processor.processNeedsLayout();
+        expect((run.processed, run.waiting, run.failed), (1, 0, 0));
+
+        row = (await queue.find(id))!;
+        expect(row.state, ScanState.pending);
+        expect(row.meta['source'], 'classroom');
+        expect(row.meta['google_submission_id'], 'sub-1');
+        expect(row.meta['regions'], hasLength(3));
+      },
+    );
   });
 
   group('needs_layout', () {

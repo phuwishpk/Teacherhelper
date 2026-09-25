@@ -60,6 +60,23 @@ void main() {
     );
   });
 
+  test('a spare worksheet passes when its source allows it', () {
+    final spare = goodDetection(qr: 'EV1.123.0.1.2.K7Q3M2PA');
+    expect(checkDetection(spare, allowSpareWorksheet: true), isEmpty);
+    // The other checks still apply.
+    expect(
+      checkDetection(
+        goodDetection(qr: 'EV1.123.0.1.2.K7Q3M2PA', missing: [3]),
+        allowSpareWorksheet: true,
+      ).single,
+      isA<MarkersMissing>(),
+    );
+  });
+
+  test('the blank line is the one DESIGN §11.8 rule D uses', () {
+    expect(emptyInkRatio, 0.02);
+  });
+
   test('several problems are all reported, and blur alone can be kept', () {
     final issues = checkDetection(goodDetection(qr: null, blur: 1));
     expect(issues.map((i) => i.runtimeType), [QrUnreadable, TooBlurry]);
