@@ -7,6 +7,7 @@ class Classroom {
     required this.academicYear,
     required this.classCode,
     this.studentCount,
+    this.googleLink,
   });
 
   final int id;
@@ -22,6 +23,20 @@ class Classroom {
   final String classCode;
   final int? studentCount;
 
+  /// The Google Classroom course this room is linked to (DESIGN §18.4
+  /// `classroom_google_links`), when the server includes `google_link`.
+  final ClassroomGoogleLink? googleLink;
+
+  Classroom withGoogleLink(ClassroomGoogleLink? link) => Classroom(
+    id: id,
+    name: name,
+    gradeLevel: gradeLevel,
+    academicYear: academicYear,
+    classCode: classCode,
+    studentCount: studentCount,
+    googleLink: link,
+  );
+
   factory Classroom.fromJson(Map<String, dynamic> json) => Classroom(
     id: (json['id'] as num).toInt(),
     name: json['name'] as String,
@@ -31,7 +46,35 @@ class Classroom {
     studentCount: (json['students_count'] ?? json['student_count']) is num
         ? ((json['students_count'] ?? json['student_count']) as num).toInt()
         : null,
+    googleLink: json['google_link'] is Map
+        ? ClassroomGoogleLink.fromJson(
+            (json['google_link'] as Map).cast<String, dynamic>(),
+          )
+        : null,
   );
+}
+
+/// `google_link` of a classroom and the answer of
+/// `POST /classrooms/{id}/google-link` (DESIGN §18.4, §18.6).
+class ClassroomGoogleLink {
+  const ClassroomGoogleLink({
+    required this.courseId,
+    required this.courseName,
+    this.linkedAt,
+  });
+
+  final String courseId;
+  final String courseName;
+  final DateTime? linkedAt;
+
+  factory ClassroomGoogleLink.fromJson(Map<String, dynamic> json) {
+    final linked = json['linked_at'];
+    return ClassroomGoogleLink(
+      courseId: json['course_id'].toString(),
+      courseName: (json['course_name'] ?? json['name'] ?? '') as String,
+      linkedAt: linked is String ? DateTime.tryParse(linked) : null,
+    );
+  }
 }
 
 /// One roster row (DESIGN §8.1 classroom_students joined with users).

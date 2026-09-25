@@ -1,0 +1,334 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:eduvision/features/assignments/assignment.dart';
+import 'package:eduvision/features/assignments/assignments_repository.dart';
+import 'package:eduvision/features/google_classroom/classroom_importer.dart';
+import 'package:eduvision/features/google_classroom/google_auth.dart';
+import 'package:eduvision/features/google_classroom/google_config.dart';
+import 'package:eduvision/features/google_classroom/google_models.dart';
+import 'package:eduvision/features/google_classroom/google_repository.dart';
+import 'package:eduvision/features/google_classroom/submissions_screen.dart';
+import 'package:eduvision/features/scan/scan_meta.dart';
+import 'package:eduvision/features/scan/scan_processor.dart';
+import 'package:eduvision/features/scan/scan_quality.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers/pump_screen.dart';
+import '../scan/scan_fixtures.dart';
+import 'google_fakes.dart';
+
+class _Assignments extends Fake implements AssignmentsRepository {
+  @override
+  Future<Assignment> get(int id) async =>
+      Assignment(id: id, classroomId: 7, subjectId: 1, title: 'เศษส่วน');
+}
+
+class _Session implements DriveSession {
+  @override
+  Future<File> download(GoogleAttachment attachment, Directory directory) =>
+      throw UnimplementedError();
+}
+
+final _blurry = ScanRejected(
+  imagePath: '/tmp/blurry.jpg',
+  capturedAt: DateTime.utc(2026, 10, 1),
+  detection: goodDetection(blur: 5),
+  source: const ScanSource.classroom(googleSubmissionId: 'Cg33'),
+  issues: const [TooBlurry(5, 60)],
+);
+
+/// Scripted importer: no Drive, no pipeline.
+class _FakeImporter extends Fake implements ClassroomImporter {
+  final imported = <int>[];
+  final emails = <String?>[];
+  final discarded = <ImageOutcome>[];
+  GoogleAuthException? authError;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<DriveSession> openSession({String? expectedEmail}) async {
+    emails.add(expectedEmail);
+    if (authError case final e?) throw e;
+    return _Session();
+  }
+
+  @override
+  Future<SubmissionImport> importSubmission(
+    GoogleSubmission submission, {
+    required int assignmentId,
+    required DriveSession session,
+    void Function(String status)? onProgress,
+  }) async {
+    imported.add(submission.id);
+    onProgress?.call('กำลังดาวน์โหลด…');
+    return switch (submission.id) {
+      31 => SubmissionImport(
+        submissionId: 31,
+        outcomes: const [
+          ImageQueued(
+            'IMG_1.jpg',
+            clientScanId: 'scan-1',
+            page: 1,
+            student: 'ด.ญ. สมหญิง (เลขที่ 12)',
+          ),
+          ImageRejected(
+            'IMG_2.jpg',
+            reasons: [
+              'มองไม่เห็นสัญลักษณ์ที่มุมล่างขวา ถอยกล้องออกหรือจัดกระดาษให้เห็นครบทั้ง 4 มุม',
+            ],
+          ),
+        ],
+      ),
+      _ => SubmissionImport(
+        submissionId: submission.id,
+        outcomes: [
+          ImageRejected(
+            'IMG_3.jpg',
+            reasons: const ['ภาพไม่คมชัด'],
+            analysis: _blurry,
+          ),
+        ],
+      ),
+    };
+  }
+
+  @override
+  Future<ImageOutcome> acceptDespiteBlur(
+    ImageRejected rejected, {
+    required GoogleSubmission submission,
+    required int assignmentId,
+  }) async => ImageQueued(
+    rejected.label,
+    clientScanId: 'scan-9',
+    page: 2,
+    student: 'ด.ช. สมชาย (เลขที่ 13)',
+  );
+
+  @override
+  Future<void> discardPending(Iterable<ImageOutcome> outcomes) async =>
+      discarded.addAll(outcomes);
+}
+
+const _rows = [
+  GoogleSubmission(
+    id: 31,
+    googleSubmissionId: 'Cg31',
+    state: SubmissionImportState.newSubmission,
+    student: SubmissionStudent(
+      id: 4567,
+      name: 'ด.ญ. สมหญิง',
+      studentNumber: 12,
+    ),
+    attachments: [
+      GoogleAttachment(
+        driveFileId: 'a',
+        title: 'IMG_1.jpg',
+        mimeType: 'image/jpeg',
+      ),
+      GoogleAttachment(
+        driveFileId: 'b',
+        title: 'IMG_2.jpg',
+        mimeType: 'image/jpeg',
+      ),
+    ],
+    alternateLink: 'https://classroom.google.com/s/31',
+  ),
+  GoogleSubmission(
+    id: 32,
+    googleSubmissionId: 'Cg32',
+    state: SubmissionImportState.gradeFailed,
+    student: SubmissionStudent(id: 4568, name: 'ด.ช. สมชาย', studentNumber: 13),
+    attachments: [
+      GoogleAttachment(
+        driveFileId: 'c',
+        title: 'scan.pdf',
+        mimeType: 'application/pdf',
+      ),
+    ],
+    lastError: 'ProjectPermissionDenied',
+  ),
+  GoogleSubmission(
+    id: 33,
+    googleSubmissionId: 'Cg33',
+    state: SubmissionImportState.needsRetake,
+    attachments: [
+      GoogleAttachment(
+        driveFileId: 'd',
+        title: 'IMG_3.jpg',
+        mimeType: 'image/jpeg',
+      ),
+    ],
+    retakeReason: 'เงาบัง QR',
+  ),
+];
+
+Future<(FakeGoogleRepository, _FakeImporter)> _pump(
+  WidgetTester tester, {
+  FakeGoogleRepository? google,
+}) async {
+  tester.view.physicalSize = const Size(1000, 3000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final repo = google ?? FakeGoogleRepository(submissionRows: _rows);
+  final importer = _FakeImporter();
+  await pumpScreen(
+    tester,
+    const GoogleSubmissionsScreen(assignmentId: 12),
+    overrides: [
+      googleClassroomEnabledProvider.overrideWithValue(true),
+      googleClassroomRepositoryProvider.overrideWithValue(repo),
+      googleAuthProvider.overrideWithValue(FakeGoogleAuth()),
+      assignmentsRepositoryProvider.overrideWithValue(_Assignments()),
+      classroomImporterProvider.overrideWithValue(importer),
+    ],
+  );
+  return (repo, importer);
+}
+
+/// DESIGN §18.7: the submissions list with states, download-and-scan (all
+/// or one), the result of every picture and "ตีกลับให้ถ่ายใหม่".
+void main() {
+  testWidgets('lists every submission with its state', (tester) async {
+    await _pump(tester);
+
+    expect(find.text('งานที่ส่ง: เศษส่วน'), findsOneWidget);
+    expect(find.text('ส่งใน Classroom 3 คน'), findsOneWidget);
+    expect(
+      find.text('ส่งแล้ว รอสแกน 1 · ต้องถ่ายใหม่ 1 · ส่งคะแนนกลับไม่สำเร็จ 1'),
+      findsOneWidget,
+    );
+    expect(find.text('ด.ญ. สมหญิง (เลขที่ 12)'), findsOneWidget);
+    expect(find.text('ยังไม่ได้จับคู่นักเรียน'), findsOneWidget);
+    expect(find.text('เหตุผลที่ตีกลับ: เงาบัง QR'), findsOneWidget);
+    expect(find.textContaining('ProjectPermissionDenied'), findsOneWidget);
+    expect(find.text('ดาวน์โหลดและสแกนทั้งหมด (2)'), findsOneWidget);
+    expect(find.text('ส่งคะแนนกลับอีกครั้ง (1)'), findsOneWidget);
+  });
+
+  testWidgets('download-and-scan all shows the result of each picture', (
+    tester,
+  ) async {
+    final (_, importer) = await _pump(tester);
+
+    await tester.tap(find.byKey(const ValueKey('import_all')));
+    await tester.pumpAndSettle();
+
+    expect(importer.imported, [
+      31,
+      33,
+    ], reason: 'only rows waiting to be scanned');
+    expect(importer.emails, ['kru@school.ac.th']);
+    expect(
+      find.text('ผ่าน: ด.ญ. สมหญิง (เลขที่ 12) หน้า 1 (อยู่ในคิวอัปโหลด)'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('ต้องถ่ายใหม่: มองไม่เห็นสัญลักษณ์'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('สแกนแล้ว 1 หน้า มี 2 งานที่ต้องให้นักเรียนถ่ายใหม่'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a blurry picture can be kept with one tap', (tester) async {
+    final (_, importer) = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('scan_33')));
+    await tester.pumpAndSettle();
+    expect(importer.imported, [33]);
+
+    await tester.tap(find.text('ภาพไม่คมแต่อ่านได้ ใช้ภาพนี้ต่อ'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('ผ่าน: ด.ช. สมชาย (เลขที่ 13) หน้า 2 (อยู่ในคิวอัปโหลด)'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('return for retake pre-fills the reasons and posts them', (
+    tester,
+  ) async {
+    final (repo, _) = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('scan_31')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('return_31')));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('retake_reason')),
+    );
+    expect(field.controller!.text, contains('มุมล่างขวา'));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('retake_reason')),
+      'ถ่ายให้เห็นมุมล่างขวาด้วย',
+    );
+    await tester.tap(find.byKey(const ValueKey('retake_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repo.returns.single, (31, 'ถ่ายให้เห็นมุมล่างขวาด้วย'));
+    expect(find.text('ตีกลับให้ถ่ายใหม่แล้ว'), findsOneWidget);
+    expect(
+      find.text('ส่งคืนงานใน Classroom และแจ้งนักเรียนแล้ว'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an empty reason is refused', (tester) async {
+    final (repo, _) = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('return_33')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('retake_reason')), '  ');
+    await tester.tap(find.byKey(const ValueKey('retake_confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('บอกนักเรียนว่าต้องถ่ายใหม่เพราะอะไร'), findsOneWidget);
+    expect(repo.returns, isEmpty);
+  });
+
+  testWidgets('grade_failed rows can be sent again', (tester) async {
+    final (repo, _) = await _pump(tester);
+    final loads = repo.submissionLoads;
+    await tester.tap(find.byKey(const ValueKey('retry_grades')));
+    await tester.pumpAndSettle();
+    expect(repo.retries, 1);
+    expect(repo.submissionLoads, loads + 1, reason: 'the list reloads');
+    expect(find.text('กำลังส่งคะแนนกลับอีกครั้ง 1 คน'), findsOneWidget);
+  });
+
+  testWidgets('an expired connection says to reconnect', (tester) async {
+    final repo = FakeGoogleRepository()
+      ..error = DioException(
+        requestOptions: RequestOptions(
+          path: '/assignments/12/google-submissions',
+        ),
+        response: Response(
+          requestOptions: RequestOptions(path: '/x'),
+          statusCode: 409,
+          data: {
+            'message': 'invalid_grant',
+            'errors': null,
+            'code': 'google_reconnect_required',
+          },
+        ),
+      );
+    await _pump(tester, google: repo);
+    expect(find.textContaining('กด "เชื่อมใหม่"'), findsOneWidget);
+  });
+
+  testWidgets('leaving the screen deletes pictures kept for a decision', (
+    tester,
+  ) async {
+    final (_, importer) = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('scan_33')));
+    await tester.pumpAndSettle();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(importer.discarded.whereType<ImageRejected>(), hasLength(1));
+  });
+}

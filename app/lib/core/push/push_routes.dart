@@ -10,6 +10,7 @@ import '../router/app_router.dart';
 /// | `appeal_opened`     | teacher | -                   | appeals list         |
 /// | `results_published` | student | `submission_id`     | result detail        |
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
+/// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
 ///
 /// Only these types are routed; anything else just opens the app. Returns
 /// null when the message is not for this user's role.
@@ -31,6 +32,9 @@ String? routeForPush(Map<String, String> data, User user) {
           when id('submission_id') != null =>
         AppRoutes.studentResult(id('submission_id')!),
       'results_published' || 'appeal_resolved' => AppRoutes.student,
+      // Google Classroom "ตีกลับให้ถ่ายใหม่" (§18.2): the reason is shown
+      // at the top of the results tab.
+      'retake_requested' => AppRoutes.student,
       _ => null,
     };
   }

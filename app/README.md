@@ -143,6 +143,44 @@ widget test ของหน้าสแกนด้วยกล้องปล�
   → ดาวน์โหลด `google-services.json` ไปวางที่ `app/android/app/` → `flutter build apk`
   หลัง login แอปขอสิทธิ์แจ้งเตือน (Android 13+) แล้ว `POST /devices`; ออกจากระบบจะลบ token ของเครื่อง
 
+## Google Classroom (Phase 7, DESIGN §18)
+
+เปิดใช้เมื่อ build ด้วย Web client ID (KICKOFF ส่วนที่ 6 ข้อ G4/G6) ถ้าไม่ใส่ แอปซ่อนทุกอย่างเกี่ยวกับ Classroom
+และ build/ทดสอบได้ตามปกติ (ไม่ต้องมี `google-services.json`):
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+```
+
+- **เชื่อมบัญชี** (ตั้งค่า → การ์ด "Google Classroom" ข้างการ์ด Gemini key): `google_sign_in` 7.x
+  `initialize(serverClientId)` → `authenticate()` (ครูเลือกบัญชี) → `authorizeServer(scopes §18.5)` ได้ server auth code
+  → `POST /google/connect` สถานะ เชื่อมแล้ว / ยังไม่เชื่อม / ต้องเชื่อมใหม่ (`needs_reconnect` หรือ error code
+  `google_reconnect_required` / `invalid_grant` จาก endpoint ใดก็ได้) ปุ่มยกเลิกการเชื่อม = `DELETE /google/disconnect`
+  + sign out ในเครื่อง; ออกจากระบบแอปก็ sign out Google ในเครื่องด้วย (`LocalUserData.wipe`)
+- **ห้องเรียน**: การ์ด "Google Classroom" → เลือกคอร์ส (`/classrooms/{id}/google-link`) → หน้าจับคู่นักเรียน
+  (`/classrooms/{id}/google-roster`) คู่ที่เสนอเติมไว้ให้ ครูแก้ได้ เตือนบัญชีที่ยังไม่จับคู่และนักเรียนที่ไม่มีบัญชี
+  ห้ามเลือกนักเรียนคนเดียวให้สองบัญชี (ปุ่มบันทึกปิด) และบอกข้อจำกัดว่าส่งคะแนนกลับได้เฉพาะงานที่โพสต์จากแอป
+- **การบ้าน** (สถานะ `ready` + ห้องผูกคอร์สแล้ว): "โพสต์ลง Classroom" (ติ๊ก "แนบใบงานสำรอง" ได้, ข้อความเพิ่มไม่บังคับ)
+  แล้วแสดง `alternate_link` (คัดลอกได้) → "ดึงงานที่ส่ง" (`/assignments/{id}/google-submissions`)
+- **ดาวน์โหลดและสแกน** (ทั้งหมด = แถว `new`/`needs_retake`, หรือทีละคน): `ClassroomImporter`
+  (`features/google_classroom/classroom_importer.dart`) ขอ access token `drive.readonly` บนเครื่อง (เก็บในหน่วยความจำเท่านั้น
+  ไม่ลงเครื่อง ไม่ส่งให้ server ต่ออายุครั้งเดียวเมื่อ Drive ตอบ 401) → ดาวน์โหลด
+  `https://www.googleapis.com/drive/v3/files/{id}?alt=media` ด้วย Dio แยกจาก API client (ไม่มี token ของเรา, จำกัด 40 MB)
+  → JPEG/PNG เข้า pipeline ตรง, PDF/HEIC/WebP/อื่นๆ ผ่าน Pigeon `rasterize(path, mimeType)` (Kotlin
+  `AttachmentRasterizer.kt`: PdfRenderer ที่ 200 DPI สูงสุด 20 หน้า, ImageDecoder ใส่ EXIF orientation ให้; HEIC ต้อง Android 9+)
+  → `detectPage`/`cropPage` เดิม → คิวอัปโหลดพร้อม `meta.source = "classroom"` และ `google_submission_id`
+  (ใบงานสำรอง `student_id = 0` รับได้เฉพาะทางนี้) ผลรายรูป: ผ่าน / รอ layout / ต้องถ่ายใหม่ + เหตุผลภาษาไทย /
+  ไฟล์ใช้ไม่ได้; ใบงานของการบ้านอื่นถูกปฏิเสธในเครื่อง; QR ของคนอื่นบันทึกตาม QR พร้อมหมายเหตุ (server ติดป้าย
+  `identity_mismatch`); รูปที่ไม่ผ่านแค่ความคมกด "ใช้ภาพนี้ต่อ" ได้ (ไฟล์ที่รอการตัดสินใจถูกลบเมื่อออกจากหน้า)
+- **ตีกลับให้ถ่ายใหม่**: กล่องเหตุผลเติมจากปัญหาที่เจอให้ → `POST /google-submissions/{id}/return {reason}`;
+  **ส่งคะแนนกลับอีกครั้ง** สำหรับแถว `grade_failed` → `POST /assignments/{id}/google-grades/retry`
+- **นักเรียน**: แท็บผลการบ้านแสดงการ์ด "ครูขอให้ถ่ายรูปใหม่" พร้อมเหตุผลจาก `GET /student/retake-requests`
+  (404 = server ไม่มี Classroom → ไม่แสดง) และในหน้าผลรายชุดถ้ามี `retake_reason`; FCM `retake_requested` เปิดแท็บนี้
+- ทดสอบ: `test/google_classroom/` (repository ด้วย Dio ปลอม, ตัวดาวน์โหลดด้วย HTTP ปลอม, importer กับ pipeline/rasterizer ปลอม,
+  widget test หน้าจับคู่ หน้ารายการ submission การ์ดตั้งค่า/ห้อง/การบ้าน), `test/results/retake_notice_test.dart`,
+  JVM `AttachmentRasterizerTest.kt` ไม่มี test ไหนต่อ Google จริง ของจริงทดสอบตาม KICKOFF ส่วนที่ 6 ข้อ G7
+
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
 รูป request/response ของ `POST /classrooms/{id}/students`, `GET /subjects`, งานพิมพ์บัตร QR (`/login-cards`,
@@ -174,4 +212,10 @@ widget test ของหน้าสแกนด้วยกล้องปล�
 | `GET /student/results/{submission_id}` | `{submission_id, assignment: {id, title, subject}, total_score, max_score, published_at, responses: [{id, question: {position, type, prompt_text, max_points}, final_score, final_understanding, final_error_types, explanation, next_step, has_crop, has_final_crop, appeal, can_appeal}]}`; `POST /student/responses/{id}/appeal {reason?}` ซ้ำ → 409 |
 | FCM `data` | `type` = `grading_done` (+`assignment_id`) / `appeal_opened` → ครู; `results_published` / `appeal_resolved` (+`submission_id`) → นักเรียน (ค่าทุกตัวเป็น string) |
 | `GET /assignments` | (ไม่บังคับ) `needs_review_count` ต่อการบ้าน ใช้แสดงตัวเลข "รอตรวจทาน" |
+| `GET /google/status` | `{connected, email, scopes (string คั่นช่องว่าง หรือ list), needs_reconnect}`; `POST /google/connect {server_auth_code}` ตอบ `{email, scopes}`; 422 `code: google_scope_missing`; endpoint ใดตอบ `code` = `google_not_connected` / `google_reconnect_required` / `invalid_grant` แอปเปลี่ยนการ์ดเป็น "ต้องเชื่อมใหม่" |
+| `google_link` ของห้อง (**เพิ่มจาก §18.6**) | `GET /classrooms` และ `/classrooms/{id}` ใส่ `google_link: {course_id, course_name, linked_at} \| null` แอปใช้ตัดสินว่าจะแสดง "ผูกกับ Google Classroom" หรือ "จับคู่นักเรียน"; `POST /classrooms/{id}/google-link {course_id}` ตอบ `{course_id, course_name, linked_at}` (หรือ 204) |
+| `google_link` ของการบ้าน (**เพิ่มจาก §18.6**) | `GET /assignments/{id}` ใส่ `google_link: {course_work_id, alternate_link, drive_file_id, posted_at} \| null`; `POST /assignments/{id}/google-post {attach_blank_worksheet, instructions?, due_at?}` ตอบ `{course_work_id, alternate_link}` (409 `already_posted`, 422 `classroom_not_linked`) |
+| `GET/PUT /classrooms/{id}/google-roster` | GET `[{google_user_id, name, email, suggested_student_id, matched_student_id}]`; PUT `{matches: [{google_user_id, student_id \| null}]}` แอปส่งครบทุกบัญชีในคอร์ส |
+| `GET /assignments/{id}/google-submissions` | แถว §18.6 + `last_error` (แสดงเมื่อ `grade_failed`); `attachments: [{drive_file_id, title, mime_type}]`; `POST /google-submissions/{id}/return {reason ≤ 255}` ตอบแถวที่อัปเดต (หรือ 204 แล้วแอปโหลดใหม่); `POST /assignments/{id}/google-grades/retry` ตอบ `{queued}` ได้ (ไม่บังคับ) |
+| `GET /student/retake-requests` (**ใหม่ ไม่อยู่ใน §18.6**) | นักเรียน: แถวที่ state `returned_for_retake` ของตัวเอง `[{id, assignment: {id, title}, reason, requested_at, alternate_link}]`; `GET /student/results/{id}` ใส่ `retake_reason` ได้ (ไม่บังคับ); FCM `type: retake_requested` (+`assignment_id`) |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |

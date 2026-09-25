@@ -31,6 +31,7 @@ class Assignment {
     this.classroomName,
     this.subjectName,
     this.needsReviewCount,
+    this.googleLink,
   });
 
   final int id;
@@ -51,7 +52,27 @@ class Assignment {
   /// endpoint includes it (optional `needs_review_count`).
   final int? needsReviewCount;
 
+  /// Set once the assignment was posted to Google Classroom (DESIGN §18.4
+  /// `assignment_google_links`), when the server includes `google_link`.
+  final AssignmentGoogleLink? googleLink;
+
   bool get isDraft => status == 'draft';
+
+  Assignment withGoogleLink(AssignmentGoogleLink? link) => Assignment(
+    id: id,
+    classroomId: classroomId,
+    subjectId: subjectId,
+    title: title,
+    strictness: strictness,
+    status: status,
+    currentLayoutVersion: currentLayoutVersion,
+    dueAt: dueAt,
+    questions: questions,
+    classroomName: classroomName,
+    subjectName: subjectName,
+    needsReviewCount: needsReviewCount,
+    googleLink: link,
+  );
 
   /// Every show_work / open question has an approved rubric (required
   /// before `POST /assignments/{id}/layout`).
@@ -81,6 +102,45 @@ class Assignment {
       classroomName: classroom?['name'] as String?,
       subjectName: subject?['name'] as String?,
       needsReviewCount: (json['needs_review_count'] as num?)?.toInt(),
+      googleLink: json['google_link'] is Map
+          ? AssignmentGoogleLink.fromJson(
+              (json['google_link'] as Map).cast<String, dynamic>(),
+            )
+          : null,
+    );
+  }
+}
+
+/// The Classroom `courseWork` made by "โพสต์ลง Classroom" (DESIGN §18.2):
+/// `google_link` of an assignment and the answer of
+/// `POST /assignments/{id}/google-post`.
+class AssignmentGoogleLink {
+  const AssignmentGoogleLink({
+    required this.courseWorkId,
+    required this.alternateLink,
+    this.hasBlankWorksheet = false,
+    this.postedAt,
+  });
+
+  final String courseWorkId;
+
+  /// Opens the assignment in the Classroom web app.
+  final String alternateLink;
+
+  /// The anonymous spare worksheet (§18.3) is attached as material.
+  final bool hasBlankWorksheet;
+  final DateTime? postedAt;
+
+  factory AssignmentGoogleLink.fromJson(Map<String, dynamic> json) {
+    final posted = json['posted_at'];
+    return AssignmentGoogleLink(
+      courseWorkId: json['course_work_id'].toString(),
+      alternateLink: (json['alternate_link'] ?? '') as String,
+      hasBlankWorksheet:
+          json['has_blank_worksheet'] == true ||
+          (json['drive_file_id'] is String &&
+              (json['drive_file_id'] as String).isNotEmpty),
+      postedAt: posted is String ? DateTime.tryParse(posted) : null,
     );
   }
 }

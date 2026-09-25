@@ -111,12 +111,59 @@ class StudentAnswer {
   }
 }
 
+/// The teacher sent a Google Classroom submission back for a new photo
+/// (DESIGN §18.2 "ตีกลับให้ถ่ายใหม่"): a row of
+/// `GET /student/retake-requests`.
+class RetakeRequest {
+  const RetakeRequest({
+    required this.id,
+    required this.title,
+    required this.reason,
+    this.assignmentId,
+    this.requestedAt,
+    this.alternateLink,
+  });
+
+  final int id;
+  final int? assignmentId;
+  final String title;
+  final String reason;
+  final DateTime? requestedAt;
+
+  /// Opens the work in Google Classroom, where the student sends again.
+  final String? alternateLink;
+
+  factory RetakeRequest.fromJson(Map<String, dynamic> json) {
+    final assignment = json['assignment'] is Map
+        ? (json['assignment'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final requested = json['requested_at'] ?? json['updated_at'];
+    return RetakeRequest(
+      id: (json['id'] as num).toInt(),
+      assignmentId: ((json['assignment_id'] ?? assignment['id']) as num?)
+          ?.toInt(),
+      title: (json['title'] ?? assignment['title'] ?? 'การบ้าน') as String,
+      reason: (json['reason'] ?? json['retake_reason'] ?? '') as String,
+      requestedAt: requested is String ? DateTime.tryParse(requested) : null,
+      alternateLink: json['alternate_link'] as String?,
+    );
+  }
+}
+
 /// `GET /student/results/{submission_id}`.
 class StudentResultDetail {
-  const StudentResultDetail({required this.summary, required this.answers});
+  const StudentResultDetail({
+    required this.summary,
+    required this.answers,
+    this.retakeReason,
+  });
 
   final StudentResult summary;
   final List<StudentAnswer> answers;
+
+  /// Set when the teacher asked for a new photo of this assignment after
+  /// the result was published (optional `retake_reason`).
+  final String? retakeReason;
 
   factory StudentResultDetail.fromJson(Map<String, dynamic> json) {
     final rows = json['responses'] ?? json['answers'] ?? json['questions'];
@@ -126,7 +173,11 @@ class StudentResultDetail {
           if (r is Map) StudentAnswer.fromJson(r.cast<String, dynamic>()),
     ]..sort((a, b) => a.position.compareTo(b.position));
     final summary = StudentResult.fromJson(json);
+    final retake = json['retake_reason'];
     return StudentResultDetail(
+      retakeReason: retake is String && retake.trim().isNotEmpty
+          ? retake
+          : null,
       summary: summary.maxScore != null || answers.isEmpty
           ? summary
           : StudentResult(

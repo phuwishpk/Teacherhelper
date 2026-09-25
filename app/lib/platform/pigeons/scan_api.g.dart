@@ -393,4 +393,33 @@ class ScanPipelineApi {
     );
     return pigeonVar_replyValue! as PageCrops;
   }
+
+  /// Turns a file a student attached in Google Classroom (DESIGN §18.2)
+  /// into JPEG pages [detectPage] can read: every page of a PDF (rendered
+  /// with PdfRenderer at about 200 DPI, at most 20 pages) or the one picture
+  /// of an image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
+  /// ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
+  /// mimeType, used as a hint; the file's own header decides.
+  /// Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
+  /// `storage_failed`.
+  Future<List<String>> rasterize(String inputPath, String mimeType) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.eduvision.ScanPipelineApi.rasterize$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[inputPath, mimeType],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return (pigeonVar_replyValue! as List<Object?>).cast<String>();
+  }
 }

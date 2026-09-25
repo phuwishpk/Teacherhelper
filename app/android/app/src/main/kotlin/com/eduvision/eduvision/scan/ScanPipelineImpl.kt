@@ -58,6 +58,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     private var openCvReady = false
     private var detector: ArucoDetector? = null
     private var scanner: BarcodeScanner? = null
+    private val rasterizer = AttachmentRasterizer()
 
     init {
         // Crops the Dart side never adopted (app killed between capture and
@@ -77,6 +78,18 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         guarded {
             val layout = LayoutPage.parse(layoutJson)
             MatScope().use { s -> crop(s, imagePath, detection, layout) }
+        }
+    }
+
+    override suspend fun rasterize(inputPath: String, mimeType: String): List<String> = withContext(dispatcher) {
+        // No OpenCV here: PdfRenderer / ImageDecoder only. Output goes to
+        // the same cache folder as the crops, so stale pages are swept too.
+        try {
+            rasterizer.rasterize(File(inputPath), mimeType, File(cacheRoot, UUID.randomUUID().toString()))
+        } catch (e: OutOfMemoryError) {
+            throw FlutterError("pipeline_failed", "Not enough memory for this attachment")
+        } catch (e: SecurityException) {
+            throw FlutterError("pdf_unreadable", e.message ?: "Protected file")
         }
     }
 
