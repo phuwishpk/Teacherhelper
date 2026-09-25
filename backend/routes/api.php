@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AiKeyController;
+use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
@@ -12,12 +13,16 @@ use App\Http\Controllers\Api\V1\LoginCardController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\QuestionController;
 use App\Http\Controllers\Api\V1\ResponseController;
+use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\RubricController;
 use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
+use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
+use App\Http\Controllers\Api\V1\StudentResultController;
 use App\Http\Controllers\Api\V1\SubjectController;
+use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
 use Illuminate\Support\Facades\Route;
@@ -96,6 +101,26 @@ Route::prefix('v1')->group(function () {
                 Route::post('scans', [ScanController::class, 'store'])->name('api.scans.store');
                 Route::post('scans/{id}/confirm-replace', [ScanController::class, 'confirmReplace'])->whereNumber('id')->name('api.scans.confirm-replace');
                 Route::get('scans/{id}/page', [ScanController::class, 'page'])->whereNumber('id')->name('api.scans.page');
+
+                // Review and publishing (§9.5, §13).
+                Route::get('assignments/{id}/review-queue', [ReviewController::class, 'queue'])->whereNumber('id')->name('api.assignments.review-queue');
+                Route::post('assignments/{id}/approve-confident', [ReviewController::class, 'approveConfident'])->whereNumber('id')->name('api.assignments.approve-confident');
+                Route::post('assignments/{id}/publish', [ReviewController::class, 'publish'])->whereNumber('id')->name('api.assignments.publish');
+                Route::get('responses/{id}', [ResponseController::class, 'show'])->whereNumber('id')->name('api.responses.show');
+                Route::patch('responses/{id}', [ResponseController::class, 'update'])->whereNumber('id')->name('api.responses.update');
+                // Calls Gemini synchronously (and costs money), so it is throttled.
+                Route::post('responses/{id}/regenerate-explanation', [ResponseController::class, 'regenerateExplanation'])->whereNumber('id')->middleware('throttle:20,1')->name('api.responses.regenerate-explanation');
+                Route::post('submissions/{id}/publish', [SubmissionController::class, 'publish'])->whereNumber('id')->name('api.submissions.publish');
+                Route::get('appeals', [AppealController::class, 'index'])->name('api.appeals.index');
+                Route::patch('appeals/{id}', [AppealController::class, 'update'])->whereNumber('id')->name('api.appeals.update');
+            });
+
+            // Student-only (§9.7): their own published results.
+            Route::middleware('ability:student')->prefix('student')->group(function () {
+                Route::get('results', [StudentResultController::class, 'index'])->name('api.student.results.index');
+                Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->whereNumber('submission_id')->name('api.student.results.show');
+                Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->whereNumber('id')->middleware('throttle:30,1')->name('api.student.responses.appeal');
+                Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
             });
 
             // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.

@@ -16,6 +16,12 @@ class SubmissionPolicy
         return self::teacherOwns($user, $submission) || self::studentOwnsPublished($user, $submission);
     }
 
+    /** POST /submissions/{id}/publish (§9.5). */
+    public function publish(User $user, Submission $submission): bool
+    {
+        return self::teacherOwns($user, $submission);
+    }
+
     public static function teacherOwns(User $user, Submission $submission): bool
     {
         $assignment = $submission->assignment;
