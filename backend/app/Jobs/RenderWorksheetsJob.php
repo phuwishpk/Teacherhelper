@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Domain\Worksheets\QrSigningKeyMissing;
 use App\Domain\Worksheets\WorksheetFiles;
 use App\Domain\Worksheets\WorksheetLayoutException;
 use App\Domain\Worksheets\WorksheetPdfRenderer;
@@ -79,12 +80,18 @@ class RenderWorksheetsJob implements ShouldQueue
         }
     }
 
-    /** The worker killed the job (timeout) outside handle()'s own catch. */
+    /**
+     * The job failed outside handle()'s own catch: the worker killed it
+     * (timeout), or resolving the renderer threw before handle() ran, which
+     * happens when QR_SIGNING_KEY was removed after the print was queued.
+     */
     public function failed(?Throwable $e): void
     {
         $print = WorksheetPrint::query()->find($this->printId);
         if ($print !== null && ! $print->isFinished()) {
-            $print->markFailed('สร้าง PDF ใบงานไม่ทันเวลา กรุณาลองใหม่');
+            $print->markFailed($e instanceof QrSigningKeyMissing
+                ? QrSigningKeyMissing::USER_MESSAGE
+                : 'สร้าง PDF ใบงานไม่ทันเวลา กรุณาลองใหม่');
         }
     }
 

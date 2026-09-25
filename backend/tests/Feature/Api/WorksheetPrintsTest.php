@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Worksheets\PdfMerger;
+use App\Domain\Worksheets\QrSigningKeyMissing;
 use App\Domain\Worksheets\WorksheetFiles;
 use App\Domain\Worksheets\WorksheetPdfRenderer;
 use App\Jobs\MergeWorksheetsJob;
@@ -185,6 +186,62 @@ class WorksheetPrintsTest extends TestCase
         $this->asUser($outsider)->postJson("/api/v1/assignments/{$assignment->id}/worksheets")->assertNotFound();
         $this->asUser($student)->getJson("/api/v1/worksheet-prints/{$id}")->assertForbidden();
         $this->asGuest()->getJson("/api/v1/worksheet-prints/{$id}/file")->assertUnauthorized();
+    }
+
+    public function test_a_teacher_loses_access_when_the_classroom_moves_to_another_teacher(): void
+    {
+        [$teacher, $assignment, $classroom] = $this->readyAssignment(students: 1);
+        $id = $this->asUser($teacher)->postJson("/api/v1/assignments/{$assignment->id}/worksheets")
+            ->assertStatus(202)
+            ->json('data.id');
+        $successor = $this->makeTeacher($teacher->school);
+
+        $classroom->update(['teacher_id' => $successor->id]);
+
+        // The requester is no longer the classroom's teacher: the PDF carries
+        // student names, so it goes with the classroom, not with the requester.
+        $this->asUser($teacher)->getJson("/api/v1/worksheet-prints/{$id}")->assertForbidden();
+        $this->asUser($teacher)->get("/api/v1/worksheet-prints/{$id}/file")->assertForbidden();
+        $this->asUser($successor)->getJson("/api/v1/worksheet-prints/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'ready');
+        $this->asUser($successor)->get("/api/v1/worksheet-prints/{$id}/file")->assertOk();
+    }
+
+    public function test_a_missing_qr_signing_key_is_refused_before_anything_is_queued(): void
+    {
+        [$teacher, $assignment] = $this->readyAssignment(students: 2);
+        config(['eduvision.qr_signing_key' => '  ']);
+        Queue::fake();
+
+        $this->asUser($teacher)->postJson("/api/v1/assignments/{$assignment->id}/worksheets")
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'qr_key_missing')
+            ->assertJsonPath('message', QrSigningKeyMissing::USER_MESSAGE);
+
+        Queue::assertNothingPushed();
+        $this->assertSame(0, WorksheetPrint::query()->count());
+    }
+
+    public function test_a_key_removed_after_queueing_fails_the_print_with_a_configuration_message(): void
+    {
+        // Same wiring as production: database queue, one bounded worker pass.
+        config(['queue.default' => 'database']);
+        [$teacher, $assignment] = $this->readyAssignment(students: 2);
+        $id = $this->asUser($teacher)->postJson("/api/v1/assignments/{$assignment->id}/worksheets")
+            ->assertStatus(202)
+            ->json('data.id');
+
+        config(['eduvision.qr_signing_key' => null]);
+        // Resolving WorksheetPdfRenderer -> QrSigner throws before handle()
+        // runs; the worker hands that exception to failed().
+        $this->artisan('queue:work', ['--queue' => 'pdf', '--stop-when-empty' => true])->assertSuccessful();
+
+        $this->asUser($teacher)->getJson("/api/v1/worksheet-prints/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.download_url', null)
+            ->assertJsonPath('data.error', QrSigningKeyMissing::USER_MESSAGE);
     }
 
     public function test_a_classroom_of_40_renders_within_the_worker_budget(): void
