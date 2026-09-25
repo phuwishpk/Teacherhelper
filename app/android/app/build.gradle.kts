@@ -25,6 +25,17 @@ android {
         versionName = flutter.versionName
     }
 
+    packaging {
+        jniLibs {
+            // OpenCV ships 32-bit x86 libraries; Flutter builds no x86 engine.
+            excludes += "lib/x86/**"
+        }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -42,4 +53,16 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Native scan pipeline (DESIGN §6.2). OpenCV 4.x from Maven Central
+    // includes the objdetect ArUco detector.
+    implementation("org.opencv:opencv:4.14.0")
+    // Same bundled ML Kit barcode model mobile_scanner already pulls in.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // Pigeon generates suspend host API methods.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

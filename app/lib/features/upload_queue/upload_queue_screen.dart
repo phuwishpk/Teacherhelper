@@ -6,6 +6,7 @@ import '../../core/db/app_database.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../scan/scan_processor.dart';
 import 'queued_scan.dart';
 import 'scan_queue_repository.dart';
 import 'upload_queue_providers.dart';
@@ -166,6 +167,14 @@ class _ScanTile extends ConsumerWidget {
                   'ผลของนักเรียนคนนี้เผยแพร่ไปแล้ว ยืนยันเพื่อแทนที่ด้วยสแกนใหม่และตรวจซ้ำ',
                 ),
               ),
+            if (scan.state == ScanState.needsLayout)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'ยังไม่มี layout ของใบงานนี้ในเครื่อง ต่อเน็ตแล้วกด "ประมวลผลต่อ" '
+                  'เพื่อตัดภาพและอัปโหลด',
+                ),
+              ),
             if (stuck)
               const Padding(
                 padding: EdgeInsets.only(top: 4),
@@ -185,6 +194,31 @@ class _ScanTile extends ConsumerWidget {
                     ),
                     icon: const Icon(Icons.published_with_changes),
                     label: const Text('ยืนยันแทนที่'),
+                  ),
+                if (scan.state == ScanState.needsLayout)
+                  TextButton.icon(
+                    onPressed: () async {
+                      try {
+                        final run = await ref
+                            .read(scanProcessorProvider)
+                            .processNeedsLayout();
+                        if (!context.mounted) return;
+                        showMessage(
+                          context,
+                          run.processed > 0
+                              ? 'ตัดภาพแล้ว ${run.processed} หน้า กำลังอัปโหลด'
+                              : run.waiting > 0
+                              ? 'ยังดาวน์โหลด layout ไม่ได้ ตรวจการเชื่อมต่อแล้วลองใหม่'
+                              : 'ประมวลผลไม่สำเร็จ ดูเหตุผลในรายการ',
+                        );
+                      } catch (e) {
+                        if (context.mounted) {
+                          showMessage(context, 'ประมวลผลไม่สำเร็จ ($e)');
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.crop),
+                    label: const Text('ประมวลผลต่อ'),
                   ),
                 if (scan.state == ScanState.failed ||
                     scan.state == ScanState.pending ||

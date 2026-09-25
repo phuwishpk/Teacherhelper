@@ -351,4 +351,64 @@ void main() {
       expect(rest.map((s) => s.clientScanId), ['y']);
     },
   );
+
+  test(
+    'completeLayout turns a needs_layout row into a pending upload',
+    () async {
+      final raw = await crop('raw');
+      await repo.enqueue(
+        clientScanId: 'nl',
+        meta: {'client_scan_id': 'nl', 'qr': 'EV1.123.4567.1.2.K7Q3M2PA'},
+        files: {'raw': raw.path},
+        state: ScanState.needsLayout,
+      );
+      now = now.add(const Duration(minutes: 3));
+      final page = await crop('page');
+      final ok = await repo.completeLayout(
+        'nl',
+        meta: meta('nl'),
+        files: {'page': page.path},
+      );
+
+      expect(ok, isTrue);
+      final scan = (await repo.find('nl'))!;
+      expect(scan.state, ScanState.pending);
+      expect(scan.meta, meta('nl'));
+      expect(scan.files, {'page': page.path});
+      expect(scan.attempts, 0);
+      expect(scan.lastError, isNull);
+      expect(scan.updatedAt, now);
+      expect((await repo.dueForUpload()).map((s) => s.clientScanId), ['nl']);
+
+      // Only a row that is still waiting for its layout is touched.
+      expect(
+        await repo.completeLayout('nl', meta: meta('x'), files: const {}),
+        isFalse,
+      );
+      expect(
+        await repo.completeLayout('missing', meta: meta('x'), files: const {}),
+        isFalse,
+      );
+      expect((await repo.find('nl'))!.files, {'page': page.path});
+    },
+  );
+
+  test('deleting a scan also removes its now-empty scan folder', () async {
+    final dir = await Directory('${tmp.path}/scan-9').create();
+    final page = File('${dir.path}/page.webp');
+    await page.writeAsBytes([1]);
+    final other = await crop('outside');
+    await repo.enqueue(
+      clientScanId: 'scan-9',
+      meta: meta('scan-9'),
+      files: {'page': page.path, 'crop_q1': other.path},
+    );
+
+    await repo.markDone('scan-9', serverScanId: 5);
+
+    expect(page.existsSync(), isFalse);
+    expect(dir.existsSync(), isFalse);
+    expect(other.existsSync(), isFalse);
+    expect(tmp.existsSync(), isTrue, reason: 'only the scan folder goes');
+  });
 }

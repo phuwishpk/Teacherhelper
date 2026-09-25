@@ -10,13 +10,19 @@ dart run build_runner build --delete-conflicting-outputs   # เมื่อแ�
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000  # AVD
 flutter test && flutter analyze
 flutter build apk --debug
+(cd android && ./gradlew :app:testDebugUnitTest)             # JVM test ของ RegionMath.kt (หลัง build ครั้งแรก)
 ```
 
 ## Build สำหรับใช้งานจริง (release)
 
 ```bash
-flutter build apk --release --dart-define=API_BASE_URL=https://<โดเมนของโรงเรียน>
+flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<โดเมนของโรงเรียน>
 ```
+
+- ใช้ `--split-per-abi` แล้วแจกไฟล์ `app-arm64-v8a-release.apk` (ประมาณ 56 MB) เพราะ OpenCV มี native library
+  แยกตาม ABI ถ้า build รวมทุก ABI ไฟล์จะใหญ่เกือบ 2 เท่า (x86 ของ OpenCV ถูกตัดออกแล้วใน `build.gradle.kts`)
+- release เปิด R8 อยู่ `android/app/proguard-rules.pro` keep `org.opencv.**` ไว้ เพราะ JNI ของ OpenCV
+  หา class/field ตามชื่อ และ AAR ไม่มี consumer rule มาให้
 
 - debug/profile build ถ้าไม่ใส่ `--dart-define` จะชี้ไปที่ `http://10.0.2.2:8000` (AVD → Mac) ให้อัตโนมัติ
 - release build **ไม่มีค่า default**: ถ้าไม่ใส่ `API_BASE_URL` แอปจะเปิดหน้าแจ้งว่า build ผิด (`MisconfiguredApp` ใน `lib/main.dart`)
@@ -44,9 +50,45 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<โดเมน�
 - นักเรียน: เข้าสู่ระบบด้วยบัตร QR (`mobile_scanner`) หรือรหัสห้อง + เลขที่ + PIN, หน้าผลการบ้าน (เฉพาะที่เผยแพร่แล้ว)
 - ในเครื่อง: drift (`cached_layouts`, `cached_rosters`, `scan_queue`, `model_cache`) และ workmanager
   อัปโหลดสแกนแบบ multipart ตาม §9.4 พร้อม exponential backoff
-- `/scan` เป็นหน้า placeholder รอขั้น A2 (กล้อง + Pigeon/Kotlin)
+- `/scan` สแกนใบงานด้วยกล้อง (Phase 1, ดูหัวข้อถัดไป)
 - โครงสร้างตาม DESIGN §6.1: หน้าผลของนักเรียนอยู่ที่ `features/results/` (shell ของนักเรียนอยู่ที่ `features/student/`)
 - ข้อความ UI เป็นภาษาไทยแบบเขียนตรงในโค้ด ยัง**ไม่**ตั้ง `flutter gen-l10n` (l10n.yaml/ARB) เลื่อนไปจนกว่าจะมีภาษาที่สอง
+
+## สแกนใบงาน (DESIGN §5.3, §6.2–§6.4, §9.4)
+
+ลำดับงาน: กล้อง (`package:camera`, ความละเอียดสูงสุด) → `detectPage` → ตรวจคุณภาพ → หา layout → `cropPage`
+→ หน้ายืนยัน (ชื่อจาก roster ที่ cache ไว้ + ภาพทุกกรอบ) → `scan_queue` (`pending`) → เริ่มอัปโหลดทันที → กลับไปถ่ายแผ่นต่อไป
+
+| ส่วน | ไฟล์ |
+|---|---|
+| นิยาม Pigeon | `pigeons/scan.dart` (อยู่นอก `lib/` เพราะ import `package:pigeon` ที่เป็น dev dependency) สร้างใหม่ด้วย `dart run pigeon --input pigeons/scan.dart && dart format lib/platform/pigeons` |
+| โค้ดที่ generate | `lib/platform/pigeons/scan_api.g.dart`, `android/app/src/main/kotlin/com/eduvision/eduvision/scan/ScanApi.g.kt` (commit ไว้ ห้ามแก้เอง) |
+| Kotlin | `scan/ScanPipelineImpl.kt` (OpenCV `org.opencv:opencv:4.14.0` จาก Maven Central: ArUco `DICT_4X4_50` ผ่าน `ArucoDetector`, warp, blur, crop, ฝนวงกลม, CNN input; ML Kit `barcode-scanning:17.3.0` อ่าน QR), `scan/RegionMath.kt` (คณิตศาสตร์ล้วน มี JVM test), `scan/LayoutPage.kt` |
+| Dart | `lib/platform/scan_pipeline.dart` (interface + ตัวที่เรียก Pigeon), `features/scan/page_layout.dart` (model ของ layout + คณิตศาสตร์ชุดเดียวกับ `RegionMath.kt`), `scan_quality.dart` (เหตุผลให้ถ่ายใหม่ภาษาไทย), `scan_meta.dart` (สร้าง `meta` ของ §9.4), `scan_processor.dart` (ลำดับงานทั้งหมด ใช้ซ้ำได้กับรูปจาก Google Classroom §18.2), `scan_file_store.dart`, `scan_camera.dart`, `scan_screen.dart` |
+
+ค่าที่ใช้ (ต้องตรงกันทั้ง Dart และ Kotlin):
+
+- marker id 0/1/2/3 = มุมบนซ้าย/บนขวา/ล่างขวา/ล่างซ้าย ตำแหน่งจุดศูนย์กลางคือมุมของ `frame_mm`
+  หา marker บนภาพที่ย่อเหลือด้านยาว 1600 px ถ้าเจอไม่ครบจะหาซ้ำบนภาพเต็ม
+- warp กรอบ marker เป็น 200 DPI (A4 frame 178×265 mm → 1402×2087 px) ภาพ `page` ย่อเหลือด้านยาว 1600 px
+- crop ขยายขอบ 2% **ของกรอบ** (0.02 ในหน่วย normalize) ทุกด้าน แล้ว clamp ให้อยู่ในกรอบ; WebP quality 80
+- กรอบคำตอบสุดท้ายของ `lines` คืนมาเป็น crop แยก id `<region_id>_final` → field `crop_<region_id>_final` และ `final_file` ใน meta
+- `blur_score` = variance of Laplacian บนกรอบที่ warp แล้ว เกณฑ์เริ่มต้น `defaultMinBlurScore = 60`
+  (ต้องจูนจากภาพจริงใน Phase 1) ถ้าติดแค่เรื่องเบลอ ครูกด "ใช้ภาพนี้ต่อ" ได้
+- `ink_ratio` วัดในกรอบที่หดเข้า 1.2 mm (ตัดเส้นขอบที่พิมพ์) หลังลบเส้นตรงยาวที่พิมพ์ไว้ (เส้นบรรทัด/ขอบ) ด้วย morphology
+- `mcq_fill` = สัดส่วนพิกเซลเข้มใน 70% ของรัศมี threshold ด้วย Otsu ของทั้งแถว (ไม่ให้ใกล้สีกระดาษเกิน 25 ระดับ)
+- `cnnInput` (เฉพาะกรอบ numeric) = grayscale 32×128 byte ตาม `ml/train/preprocess.py` (tight crop + fit to canvas)
+  ฝั่ง Dart ค่อย normalize `x = 1 - g/255` ตอนรันโมเดล (ขั้น digit reader) ตอนนี้ยังไม่แนบ `cnn` ใน meta
+- ใบงานสำรอง (`student_id = 0`, §18.3) และบัตร login (`EVL1.`) ถูกปฏิเสธที่หน้าสแกนด้วยข้อความภาษาไทย
+- layout: หาใน drift `cached_layouts` ก่อน ถ้าไม่มีและต่อเน็ตได้จะดึง `GET /assignments/{id}/layouts?version=` มา cache
+  ถ้าต่อไม่ได้ ครูเลือก "เก็บไว้ในคิว" → แถว `needs_layout` เก็บภาพดิบ (field `raw` ใช้ในเครื่องเท่านั้น ไม่เคยถูกส่ง)
+  แล้วประมวลผลต่อเมื่อเปิดหน้าสแกนหรือกด "ประมวลผลต่อ" ในหน้าคิว (ใช้ `client_scan_id` และ `scanned_at` เดิม)
+- ไฟล์ของสแกนที่ยืนยันแล้วถูกย้ายจาก cache ไป `<app support>/scan_queue/<client_scan_id>/` เพื่อไม่ให้ Android ลบทิ้งตอนพื้นที่เต็ม
+- ถ้าสแกนหน้าเดิม (การบ้าน, นักเรียน, หน้า) ที่ยังค้างในคิว หน้ายืนยันจะเตือนก่อน (server ใช้ภาพล่าสุดตามกติกาสแกนซ้ำ §9.4)
+
+ทดสอบ: `test/scan/` (คณิตศาสตร์ของ region, เหตุผลให้ถ่ายใหม่, รูป meta, processor กับ drift ในหน่วยความจำ + pipeline ปลอม,
+widget test ของหน้าสแกนด้วยกล้องปลอม) และ `android/app/src/test/.../RegionMathTest.kt` ซึ่งใช้ตัวเลขชุดเดียวกับ
+`test/scan/page_layout_test.dart` ส่วนการทำงานของ OpenCV จริงต้องลองบนเครื่อง Android (Phase 1: พิมพ์ 20 แผ่นแล้ววัด crop ตรงกรอบ)
 
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
@@ -68,5 +110,6 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<โดเมน�
 | `PUT /questions/{id}/rubric` | `open`: `{criteria: [{position, description, points, is_core}]}` (เกณฑ์หลักไม่เกิน 1 ข้อ); `show_work`: `{criteria: [], reference_steps: [...]}` |
 | ร่าง rubric | poll `GET /assignments/{id}` จนข้อนั้นเปลี่ยน: `show_work` ดู `answer_key.reference_steps`, `open` ดู `rubric_criteria` |
 | `GET /assignments/{id}/layouts` | ไม่ส่ง `version` = ทุกเวอร์ชัน `[{version, pages[]}]` (รับแบบ object เดี่ยวด้วย) |
+| `meta` ของ `POST /scans` | ตาม §9.4: `mcq` ส่ง `mcq_fill` (ไม่มี `ink_ratio`), `box`/`lines` ส่ง `ink_ratio`, `lines` ที่มีกรอบคำตอบสุดท้ายส่ง `final_file`; `scanned_at` เป็น UTC (`...Z`); `blur_score` ปัด 1 ตำแหน่ง |
 | `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done; 202 หรือ `state: pending_confirm` (รวม 200 ที่ส่ง body เดิมซ้ำ) → `conflict` รอครูยืนยันผ่าน `POST /scans/{scan_id}/confirm-replace` **แอปต้องการ `scan_id` ใน body ของ 202** (ถ้าไม่มีจะเก็บเป็น conflict ที่ยืนยันจากเครื่องไม่ได้ ไม่ลบไฟล์); 401/408/429/5xx/เน็ตหลุด → retry แบบ backoff; 4xx อื่น (422, 403, 404, 413, …) → failed ถาวร (แสดง `message (code)`) |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |
