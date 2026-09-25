@@ -899,11 +899,14 @@ CREATE TABLE training_samples (
 |---|---|---|
 | GET / POST | `/classrooms` | |
 | GET / PATCH | `/classrooms/{id}` | |
-| POST | `/classrooms/{id}/students` | เพิ่มทีละหลายคน `[{name, student_number}]` |
+| POST | `/classrooms/{id}/students` | เพิ่มทีละหลายคน `{students: [{name, student_number}]}` (สูงสุด 100 แถว) ตอบ `201 {data: [{student_id, student_number, name, status, pin}]}` PIN แสดงครั้งเดียว |
 | GET | `/classrooms/{id}/roster` | ใช้ cache ไว้สแกนตอนออฟไลน์ |
-| POST | `/classrooms/{id}/login-cards` | queue งานสร้าง PDF บัตร QR ของทั้งห้อง |
-| POST | `/students/{id}/login-card` | ออกบัตรใหม่ ยกเลิก token เดิม |
-| POST | `/students/{id}/pin` | รีเซ็ต PIN ยกเลิก token เดิม |
+| POST | `/classrooms/{id}/login-cards` | queue งานสร้าง PDF บัตร QR ของทั้งห้อง ตอบ `202` พร้อม print job (รูปแบบด้านล่าง) |
+| POST | `/students/{id}/login-card` | ออกบัตรใหม่ ยกเลิก token เดิม ตอบ `202` พร้อม print job |
+| GET | `/login-card-prints/{id}` | สถานะ print job `{id, status: queued\|rendering\|ready\|failed, classroom_id, student_id, download_url, status_url, error, created_at}` (`download_url` มีค่าเมื่อ `ready`) |
+| GET | `/login-card-prints/{id}/file` | ดาวน์โหลด PDF บัตร (ตรวจสิทธิ์) |
+| POST | `/students/{id}/pin` | รีเซ็ต PIN ยกเลิก token เดิม ตอบ `{pin}` ครั้งเดียว |
+| GET | `/subjects` | รายการวิชา `{data: [{id, code, name}]}` ใช้ตอนสร้างการบ้าน |
 
 ### 9.3 การบ้าน, rubric และใบงาน (ครู)
 
