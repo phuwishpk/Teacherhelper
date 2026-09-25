@@ -635,16 +635,6 @@ class ScansTest extends TestCase
         $this->assertSame('published', $submission->fresh()->status); // only publishing or a confirmed rescan changes it
     }
 
-    public function test_the_grading_job_stub_leaves_queued_responses_for_b4(): void
-    {
-        $id = $this->postScan($this->metaFor(2))->assertStatus(201)->json('scan_id');
-
-        (new GradeScanJob($id))->handle();
-        (new GradeScanJob(999999))->handle(); // a scan deleted meanwhile is ignored
-
-        $this->assertSame(['queued'], Response::query()->where('scan_id', $id)->distinct()->pluck('grading_state')->all());
-    }
-
     public function test_scans_work_with_a_layout_built_by_the_server(): void
     {
         $assignment = Assignment::factory()->for_classroom($this->classroom)->create();

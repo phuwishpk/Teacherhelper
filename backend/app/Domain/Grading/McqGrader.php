@@ -48,8 +48,8 @@ final class McqGrader
             score: ScoreRounding::score($ratio, $maxPoints),
             understanding: Understanding::fromU($u),
             errorTypes: $filled === [] ? ['no_answer'] : [],
-            reviewPriority: $priority['p'],
-            priorityBand: $priority['band'],
+            reviewPriority: $priority->storedP(),
+            priorityBand: $priority->band,
             trace: [
                 'system' => 'mcq',
                 'fill' => array_map(fn ($v) => round((float) $v, 4), $fill),
@@ -59,7 +59,7 @@ final class McqGrader
                 'correct' => $correct,
                 'score_ratio' => $ratio,
                 'u' => $u,
-                'review_priority' => $priority['trace'],
+                'review_priority' => $priority->toArray(),
             ],
         );
     }

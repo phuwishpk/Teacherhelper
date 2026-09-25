@@ -49,6 +49,12 @@ class AssignmentPolicy
         return self::owns($user, $assignment);
     }
 
+    /** Review AI grading: requeue, review queue, publish (§9.5, §13). */
+    public function review(User $user, Assignment $assignment): bool
+    {
+        return self::owns($user, $assignment);
+    }
+
     public static function owns(User $user, Assignment $assignment): bool
     {
         return self::isSchoolTeacher($user)

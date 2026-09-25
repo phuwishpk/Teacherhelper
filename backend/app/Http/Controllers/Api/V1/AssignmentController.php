@@ -143,7 +143,7 @@ class AssignmentController extends Controller
     public static function loadDetail(Assignment $assignment): Assignment
     {
         return $assignment->load(['classroom', 'subject', 'questions.skills', 'questions.rubricCriteria'])
-            ->loadCount('questions');
+            ->loadCount(['questions', 'responses as missing_ai_key_count' => fn ($q) => $q->awaitingAiKey()]);
     }
 
     private static function utc(?string $value): ?Carbon

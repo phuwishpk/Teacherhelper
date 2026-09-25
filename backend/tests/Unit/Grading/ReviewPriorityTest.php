@@ -15,19 +15,21 @@ class ReviewPriorityTest extends TestCase
         // D = 0, L = 0.4, B = 0 -> P2 w 0.4, P4 w 0.6 -> p = 0.32 "look".
         $result = ReviewPriority::evaluate(0.0, 0.4, 0.0);
 
-        $this->assertEqualsWithDelta(0.32, $result['p'], 1e-9);
-        $this->assertSame('look', $result['band']);
-        $this->assertSame(['P1' => 0.0, 'P2' => 0.4, 'P3' => 0.0, 'P4' => 0.6], array_column($result['trace']['rules'], 'w', 'rule'));
+        $this->assertEqualsWithDelta(0.32, $result->p, 1e-9);
+        $this->assertSame(0.32, $result->storedP());
+        $this->assertSame('look', $result->band);
+        $this->assertEqualsWithDelta(['P1' => 0.0, 'P2' => 0.4, 'P3' => 0.0, 'P4' => 0.6], $result->trace->weights(), 1e-12);
+        $this->assertSame('review_priority', $result->toArray()['system']);
     }
 
     public function test_bands_and_extremes(): void
     {
-        $this->assertSame(['p' => 0.0, 'band' => 'confident'], array_intersect_key(ReviewPriority::evaluate(0, 0, 0), ['p' => 1, 'band' => 1]));
-        $this->assertSame(1.0, ReviewPriority::evaluate(1, 0, 0)['p']);
+        $this->assertSame([0.0, 'confident'], [ReviewPriority::evaluate(0, 0, 0)->p, ReviewPriority::evaluate(0, 0, 0)->band]);
+        $this->assertSame(1.0, ReviewPriority::evaluate(1, 0, 0)->p);
         $this->assertSame('check', ReviewPriority::band(0.5));
         $this->assertSame('look', ReviewPriority::band(0.2));
         $this->assertSame('confident', ReviewPriority::band(0.1999));
-        $this->assertSame(1.0, ReviewPriority::evaluate(0, 0, 0, suspicious: true)['p']);
+        $this->assertSame(1.0, ReviewPriority::evaluate(0, 0, 0, suspicious: true)->p);
     }
 
     public function test_boundary_closeness(): void
@@ -51,9 +53,11 @@ class ReviewPriorityTest extends TestCase
     {
         $this->assertSame(2.5, ScoreRounding::score(0.5, 5));
         $this->assertSame(3.5, ScoreRounding::score(0.7, 5));
+        $this->assertSame(2.5, ScoreRounding::score(0.5375, 5), 'the §11.3 example: 2.69 -> 2.5');
         $this->assertSame(1.25, ScoreRounding::score(1.0, 1.25)); // full marks stay exact
         $this->assertSame(1.0, ScoreRounding::score(0.9, 1.25)); // 1.125 -> 1.0, never above max
         $this->assertSame(0.0, ScoreRounding::score(-1, 5));
         $this->assertSame(4.75, ScoreRounding::score(0.95, 5, 0.25));
+        $this->assertSame(2.0, ScoreRounding::score(0.49999999999999994, 5, 1.0), 'no pre-rounding: 2.4999… stays below the half like ml/fuzzy');
     }
 }

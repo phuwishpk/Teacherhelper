@@ -5,6 +5,10 @@ namespace App\Providers;
 use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
+use App\Domain\Gemini\HttpGeminiClient;
+use App\Domain\Gemini\PromptRepository;
+use App\Domain\Notifications\LogNotifier;
+use App\Domain\Notifications\Notifier;
 use App\Domain\Worksheets\QrSigner;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -15,9 +19,15 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Canned, offline Gemini by default (DESIGN §10): development and tests
-        // need no API key. The real HTTP client replaces this binding.
-        $this->app->bind(GeminiClient::class, FakeGeminiClient::class);
+        // Gemini transport (DESIGN §10): the real REST client, or the offline
+        // deterministic fake when GEMINI_FAKE=true (tests, local demo).
+        $this->app->singleton(GeminiClient::class, fn () => config('services.gemini.fake')
+            ? new FakeGeminiClient((string) config('services.gemini.model'))
+            : HttpGeminiClient::fromConfig());
+        $this->app->singleton(PromptRepository::class);
+
+        // Push notifications (DESIGN §9.9): logged until the FCM notifier lands.
+        $this->app->bind(Notifier::class, LogNotifier::class);
 
         // Resolved lazily: a missing QR_SIGNING_KEY only fails the code paths
         // that sign or verify worksheet QRs, with a clear message.

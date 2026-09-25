@@ -8,8 +8,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * {id, classroom_id, subject_id, title, strictness, status,
- *  current_layout_version, due_at, questions_count?, classroom?: {id, name},
+ *  current_layout_version, due_at, questions_count?, missing_ai_key_count?,
+ *  classroom?: {id, name},
  *  subject?: {id, code, name}, questions?: [...], created_by, created_at, updated_at}
+ *
+ * missing_ai_key_count (detail only): answers waiting as `manual` because no
+ * Gemini key was usable (DESIGN §13 banner; POST .../requeue-missing-key).
  *
  * due_at and timestamps are UTC ISO 8601; the app shows Asia/Bangkok.
  *
@@ -32,6 +36,7 @@ class AssignmentResource extends JsonResource
             'current_layout_version' => $this->current_layout_version,
             'due_at' => $this->due_at?->toIso8601String(),
             'questions_count' => $this->whenCounted('questions'),
+            'missing_ai_key_count' => $this->whenCounted('missing_ai_key_count'),
             'classroom' => $this->whenLoaded('classroom', fn () => [
                 'id' => $this->classroom->id,
                 'name' => $this->classroom->name,

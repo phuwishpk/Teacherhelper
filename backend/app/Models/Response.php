@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Domain\Grading\ScanGrader;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,7 +18,9 @@ use Illuminate\Support\Carbon;
  * grading_state: `queued` waits for GradeScanJob (Gemini + fuzzy),
  * `extracted` has Gemini output but no score yet, `scored` has an AI score
  * (mcq is scored at upload, §11.6), `failed` will be retried, `manual` must be
- * graded by the teacher (reason in fuzzy_trace.manual_reason).
+ * graded by the teacher (reason in fuzzy_trace.manual_reason, e.g.
+ * ai_key_missing, ai_key_invalid, ai_error, invalid_output, fuzzy_degenerate,
+ * crop_missing, layout_type_mismatch, answer_key_missing; see ScanGrader).
  *
  * @property int $id
  * @property int $submission_id
@@ -156,6 +160,30 @@ class Response extends Model
     public function appeal(): HasOne
     {
         return $this->hasOne(Appeal::class);
+    }
+
+    /** Why the answer is `manual` (fuzzy_trace.manual_reason), null otherwise. */
+    public function manualReason(): ?string
+    {
+        if ($this->grading_state !== self::STATE_MANUAL) {
+            return null;
+        }
+        $reason = $this->fuzzy_trace['manual_reason'] ?? null;
+
+        return is_string($reason) ? $reason : null;
+    }
+
+    /**
+     * `manual` because there was no usable Gemini key, and not yet graded by
+     * the teacher: what the missing-key banner counts and requeues (§13).
+     *
+     * @param  Builder<Response>  $query
+     */
+    public function scopeAwaitingAiKey(Builder $query): void
+    {
+        $query->where('grading_state', self::STATE_MANUAL)
+            ->whereNull('reviewed_at')
+            ->whereIn('fuzzy_trace->manual_reason', ScanGrader::KEY_REASONS);
     }
 
     /** The score that currently counts: the teacher's if reviewed, else the AI's. */
