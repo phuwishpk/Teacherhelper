@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/session.dart';
 import 'review_models.dart';
 import 'review_repository.dart';
 
@@ -12,8 +13,10 @@ class ReviewQueueNotifier extends AsyncNotifier<ReviewQueue> {
   ReviewRepository get _repo => ref.read(reviewRepositoryProvider);
 
   @override
-  Future<ReviewQueue> build() =>
-      ref.watch(reviewRepositoryProvider).queue(assignmentId);
+  Future<ReviewQueue> build() {
+    watchSignedInUser(ref);
+    return ref.watch(reviewRepositoryProvider).queue(assignmentId);
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -49,21 +52,23 @@ class ReviewQueueNotifier extends AsyncNotifier<ReviewQueue> {
   }
 }
 
-final reviewQueueProvider =
-    AsyncNotifierProvider.family<ReviewQueueNotifier, ReviewQueue, int>(
-      ReviewQueueNotifier.new,
-    );
+final reviewQueueProvider = AsyncNotifierProvider.autoDispose
+    .family<ReviewQueueNotifier, ReviewQueue, int>(ReviewQueueNotifier.new);
 
 /// Full detail of one response while its pane is on screen.
 final responseDetailProvider = FutureProvider.autoDispose
-    .family<ResponseDetail, int>(
-      (ref, id) => ref.watch(reviewRepositoryProvider).response(id),
-    );
+    .family<ResponseDetail, int>((ref, id) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(reviewRepositoryProvider).response(id);
+    });
 
 /// Open appeals of the teacher's classrooms (`GET /appeals?status=open`).
 class OpenAppealsNotifier extends AsyncNotifier<List<Appeal>> {
   @override
-  Future<List<Appeal>> build() => ref.watch(reviewRepositoryProvider).appeals();
+  Future<List<Appeal>> build() {
+    watchSignedInUser(ref);
+    return ref.watch(reviewRepositoryProvider).appeals();
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -98,6 +103,6 @@ class OpenAppealsNotifier extends AsyncNotifier<List<Appeal>> {
 }
 
 final openAppealsProvider =
-    AsyncNotifierProvider<OpenAppealsNotifier, List<Appeal>>(
+    AsyncNotifierProvider.autoDispose<OpenAppealsNotifier, List<Appeal>>(
       OpenAppealsNotifier.new,
     );

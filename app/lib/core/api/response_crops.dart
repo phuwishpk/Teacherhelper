@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_repository.dart';
+import '../auth/session.dart';
 
 /// Answer crops have no public URL (DESIGN §7.3): they are fetched with the
 /// bearer token from `GET /responses/{id}/crop[?part=final]`, which the
@@ -40,8 +41,9 @@ typedef CropKey = ({int responseId, bool finalPart});
 
 /// Bytes of one crop; kept while a widget shows it.
 final responseCropProvider = FutureProvider.autoDispose
-    .family<Uint8List, CropKey>(
-      (ref, key) => ref
+    .family<Uint8List, CropKey>((ref, key) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref
           .watch(cropLoaderProvider)
-          .crop(key.responseId, finalPart: key.finalPart),
-    );
+          .crop(key.responseId, finalPart: key.finalPart);
+    });

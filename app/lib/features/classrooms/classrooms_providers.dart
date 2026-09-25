@@ -1,12 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/session.dart';
 import 'classroom.dart';
 import 'classrooms_repository.dart';
 
 class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
   @override
-  Future<List<Classroom>> build() =>
-      ref.watch(classroomsRepositoryProvider).list();
+  Future<List<Classroom>> build() {
+    watchSignedInUser(ref);
+    return ref.watch(classroomsRepositoryProvider).list();
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -48,15 +51,16 @@ class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
 }
 
 final classroomsProvider =
-    AsyncNotifierProvider<ClassroomsNotifier, List<Classroom>>(
+    AsyncNotifierProvider.autoDispose<ClassroomsNotifier, List<Classroom>>(
       ClassroomsNotifier.new,
     );
 
 /// A single classroom from the list cache, fetched on its own if missing.
-final classroomProvider = FutureProvider.family<Classroom, int>((
+final classroomProvider = FutureProvider.autoDispose.family<Classroom, int>((
   ref,
   id,
 ) async {
+  watchSignedInUser(ref);
   final list = await ref.watch(classroomsProvider.future);
   for (final c in list) {
     if (c.id == id) return c;
@@ -70,8 +74,10 @@ class RosterNotifier extends AsyncNotifier<List<RosterStudent>> {
   final int classroomId;
 
   @override
-  Future<List<RosterStudent>> build() =>
-      ref.watch(classroomsRepositoryProvider).roster(classroomId);
+  Future<List<RosterStudent>> build() {
+    watchSignedInUser(ref);
+    return ref.watch(classroomsRepositoryProvider).roster(classroomId);
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -89,7 +95,5 @@ class RosterNotifier extends AsyncNotifier<List<RosterStudent>> {
   }
 }
 
-final rosterProvider =
-    AsyncNotifierProvider.family<RosterNotifier, List<RosterStudent>, int>(
-      RosterNotifier.new,
-    );
+final rosterProvider = AsyncNotifierProvider.autoDispose
+    .family<RosterNotifier, List<RosterStudent>, int>(RosterNotifier.new);
