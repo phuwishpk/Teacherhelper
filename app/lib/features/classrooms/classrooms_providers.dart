@@ -78,12 +78,14 @@ class RosterNotifier extends AsyncNotifier<List<RosterStudent>> {
     await future;
   }
 
-  Future<void> addStudents(List<NewStudent> students) async {
-    await ref
+  /// Returns the created rows with their one-time PINs for the teacher.
+  Future<List<EnrolledStudent>> addStudents(List<NewStudent> students) async {
+    final enrolled = await ref
         .read(classroomsRepositoryProvider)
         .addStudents(classroomId, students);
     await refresh();
     ref.invalidate(classroomsProvider);
+    return enrolled;
   }
 }
 

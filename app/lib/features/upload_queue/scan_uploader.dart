@@ -20,7 +20,16 @@ Duration backoffFor(int attempts) {
   return d > cap ? cap : d;
 }
 
-enum UploadOutcome { done, conflict, failed, retry }
+enum UploadOutcome {
+  done,
+  conflict,
+  failed,
+  retry,
+
+  /// The row was already settled by another isolate (or removed) before
+  /// this attempt could claim it; nothing was sent.
+  skipped,
+}
 
 class DrainResult {
   const DrainResult({
@@ -28,14 +37,19 @@ class DrainResult {
     required this.conflict,
     required this.failed,
     required this.retry,
+    this.skipped = 0,
   });
 
   final int done;
   final int conflict;
   final int failed;
   final int retry;
+  final int skipped;
 
-  /// True when nothing is left that a later attempt could still fix.
+  /// True when nothing in THIS drain is left that a later attempt could
+  /// still fix. Rows whose backoff has not elapsed are not visited by a
+  /// drain, so the caller must also look at the pending count before
+  /// deciding that no retry is needed (see `runBackgroundDrain`).
   bool get settled => retry == 0;
 }
 
@@ -57,7 +71,7 @@ class ScanUploader {
   /// queue; the caller (workmanager or the queue screen) decides when to
   /// call again.
   Future<DrainResult> drain() async {
-    var done = 0, conflict = 0, failed = 0, retry = 0;
+    var done = 0, conflict = 0, failed = 0, retry = 0, skipped = 0;
     for (final scan in await _repo.dueForUpload()) {
       switch (await uploadOne(scan)) {
         case UploadOutcome.done:
@@ -68,6 +82,8 @@ class ScanUploader {
           failed++;
         case UploadOutcome.retry:
           retry++;
+        case UploadOutcome.skipped:
+          skipped++;
       }
     }
     return DrainResult(
@@ -75,11 +91,16 @@ class ScanUploader {
       conflict: conflict,
       failed: failed,
       retry: retry,
+      skipped: skipped,
     );
   }
 
   Future<UploadOutcome> uploadOne(QueuedScan scan) async {
-    await _repo.markUploading(scan.clientScanId);
+    // Claim the row; a concurrent drain (WorkManager vs. foreground) that
+    // already settled it wins and this attempt must not send anything.
+    if (!await _repo.markUploading(scan.clientScanId)) {
+      return UploadOutcome.skipped;
+    }
     final FormData form;
     try {
       form = await _buildForm(scan);

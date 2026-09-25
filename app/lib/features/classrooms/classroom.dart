@@ -53,6 +53,31 @@ class RosterStudent {
   );
 }
 
+/// A row of the `201` answer of `POST /classrooms/{id}/students`
+/// (DESIGN §9.2): the new student plus the initial PIN. The server keeps only
+/// the PIN's hash, so this is the ONLY time the app ever sees it.
+class EnrolledStudent {
+  const EnrolledStudent({
+    required this.studentId,
+    required this.studentNumber,
+    required this.name,
+    required this.pin,
+  });
+
+  final int studentId;
+  final int studentNumber;
+  final String name;
+  final String pin;
+
+  factory EnrolledStudent.fromJson(Map<String, dynamic> json) =>
+      EnrolledStudent(
+        studentId: (json['student_id'] as num).toInt(),
+        studentNumber: (json['student_number'] as num).toInt(),
+        name: json['name'] as String,
+        pin: json['pin'].toString(),
+      );
+}
+
 /// Input row for `POST /classrooms/{id}/students`.
 class NewStudent {
   const NewStudent({required this.studentNumber, required this.name});

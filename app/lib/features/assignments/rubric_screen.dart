@@ -64,26 +64,36 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
     return null;
   }
 
+  /// Polling interval while waiting for DraftRubricJob.
+  static const draftPollInterval = Duration(seconds: 4);
+
+  /// The hosting queue runs once a minute (CLAUDE.md), so give it a while.
+  static const draftPollTimeout = Duration(minutes: 3);
+
   Future<void> _requestDraft() async {
     setState(() {
       _drafting = true;
       _error = null;
     });
     try {
-      await ref
-          .read(assignmentsRepositoryProvider)
-          .requestRubricDraft(widget.questionId);
       final notifier = ref.read(
         assignmentDetailProvider(widget.assignmentId).notifier,
       );
-      final before =
-          _question(
-            ref.read(assignmentDetailProvider(widget.assignmentId)).value,
-          )?.rubricCriteria.length ??
-          0;
-      final deadline = DateTime.now().add(const Duration(minutes: 3));
+      // Snapshot BEFORE the request: the draft is only "ready" once the
+      // server's criteria differ from what we already had, otherwise a
+      // re-draft of a question that already has a rubric would report
+      // success on the first poll while DraftRubricJob is still queued.
+      final before = rubricFingerprint(
+        _question(
+          ref.read(assignmentDetailProvider(widget.assignmentId)).value,
+        ),
+      );
+      await ref
+          .read(assignmentsRepositoryProvider)
+          .requestRubricDraft(widget.questionId);
+      final deadline = DateTime.now().add(draftPollTimeout);
       _poll?.cancel();
-      _poll = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      _poll = Timer.periodic(draftPollInterval, (timer) async {
         if (!mounted) {
           timer.cancel();
           return;
@@ -94,8 +104,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
           final ready =
               q != null &&
               q.rubricCriteria.isNotEmpty &&
-              (q.rubricStatus != RubricStatus.notNeeded ||
-                  q.rubricCriteria.length != before);
+              rubricFingerprint(q) != before;
           if (ready) {
             timer.cancel();
             setState(() {
@@ -221,7 +230,13 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
               const SizedBox(height: 4),
               Text(q.promptText, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 8),
-              Row(
+              // Wrap, not Row: at phone width the chip and the button do
+              // not fit on one line with a real Thai font.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   StatusChip(
                     label: q.rubricStatus.label,
@@ -229,7 +244,6 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
                         ? Colors.green.shade700
                         : null,
                   ),
-                  const Spacer(),
                   FilledButton.tonalIcon(
                     onPressed: _drafting ? null : _requestDraft,
                     icon: _drafting
@@ -289,6 +303,18 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
       ),
     );
   }
+}
+
+/// Stable summary of a question's rubric used to detect that DraftRubricJob
+/// has written something new. Null when there is no question.
+String? rubricFingerprint(Question? q) {
+  if (q == null) return null;
+  final parts = [
+    q.rubricStatus.apiValue,
+    for (final c in q.rubricCriteria)
+      '${c.id}|${c.position}|${c.description}|${c.points}|${c.isCore}|${c.source}',
+  ];
+  return parts.join('\n');
 }
 
 class _CriterionRow {
@@ -393,8 +419,13 @@ class _CriterionCard extends StatelessWidget {
                     onChanged();
                   },
                 ),
-                const Text('เกณฑ์หลัก (แก่นของคำตอบ)'),
-                const Spacer(),
+                const Expanded(
+                  child: Text(
+                    'เกณฑ์หลัก (แก่นของคำตอบ)',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Text(
                   row.source == 'ai' ? 'ร่างโดย AI' : 'โดยครู',
                   style: Theme.of(context).textTheme.bodySmall,

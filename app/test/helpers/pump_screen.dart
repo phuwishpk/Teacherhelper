@@ -33,3 +33,17 @@ Future<ProviderContainer> pumpScreen(
   await tester.pumpAndSettle();
   return ProviderScope.containerOf(tester.element(find.byWidget(screen)));
 }
+
+/// Replaces the pumped tree with nothing and advances the fake clock, so
+/// providers that hold a drift query stream get disposed INSIDE the test
+/// body. drift schedules a zero-length `Timer.run` when a stream loses its
+/// last listener; without this the timer is still pending when flutter_test
+/// checks invariants ("A Timer is still pending") and a later `db.close()`
+/// in tearDown waits forever for it.
+///
+/// `tester.pump()` without a duration does NOT elapse fake time, so it never
+/// fires that timer; an explicit [Duration.zero] does.
+Future<void> unmountScreen(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump(Duration.zero);
+}

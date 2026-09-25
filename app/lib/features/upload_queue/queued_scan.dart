@@ -81,4 +81,8 @@ class QueuedScan {
   WorksheetQr? get qr => WorksheetQr.tryParse(qrPayload);
 
   bool get isTerminal => state == ScanState.done || state == ScanState.failed;
+
+  /// The server has this scan (accepted, or waiting for the teacher's
+  /// confirm-replace): no upload attempt may touch the row any more.
+  bool get isSettled => state == ScanState.done || state == ScanState.conflict;
 }

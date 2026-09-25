@@ -5,10 +5,49 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'assignment.dart';
 import 'assignments_providers.dart';
+
+/// `/assignments/:id/edit`: uses the assignment handed over as route `extra`
+/// when there is one, otherwise loads it by id so a deep link or a restored
+/// route never silently opens the form in create mode (which would create a
+/// duplicate on save).
+class AssignmentEditScreen extends ConsumerWidget {
+  const AssignmentEditScreen({
+    super.key,
+    required this.assignmentId,
+    this.initial,
+  });
+
+  final int assignmentId;
+  final Assignment? initial;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (initial case final a? when a.id == assignmentId) {
+      return AssignmentFormScreen(existing: a);
+    }
+    final detail = ref.watch(assignmentDetailProvider(assignmentId));
+    return detail.when(
+      skipLoadingOnRefresh: true,
+      data: (a) => AssignmentFormScreen(existing: a),
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('แก้ไขการบ้าน')),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        appBar: AppBar(title: const Text('แก้ไขการบ้าน')),
+        body: ErrorView(
+          message: apiErrorMessage(e),
+          onRetry: () => ref.invalidate(assignmentDetailProvider(assignmentId)),
+        ),
+      ),
+    );
+  }
+}
 
 /// Create an assignment (classroom + subject fixed afterwards) or edit its
 /// title, strictness and due date.

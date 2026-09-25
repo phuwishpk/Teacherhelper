@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/widgets/async_view.dart';
-import 'results_page.dart';
+import '../results/results_page.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);

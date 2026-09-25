@@ -28,7 +28,10 @@ abstract class ClassroomsRepository {
     int? gradeLevel,
     int? academicYear,
   });
-  Future<List<RosterStudent>> addStudents(int id, List<NewStudent> students);
+
+  /// Enrols [students]; the answer carries each new student's initial PIN,
+  /// which the server never returns again.
+  Future<List<EnrolledStudent>> addStudents(int id, List<NewStudent> students);
   Future<List<RosterStudent>> roster(int id);
 
   /// Queues the PDF with every student's QR login card.
@@ -95,20 +98,17 @@ class ApiClassroomsRepository implements ClassroomsRepository {
   }
 
   @override
-  Future<List<RosterStudent>> addStudents(
+  Future<List<EnrolledStudent>> addStudents(
     int id,
     List<NewStudent> students,
   ) async {
+    // DESIGN §9.2: body {students: [...]}, answer 201 {data: [{student_id,
+    // student_number, name, status, pin}]}.
     final res = await _dio.post<Object?>(
       '/classrooms/$id/students',
       data: {'students': students.map((s) => s.toJson()).toList()},
     );
-    // The server may answer with the created rows or with the full roster.
-    try {
-      return unwrapList(res.data).map(RosterStudent.fromJson).toList();
-    } on FormatException {
-      return roster(id);
-    }
+    return unwrapList(res.data).map(EnrolledStudent.fromJson).toList();
   }
 
   @override

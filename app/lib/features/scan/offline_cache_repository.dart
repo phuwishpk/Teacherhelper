@@ -154,11 +154,22 @@ class OfflineCacheRepository {
   }
 
   /// Name lookup for a scanned QR (the QR carries only the student id).
-  Future<RosterStudent?> findStudent(int studentId) async {
-    final row = await (_db.select(
-      _db.cachedRosters,
-    )..where((t) => t.studentId.equals(studentId))).getSingleOrNull();
-    if (row == null) return null;
+  /// A student can be cached under several classrooms (last year's room,
+  /// another subject's room), so this never assumes a single row; when
+  /// [classroomId] is known that room's row wins.
+  Future<RosterStudent?> findStudent(int studentId, {int? classroomId}) async {
+    final rows =
+        await (_db.select(_db.cachedRosters)
+              ..where((t) => t.studentId.equals(studentId))
+              ..orderBy([(t) => OrderingTerm.desc(t.classroomId)]))
+            .get();
+    if (rows.isEmpty) return null;
+    final row = classroomId == null
+        ? rows.first
+        : rows.firstWhere(
+            (r) => r.classroomId == classroomId,
+            orElse: () => rows.first,
+          );
     return RosterStudent(
       studentId: row.studentId,
       studentNumber: row.studentNumber,
