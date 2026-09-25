@@ -57,7 +57,7 @@ final readonly class ScanMeta
     {
         $meta = self::decode($request, true);
 
-        $validated = Validator::make(['meta' => $meta], self::rules(), self::messages())->validate()['meta'];
+        $validated = Validator::make(['meta' => $meta], self::rules(), self::messages(), self::attributes())->validate()['meta'];
 
         $regions = array_map(fn (array $r) => ScanRegion::fromValidated($r), array_values($validated['regions']));
         self::assertDistinctFiles($regions);
@@ -106,7 +106,11 @@ final readonly class ScanMeta
     }
 
     /**
-     * @return array<string, string>
+     * Specific messages first, then a Thai line for every rule used above so
+     * no answer falls back to Laravel's English text (the app shows the
+     * message of a 422 to the teacher as the reason the scan was refused).
+     *
+     * @return array<string, string|array<string, string>>
      */
     private static function messages(): array
     {
@@ -130,6 +134,64 @@ final readonly class ScanMeta
             'meta.regions.*.ink_ratio.between' => 'ink_ratio ต้องอยู่ระหว่าง 0–1',
             'meta.regions.*.mcq_fill.*.between' => 'ค่าการฝนต้องอยู่ระหว่าง 0–1',
             'meta.regions.*.cnn.confidence.between' => 'ความมั่นใจของตัวอ่านเลขต้องอยู่ระหว่าง 0–1',
+
+            // Rule-level fallbacks for this validator only.
+            'required' => 'ไม่มี :attribute',
+            'required_with' => 'ไม่มี :attribute',
+            'array' => ':attribute ต้องเป็น JSON object',
+            'list' => ':attribute ต้องเป็น array',
+            'string' => ':attribute ต้องเป็นข้อความ',
+            'integer' => ':attribute ต้องเป็นจำนวนเต็ม',
+            'numeric' => ':attribute ต้องเป็นตัวเลข',
+            'uuid' => ':attribute ต้องเป็น UUID',
+            'date' => ':attribute ต้องเป็นวันเวลาที่ถูกต้อง',
+            'after' => ':attribute ต้องเป็นวันเวลาที่ถูกต้อง',
+            'regex' => ':attribute มีรูปแบบไม่ถูกต้อง',
+            'not_in' => ':attribute ใช้ค่านี้ไม่ได้',
+            'distinct' => ':attribute ซ้ำกัน',
+            'min' => [
+                'numeric' => ':attribute ต้องไม่น้อยกว่า :min',
+                'string' => ':attribute ต้องยาวอย่างน้อย :min ตัวอักษร',
+                'array' => ':attribute ต้องมีอย่างน้อย :min รายการ',
+            ],
+            'max' => [
+                'numeric' => ':attribute ต้องไม่เกิน :max',
+                'string' => ':attribute ยาวได้ไม่เกิน :max ตัวอักษร',
+                'array' => ':attribute มีได้ไม่เกิน :max รายการ',
+            ],
+            'between' => [
+                'numeric' => ':attribute ต้องอยู่ระหว่าง :min–:max',
+                'string' => ':attribute ต้องยาว :min–:max ตัวอักษร',
+                'array' => ':attribute ต้องมี :min–:max รายการ',
+            ],
+        ];
+    }
+
+    /**
+     * Names used for :attribute in the messages above.
+     *
+     * @return array<string, string>
+     */
+    private static function attributes(): array
+    {
+        return [
+            'meta' => 'ข้อมูล meta ของสแกน',
+            'meta.client_scan_id' => 'client_scan_id',
+            'meta.qr' => 'ข้อความ QR ของใบงาน',
+            'meta.scanned_at' => 'เวลาที่สแกน',
+            'meta.blur_score' => 'ค่าความคมชัดของภาพ (blur_score)',
+            'meta.regions' => 'ข้อมูลช่องคำตอบ (regions)',
+            'meta.regions.*' => 'ช่องคำตอบ',
+            'meta.regions.*.region_id' => 'region_id ของช่องคำตอบ',
+            'meta.regions.*.question_id' => 'question_id ของช่องคำตอบ',
+            'meta.regions.*.file' => 'ชื่อไฟล์ crop',
+            'meta.regions.*.final_file' => 'ชื่อไฟล์ crop ของกรอบคำตอบสุดท้าย',
+            'meta.regions.*.ink_ratio' => 'ink_ratio',
+            'meta.regions.*.mcq_fill' => 'ค่าการฝน (mcq_fill)',
+            'meta.regions.*.mcq_fill.*' => 'ค่าการฝนของตัวเลือก',
+            'meta.regions.*.cnn' => 'ผลของตัวอ่านเลข (cnn)',
+            'meta.regions.*.cnn.text' => 'ข้อความจากตัวอ่านเลข',
+            'meta.regions.*.cnn.confidence' => 'ความมั่นใจของตัวอ่านเลข',
         ];
     }
 

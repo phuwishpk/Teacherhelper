@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\Log;
  *
  * - worksheet PDFs: 30 days after the print was created (WorksheetFiles);
  * - scanned page images: after the submission is published;
- * - answer crops: after schools.crop_retention_until (ScanRetention).
+ * - answer crops: after schools.crop_retention_until;
+ * - rescans of a published submission never confirmed by the teacher:
+ *   after ScanRetention::PENDING_RESCAN_DAYS (ScanRetention).
  */
 class PurgeImagesCommand extends Command
 {
@@ -31,7 +33,8 @@ class PurgeImagesCommand extends Command
         $this->info("Worksheet prints expired: {$worksheets}");
         $this->info("Page images deleted (published): {$scans['page_images']}");
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
-        $this->info("Pending rescan stashes deleted: {$scans['pending']}");
+        $this->info("Unconfirmed rescans expired (page image and crops deleted): {$scans['pending_expired']}");
+        $this->info("Leftover rescan files swept: {$scans['leftovers']}");
 
         return self::SUCCESS;
     }

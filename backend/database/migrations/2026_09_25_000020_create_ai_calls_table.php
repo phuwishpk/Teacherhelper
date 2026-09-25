@@ -16,9 +16,11 @@ return new class extends Migration
         Schema::create('ai_calls', function (Blueprint $table) {
             $table->id();
             $table->enum('purpose', ['extract', 'rubric_draft', 'explanation', 'practice_gen']);
-            $table->foreignId('response_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('question_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('skill_id')->nullable()->constrained()->restrictOnDelete();
+            // An audit log must never block deleting what it refers to (a question
+            // with a rubric draft, a draft assignment): the link becomes NULL.
+            $table->foreignId('response_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('question_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('skill_id')->nullable()->constrained()->nullOnDelete();
             $table->string('model', 64);
             $table->string('prompt_version', 20);
             $table->enum('key_source', ['teacher', 'server']);

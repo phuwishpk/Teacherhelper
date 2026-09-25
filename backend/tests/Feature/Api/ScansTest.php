@@ -2,19 +2,24 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Scans\ScanIngestor;
 use App\Domain\Scans\SubmissionStatus;
+use App\Exceptions\ApiException;
 use App\Jobs\GradeScanJob;
 use App\Models\Assignment;
+use App\Models\Layout;
 use App\Models\Question;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\ScoreEvent;
 use App\Models\Submission;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\Feature\Scans\ScanFixtures;
 use Tests\TestCase;
 
@@ -291,6 +296,47 @@ class ScansTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
+    public function test_meta_validation_messages_are_in_thai(): void
+    {
+        $meta = $this->metaFor(1);
+        $meta['regions'][0]['mcq_fill'] = ['A' => 0.1, 'B' => 'x'];
+        $meta['regions'][1]['question_id'] = 'abc';
+        $meta['regions'][1]['cnn'] = ['text' => str_repeat('1', 40), 'confidence' => 0.9];
+        $meta['blur_score'] = 'sharp';
+
+        $res = $this->postScan($meta)->assertStatus(422)->assertJsonPath('code', 'validation_failed');
+
+        $errors = $res->json('errors');
+        $this->assertSame('ค่าการฝนของตัวเลือก ต้องเป็นตัวเลข', $errors['meta.regions.0.mcq_fill.B'][0]);
+        $this->assertSame('question_id ของช่องคำตอบ ต้องเป็นจำนวนเต็ม', $errors['meta.regions.1.question_id'][0]);
+        $this->assertSame('ข้อความจากตัวอ่านเลข ยาวได้ไม่เกิน 32 ตัวอักษร', $errors['meta.regions.1.cnn.text'][0]);
+        $this->assertSame('ค่าความคมชัดของภาพ (blur_score) ต้องเป็นตัวเลข', $errors['meta.blur_score'][0]);
+        foreach ([$res->json('message'), ...array_merge(...array_values($errors))] as $message) {
+            $this->assertMatchesRegularExpression('/\p{Thai}/u', $message);
+            $this->assertDoesNotMatchRegularExpression('/\b(field|must|more errors?)\b/i', $message);
+        }
+    }
+
+    public function test_files_dropped_by_max_file_uploads_are_a_retryable_server_error(): void
+    {
+        $uploaded = ['page' => 'x', 'crop_a' => 'x', 'crop_b' => 'x'];
+
+        try {
+            ScanIngestor::assertUploadNotTruncated($uploaded, ['page', 'crop_a', 'crop_b', 'crop_c', 'crop_d'], 3);
+            $this->fail('expected too_many_files');
+        } catch (ApiException $e) {
+            // 5xx: the app keeps the scan and retries after the limit is raised.
+            $this->assertSame(503, $e->status);
+            $this->assertSame('too_many_files', $e->errorCode);
+            $this->assertStringContainsString('max_file_uploads', $e->getMessage());
+        }
+
+        // Under the limit, or a page that fits the limit: nothing to report.
+        ScanIngestor::assertUploadNotTruncated($uploaded, ['page', 'crop_a', 'crop_b'], 3);
+        ScanIngestor::assertUploadNotTruncated(['page' => 'x'], ['page', 'crop_a'], 20);
+        ScanIngestor::assertUploadNotTruncated($uploaded, ['page', 'crop_a', 'crop_b', 'crop_c'], 0);
+    }
+
     public function test_mcq_fill_must_use_the_printed_options(): void
     {
         $this->postScan($this->metaFor(1, fill: ['A' => 0.1, 'E' => 0.9]))
@@ -395,6 +441,63 @@ class ScansTest extends TestCase
         $this->assertSame('grading', Submission::query()->findOrFail($first->json('submission_id'))->status);
     }
 
+    public function test_a_failed_crop_write_during_a_rescan_restores_the_previous_crops(): void
+    {
+        $first = $this->postScan($this->metaFor(2))->assertStatus(201);
+        $work = Response::query()->where('question_id', $this->work->id)->firstOrFail();
+        $open = Response::query()->where('question_id', $this->open->id)->firstOrFail();
+        $disk = Storage::disk('local');
+        $before = [
+            $work->crop_path => $disk->get($work->crop_path),
+            $work->final_crop_path => $disk->get($work->final_crop_path),
+            $open->crop_path => $disk->get($open->crop_path),
+        ];
+        $this->assertSame($this->fixtureBytes('crop.webp'), $before[$work->crop_path]);
+        $this->assertSame($this->fixtureBytes('crop_alt.webp'), $before[$work->final_crop_path]);
+        $pageFiles = $disk->allFiles("scans/{$this->assignment->school_id}/{$this->assignment->id}");
+
+        // The work crops are replaced first; writing the open crop then fails.
+        $this->failDiskWritesTo($open->crop_path);
+        $meta = $this->metaFor(2);
+        $files = $this->filesFor($meta, 'crop_alt.webp');
+        $files['crop_q'.$this->work->id.'_final'] = $this->webp('crop.webp');
+        $this->postScan($meta, $files)->assertStatus(500);
+
+        foreach ($before as $path => $bytes) {
+            $this->assertSame($bytes, $disk->get($path), $path);
+        }
+        $this->assertSame($first->json('scan_id'), $work->fresh()->scan_id);
+        $this->assertSame($first->json('scan_id'), $open->fresh()->scan_id);
+        $this->assertSame(1, Scan::query()->count());
+        $this->assertSame('active', Scan::query()->findOrFail($first->json('scan_id'))->state);
+        $this->assertSame($pageFiles, $disk->allFiles("scans/{$this->assignment->school_id}/{$this->assignment->id}"));
+        $this->assertSame([], $disk->allFiles("crops/{$this->assignment->school_id}/{$this->assignment->id}/replaced"));
+    }
+
+    public function test_a_rescan_without_the_final_answer_box_deletes_the_old_final_crop(): void
+    {
+        $this->postScan($this->metaFor(2))->assertStatus(201);
+        $work = Response::query()->where('question_id', $this->work->id)->firstOrFail();
+        $oldFinal = $work->final_crop_path;
+        $disk = Storage::disk('local');
+        $this->assertTrue($disk->exists($oldFinal));
+
+        // Layout v2 printed the question without a final-answer box.
+        $pages = $this->layoutPages(2);
+        unset($pages[1]['regions'][0]['final_answer']);
+        Layout::create(['assignment_id' => $this->assignment->id, 'version' => 2, 'pages' => $pages]);
+        $meta = $this->metaFor(2, qr: $this->qr(2, version: 2));
+        unset($meta['regions'][0]['final_file']);
+        $this->postScan($meta, $this->filesFor($meta, 'crop_alt.webp'))->assertStatus(201);
+
+        $work->refresh();
+        $this->assertNull($work->final_crop_path);
+        $this->assertFalse($disk->exists($oldFinal));
+        $this->assertSame($this->fixtureBytes('crop_alt.webp'), $disk->get($work->crop_path));
+        $this->assertSame([], $disk->allFiles("crops/{$this->assignment->school_id}/{$this->assignment->id}/replaced"));
+        $this->asUser($this->teacher)->get("/api/v1/responses/{$work->id}/crop?part=final", ['Accept' => 'application/json'])->assertNotFound();
+    }
+
     public function test_a_rescan_of_a_published_submission_waits_for_confirmation(): void
     {
         $first = $this->postScan($this->metaFor(1))->assertStatus(201);
@@ -446,6 +549,7 @@ class ScansTest extends TestCase
         $this->assertNull($submission->published_by);
         $school = $this->assignment->school_id;
         $this->assertSame([], Storage::disk('local')->allFiles("scans/{$school}/{$this->assignment->id}/pending"));
+        $this->assertSame([], Storage::disk('local')->allFiles("crops/{$school}/{$this->assignment->id}/replaced"));
         Queue::assertPushedOn('grading', GradeScanJob::class, fn (GradeScanJob $job) => $job->scanId === $pendingId);
 
         // Confirming again is harmless; the upload retry now reports active.
@@ -573,5 +677,27 @@ class ScansTest extends TestCase
 
         $this->assertSame(1.0, Response::query()->where('question_id', $mcq->id)->value('ai_score'));
         $this->assertNotNull(Response::query()->where('question_id', $work->id)->value('final_crop_path'));
+    }
+
+    /** Makes every write of $failingPath on the fake private disk throw, like a full disk. */
+    private function failDiskWritesTo(string $failingPath): void
+    {
+        $fake = Storage::disk('local');
+        Storage::set('local', new class($fake->getDriver(), $fake->getAdapter(), $fake->getConfig(), $failingPath) extends FilesystemAdapter
+        {
+            public function __construct($driver, $adapter, array $config, private readonly string $failingPath)
+            {
+                parent::__construct($driver, $adapter, $config);
+            }
+
+            public function putFileAs($path, $file, $name = null, $options = [])
+            {
+                if (trim($path, '/').'/'.$name === $this->failingPath) {
+                    throw new RuntimeException("disk full while writing {$this->failingPath}");
+                }
+
+                return parent::putFileAs($path, $file, $name, $options);
+            }
+        });
     }
 }

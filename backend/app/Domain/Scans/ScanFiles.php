@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Storage;
  *   scans/{school}/{assignment}/pending/{scan}/             crops + regions.json of a
  *                                                          pending_confirm rescan until the
  *                                                          teacher confirms it
+ *   crops/{school}/{assignment}/replaced/{scan}/            crops a rescan replaces, kept only
+ *                                                          until its transaction has committed
+ *                                                          (CropSwap)
  */
 final class ScanFiles
 {
@@ -42,6 +45,11 @@ final class ScanFiles
     public static function pendingDirectory(int $schoolId, int $assignmentId, int $scanId): string
     {
         return "scans/{$schoolId}/{$assignmentId}/pending/{$scanId}";
+    }
+
+    public static function replacedDirectory(int $schoolId, int $assignmentId, int $scanId): string
+    {
+        return "crops/{$schoolId}/{$assignmentId}/replaced/{$scanId}";
     }
 
     /** region ids are checked against the layout (q{question_id}), so they are safe file names. */

@@ -15,7 +15,9 @@ return new class extends Migration
         Schema::create('student_credentials', function (Blueprint $table) {
             $table->foreignId('student_id')->primary()->constrained('users')->restrictOnDelete();
             $table->char('qr_token_hash', 64)->unique();
-            $table->timestamp('qr_issued_at');
+            // Explicit default: without it MariaDB with explicit_defaults_for_timestamp
+            // OFF adds ON UPDATE CURRENT_TIMESTAMP, so every failed PIN would move it.
+            $table->timestamp('qr_issued_at')->useCurrent();
             $table->string('pin_hash');
             $table->unsignedTinyInteger('failed_pin_attempts')->default(0);
             $table->timestamp('locked_until')->nullable();

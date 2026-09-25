@@ -15,7 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('fcm_token')->unique();
-            $table->timestamp('last_seen_at');
+            // Explicit default: without it MariaDB with explicit_defaults_for_timestamp
+            // OFF adds ON UPDATE CURRENT_TIMESTAMP to this column.
+            $table->timestamp('last_seen_at')->useCurrent();
             $table->timestamps();
         });
     }
