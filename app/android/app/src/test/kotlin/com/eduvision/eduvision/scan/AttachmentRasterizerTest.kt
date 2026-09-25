@@ -51,6 +51,15 @@ class AttachmentRasterizerTest {
     }
 
     @Test
+    fun longPdfsAreCutAtThePageLimit() {
+        assertEquals(3, RasterMath.renderedPageCount(3, AttachmentRasterizer.MAX_PDF_PAGES))
+        assertEquals(20, RasterMath.renderedPageCount(20, AttachmentRasterizer.MAX_PDF_PAGES))
+        // The caller gets totalPages = 35 and tells the teacher 15 were skipped.
+        assertEquals(20, RasterMath.renderedPageCount(35, AttachmentRasterizer.MAX_PDF_PAGES))
+        assertEquals(0, RasterMath.renderedPageCount(0, AttachmentRasterizer.MAX_PDF_PAGES))
+    }
+
+    @Test
     fun cappedSizeKeepsSmallImages() {
         assertEquals(RasterMath.Size(3000, 4000), RasterMath.cappedSize(3000, 4000, 4000))
         assertEquals(RasterMath.Size(3000, 4000), RasterMath.cappedSize(6000, 8000, 4000))

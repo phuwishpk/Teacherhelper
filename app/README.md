@@ -167,12 +167,17 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
   (`features/google_classroom/classroom_importer.dart`) ขอ access token `drive.readonly` บนเครื่อง (เก็บในหน่วยความจำเท่านั้น
   ไม่ลงเครื่อง ไม่ส่งให้ server ต่ออายุครั้งเดียวเมื่อ Drive ตอบ 401) → ดาวน์โหลด
   `https://www.googleapis.com/drive/v3/files/{id}?alt=media` ด้วย Dio แยกจาก API client (ไม่มี token ของเรา, จำกัด 40 MB)
-  → JPEG/PNG เข้า pipeline ตรง, PDF/HEIC/WebP/อื่นๆ ผ่าน Pigeon `rasterize(path, mimeType)` (Kotlin
-  `AttachmentRasterizer.kt`: PdfRenderer ที่ 200 DPI สูงสุด 20 หน้า, ImageDecoder ใส่ EXIF orientation ให้; HEIC ต้อง Android 9+)
+  → JPEG/PNG เข้า pipeline ตรง, PDF/HEIC/WebP/อื่นๆ ผ่าน Pigeon `rasterize(path, mimeType)` →
+  `RasterizedAttachment {page_paths, total_pages}` (Kotlin `AttachmentRasterizer.kt`: PdfRenderer ที่ 200 DPI เฉพาะ 20 หน้าแรก
+  หน้าที่เกินแสดงเป็นปัญหา "PDF มี N หน้า ... ให้นักเรียนแยกส่ง", ImageDecoder ใส่ EXIF orientation ให้; HEIC ต้อง Android 9+)
   → `detectPage`/`cropPage` เดิม → คิวอัปโหลดพร้อม `meta.source = "classroom"` และ `google_submission_id`
-  (ใบงานสำรอง `student_id = 0` รับได้เฉพาะทางนี้) ผลรายรูป: ผ่าน / รอ layout / ต้องถ่ายใหม่ + เหตุผลภาษาไทย /
-  ไฟล์ใช้ไม่ได้; ใบงานของการบ้านอื่นถูกปฏิเสธในเครื่อง; QR ของคนอื่นบันทึกตาม QR พร้อมหมายเหตุ (server ติดป้าย
-  `identity_mismatch`); รูปที่ไม่ผ่านแค่ความคมกด "ใช้ภาพนี้ต่อ" ได้ (ไฟล์ที่รอการตัดสินใจถูกลบเมื่อออกจากหน้า)
+  (ใบงานสำรอง `student_id = 0` รับได้เฉพาะทางนี้ และเฉพาะบัญชีที่จับคู่นักเรียนแล้ว ถ้ายังไม่จับคู่ ไม่เข้าคิว แสดง
+  "ยังสแกนไม่ได้" ให้ครูจับคู่ก่อน) ผลรายรูป: ผ่าน / รอ layout / ต้องถ่ายใหม่ + เหตุผลภาษาไทย / ไฟล์ใช้ไม่ได้ /
+  ข้าม (หน้าเดียวกันยังรออยู่ในคิวอัปโหลด ไม่อัปโหลดซ้ำ); ใบงานของการบ้านอื่นถูกปฏิเสธในเครื่อง; QR ของคนอื่นบันทึกตาม QR
+  พร้อมหมายเหตุ (server ติดป้าย `identity_mismatch`); รูปที่ไม่ผ่านแค่ความคมกด "ใช้ภาพนี้ต่อ" ได้ (ไฟล์ที่รอการตัดสินใจถูกลบเมื่อออกจากหน้า)
+  ถ้าต่อ token Drive ไม่ได้กลางทาง (ครูปิดหน้าลงชื่อเข้าใช้, เลือกบัญชีอื่น) ชุดนั้นหยุด แถวที่ทำแล้วเก็บผลไว้ แถวที่ค้างแสดง
+  "ยังไม่เสร็จ" และปุ่มกดได้อีกครั้ง; สแกนซ้ำทีละคนได้เฉพาะแถว `new`/`imported`/`needs_retake` (ไม่ใช่แถวที่ตีกลับแล้ว
+  หรือส่งคะแนนแล้ว)
 - **ตีกลับให้ถ่ายใหม่**: กล่องเหตุผลเติมจากปัญหาที่เจอให้ → `POST /google-submissions/{id}/return {reason}`;
   **ส่งคะแนนกลับอีกครั้ง** สำหรับแถว `grade_failed` → `POST /assignments/{id}/google-grades/retry`
 - **นักเรียน**: แท็บผลการบ้านแสดงการ์ด "ครูขอให้ถ่ายรูปใหม่" พร้อมเหตุผลจาก `GET /student/retake-requests`

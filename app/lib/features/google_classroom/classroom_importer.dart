@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../platform/attachment_rasterizer.dart';
+import '../classrooms/classroom.dart' show RosterStudent;
 import '../scan/scan_meta.dart';
 import '../scan/scan_processor.dart';
 import '../scan/scan_screen.dart' show studentLabel;
@@ -42,6 +43,32 @@ final class ImageQueued extends ImageOutcome {
   final String? identityNote;
 }
 
+/// The same page (assignment, student, page) is still waiting in the upload
+/// queue, e.g. from an earlier "ดาวน์โหลดและสแกน" whose upload has not
+/// finished: not queued twice (each upload costs a Gemini call).
+final class ImageAlreadyQueued extends ImageOutcome {
+  const ImageAlreadyQueued(
+    super.label, {
+    required this.page,
+    required this.student,
+  });
+
+  final int page;
+  final String student;
+}
+
+/// A spare worksheet (QR `student_id = 0`, §18.3) sent from a Classroom
+/// account that is not matched to a student of the room: the server could
+/// not tell whose page it is. The teacher matches the account on the
+/// roster screen and scans again; nothing for the student to redo.
+final class ImageNeedsMatch extends ImageOutcome {
+  const ImageNeedsMatch(super.label);
+
+  String get reason =>
+      'ใบงานสำรองไม่มีชื่อนักเรียน และบัญชี Classroom นี้ยังไม่ได้จับคู่กับนักเรียนในห้อง '
+      'จับคู่นักเรียนที่หน้าห้องเรียน (ผูกกับ Google Classroom) ก่อนแล้วสแกนอีกครั้ง';
+}
+
 /// Kept as `needs_layout` until the layout can be fetched (offline).
 final class ImageWaitingLayout extends ImageOutcome {
   const ImageWaitingLayout(super.label, {required this.page});
@@ -72,21 +99,44 @@ final class AttachmentFailed extends ImageOutcome {
 
 /// Everything done for one Classroom submission.
 class SubmissionImport {
-  const SubmissionImport({required this.submissionId, required this.outcomes});
+  const SubmissionImport({
+    required this.submissionId,
+    required this.outcomes,
+    this.interruption,
+    this.authFailure,
+  });
 
   final int submissionId;
+
+  /// What was done before [interruption], if any.
   final List<ImageOutcome> outcomes;
 
+  /// Why the import stopped before every attachment was done (Thai), e.g.
+  /// Google Sign-In refused a new Drive token. The teacher's problem, not
+  /// the student's, so it is not one of [problems].
+  final String? interruption;
+
+  /// The sign-in failure behind [interruption]: the batch stops on it.
+  final GoogleAuthException? authFailure;
+
+  bool get isComplete => interruption == null;
+
+  /// The student has something to redo ("ตีกลับให้ถ่ายใหม่").
   bool get hasProblems =>
-      outcomes.isEmpty ||
+      (outcomes.isEmpty && isComplete) ||
       outcomes.any((o) => o is ImageRejected || o is AttachmentFailed);
 
   int get queuedCount =>
       outcomes.where((o) => o is ImageQueued || o is ImageWaitingLayout).length;
 
+  /// Spare worksheets waiting for the teacher to match the account.
+  int get needsMatchCount => outcomes.whereType<ImageNeedsMatch>().length;
+
   /// Distinct reasons, for the retake message to the student.
   List<String> get problems {
-    if (outcomes.isEmpty) return const ['ไม่มีไฟล์แนบในงานที่ส่ง'];
+    if (outcomes.isEmpty) {
+      return isComplete ? const ['ไม่มีไฟล์แนบในงานที่ส่ง'] : const [];
+    }
     final seen = <String>{};
     return [
       for (final o in outcomes)
@@ -102,6 +152,8 @@ class SubmissionImport {
       SubmissionImport(
         submissionId: submissionId,
         outcomes: [for (final o in outcomes) identical(o, old) ? next : o],
+        interruption: interruption,
+        authFailure: authFailure,
       );
 }
 
@@ -170,6 +222,12 @@ class ClassroomImporter {
 
   /// Downloads and scans every attachment of [submission] (an assignment's
   /// Classroom submission). [onProgress] gets Thai status lines.
+  ///
+  /// Per-file failures become outcomes. When Google Sign-In refuses a new
+  /// Drive token half way (the old one expired, the teacher closed the
+  /// consent screen), the result says so in [SubmissionImport.interruption]
+  /// and keeps what was already done. Any other error is rethrown after
+  /// the files of this submission are deleted.
   Future<SubmissionImport> importSubmission(
     GoogleSubmission submission, {
     required int assignmentId,
@@ -180,64 +238,106 @@ class ClassroomImporter {
       p.join((await _workRoot()).path, 'submission_${submission.id}'),
     );
     final outcomes = <ImageOutcome>[];
-    final attachments = submission.attachments;
-    for (var i = 0; i < attachments.length; i++) {
-      final a = attachments[i];
-      final prefix = attachments.length > 1
-          ? 'ไฟล์ ${i + 1}/${attachments.length}: '
-          : '';
-      if (!a.isSupported) {
-        outcomes.add(
-          AttachmentFailed(
-            a.title,
-            reason: AttachmentUnsupported(a.mimeType).message,
-          ),
-        );
-        continue;
-      }
-      onProgress?.call('$prefixกำลังดาวน์โหลด ${a.title}…');
-      final File file;
-      try {
-        file = await session.download(a, dir);
-      } on DownloadFailure catch (e) {
-        outcomes.add(AttachmentFailed(a.title, reason: e.message));
-        continue;
-      }
-
-      final List<String> images;
-      if (a.needsRasterize) {
-        onProgress?.call('$prefixกำลังแปลง ${a.title} เป็นภาพ…');
-        try {
-          images = await _rasterizer.rasterize(file.path, a.mimeType);
-        } on RasterizeException catch (e) {
-          outcomes.add(AttachmentFailed(a.title, reason: e.message));
-          continue;
-        } finally {
-          // The pages are new JPEG files; the original is not needed.
-          await _delete(file);
-        }
-        if (images.isEmpty) {
+    GoogleAuthException? authFailure;
+    var finished = false;
+    try {
+      final attachments = submission.attachments;
+      for (var i = 0; i < attachments.length; i++) {
+        final a = attachments[i];
+        final prefix = attachments.length > 1
+            ? 'ไฟล์ ${i + 1}/${attachments.length}: '
+            : '';
+        if (!a.isSupported) {
           outcomes.add(
-            AttachmentFailed(a.title, reason: 'ไม่พบหน้าใดในไฟล์นี้'),
+            AttachmentFailed(
+              a.title,
+              reason: AttachmentUnsupported(a.mimeType).message,
+            ),
           );
           continue;
         }
-      } else {
-        images = [file.path];
-      }
+        onProgress?.call('$prefixกำลังดาวน์โหลด ${a.title}…');
+        final File file;
+        try {
+          file = await session.download(a, dir);
+        } on DownloadFailure catch (e) {
+          outcomes.add(AttachmentFailed(a.title, reason: e.message));
+          continue;
+        } on FileSystemException {
+          outcomes.add(
+            AttachmentFailed(
+              a.title,
+              reason: const LocalStorageFailed().message,
+            ),
+          );
+          continue;
+        } on GoogleAuthException catch (e) {
+          // No Drive token for this file, so none for the rest either.
+          authFailure = e;
+          break;
+        }
 
-      for (var page = 0; page < images.length; page++) {
-        final label = images.length > 1
-            ? '${a.title} หน้า ${page + 1}'
-            : a.title;
-        onProgress?.call('$prefixกำลังตรวจ $label…');
-        outcomes.add(
-          await _scan(images[page], label, submission, assignmentId),
-        );
+        final List<String> images;
+        var skippedPages = 0;
+        if (a.needsRasterize) {
+          onProgress?.call('$prefixกำลังแปลง ${a.title} เป็นภาพ…');
+          try {
+            final pages = await _rasterizer.rasterize(file.path, a.mimeType);
+            images = pages.paths;
+            skippedPages = pages.skippedPages;
+          } on RasterizeException catch (e) {
+            outcomes.add(AttachmentFailed(a.title, reason: e.message));
+            continue;
+          } finally {
+            // The pages are new JPEG files; the original is not needed.
+            await _delete(file);
+          }
+          if (images.isEmpty) {
+            outcomes.add(
+              AttachmentFailed(a.title, reason: 'ไม่พบหน้าใดในไฟล์นี้'),
+            );
+            continue;
+          }
+        } else {
+          images = [file.path];
+        }
+
+        for (var page = 0; page < images.length; page++) {
+          final label = images.length > 1 || skippedPages > 0
+              ? '${a.title} หน้า ${page + 1}'
+              : a.title;
+          onProgress?.call('$prefixกำลังตรวจ $label…');
+          outcomes.add(
+            await _scan(images[page], label, submission, assignmentId),
+          );
+        }
+        if (skippedPages > 0) {
+          final total = images.length + skippedPages;
+          outcomes.add(
+            AttachmentFailed(
+              '${a.title} หน้า ${images.length + 1}–$total',
+              reason:
+                  'PDF มี $total หน้า สแกนได้ครั้งละ ${images.length} หน้า '
+                  'หน้าที่ ${images.length + 1}–$total ยังไม่ได้สแกน '
+                  'ให้นักเรียนแยกส่งเป็นหลายไฟล์',
+            ),
+          );
+        }
       }
+      finished = true;
+    } finally {
+      if (!finished) {
+        // Nobody will see these outcomes: drop pictures kept for a decision.
+        await discardPending(outcomes);
+      }
+      await _cleanUp(dir, finished ? outcomes : const []);
     }
-    await _cleanUp(dir, outcomes);
-    return SubmissionImport(submissionId: submission.id, outcomes: outcomes);
+    return SubmissionImport(
+      submissionId: submission.id,
+      outcomes: outcomes,
+      interruption: authFailure?.message,
+      authFailure: authFailure,
+    );
   }
 
   /// The teacher keeps a picture that only failed the blur check.
@@ -317,15 +417,25 @@ class ClassroomImporter {
                 'ไม่ใช่งานนี้ ให้ส่งรูปใบงานของงานนี้',
           ],
         );
+      // §18.3: the QR names nobody and neither does the account.
+      case ScanReady(:final qr) || ScanNeedsLayout(:final qr)
+          when qr.studentId == 0 && submission.student == null:
+        await _processor.discard(analysis);
+        return ImageNeedsMatch(label);
+      case ScanReady(:final qr, :final student, alreadyQueued: true):
+        await _processor.discard(analysis);
+        return ImageAlreadyQueued(
+          label,
+          page: qr.page,
+          student: _studentLabel(qr.studentId, student, submission),
+        );
       case ScanReady(:final qr, :final student):
         final id = await _processor.confirm(analysis);
         return ImageQueued(
           label,
           clientScanId: id,
           page: qr.page,
-          student: qr.studentId == 0
-              ? '${submission.studentLabel} (ใบงานสำรอง)'
-              : studentLabel(student, qr.studentId),
+          student: _studentLabel(qr.studentId, student, submission),
           identityNote: _identityNote(qr.studentId, student?.name, submission),
         );
       case ScanNeedsLayout(:final qr):
@@ -333,6 +443,14 @@ class ClassroomImporter {
         return ImageWaitingLayout(label, page: qr.page);
     }
   }
+
+  static String _studentLabel(
+    int qrStudentId,
+    RosterStudent? student,
+    GoogleSubmission submission,
+  ) => qrStudentId == 0
+      ? '${submission.studentLabel} (ใบงานสำรอง)'
+      : studentLabel(student, qrStudentId);
 
   static String? _identityNote(
     int qrStudentId,

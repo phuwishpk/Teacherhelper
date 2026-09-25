@@ -124,15 +124,27 @@ class SubmissionsList extends ConsumerWidget {
       final state = ref.read(classroomImportProvider(assignmentId));
       final results = [for (final t in targets) ?state.rows[t.id]?.result];
       final pages = results.fold<int>(0, (n, r) => n + r.queuedCount);
+      final skipped = results.fold<int>(
+        0,
+        (n, r) => n + r.outcomes.whereType<ImageAlreadyQueued>().length,
+      );
       final problems = results.where((r) => r.hasProblems).length;
+      final unmatched = results.where((r) => r.needsMatchCount > 0).length;
       showMessage(
         context,
-        problems == 0
-            ? 'สแกนแล้ว $pages หน้า กำลังอัปโหลด'
-            : 'สแกนแล้ว $pages หน้า มี $problems งานที่ต้องให้นักเรียนถ่ายใหม่',
+        [
+          'สแกนแล้ว $pages หน้า',
+          if (skipped > 0) 'ข้าม $skipped หน้าที่อยู่ในคิวแล้ว',
+          if (problems > 0) 'มี $problems งานที่ต้องให้นักเรียนถ่ายใหม่',
+          if (unmatched > 0) 'มี $unmatched งานที่ต้องจับคู่นักเรียนก่อน',
+          if (problems == 0 && unmatched == 0) 'กำลังอัปโหลด',
+        ].join(' '),
       );
+    } on ClassroomImportStopped catch (e) {
+      // Part of the batch ran; the rows show what was done.
+      if (context.mounted) showMessage(context, e.message);
     } on GoogleAuthCanceled {
-      // The teacher closed the picker.
+      // The teacher closed the picker before anything ran.
     } on GoogleAuthException catch (e) {
       if (context.mounted) showMessage(context, e.message);
     } catch (e) {
@@ -363,6 +375,11 @@ class _SubmissionCard extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text('เหตุผลที่ตีกลับ: $reason'),
               ),
+            if (row.state == SubmissionImportState.returnedForRetake)
+              Text(
+                'รอนักเรียนส่งรูปใหม่ใน Classroom แล้วกด "ดึงงานที่ส่ง" อีกครั้ง',
+                style: muted,
+              ),
             if (row.state == SubmissionImportState.gradeFailed &&
                 row.lastError != null)
               Padding(
@@ -378,6 +395,15 @@ class _SubmissionCard extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(import?.status ?? 'กำลังทำงาน…', style: muted),
             ],
+            if (result?.interruption case final stop?)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'ยังไม่เสร็จ: $stop',
+                  key: ValueKey('interrupted_${row.id}'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
             if (result != null) ...[
               const SizedBox(height: 8),
               for (final outcome in result.outcomes)
@@ -391,7 +417,7 @@ class _SubmissionCard extends ConsumerWidget {
                             .acceptDespiteBlur(row, outcome)
                       : null,
                 ),
-              if (result.outcomes.isEmpty)
+              if (result.outcomes.isEmpty && result.isComplete)
                 const _OutcomeTile(
                   outcome: AttachmentFailed('งานนี้', reason: 'ไม่มีไฟล์แนบ'),
                 ),
@@ -402,7 +428,8 @@ class _SubmissionCard extends ConsumerWidget {
               children: [
                 TextButton.icon(
                   key: ValueKey('scan_${row.id}'),
-                  onPressed: canScan && row.attachments.isNotEmpty
+                  onPressed:
+                      canScan && row.state.canScan && row.attachments.isNotEmpty
                       ? onScan
                       : null,
                   icon: const Icon(Icons.document_scanner_outlined),
@@ -460,6 +487,16 @@ class _OutcomeTile extends StatelessWidget {
         Icons.check_circle_outline,
         ok,
         ['ผ่าน: $student หน้า $page (อยู่ในคิวอัปโหลด)', ?identityNote],
+      ),
+      ImageAlreadyQueued(:final student, :final page) => (
+        Icons.playlist_add_check,
+        theme.colorScheme.tertiary,
+        ['ข้าม: $student หน้า $page รออยู่ในคิวอัปโหลดแล้ว ไม่ได้เพิ่มซ้ำ'],
+      ),
+      ImageNeedsMatch(:final reason) => (
+        Icons.person_search_outlined,
+        theme.colorScheme.tertiary,
+        ['ยังสแกนไม่ได้: $reason'],
       ),
       ImageWaitingLayout(:final page) => (
         Icons.cloud_off_outlined,

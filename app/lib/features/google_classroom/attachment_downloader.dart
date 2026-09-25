@@ -58,6 +58,14 @@ final class AttachmentTooLarge extends DownloadFailure {
       'ไฟล์ใหญ่เกิน ${maxBytes ~/ (1024 * 1024)} MB ให้นักเรียนส่งรูปที่เล็กลง';
 }
 
+/// The phone could not write the file (storage full, cache folder gone).
+final class LocalStorageFailed extends DownloadFailure {
+  const LocalStorageFailed();
+
+  @override
+  String get message => 'บันทึกไฟล์ลงเครื่องไม่ได้ พื้นที่ในเครื่องอาจเต็ม';
+}
+
 final class DownloadFailed extends DownloadFailure {
   const DownloadFailed(this.detail);
 
@@ -99,7 +107,11 @@ class DriveAttachmentDownloader {
     if (!attachment.isSupported) {
       throw AttachmentUnsupported(attachment.mimeType);
     }
-    await directory.create(recursive: true);
+    try {
+      await directory.create(recursive: true);
+    } on FileSystemException {
+      throw const LocalStorageFailed();
+    }
     final file = File(
       p.join(
         directory.path,
@@ -144,13 +156,21 @@ class DriveAttachmentDownloader {
         sink.add(chunk);
       }
       await sink.flush();
-    } catch (e) {
       await sink.close();
+    } catch (e) {
+      try {
+        await sink.close();
+      } catch (_) {
+        // Already failed; the file is deleted below.
+      }
       await _deleteQuietly(file);
-      if (e is DownloadFailure) rethrow;
-      throw DownloadFailed(e is DioException ? e.type.name : '$e');
+      throw switch (e) {
+        final DownloadFailure failure => failure,
+        FileSystemException() => const LocalStorageFailed(),
+        DioException(:final type) => DownloadFailed(type.name),
+        _ => DownloadFailed('$e'),
+      };
     }
-    await sink.close();
     if (total == 0) {
       await _deleteQuietly(file);
       throw const DownloadFailed('empty file');

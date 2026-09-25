@@ -122,6 +122,10 @@ class FakeScanPipeline implements ScanPipeline {
 
   final Directory cropDir;
   PageDetection detection;
+
+  /// Answered one per call before falling back to [detection] (e.g. the
+  /// pages of a PDF).
+  final nextDetections = <PageDetection>[];
   Object? detectError;
   Object? cropError;
   final detectCalls = <String>[];
@@ -134,7 +138,7 @@ class FakeScanPipeline implements ScanPipeline {
   Future<PageDetection> detectPage(String imagePath) async {
     detectCalls.add(imagePath);
     if (detectError case final e?) throw e;
-    return detection;
+    return nextDetections.isEmpty ? detection : nextDetections.removeAt(0);
   }
 
   @override
