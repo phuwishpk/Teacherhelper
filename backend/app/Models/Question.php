@@ -117,6 +117,12 @@ class Question extends Model
         return $this->hasMany(RubricCriterion::class)->orderBy('position');
     }
 
+    /** @return HasMany<Response, $this> */
+    public function responses(): HasMany
+    {
+        return $this->hasMany(Response::class);
+    }
+
     /** @return BelongsToMany<Skill, $this> */
     public function skills(): BelongsToMany
     {

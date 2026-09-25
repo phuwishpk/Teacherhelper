@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Scans\ScanRetention;
 use App\Domain\Worksheets\WorksheetFiles;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -11,9 +12,9 @@ use Illuminate\Support\Facades\Log;
  * 02:00) applying the deletion rules of DESIGN §7.3. It needs no
  * `schedule:run`: Plesk calls it directly.
  *
- * Implemented so far: worksheet PDFs, 30 days after the print was created.
- * Scan images (after publish) and crops (after schools.crop_retention_until)
- * are added here by the steps that store them.
+ * - worksheet PDFs: 30 days after the print was created (WorksheetFiles);
+ * - scanned page images: after the submission is published;
+ * - answer crops: after schools.crop_retention_until (ScanRetention).
  */
 class PurgeImagesCommand extends Command
 {
@@ -24,9 +25,13 @@ class PurgeImagesCommand extends Command
     public function handle(): int
     {
         $worksheets = WorksheetFiles::purgeExpired();
+        $scans = ScanRetention::purge();
 
-        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets]);
+        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans]);
         $this->info("Worksheet prints expired: {$worksheets}");
+        $this->info("Page images deleted (published): {$scans['page_images']}");
+        $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
+        $this->info("Pending rescan stashes deleted: {$scans['pending']}");
 
         return self::SUCCESS;
     }

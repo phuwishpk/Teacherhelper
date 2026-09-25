@@ -15,6 +15,7 @@ use App\Models\Question;
  *   `draft`; the next layout build creates a new layout_version (DESIGN §5.1).
  * - Changing the type discards the rubric; changing max_points of an approved
  *   rubric sends it back to `draft` because its points no longer add up.
+ * - A question that already has scanned responses cannot be deleted (409).
  */
 class QuestionEditor
 {
@@ -108,6 +109,11 @@ class QuestionEditor
     public function delete(Question $question): void
     {
         AssignmentLocked::run($question->assignment_id, function (Assignment $assignment) use ($question) {
+            // Scanned answers keep their scores and review history (score_events),
+            // so a question with responses stays; the teacher closes the assignment instead.
+            if ($question->responses()->exists()) {
+                throw new ApiException('ข้อนี้มีคำตอบของนักเรียนที่สแกนแล้ว ลบไม่ได้', 'question_has_responses', 409);
+            }
             Question::query()->whereKey($question->id)->delete();
             QuestionPositions::compact($assignment->id);
             $assignment->backToDraft();

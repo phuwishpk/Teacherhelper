@@ -36,6 +36,16 @@ return [
         'batch_size' => max(1, (int) env('WORKSHEET_BATCH_SIZE', 10)),
     ],
 
+    // POST /scans upload limits (DESIGN §9.4). The phone sends a WebP page of
+    // about 1600 px on the long side (a few hundred KB) and one small WebP per
+    // answer area. PHP must allow the whole request: upload_max_filesize >= the
+    // page limit, post_max_size >= page + all crops (16M is plenty) and
+    // max_file_uploads >= 1 + 2 x answer areas per page (set 100).
+    'scans' => [
+        'max_page_kb' => max(64, (int) env('SCAN_MAX_PAGE_KB', 4096)),
+        'max_crop_kb' => max(16, (int) env('SCAN_MAX_CROP_KB', 1024)),
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,
