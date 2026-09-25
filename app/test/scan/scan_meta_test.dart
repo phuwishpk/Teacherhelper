@@ -143,4 +143,28 @@ void main() {
     );
     expect(cropFileField('q9_final'), 'crop_q9_final');
   });
+  group('ScanSource', () {
+    test('camera adds nothing to meta', () {
+      const camera = ScanSource.camera();
+      expect(camera.isClassroom, isFalse);
+      expect(camera.allowsSpareWorksheet, isFalse);
+      expect(camera.toMeta(), isEmpty);
+      expect(ScanSource.fromMeta(const {'qr': sampleQr}), camera);
+    });
+
+    test('classroom adds source and google_submission_id (DESIGN §18.6)', () {
+      const classroom = ScanSource.classroom(googleSubmissionId: 'sub-9');
+      expect(classroom.allowsSpareWorksheet, isTrue);
+      expect(classroom.toMeta(), {
+        'source': 'classroom',
+        'google_submission_id': 'sub-9',
+      });
+      expect(ScanSource.fromMeta(classroom.toMeta()), classroom);
+      // Incomplete meta falls back to the camera.
+      expect(
+        ScanSource.fromMeta(const {'source': 'classroom'}),
+        const ScanSource.camera(),
+      );
+    });
+  });
 }

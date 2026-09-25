@@ -271,7 +271,10 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
                     crops += RegionCrop(
                         regionId = region.regionId,
                         imagePath = file.path,
-                        inkRatio = inkRatio(s, gray, region.rect, rect),
+                        inkRatio = inkRatio(
+                            s, gray, region.rect, rect,
+                            gutterPx = if (region.numbered) numberGutterPx else 0,
+                        ),
                     )
                     region.finalAnswer?.let { fa ->
                         val finalRect = RegionMath.cropRect(fa.rect, w, h)
@@ -319,17 +322,66 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     }
 
     /**
-     * Handwriting share inside [norm]: the rect without its printed border,
-     * thresholded with the split found on the wider crop [marginRect], and
-     * with long straight printed lines (ruling, box edges) removed.
+     * `ink_ratio` of [norm] (DESIGN §9.4, §11.8): the share of the answer
+     * area that lies within [RegionMath.INK_REACH_MM] of handwriting.
+     *
+     * 1. Area: the rect without its printed border (and without the
+     *    line-number gutter when [gutterPx] > 0).
+     * 2. Ink: pixels at or below the split found on the wider crop
+     *    [marginRect], minus printed rules and box edges ([ruledLines]).
+     * 3. Strokes thinner than 2 px and specks under
+     *    [RegionMath.MIN_SPECK_MM2] are dropped (paper texture, JPEG noise,
+     *    slivers of a border that curved into the area).
+     * 4. Every pixel within the reach of the remaining ink counts.
+     *
+     * Blank areas read 0; one written digit in a 70 x 16 mm box about 0.05,
+     * a few lines of working about 0.1, so DESIGN's 0.02 separates written
+     * from blank (numbers from the synthetic photo check in app/README.md).
      */
-    private fun inkRatio(s: MatScope, gray: Mat, norm: NormRect, marginRect: PixelRect): Double {
+    private fun inkRatio(
+        s: MatScope,
+        gray: Mat,
+        norm: NormRect,
+        marginRect: PixelRect,
+        gutterPx: Int = 0,
+    ): Double {
         val threshold = inkThreshold(s, sub(s, gray, marginRect))
-        val inner = RegionMath.inset(RegionMath.cropRect(norm, gray.cols(), gray.rows(), 0.0), borderInsetPx)
+        val inner = RegionMath.inkRect(norm, gray.cols(), gray.rows(), borderInsetPx, gutterPx)
         if (inner.isEmpty) return 0.0
         val bin = binarize(s, sub(s, gray, inner), threshold)
-        val ink = withoutRuledLines(s, bin)
-        return Core.countNonZero(ink).toDouble() / (inner.width.toDouble() * inner.height)
+        return inkCoverage(s, withoutRuledLines(s, bin))
+    }
+
+    /** Steps 3 and 4 of [inkRatio] on a binary ink mask (255 = ink). */
+    private fun inkCoverage(s: MatScope, ink: Mat): Double {
+        val total = ink.rows() * ink.cols()
+        val strokes = s.track(Mat())
+        Imgproc.morphologyEx(
+            ink, strokes, Imgproc.MORPH_OPEN,
+            s.track(Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(2.0, 2.0))),
+            Point(-1.0, -1.0), 1, Core.BORDER_CONSTANT, Scalar(0.0),
+        )
+        val labels = s.track(Mat())
+        val stats = s.track(Mat())
+        val count = Imgproc.connectedComponentsWithStats(
+            strokes, labels, stats, s.track(Mat()), 8, CvType.CV_32S,
+        )
+        if (count <= 1) return 0.0
+        val statValues = IntArray(count * stats.cols())
+        stats.get(0, 0, statValues)
+        val areas = IntArray(count) { statValues[it * stats.cols() + Imgproc.CC_STAT_AREA] }
+        val kept = InkCoverage.keptLabels(areas, minSpeckAreaPx)
+
+        val labelValues = IntArray(total)
+        labels.get(0, 0, labelValues)
+        val source = InkCoverage.distanceSource(labelValues, kept) ?: return 0.0
+        val paper = s.track(Mat(ink.rows(), ink.cols(), CvType.CV_8UC1))
+        paper.put(0, 0, source)
+        val distance = s.track(Mat())
+        Imgproc.distanceTransform(paper, distance, Imgproc.DIST_L2, Imgproc.DIST_MASK_PRECISE)
+        val near = s.track(Mat())
+        Core.compare(distance, Scalar(inkReachPx), near, Core.CMP_LE)
+        return InkCoverage.ratio(Core.countNonZero(near), total)
     }
 
     /**
@@ -376,6 +428,10 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     // --------------------------------------------------------------- helpers
 
     private val borderInsetPx = RegionMath.mmToPx(RegionMath.BORDER_INSET_MM).roundToInt()
+    private val numberGutterPx = RegionMath.mmToPx(RegionMath.NUMBER_GUTTER_MM).roundToInt()
+    private val maxRuleRunPx = RegionMath.mmToPx(RegionMath.MAX_RULE_RUN_MM).roundToInt()
+    private val inkReachPx = RegionMath.mmToPx(RegionMath.INK_REACH_MM)
+    private val minSpeckAreaPx = RegionMath.mm2ToPx(RegionMath.MIN_SPECK_MM2)
 
     /** Otsu split of [gray], never closer than 25 levels to the paper. */
     private fun inkThreshold(s: MatScope, gray: Mat): Double {
@@ -404,15 +460,20 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     }
 
     /**
-     * Mask of long horizontal (>= 1/4 of the width) and near full-height
-     * vertical printed lines, slightly dilated to swallow anti-aliasing.
+     * Mask of long horizontal (a quarter of the width, at most
+     * [RegionMath.MAX_RULE_RUN_MM]) and near full-height vertical printed
+     * lines, slightly dilated to swallow anti-aliasing. Horizontal runs are
+     * looked for after a 1 px vertical dilation so rules that tilt or curve
+     * with the paper are still found.
      */
     private fun ruledLines(s: MatScope, bin: Mat): Mat {
-        val hLen = max(15, bin.cols() / 4).toDouble()
+        val hLen = RegionMath.ruleRunLength(bin.cols(), maxRuleRunPx).toDouble()
         val vLen = max(15, (bin.rows() * 0.9).toInt()).toDouble()
+        val tolerant = s.track(Mat())
+        Imgproc.dilate(bin, tolerant, s.track(Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, 3.0))))
         val horizontal = s.track(Mat())
         val vertical = s.track(Mat())
-        Imgproc.morphologyEx(bin, horizontal, Imgproc.MORPH_OPEN, s.track(Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(hLen, 1.0))))
+        Imgproc.morphologyEx(tolerant, horizontal, Imgproc.MORPH_OPEN, s.track(Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(hLen, 1.0))))
         Imgproc.morphologyEx(bin, vertical, Imgproc.MORPH_OPEN, s.track(Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, vLen))))
         val lines = s.track(Mat())
         Core.bitwise_or(horizontal, vertical, lines)

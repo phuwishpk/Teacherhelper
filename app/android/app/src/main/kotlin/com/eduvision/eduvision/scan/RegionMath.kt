@@ -45,6 +45,30 @@ object RegionMath {
     /** Never inset more than this share of a side. */
     const val MAX_INSET_SHARE = 0.15
 
+    /**
+     * Width of the printed line-number gutter on the left of a numbered
+     * `lines` region (show_work; WorksheetPdfRenderer::drawLines starts the
+     * rules 8 mm in). Ink is not measured there.
+     */
+    const val NUMBER_GUTTER_MM = 8.0
+
+    /**
+     * `ink_ratio` is the share of the answer area within this distance of a
+     * handwritten stroke (DESIGN §9.4, §11.8), so a single digit in a 70 x
+     * 16 mm box reads about 0.05 and a blank area 0.
+     */
+    const val INK_REACH_MM = 2.0
+
+    /** Ink blobs smaller than this (dust, JPEG noise) are not handwriting. */
+    const val MIN_SPECK_MM2 = 0.25
+
+    /**
+     * Printed horizontal rules are found as runs of at least a quarter of the
+     * width, but never longer than this, so rules that curve with the paper
+     * are still found in wide regions.
+     */
+    const val MAX_RULE_RUN_MM = 20.0
+
     /** Default frame of the A4 worksheet (WorksheetGeometry on the server). */
     const val DEFAULT_FRAME_W_MM = 178.0
     const val DEFAULT_FRAME_H_MM = 265.0
@@ -81,6 +105,28 @@ object RegionMath {
         val dx = min(insetPx, (rect.width * MAX_INSET_SHARE).toInt())
         val dy = min(insetPx, (rect.height * MAX_INSET_SHARE).toInt())
         return PixelRect(rect.left + dx, rect.top + dy, rect.right - dx, rect.bottom - dy)
+    }
+
+    /**
+     * Where ink is measured: [rect] without its printed border ([insetPx])
+     * and, when [gutterPx] > 0, without that many pixels from its left edge
+     * (the line-number gutter). Empty when nothing is left.
+     */
+    fun inkRect(rect: NormRect, width: Int, height: Int, insetPx: Int, gutterPx: Int = 0): PixelRect {
+        val outer = cropRect(rect, width, height, 0.0)
+        val inner = inset(outer, insetPx)
+        if (gutterPx <= 0) return inner
+        val left = min(inner.right, max(inner.left, outer.left + gutterPx))
+        return inner.copy(left = left)
+    }
+
+    /** Minimum run length of a printed horizontal rule in a [width] px wide patch. */
+    fun ruleRunLength(width: Int, maxRunPx: Int): Int = max(15, min(width / 4, maxRunPx))
+
+    /** Area in px of [mm2] square millimetres at [dpi]. */
+    fun mm2ToPx(mm2: Double, dpi: Double = DPI): Double {
+        val side = mmToPx(1.0, dpi)
+        return mm2 * side * side
     }
 
     /**
@@ -165,6 +211,32 @@ object RegionMath {
         }
         return sign > 0
     }
+}
+
+/** The pure parts of the `ink_ratio` measurement (see ScanPipelineImpl.inkRatio). */
+object InkCoverage {
+    /**
+     * Which connected components count as handwriting: [areas] are the pixel
+     * areas by label (label 0 = background, never kept); components smaller
+     * than [minArea] are specks.
+     */
+    fun keptLabels(areas: IntArray, minArea: Double): BooleanArray =
+        BooleanArray(areas.size) { it > 0 && areas[it] >= minArea }
+
+    /**
+     * Input of the distance transform: 0 where [labels] (row-major, one per
+     * pixel) belongs to a kept component, 255 elsewhere. Null when nothing
+     * is kept.
+     */
+    fun distanceSource(labels: IntArray, kept: BooleanArray): ByteArray? {
+        if (kept.none { it }) return null
+        return ByteArray(labels.size) { if (kept[labels[it]]) 0 else PAPER_BYTE }
+    }
+
+    /** Share of [near] pixels in an area of [total]; 0 for an empty area. */
+    fun ratio(near: Int, total: Int): Double = if (total <= 0) 0.0 else near.toDouble() / total
+
+    private const val PAPER_BYTE: Byte = -1 // 255
 }
 
 /** Share of dark pixels inside a circle; pure so it can be unit tested. */

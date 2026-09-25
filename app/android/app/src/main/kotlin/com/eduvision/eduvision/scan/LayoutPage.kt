@@ -16,7 +16,13 @@ data class LayoutRegion(
     val numeric: Boolean,
     val bubbles: List<LayoutBubble>,
     val finalAnswer: LayoutFinalAnswer?,
-)
+) {
+    /**
+     * show_work lines (the `lines` regions with a final-answer box) are
+     * printed with line numbers in a gutter on the left (DESIGN §5.2).
+     */
+    val numbered: Boolean get() = kind == LayoutPage.KIND_LINES && finalAnswer != null
+}
 
 /** The part of one layout JSON page that the crop step needs. */
 data class LayoutPage(

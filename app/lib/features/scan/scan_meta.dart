@@ -14,6 +14,49 @@ const rawFileField = 'raw';
 /// Multipart field (and meta `file` / `final_file` value) of a crop.
 String cropFileField(String cropId) => 'crop_$cropId';
 
+/// Where a scanned page came from (DESIGN §18.2, §18.6).
+class ScanSource {
+  /// The teacher's camera. `meta` carries no `source` (the server default).
+  const ScanSource.camera() : googleSubmissionId = null;
+
+  /// An attachment of a Google Classroom submission.
+  const ScanSource.classroom({required String this.googleSubmissionId});
+
+  /// Reads the source back from a queued scan's `meta`.
+  factory ScanSource.fromMeta(Map<String, dynamic> meta) {
+    final id = meta['google_submission_id'];
+    if (meta['source'] == 'classroom' && id is String && id.isNotEmpty) {
+      return ScanSource.classroom(googleSubmissionId: id);
+    }
+    return const ScanSource.camera();
+  }
+
+  final String? googleSubmissionId;
+
+  bool get isClassroom => googleSubmissionId != null;
+
+  /// The anonymous spare worksheet (`student_id = 0`) is accepted only with
+  /// a Classroom submission, which tells the server who sent it (§18.3).
+  bool get allowsSpareWorksheet => isClassroom;
+
+  /// Extra `meta` fields of `POST /scans` (§18.6).
+  Map<String, Object?> toMeta() => isClassroom
+      ? {'source': 'classroom', 'google_submission_id': googleSubmissionId}
+      : const {};
+
+  @override
+  bool operator ==(Object other) =>
+      other is ScanSource && other.googleSubmissionId == googleSubmissionId;
+
+  @override
+  int get hashCode => googleSubmissionId.hashCode;
+
+  @override
+  String toString() => isClassroom
+      ? 'ScanSource.classroom($googleSubmissionId)'
+      : 'ScanSource.camera()';
+}
+
 /// A digit-reader result attached as `cnn` (DESIGN §9.4, §12).
 class CnnReading {
   const CnnReading({required this.text, required this.confidence});

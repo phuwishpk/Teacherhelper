@@ -75,12 +75,37 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
 - กรอบคำตอบสุดท้ายของ `lines` คืนมาเป็น crop แยก id `<region_id>_final` → field `crop_<region_id>_final` และ `final_file` ใน meta
 - `blur_score` = variance of Laplacian บนกรอบที่ warp แล้ว เกณฑ์เริ่มต้น `defaultMinBlurScore = 60`
   (ต้องจูนจากภาพจริงใน Phase 1) ถ้าติดแค่เรื่องเบลอ ครูกด "ใช้ภาพนี้ต่อ" ได้
-- `ink_ratio` วัดในกรอบที่หดเข้า 1.2 mm (ตัดเส้นขอบที่พิมพ์) หลังลบเส้นตรงยาวที่พิมพ์ไว้ (เส้นบรรทัด/ขอบ) ด้วย morphology
+- `ink_ratio` = **สัดส่วนของพื้นที่คำตอบที่อยู่ห่างจากลายมือไม่เกิน 2 mm** (สเกลเดียวกับ DESIGN §9.4 และเกณฑ์ `> 0.02` ของ §11.8 กฎ D)
+  1. พื้นที่: กรอบที่หดเข้า 1.2 mm (ตัดเส้นขอบที่พิมพ์) ถ้าเป็น `lines` ที่มีกรอบคำตอบสุดท้าย (show_work มีเลขบรรทัด) ตัด 8 mm ทางซ้ายที่เป็นเลขบรรทัดออกด้วย
+  2. หมึก: พิกเซลที่เข้มกว่าเกณฑ์ (Otsu ของ crop ที่ขยาย 2% ไม่ใกล้สีกระดาษเกิน 25 ระดับ) ลบเส้นที่พิมพ์: เส้นนอนยาว ≥ ¼ ของความกว้างแต่ไม่เกิน 20 mm
+     (หาหลังขยายแนวตั้ง 1 px จึงเจอเส้นที่เอียงหรือโค้งตามกระดาษ) และเส้นตั้งสูง ≥ 90% ของความสูง
+  3. ทิ้งเส้นที่บางกว่า 2 px และจุดเล็กกว่า 0.25 mm² (ฝุ่น, noise ของ JPEG, เศษเส้นขอบที่โค้งเข้ามา)
+  4. นับทุกพิกเซลที่ห่างจากหมึกที่เหลือไม่เกิน 2 mm (distance transform) หารด้วยพื้นที่
+  
+  ผลจากภาพสังเคราะห์ (port ขั้นตอนเดียวกันเป็น Python, ภาพถ่ายเอียงแบบ perspective + แสงไม่เท่ากัน + blur + noise + JPEG):
+
+  | กรอบ | `ink_ratio` | วิธีเดิม (นับเฉพาะพิกเซลหมึก) |
+  |---|---|---|
+  | กรอบว่าง, บรรทัดว่าง (มีเลขบรรทัด), กรอบคำตอบว่าง, กรอบว่างที่มีฝุ่น | 0.000 (กระดาษโค้ง 1.5 mm ก็ยัง 0) | 0.000–0.006 |
+  | จุดปากกา 0.7 mm ในกรอบ 70×16 mm | 0.017 | 0.0004 |
+  | "x=5" ตัวเล็กในบรรทัดเปล่า 3 บรรทัด | 0.024 | 0.004 |
+  | เลข "5" ตัวเล็ก / "1" / ดินสอ "7" / "-2" ในกรอบ 70×16 mm | 0.050 / 0.060 / 0.068 / 0.100 | 0.005 / 0.009 / 0.005 / 0.012 |
+  | "125" ในกรอบ 70×16 mm | 0.236 | 0.040 |
+  | show_work 2 บรรทัด / กรอบคำตอบ "5" | 0.118 / 0.098 | 0.018 / 0.016 |
+
+  หน้ายืนยันแสดง "ว่าง" เมื่อ `ink_ratio ≤ 0.02` (`emptyInkRatio` เส้นเดียวกับ §11.8) ข้อจำกัด: เป็นสัดส่วนของพื้นที่
+  คำตอบสั้นมากในบรรทัดเปล่าหลายบรรทัดจึงได้ค่าน้อย (5 บรรทัดขึ้นไปอาจต่ำกว่า 0.02) และดินสอที่จางมาก (เทาอ่อนกว่าราว 150/255)
+  อาจไม่ถูกนับเป็นหมึกเพราะเกณฑ์ Otsu แบ่งระหว่างเส้นขอบสีดำกับกระดาษ ต้องตรวจกับภาพจริงของ KICKOFF 2b
 - `mcq_fill` = สัดส่วนพิกเซลเข้มใน 70% ของรัศมี threshold ด้วย Otsu ของทั้งแถว (ไม่ให้ใกล้สีกระดาษเกิน 25 ระดับ)
 - `cnnInput` (เฉพาะกรอบ numeric) = grayscale 32×128 byte ตาม `ml/train/preprocess.py` (tight crop + fit to canvas)
   ฝั่ง Dart ค่อย normalize `x = 1 - g/255` ตอนรันโมเดล (ขั้น digit reader) ตอนนี้ยังไม่แนบ `cnn` ใน meta
 - ใบงานสำรอง (`student_id = 0`, §18.3) และบัตร login (`EVL1.`) ถูกปฏิเสธที่หน้าสแกนด้วยข้อความภาษาไทย
+  ใบงานสำรองผ่านได้เฉพาะ `ScanProcessor.analyze(path, source: ScanSource.classroom(googleSubmissionId: ...))`
+  (ไฟล์แนบจาก Google Classroom §18.2) ซึ่งเพิ่ม `source: "classroom"` และ `google_submission_id` ใน `meta` (§18.6)
+  เก็บค่านี้ไว้ในแถว `needs_layout` ด้วย และไม่ถือว่าใบงานสำรองของคนละ submission เป็นหน้าซ้ำ
 - layout: หาใน drift `cached_layouts` ก่อน ถ้าไม่มีและต่อเน็ตได้จะดึง `GET /assignments/{id}/layouts?version=` มา cache
+  404 `code: layout_unknown` (การบ้านเป็นของครูคนนี้แต่ไม่มีเวอร์ชันนั้น) → "ไม่พบหน้า … ใน layout เวอร์ชัน …";
+  403/404 อื่น → "ไม่พบการบ้าน #… ในบัญชีนี้"
   ถ้าต่อไม่ได้ ครูเลือก "เก็บไว้ในคิว" → แถว `needs_layout` เก็บภาพดิบ (field `raw` ใช้ในเครื่องเท่านั้น ไม่เคยถูกส่ง)
   แล้วประมวลผลต่อเมื่อเปิดหน้าสแกนหรือกด "ประมวลผลต่อ" ในหน้าคิว (ใช้ `client_scan_id` และ `scanned_at` เดิม)
 - ไฟล์ของสแกนที่ยืนยันแล้วถูกย้ายจาก cache ไป `<app support>/scan_queue/<client_scan_id>/` เพื่อไม่ให้ Android ลบทิ้งตอนพื้นที่เต็ม
@@ -110,6 +135,6 @@ widget test ของหน้าสแกนด้วยกล้องปล�
 | `PUT /questions/{id}/rubric` | `open`: `{criteria: [{position, description, points, is_core}]}` (เกณฑ์หลักไม่เกิน 1 ข้อ); `show_work`: `{criteria: [], reference_steps: [...]}` |
 | ร่าง rubric | poll `GET /assignments/{id}` จนข้อนั้นเปลี่ยน: `show_work` ดู `answer_key.reference_steps`, `open` ดู `rubric_criteria` |
 | `GET /assignments/{id}/layouts` | ไม่ส่ง `version` = ทุกเวอร์ชัน `[{version, pages[]}]` (รับแบบ object เดี่ยวด้วย) |
-| `meta` ของ `POST /scans` | ตาม §9.4: `mcq` ส่ง `mcq_fill` (ไม่มี `ink_ratio`), `box`/`lines` ส่ง `ink_ratio`, `lines` ที่มีกรอบคำตอบสุดท้ายส่ง `final_file`; `scanned_at` เป็น UTC (`...Z`); `blur_score` ปัด 1 ตำแหน่ง |
+| `meta` ของ `POST /scans` | ตาม §9.4: `mcq` ส่ง `mcq_fill` (ไม่มี `ink_ratio`), `box`/`lines` ส่ง `ink_ratio` (นิยามด้านบน: ว่าง = 0, เขียนแล้ว > 0.02), `lines` ที่มีกรอบคำตอบสุดท้ายส่ง `final_file`; `scanned_at` เป็น UTC (`...Z`); `blur_score` ปัด 1 ตำแหน่ง; สแกนจาก Classroom เพิ่ม `source: "classroom"` และ `google_submission_id` (สแกนจากกล้องไม่ส่ง `source`) |
 | `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done; 202 หรือ `state: pending_confirm` (รวม 200 ที่ส่ง body เดิมซ้ำ) → `conflict` รอครูยืนยันผ่าน `POST /scans/{scan_id}/confirm-replace` **แอปต้องการ `scan_id` ใน body ของ 202** (ถ้าไม่มีจะเก็บเป็น conflict ที่ยืนยันจากเครื่องไม่ได้ ไม่ลบไฟล์); 401/408/429/5xx/เน็ตหลุด → retry แบบ backoff; 4xx อื่น (422, 403, 404, 413, …) → failed ถาวร (แสดง `message (code)`) |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |

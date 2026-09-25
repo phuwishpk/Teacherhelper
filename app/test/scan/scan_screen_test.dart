@@ -5,6 +5,7 @@ import 'package:eduvision/core/db/database_provider.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/scan/page_layout.dart';
 import 'package:eduvision/features/scan/scan_camera.dart';
+import 'package:eduvision/features/scan/scan_meta.dart';
 import 'package:eduvision/features/scan/scan_processor.dart';
 import 'package:eduvision/features/scan/scan_quality.dart';
 import 'package:eduvision/features/scan/scan_screen.dart';
@@ -64,7 +65,11 @@ class FakeProcessor extends Fake implements ScanProcessor {
   bool get isSupported => supported;
 
   @override
-  Future<ScanAnalysis> analyze(String imagePath) async {
+  Future<ScanAnalysis> analyze(
+    String imagePath, {
+    ScanSource source = const ScanSource.camera(),
+  }) async {
+    expect(source, const ScanSource.camera(), reason: 'the camera screen');
     analyzed.add(imagePath);
     return results.removeAt(0)(imagePath);
   }

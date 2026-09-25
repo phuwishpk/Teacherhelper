@@ -1,10 +1,12 @@
 package com.eduvision.eduvision.scan
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /**
  * Mirrors test/scan/page_layout_test.dart: the Dart and Kotlin sides must
@@ -101,5 +103,66 @@ class RegionMathTest {
         assertEquals(0.5, share, 0.05)
         val none = CircleFill.darkShare(px, w, w, 100, 200, PixelCircle(0.0, 0.0, 1.0), 128.0)
         assertEquals(0.0, none, 0.0)
+    }
+
+    @Test
+    fun inkRectDropsTheBorderAndTheNumberGutter() {
+        // 165 x 30 mm show_work area of the A4 frame at 200 DPI (1402 x 2087).
+        val rect = NormRect(11.0 / 178, 84.0 / 265, 165.0 / 178, 30.0 / 265)
+        val outer = RegionMath.cropRect(rect, 1402, 2087, 0.0)
+        val inset = RegionMath.mmToPx(RegionMath.BORDER_INSET_MM).roundToInt()
+        val gutter = RegionMath.mmToPx(RegionMath.NUMBER_GUTTER_MM).roundToInt()
+        assertEquals(9, inset)
+        assertEquals(63, gutter)
+
+        val plain = RegionMath.inkRect(rect, 1402, 2087, inset)
+        assertEquals(RegionMath.inset(outer, inset), plain)
+
+        val numbered = RegionMath.inkRect(rect, 1402, 2087, inset, gutter)
+        assertEquals(outer.left + gutter, numbered.left)
+        assertEquals(plain.top, numbered.top)
+        assertEquals(plain.right, numbered.right)
+        assertEquals(plain.bottom, numbered.bottom)
+
+        // A gutter wider than the area leaves nothing, never a negative width.
+        val tiny = RegionMath.inkRect(NormRect(0.1, 0.1, 0.01, 0.1), 1402, 2087, inset, gutter)
+        assertTrue(tiny.isEmpty)
+        assertEquals(0, tiny.width)
+    }
+
+    @Test
+    fun ruleRunLengthIsAQuarterOfTheWidthWithinLimits() {
+        val cap = RegionMath.mmToPx(RegionMath.MAX_RULE_RUN_MM).roundToInt()
+        assertEquals(157, cap)
+        assertEquals(15, RegionMath.ruleRunLength(40, cap))
+        assertEquals(134, RegionMath.ruleRunLength(536, cap)) // 70 mm box
+        assertEquals(157, RegionMath.ruleRunLength(1281, cap)) // 165 mm lines
+    }
+
+    @Test
+    fun squareMillimetresToPixels() {
+        assertEquals(15.5, RegionMath.mm2ToPx(RegionMath.MIN_SPECK_MM2), 0.01)
+        assertEquals(RegionMath.mmToPx(1.0) * RegionMath.mmToPx(1.0), RegionMath.mm2ToPx(1.0), 1e-9)
+    }
+
+    @Test
+    fun specksAreNotHandwriting() {
+        val kept = InkCoverage.keptLabels(intArrayOf(5000, 12, 16, 900), 15.5)
+        assertArrayEquals(booleanArrayOf(false, false, true, true), kept)
+    }
+
+    @Test
+    fun distanceSourceMarksKeptInkAsZero() {
+        val labels = intArrayOf(0, 1, 1, 2, 0, 3)
+        val kept = booleanArrayOf(false, true, false, true)
+        val source = InkCoverage.distanceSource(labels, kept)!!
+        assertEquals(listOf(255, 0, 0, 255, 255, 0), source.map { it.toInt() and 0xFF })
+        assertNull(InkCoverage.distanceSource(labels, booleanArrayOf(false, false, false, false)))
+    }
+
+    @Test
+    fun coverageRatio() {
+        assertEquals(0.25, InkCoverage.ratio(25, 100), 0.0)
+        assertEquals(0.0, InkCoverage.ratio(0, 0), 0.0)
     }
 }
