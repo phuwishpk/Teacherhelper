@@ -171,4 +171,18 @@ void main() {
       throwsA(isA<DownloadFailed>()),
     );
   });
+
+  test('a folder that cannot be created is a storage failure', () async {
+    final adapter = FakeHttpAdapter((_) async => _bytes(200, [1]));
+    final blocker = File('${dir.path}/blocked');
+    await blocker.writeAsString('a file, not a folder');
+
+    await expectLater(
+      downloaderWith(
+        adapter,
+      ).download(_photo, _token, Directory('${blocker.path}/sub')),
+      throwsA(isA<LocalStorageFailed>()),
+    );
+    expect(adapter.requests, isEmpty, reason: 'nothing is downloaded');
+  });
 }

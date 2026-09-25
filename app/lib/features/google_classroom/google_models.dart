@@ -118,6 +118,13 @@ enum SubmissionImportState {
   /// picks up).
   bool get awaitsScan => this == newSubmission || this == needsRetake;
 
+  /// The phone may download and scan it (again). Not once it was returned
+  /// for a retake (Classroom still holds the photos the teacher rejected,
+  /// until the student hands in new ones) nor once graded (a rescan of
+  /// published work waits for the teacher's confirmation, §9.4).
+  bool get canScan =>
+      this == newSubmission || this == imported || this == needsRetake;
+
   /// The teacher may still send it back for a new photo.
   bool get canReturnForRetake =>
       this == newSubmission || this == imported || this == needsRetake;

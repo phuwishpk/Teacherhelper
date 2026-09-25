@@ -166,6 +166,37 @@ class ClassroomImportState {
 
 const _keep = Object();
 
+/// "ดาวน์โหลดและสแกน" stopped part way because Google Sign-In refused a new
+/// Drive token (the old one expired after about an hour, the teacher closed
+/// the consent screen, or picked another account). Rows done so far keep
+/// their results; running again picks up the rest.
+class ClassroomImportStopped implements Exception {
+  const ClassroomImportStopped(
+    this.cause, {
+    required this.done,
+    required this.total,
+  });
+
+  final GoogleAuthException cause;
+
+  /// Submissions finished before the stop.
+  final int done;
+  final int total;
+
+  /// Thai, for a snackbar.
+  String get message {
+    final head = cause is GoogleAuthCanceled
+        ? 'หยุดดาวน์โหลดและสแกนแล้ว เพราะปิดหน้าลงชื่อเข้าใช้ Google'
+        : 'หยุดดาวน์โหลดและสแกน: ${cause.message}';
+    return total > 1
+        ? '$head (เสร็จ $done จาก $total งาน กดดาวน์โหลดอีกครั้งเพื่อทำต่อ)'
+        : head;
+  }
+
+  @override
+  String toString() => 'ClassroomImportStopped($cause, $done/$total)';
+}
+
 /// Runs [ClassroomImporter] for the submissions screen of one assignment.
 /// Kept alive while a download runs, so leaving the screen does not stop it;
 /// pictures still waiting for a blur decision are deleted on dispose.
@@ -195,7 +226,9 @@ class ClassroomImportController extends Notifier<ClassroomImportState> {
   ClassroomImporter get _importer => ref.read(classroomImporterProvider);
 
   /// Downloads and scans [rows] one after the other. Throws
-  /// [GoogleAuthException] when no Drive token could be had (nothing ran).
+  /// [GoogleAuthException] when no Drive token could be had (nothing ran),
+  /// [ClassroomImportStopped] when a new token was refused part way, and
+  /// rethrows anything else; a row never stays "running" after an error.
   Future<void> run(List<GoogleSubmission> rows, {String? expectedEmail}) async {
     if (rows.isEmpty || state.running) return;
     final link = ref.keepAlive();
@@ -216,22 +249,44 @@ class ClassroomImportController extends Notifier<ClassroomImportState> {
             batch: rows.length > 1 ? '${i + 1}/${rows.length}' : null,
           ),
         );
-        final result = await _importer.importSubmission(
-          row,
-          assignmentId: assignmentId,
-          session: session,
-          onProgress: (status) {
-            if (!ref.mounted) return;
+        final SubmissionImport result;
+        try {
+          result = await _importer.importSubmission(
+            row,
+            assignmentId: assignmentId,
+            session: session,
+            onProgress: (status) {
+              if (!ref.mounted) return;
+              _emit(
+                state.withRow(row.id, ImportRow(running: true, status: status)),
+              );
+            },
+          );
+        } catch (_) {
+          if (ref.mounted) {
             _emit(
-              state.withRow(row.id, ImportRow(running: true, status: status)),
+              state.withRow(
+                row.id,
+                ImportRow(
+                  result: SubmissionImport(
+                    submissionId: row.id,
+                    outcomes: const [],
+                    interruption: 'ดาวน์โหลดหรือสแกนไม่สำเร็จ ลองอีกครั้ง',
+                  ),
+                ),
+              ),
             );
-          },
-        );
+          }
+          rethrow;
+        }
         if (!ref.mounted) {
           await _importer.discardPending(result.outcomes);
           return;
         }
         _emit(state.withRow(row.id, ImportRow(result: result)));
+        if (result.authFailure case final failure?) {
+          throw ClassroomImportStopped(failure, done: i, total: rows.length);
+        }
       }
     } finally {
       if (ref.mounted) _emit(state.withBatch(null));

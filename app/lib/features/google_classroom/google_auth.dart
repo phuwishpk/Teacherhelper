@@ -94,8 +94,20 @@ class PluginGoogleAuth implements GoogleAuthGateway {
   Future<void>? _initialized;
   GoogleSignInAccount? _account;
 
-  Future<void> _ready() =>
-      _initialized ??= _signIn.initialize(serverClientId: serverClientId);
+  /// `initialize` once. A failed attempt (Play services busy, no network)
+  /// is not kept, so the next tap tries again instead of failing until the
+  /// app restarts.
+  Future<void> _ready() async {
+    final attempt = _initialized ??= Future.sync(
+      () => _signIn.initialize(serverClientId: serverClientId),
+    );
+    try {
+      await attempt;
+    } catch (_) {
+      if (identical(_initialized, attempt)) _initialized = null;
+      rethrow;
+    }
+  }
 
   @override
   Future<GoogleServerAuth> requestServerAuthCode() => _guard(() async {
@@ -179,9 +191,12 @@ class PluginGoogleAuth implements GoogleAuthGateway {
   static bool _sameEmail(String actual, String? expected) =>
       expected == null || actual.toLowerCase() == expected.toLowerCase();
 
+  /// Every failure leaves as a [GoogleAuthException] with a Thai message.
   static Future<T> _guard<T>(Future<T> Function() call) async {
     try {
       return await call();
+    } on GoogleAuthException {
+      rethrow;
     } on GoogleSignInException catch (e) {
       throw switch (e.code) {
         GoogleSignInExceptionCode.canceled ||
@@ -198,6 +213,10 @@ class PluginGoogleAuth implements GoogleAuthGateway {
           e.description,
         ),
       };
+    } catch (e) {
+      // PlatformException from the plugin, a missing Play services, ...
+      debugPrint('Google Sign-In failed: $e');
+      throw GoogleAuthFailed('เข้าสู่ระบบ Google ไม่สำเร็จ ลองอีกครั้ง', '$e');
     }
   }
 }

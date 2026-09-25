@@ -23,8 +23,12 @@ import kotlin.math.roundToInt
  */
 class AttachmentRasterizer(private val maxPdfPages: Int = MAX_PDF_PAGES) {
 
-    /** Writes the pages into [outDir] (created here) and returns their paths. */
-    fun rasterize(input: File, mimeType: String, outDir: File): List<String> {
+    /**
+     * Writes the pages into [outDir] (created here) and returns their paths
+     * with the file's page count, so a PDF cut at [maxPdfPages] is not
+     * silently shortened.
+     */
+    fun rasterize(input: File, mimeType: String, outDir: File): RasterizedAttachment {
         if (!input.isFile) throw FlutterError("image_unreadable", "Missing file ${input.name}")
         val kind = AttachmentKind.detect(headerOf(input), mimeType)
         if (kind == AttachmentKind.UNSUPPORTED) {
@@ -35,11 +39,11 @@ class AttachmentRasterizer(private val maxPdfPages: Int = MAX_PDF_PAGES) {
         }
         return when (kind) {
             AttachmentKind.PDF -> renderPdf(input, outDir)
-            else -> listOf(decodeImage(input, kind, outDir))
+            else -> RasterizedAttachment(listOf(decodeImage(input, kind, outDir)), 1L)
         }
     }
 
-    private fun renderPdf(input: File, outDir: File): List<String> {
+    private fun renderPdf(input: File, outDir: File): RasterizedAttachment {
         val fd = try {
             ParcelFileDescriptor.open(input, ParcelFileDescriptor.MODE_READ_ONLY)
         } catch (e: IOException) {
@@ -55,7 +59,7 @@ class AttachmentRasterizer(private val maxPdfPages: Int = MAX_PDF_PAGES) {
         renderer.use {
             if (it.pageCount == 0) throw FlutterError("pdf_unreadable", "The PDF has no pages")
             val out = ArrayList<String>()
-            for (index in 0 until min(it.pageCount, maxPdfPages)) {
+            for (index in 0 until RasterMath.renderedPageCount(it.pageCount, maxPdfPages)) {
                 it.openPage(index).use { page ->
                     val size = RasterMath.pdfPagePixels(page.width, page.height)
                     val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
@@ -69,7 +73,7 @@ class AttachmentRasterizer(private val maxPdfPages: Int = MAX_PDF_PAGES) {
                     }
                 }
             }
-            return out
+            return RasterizedAttachment(out, it.pageCount.toLong())
         }
     }
 
@@ -166,6 +170,9 @@ object RasterMath {
     const val PDF_MAX_LONG_SIDE = 3400
 
     data class Size(val width: Int, val height: Int)
+
+    /** PDF pages rendered: the first [maxPages]; the caller reports the rest. */
+    fun renderedPageCount(pageCount: Int, maxPages: Int): Int = max(0, min(pageCount, maxPages))
 
     /** Page size in points (1/72 inch) -> pixels at [PDF_DPI], capped. */
     fun pdfPagePixels(widthPt: Int, heightPt: Int): Size {

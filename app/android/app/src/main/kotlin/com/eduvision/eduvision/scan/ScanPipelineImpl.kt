@@ -81,7 +81,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         }
     }
 
-    override suspend fun rasterize(inputPath: String, mimeType: String): List<String> = withContext(dispatcher) {
+    override suspend fun rasterize(inputPath: String, mimeType: String): RasterizedAttachment = withContext(dispatcher) {
         // No OpenCV here: PdfRenderer / ImageDecoder only. Output goes to
         // the same cache folder as the crops, so stale pages are swept too.
         try {

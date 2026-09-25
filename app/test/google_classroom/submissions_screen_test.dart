@@ -46,6 +46,9 @@ class _FakeImporter extends Fake implements ClassroomImporter {
   final discarded = <ImageOutcome>[];
   GoogleAuthException? authError;
 
+  /// Scripted per row; an [Error] or [Exception] is thrown.
+  final results = <int, Object>{};
+
   @override
   bool get isSupported => true;
 
@@ -65,6 +68,14 @@ class _FakeImporter extends Fake implements ClassroomImporter {
   }) async {
     imported.add(submission.id);
     onProgress?.call('กำลังดาวน์โหลด…');
+    switch (results[submission.id]) {
+      case final SubmissionImport result:
+        return result;
+      case final Object error?:
+        throw error;
+      case null:
+        break;
+    }
     return switch (submission.id) {
       31 => SubmissionImport(
         submissionId: 31,
@@ -189,6 +200,23 @@ Future<(FakeGoogleRepository, _FakeImporter)> _pump(
   return (repo, importer);
 }
 
+ButtonStyleButton _button(WidgetTester tester, String key) =>
+    tester.widget<ButtonStyleButton>(find.byKey(ValueKey(key)));
+
+GoogleSubmission _row(int id, SubmissionImportState state) => GoogleSubmission(
+  id: id,
+  googleSubmissionId: 'Cg$id',
+  state: state,
+  student: SubmissionStudent(id: 4500 + id, name: 'นักเรียน $id'),
+  attachments: const [
+    GoogleAttachment(
+      driveFileId: 'x',
+      title: 'IMG.jpg',
+      mimeType: 'image/jpeg',
+    ),
+  ],
+);
+
 /// DESIGN §18.7: the submissions list with states, download-and-scan (all
 /// or one), the result of every picture and "ตีกลับให้ถ่ายใหม่".
 void main() {
@@ -207,6 +235,12 @@ void main() {
     expect(find.textContaining('ProjectPermissionDenied'), findsOneWidget);
     expect(find.text('ดาวน์โหลดและสแกนทั้งหมด (2)'), findsOneWidget);
     expect(find.text('ส่งคะแนนกลับอีกครั้ง (1)'), findsOneWidget);
+    expect(_button(tester, 'scan_31').onPressed, isNotNull);
+    expect(
+      _button(tester, 'scan_32').onPressed,
+      isNull,
+      reason: 'grade_failed work was already graded and published',
+    );
   });
 
   testWidgets('download-and-scan all shows the result of each picture', (
@@ -330,5 +364,125 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(importer.discarded.whereType<ImageRejected>(), hasLength(1));
+  });
+
+  testWidgets('returned and graded rows cannot be scanned again', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      google: FakeGoogleRepository(
+        submissionRows: [
+          _row(41, SubmissionImportState.returnedForRetake),
+          _row(42, SubmissionImportState.graded),
+          _row(43, SubmissionImportState.imported),
+          _row(44, SubmissionImportState.needsRetake),
+        ],
+      ),
+    );
+    expect(_button(tester, 'scan_41').onPressed, isNull);
+    expect(_button(tester, 'scan_42').onPressed, isNull);
+    expect(_button(tester, 'scan_43').onPressed, isNotNull);
+    expect(_button(tester, 'scan_44').onPressed, isNotNull);
+    expect(
+      find.textContaining('รอนักเรียนส่งรูปใหม่ใน Classroom'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a sign-in refused part way stops the batch and frees the '
+      'buttons', (tester) async {
+    final (_, importer) = await _pump(tester);
+    importer.results[31] = SubmissionImport(
+      submissionId: 31,
+      outcomes: const [
+        ImageQueued(
+          'IMG_1.jpg',
+          clientScanId: 'scan-1',
+          page: 1,
+          student: 'ด.ญ. สมหญิง (เลขที่ 12)',
+        ),
+      ],
+      interruption: const GoogleAuthCanceled().message,
+      authFailure: const GoogleAuthCanceled(),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('import_all')));
+    await tester.pumpAndSettle();
+
+    expect(importer.imported, [31], reason: 'row 33 is not started');
+    expect(
+      find.text(
+        'หยุดดาวน์โหลดและสแกนแล้ว เพราะปิดหน้าลงชื่อเข้าใช้ Google '
+        '(เสร็จ 0 จาก 2 งาน กดดาวน์โหลดอีกครั้งเพื่อทำต่อ)',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('ยังไม่เสร็จ: ${const GoogleAuthCanceled().message}'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('ผ่าน: ด.ญ. สมหญิง (เลขที่ 12) หน้า 1 (อยู่ในคิวอัปโหลด)'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(_button(tester, 'import_all').onPressed, isNotNull);
+    expect(_button(tester, 'scan_31').onPressed, isNotNull);
+  });
+
+  testWidgets('an unexpected error does not leave the row spinning', (
+    tester,
+  ) async {
+    final (_, importer) = await _pump(tester);
+    importer.results[33] = StateError('plugin gone');
+
+    await tester.tap(find.byKey(const ValueKey('scan_33')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('ยังไม่เสร็จ: ดาวน์โหลดหรือสแกนไม่สำเร็จ ลองอีกครั้ง'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(_button(tester, 'scan_33').onPressed, isNotNull);
+  });
+
+  testWidgets('unmatched spare sheets and pages already queued are explained', (
+    tester,
+  ) async {
+    final (_, importer) = await _pump(tester);
+    importer.results[33] = const SubmissionImport(
+      submissionId: 33,
+      outcomes: [
+        ImageNeedsMatch('IMG_3.jpg'),
+        ImageAlreadyQueued(
+          'IMG_4.jpg',
+          page: 2,
+          student: 'ด.ช. สมชาย (เลขที่ 13)',
+        ),
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('scan_33')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('ยังสแกนไม่ได้: ใบงานสำรองไม่มีชื่อนักเรียน'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'ข้าม: ด.ช. สมชาย (เลขที่ 13) หน้า 2 รออยู่ในคิวอัปโหลดแล้ว ไม่ได้เพิ่มซ้ำ',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'สแกนแล้ว 0 หน้า ข้าม 1 หน้าที่อยู่ในคิวแล้ว '
+        'มี 1 งานที่ต้องจับคู่นักเรียนก่อน',
+      ),
+      findsOneWidget,
+    );
   });
 }

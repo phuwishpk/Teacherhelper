@@ -11,11 +11,13 @@ import 'package:eduvision/features/google_classroom/attachment_downloader.dart';
 import 'package:eduvision/features/google_classroom/classroom_importer.dart';
 import 'package:eduvision/features/google_classroom/google_auth.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/scan/offline_cache_repository.dart';
 import 'package:eduvision/features/scan/scan_file_store.dart';
 import 'package:eduvision/features/scan/scan_processor.dart';
 import 'package:eduvision/features/upload_queue/scan_queue_repository.dart';
 import 'package:eduvision/platform/attachment_rasterizer.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -23,14 +25,24 @@ import '../helpers/fake_http_adapter.dart';
 import '../scan/scan_fixtures.dart';
 
 class _Assignments extends Fake implements AssignmentsRepository {
+  /// The server cannot be reached: scans wait as `needs_layout`.
+  bool offline = false;
+
   @override
-  Future<List<LayoutVersion>> layouts(int assignmentId, {int? version}) async =>
-      [
-        LayoutVersion(
-          version: 2,
-          pages: [sampleLayoutPage(page: 1), sampleLayoutPage(page: 2)],
-        ),
-      ];
+  Future<List<LayoutVersion>> layouts(int assignmentId, {int? version}) async {
+    if (offline) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/assignments/$assignmentId'),
+        type: DioExceptionType.connectionError,
+      );
+    }
+    return [
+      LayoutVersion(
+        version: 2,
+        pages: [sampleLayoutPage(page: 1), sampleLayoutPage(page: 2)],
+      ),
+    ];
+  }
 
   @override
   Future<Assignment> get(int id) async =>
@@ -51,9 +63,13 @@ class _FakeAuth implements GoogleAuthGateway {
   final invalidated = <String>[];
   final emails = <String?>[];
 
+  /// Thrown instead of the second token (the renewal after a 401).
+  GoogleAuthException? renewalError;
+
   @override
   Future<DriveAccessToken> driveAccessToken({String? expectedEmail}) async {
     emails.add(expectedEmail);
+    if (emails.length > 1 && renewalError != null) throw renewalError!;
     issued++;
     return DriveAccessToken(value: 'token-$issued', email: 'kru@school.ac.th');
   }
@@ -76,6 +92,9 @@ class _FakeRasterizer implements AttachmentRasterizer {
 
   final Directory outDir;
   int pages = 2;
+
+  /// Pages in the file; more than [pages] when the plugin cut a long PDF.
+  int? totalPages;
   Object? error;
   final calls = <(String, String)>[];
 
@@ -83,22 +102,23 @@ class _FakeRasterizer implements AttachmentRasterizer {
   bool get isSupported => true;
 
   @override
-  Future<List<String>> rasterize(String path, String mimeType) async {
+  Future<RasterizedPages> rasterize(String path, String mimeType) async {
     calls.add((path, mimeType));
     if (error case final e?) throw e;
     final dir = await Directory(
       p.join(outDir.path, 'scan_pipeline', 'raster${calls.length}'),
     ).create(recursive: true);
-    return [
+    return RasterizedPages([
       for (var i = 1; i <= pages; i++)
         (await File(
           p.join(dir.path, 'page_$i.jpg'),
         ).writeAsBytes([0xFF, 0xD8])).path,
-    ];
+    ], totalPages: totalPages);
   }
 }
 
 GoogleSubmission _submission({
+  int id = 31,
   List<GoogleAttachment> attachments = const [
     GoogleAttachment(
       driveFileId: 'f1',
@@ -112,8 +132,8 @@ GoogleSubmission _submission({
     studentNumber: 12,
   ),
 }) => GoogleSubmission(
-  id: 31,
-  googleSubmissionId: 'Cg4ItestSub',
+  id: id,
+  googleSubmissionId: 'Cg4ItestSub$id',
   state: SubmissionImportState.newSubmission,
   student: student,
   attachments: attachments,
@@ -130,18 +150,22 @@ void main() {
   late _FakeAuth auth;
   late FakeHttpAdapter drive;
   late ClassroomImporter importer;
+  late _Assignments assignments;
   late int queuedSignals;
   late Directory workRoot;
   var ids = 0;
   final served = <String>[];
   int? failNextWith;
 
+  /// Drive answers request number n (1-based) with this status.
+  final failOn = <int, int>{};
+
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('classroom_importer_test');
     workRoot = Directory(p.join(tmp.path, 'classroom_import'));
     db = AppDatabase(NativeDatabase.memory());
     queue = ScanQueueRepository(db);
-    final assignments = _Assignments();
+    assignments = _Assignments();
     pipeline = FakeScanPipeline(cropDir: Directory(p.join(tmp.path, 'cache')));
     rasterizer = _FakeRasterizer(Directory(p.join(tmp.path, 'cache')));
     auth = _FakeAuth();
@@ -149,9 +173,10 @@ void main() {
     ids = 0;
     served.clear();
     failNextWith = null;
+    failOn.clear();
     drive = FakeHttpAdapter((options) async {
       served.add(options.headers['Authorization'] as String);
-      if (failNextWith case final status?) {
+      if (failNextWith ?? failOn[served.length] case final status?) {
         failNextWith = null;
         return jsonResponse(status, {'error': status});
       }
@@ -224,7 +249,7 @@ void main() {
       final scan = (await queue.listAll()).single;
       expect(scan.clientScanId, outcome.clientScanId);
       expect(scan.meta['source'], 'classroom');
-      expect(scan.meta['google_submission_id'], 'Cg4ItestSub');
+      expect(scan.meta['google_submission_id'], 'Cg4ItestSub31');
       expect(scan.meta['qr'], sampleQr);
       expect(queuedSignals, 1);
       expect(progress, isNotEmpty);
@@ -237,7 +262,10 @@ void main() {
   );
 
   test('a PDF is rasterized page by page and the original deleted', () async {
-    pipeline.detection = goodDetection();
+    pipeline.nextDetections.addAll([
+      goodDetection(),
+      goodDetection(qr: 'EV1.123.4567.2.2.K7Q3M2PA'),
+    ]);
     final result = await run(
       _submission(
         attachments: const [
@@ -341,7 +369,7 @@ void main() {
     expect(outcome.identityNote, isNull);
     expect(
       (await queue.listAll()).single.meta['google_submission_id'],
-      'Cg4ItestSub',
+      'Cg4ItestSub31',
     );
   });
 
@@ -403,5 +431,264 @@ void main() {
     expect(result.outcomes, isEmpty);
     expect(result.hasProblems, isTrue);
     expect(result.problems, ['ไม่มีไฟล์แนบในงานที่ส่ง']);
+  });
+
+  test(
+    'a PDF cut at the page limit says which pages were not scanned',
+    () async {
+      rasterizer.totalPages = 25;
+      pipeline.nextDetections.addAll([
+        goodDetection(),
+        goodDetection(qr: 'EV1.123.4567.2.2.K7Q3M2PA'),
+      ]);
+      final result = await run(
+        _submission(
+          attachments: const [
+            GoogleAttachment(
+              driveFileId: 'long',
+              title: 'ยาว.pdf',
+              mimeType: 'application/pdf',
+            ),
+          ],
+        ),
+      );
+      expect(result.outcomes.map((o) => o.label), [
+        'ยาว.pdf หน้า 1',
+        'ยาว.pdf หน้า 2',
+        'ยาว.pdf หน้า 3–25',
+      ]);
+      final note = result.outcomes.last as AttachmentFailed;
+      expect(note.reason, contains('PDF มี 25 หน้า'));
+      expect(note.reason, contains('หน้าที่ 3–25 ยังไม่ได้สแกน'));
+      expect(result.hasProblems, isTrue);
+      expect(result.problems.single, note.reason);
+      expect(await queue.listAll(), hasLength(2));
+    },
+  );
+
+  group('a spare worksheet from an unmatched account', () {
+    test('is not queued and asks the teacher to match first', () async {
+      pipeline.detection = goodDetection(qr: 'EV1.123.0.1.2.SPARE');
+      final result = await run(_submission(student: null));
+      final outcome = result.outcomes.single as ImageNeedsMatch;
+      expect(outcome.reason, contains('จับคู่นักเรียนที่หน้าห้องเรียน'));
+      expect(result.needsMatchCount, 1);
+      expect(
+        result.hasProblems,
+        isFalse,
+        reason: 'nothing for the student to redo',
+      );
+      expect(await queue.listAll(), isEmpty);
+      expect(queuedSignals, 0);
+      expect(
+        await Directory(
+          p.join(tmp.path, 'cache', 'scan_pipeline'),
+        ).list(recursive: true).where((e) => e is File).isEmpty,
+        isTrue,
+        reason: 'the crops are deleted',
+      );
+    });
+
+    test('is not kept for later either when the layout is offline', () async {
+      assignments.offline = true;
+      pipeline.detection = goodDetection(qr: 'EV1.123.0.1.2.SPARE');
+      final result = await run(_submission(student: null));
+      expect(result.outcomes.single, isA<ImageNeedsMatch>());
+      expect(await queue.listAll(), isEmpty);
+    });
+
+    test('a named worksheet from that account is kept by its QR', () async {
+      final result = await run(_submission(student: null));
+      final outcome = result.outcomes.single as ImageQueued;
+      expect(outcome.student, 'ด.ญ. สมหญิง (เลขที่ 12)');
+      expect(await queue.listAll(), hasLength(1));
+    });
+  });
+
+  test(
+    'a page still waiting in the upload queue is not queued twice',
+    () async {
+      final first = await run(_submission());
+      expect(first.outcomes.single, isA<ImageQueued>());
+
+      // "ดาวน์โหลดและสแกน" again before the upload finished.
+      final again = await run(_submission());
+      final skipped = again.outcomes.single as ImageAlreadyQueued;
+      expect(skipped.page, 1);
+      expect(skipped.student, 'ด.ญ. สมหญิง (เลขที่ 12)');
+      expect(again.hasProblems, isFalse);
+      expect(again.queuedCount, 0);
+      expect(await queue.listAll(), hasLength(1));
+      expect(queuedSignals, 1);
+    },
+  );
+
+  test('a phone that cannot store the file says so per file', () async {
+    await File(workRoot.path).create(recursive: true);
+    final result = await run(_submission());
+    expect(
+      (result.outcomes.single as AttachmentFailed).reason,
+      const LocalStorageFailed().message,
+    );
+    expect(served, isEmpty);
+  });
+
+  test(
+    'a refused token renewal stops the import and keeps what was done',
+    () async {
+      auth.renewalError = const GoogleAuthCanceled();
+      failOn[2] = 401;
+      final result = await run(
+        _submission(
+          attachments: const [
+            GoogleAttachment(
+              driveFileId: 'a',
+              title: 'a.jpg',
+              mimeType: 'image/jpeg',
+            ),
+            GoogleAttachment(
+              driveFileId: 'b',
+              title: 'b.jpg',
+              mimeType: 'image/jpeg',
+            ),
+            GoogleAttachment(
+              driveFileId: 'c',
+              title: 'c.jpg',
+              mimeType: 'image/jpeg',
+            ),
+          ],
+        ),
+      );
+      expect(result.outcomes.single, isA<ImageQueued>());
+      expect(result.isComplete, isFalse);
+      expect(result.interruption, const GoogleAuthCanceled().message);
+      expect(result.authFailure, isA<GoogleAuthCanceled>());
+      expect(result.hasProblems, isFalse, reason: 'not the student\'s problem');
+      expect(result.problems, isEmpty);
+      expect(auth.invalidated, ['token-1']);
+      expect(served, hasLength(2), reason: 'the third file is not requested');
+      expect(await queue.listAll(), hasLength(1));
+      expect(
+        await Directory(p.join(workRoot.path, 'submission_31')).exists(),
+        isFalse,
+      );
+    },
+  );
+
+  test('an unexpected error deletes pictures kept for a decision', () async {
+    pipeline.detection = goodDetection(blur: 5);
+    rasterizer.error = StateError('plugin gone');
+    await expectLater(
+      run(
+        _submission(
+          attachments: const [
+            GoogleAttachment(
+              driveFileId: 'a',
+              title: 'a.jpg',
+              mimeType: 'image/jpeg',
+            ),
+            GoogleAttachment(
+              driveFileId: 'b',
+              title: 'b.pdf',
+              mimeType: 'application/pdf',
+            ),
+          ],
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      await Directory(p.join(workRoot.path, 'submission_31')).exists(),
+      isFalse,
+      reason: 'the blurry a.jpg kept for a decision is gone too',
+    );
+  });
+
+  group('ClassroomImportController', () {
+    late ProviderContainer container;
+
+    setUp(() {
+      container = ProviderContainer(
+        overrides: [classroomImporterProvider.overrideWithValue(importer)],
+      );
+      container.listen(classroomImportProvider(123), (_, _) {});
+    });
+
+    tearDown(() => container.dispose());
+
+    ClassroomImportController controller() =>
+        container.read(classroomImportProvider(123).notifier);
+
+    ClassroomImportState state() =>
+        container.read(classroomImportProvider(123));
+
+    test(
+      'a refused token renewal stops the batch without a row left running',
+      () async {
+        auth.renewalError = const GoogleAuthFailed(
+          'เข้าสู่ระบบ Google ไม่สำเร็จ',
+        );
+        failOn[1] = 401;
+        await expectLater(
+          controller().run([
+            _submission(id: 31),
+            _submission(id: 32),
+          ], expectedEmail: 'kru@school.ac.th'),
+          throwsA(
+            isA<ClassroomImportStopped>()
+                .having((e) => e.done, 'done', 0)
+                .having((e) => e.total, 'total', 2)
+                .having((e) => e.message, 'message', contains('เสร็จ 0 จาก 2')),
+          ),
+        );
+        expect(state().running, isFalse);
+        expect(state().batch, isNull);
+        final row = state().rows[31]!;
+        expect(row.running, isFalse);
+        expect(row.result!.interruption, 'เข้าสู่ระบบ Google ไม่สำเร็จ');
+        expect(state().rows.containsKey(32), isFalse, reason: 'batch stopped');
+        expect(served, hasLength(1));
+      },
+    );
+
+    test('an unexpected error leaves the row stopped with a reason', () async {
+      rasterizer.error = StateError('plugin gone');
+      await expectLater(
+        controller().run([
+          _submission(
+            attachments: const [
+              GoogleAttachment(
+                driveFileId: 'p',
+                title: 'b.pdf',
+                mimeType: 'application/pdf',
+              ),
+            ],
+          ),
+        ]),
+        throwsA(isA<StateError>()),
+      );
+      expect(state().running, isFalse);
+      expect(state().rows[31]!.result!.interruption, contains('ไม่สำเร็จ'));
+
+      // The buttons work again: a new run goes through.
+      rasterizer.error = null;
+      pipeline.nextDetections.addAll([
+        goodDetection(),
+        goodDetection(qr: 'EV1.123.4567.2.2.K7Q3M2PA'),
+      ]);
+      await controller().run([
+        _submission(
+          attachments: const [
+            GoogleAttachment(
+              driveFileId: 'p',
+              title: 'b.pdf',
+              mimeType: 'application/pdf',
+            ),
+          ],
+        ),
+      ]);
+      expect(state().rows[31]!.result!.queuedCount, 2);
+      expect(state().rows[31]!.result!.isComplete, isTrue);
+    });
   });
 }

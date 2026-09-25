@@ -27,14 +27,30 @@ class RasterizeException implements Exception {
   String toString() => 'RasterizeException($code, $detail)';
 }
 
+/// The JPEG pages made from one attachment.
+class RasterizedPages {
+  const RasterizedPages(this.paths, {int? totalPages})
+    : totalPages = totalPages ?? paths.length;
+
+  /// One per rendered page, in the pipeline's cache folder.
+  final List<String> paths;
+
+  /// Pages in the file. A PDF longer than the plugin's limit (20) is cut,
+  /// so this can be more than [paths].
+  final int totalPages;
+
+  /// Pages of the file that were not rendered.
+  int get skippedPages =>
+      totalPages > paths.length ? totalPages - paths.length : 0;
+}
+
 /// Turns a Google Classroom attachment (PDF, HEIC, WebP, ...) into JPEG
 /// pages for the scan pipeline (DESIGN §18.2): `rasterize` of the Kotlin
 /// plugin (PdfRenderer / ImageDecoder).
 abstract class AttachmentRasterizer {
   bool get isSupported;
 
-  /// JPEG paths, one per page, in the pipeline's cache folder.
-  Future<List<String>> rasterize(String path, String mimeType);
+  Future<RasterizedPages> rasterize(String path, String mimeType);
 }
 
 class NativeAttachmentRasterizer implements AttachmentRasterizer {
@@ -47,9 +63,10 @@ class NativeAttachmentRasterizer implements AttachmentRasterizer {
   bool get isSupported => true;
 
   @override
-  Future<List<String>> rasterize(String path, String mimeType) async {
+  Future<RasterizedPages> rasterize(String path, String mimeType) async {
     try {
-      return await _api.rasterize(path, mimeType);
+      final result = await _api.rasterize(path, mimeType);
+      return RasterizedPages(result.pagePaths, totalPages: result.totalPages);
     } on PlatformException catch (e) {
       throw RasterizeException(e.code, e.message);
     }
@@ -63,7 +80,7 @@ class UnsupportedAttachmentRasterizer implements AttachmentRasterizer {
   bool get isSupported => false;
 
   @override
-  Future<List<String>> rasterize(String path, String mimeType) =>
+  Future<RasterizedPages> rasterize(String path, String mimeType) =>
       Future.error(const RasterizeException('unsupported'));
 }
 
