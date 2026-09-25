@@ -43,6 +43,12 @@ class AssignmentPolicy
         return self::owns($user, $assignment);
     }
 
+    /** Upload scanned pages of this assignment's worksheets (POST /scans). */
+    public function scan(User $user, Assignment $assignment): bool
+    {
+        return self::owns($user, $assignment);
+    }
+
     public static function owns(User $user, Assignment $assignment): bool
     {
         return self::isSchoolTeacher($user)

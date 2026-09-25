@@ -86,6 +86,24 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 ใบงาน: `LayoutBuilder` วัดความสูงโจทย์จากการวาดจริงของ mPDF (ฟอนต์ Sarabun ใน `resources/fonts`, ตัดคำไทยด้วยพจนานุกรม) แล้ว `WorksheetPdfRenderer` วาดตาม layout เดิมทุกคนและตรวจซ้ำว่าตรงกับ layout ที่เก็บไว้ `RenderWorksheetsJob` วาดครั้งละ `WORKSHEET_BATCH_SIZE` คน (ค่าเริ่มต้น 10) แล้ว `MergeWorksheetsJob` รวมไฟล์ ทั้งสองเขียนเวลาลง log (`worksheets.render_batch`, `worksheets.merge`) ไว้วัดบน hosting ตาม §5.5 ในเครื่อง 40 คนใช้ราว 0.5–1.2 วินาทีรวมทุก job
 
+## สแกนใบงาน (DESIGN §9.4, §7.3)
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| POST | `/scans` | ครู | multipart: `meta` (JSON ตาม §9.4), `page` (WebP) และ crop WebP หนึ่งไฟล์ต่อชื่อที่อ้างใน `meta.regions[].file` / `final_file` ตอบ `201 {scan_id, submission_id, state: "active"}`, `202 {…, state: "pending_confirm"}` (submission เผยแพร่แล้ว) หรือ `200` body เดิมเมื่อ `client_scan_id` ซ้ำ (state ปัจจุบันของ scan) ถูกปฏิเสธ: `422 qr_invalid` (ลายเซ็นผิด/ไม่พบการบ้าน), `422 layout_unknown`, `422 page_mismatch` (หน้าไม่อยู่ใน layout หรือชุดช่องคำตอบไม่ตรงกับหน้านั้น), `422 student_unknown` (ไม่อยู่ในห้อง หรือใบงานสำรอง `student_id = 0` จากกล้อง §18.3), `422 validation_failed` (meta/ไฟล์), `403` (ไม่ใช่ครูของห้อง), `413 too_many_files` (PHP `max_file_uploads` ต่ำไป), `503 qr_key_missing` |
+| POST | `/scans/{id}/confirm-replace` | ครู | ยืนยันใช้สแกนใหม่แทนหน้าที่เผยแพร่แล้ว → `200 {…, state: "active"}` เรียกซ้ำได้ `409 scan_superseded` / `scan_files_missing` |
+| GET | `/scans/{id}/page` | ครู | ภาพหน้าเต็ม `image/webp` (`410 image_purged` หลังเผยแพร่และ purge แล้ว) |
+| GET | `/responses/{id}/crop?part=main\|final` | ครู / นักเรียนเจ้าของ (หลังเผยแพร่) | ภาพ crop ของข้อ `final` = กรอบคำตอบสุดท้ายของ show_work (`410 image_purged` หลัง `crop_retention_until`) |
+
+- **ขั้นตอน** (`App\Domain\Scans\ScanIngestor`): ตรวจ QR ด้วย `QrSigner` → สิทธิ์ครู → layout เวอร์ชันตาม QR → หน้าและชุดช่องคำตอบต้องตรงกับ layout → นักเรียนอยู่ในห้อง → ไฟล์ WebP ไม่เกิน `SCAN_MAX_PAGE_KB` / `SCAN_MAX_CROP_KB` จากนั้นทำใน transaction ที่ล็อกแถว submission
+- **กติกาสแกนซ้ำ** (key = การบ้าน, นักเรียน, หน้า): ยังไม่เผยแพร่ → สแกนใหม่ `active` ของเก่า `superseded` และ response ของหน้านั้น (แถวเดิม, id เดิม) ถูกล้างผลตรวจแล้วตรวจใหม่ เผยแพร่แล้ว → `pending_confirm` เก็บ crop + `regions.json` ไว้ที่ `scans/{school}/{assignment}/pending/{scan}/` จนครูยืนยัน แล้ว submission กลับไป `grading` (ล้าง `published_at`) ทุกคะแนนที่ถูกแทนบันทึก `score_events.action = rescan`
+- **ตรวจตอนรับ**: ปรนัยให้คะแนนทันทีจากค่าการฝน (§11.6, `App\Domain\Grading\McqGrader`) พร้อม `review_priority` ตาม §11.8 (`ReviewPriority`) และ `score_events` `ai_scored` (actor `system`) ข้ออื่นเป็น `queued` แล้ว dispatch `GradeScanJob` ลง queue `grading` (**ตอนนี้เป็น stub** ขั้น B4 เติม Gemini + fuzzy) ข้อที่ชนิดคำถามถูกแก้หลังพิมพ์จนไม่ตรงกับช่องบนกระดาษเป็น `manual` (`fuzzy_trace.manual_reason`)
+- **สถานะ submission** (`SubmissionStatus::refresh`): `awaiting_scan` → `grading` (มีข้อ queued/extracted/failed) → `needs_review` → `reviewed` (ครูตรวจครบ) → `published` (ตั้งโดยการเผยแพร่เท่านั้น)
+- ลบคำถามที่มีคำตอบสแกนแล้วไม่ได้ (`409 question_has_responses`)
+- **PHP บน server** ต้องรับ request ได้: `upload_max_filesize` ≥ 8M, `post_max_size` ≥ 16M, `max_file_uploads` ≥ 100 (หน้าหนึ่งมีได้ถึง 1 + 2 × จำนวนข้อ ไฟล์ที่เกิน PHP ทิ้งเงียบๆ)
+
+ทดสอบในเครื่องด้วย curl ต้องรัน server ที่ตั้ง ini เหล่านี้ เช่น `cd public && php -d max_file_uploads=100 -d upload_max_filesize=8M -d post_max_size=16M -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php`
+
 ## Queue และ heartbeat
 
 Plesk ไม่มี process ค้าง จึงใช้ Scheduled Task ทุก 1 นาทีเรียก
@@ -104,7 +122,10 @@ Scheduled Task ทุกวัน 02:00 เรียก
 php artisan eduvision:purge-images
 ```
 
-ตอนนี้ลบ PDF ใบงาน (มีชื่อนักเรียน) ที่สร้างมาเกิน 30 วัน: แถวใน `worksheet_prints` ยังอยู่ แต่เปลี่ยนเป็น `failed` พร้อม `error` "ไฟล์ใบงานถูกลบแล้วเพราะเก็บไว้ครบ 30 วัน กรุณาสั่งพิมพ์ใหม่" และไฟล์ใต้ `worksheets/` ที่ไม่มีแถวชี้ถึงแต่เก่ากว่า 30 วันก็ถูกลบด้วย ภาพสแกนและภาพ crop จะเพิ่มใน command เดียวกันตอนที่ขั้นนั้นเริ่มเก็บไฟล์
+- PDF ใบงาน (มีชื่อนักเรียน) ที่สร้างมาเกิน 30 วัน: แถวใน `worksheet_prints` ยังอยู่ แต่เปลี่ยนเป็น `failed` พร้อม `error` "ไฟล์ใบงานถูกลบแล้วเพราะเก็บไว้ครบ 30 วัน กรุณาสั่งพิมพ์ใหม่" และไฟล์ใต้ `worksheets/` ที่ไม่มีแถวชี้ถึงแต่เก่ากว่า 30 วันก็ถูกลบด้วย
+- ภาพหน้าเต็ม `scans/{school}/{assignment}/{scan}.webp` ของ submission ที่เผยแพร่แล้ว (scan `active`/`superseded`; สแกน `pending_confirm` เก็บไว้จนครูตัดสินใจ) → `scans.page_image_path = NULL`
+- ภาพ crop `crops/{school}/{assignment}/{response}[_final].webp` ของสแกนที่ทำจนถึง `schools.crop_retention_until` เมื่อวันนั้นผ่านไปแล้ว (รวมที่พักไฟล์ของสแกนที่รอยืนยัน) → `crop_path`/`final_crop_path = NULL` คะแนนและค่าที่อ่านได้ยังอยู่
+- โฟลเดอร์ `pending/{scan}` ที่ค้างของสแกนที่ไม่ได้รอยืนยันแล้ว (เก่ากว่า 24 ชั่วโมง)
 
 ## โครงสร้างโค้ด (ตาม DESIGN §7.1)
 
@@ -121,7 +142,9 @@ app/Models/{School,User}.php
 app/Domain/Worksheets/                       LayoutBuilder, WorksheetPdfRenderer, QrSigner, PdfMerger, LayoutService, WorksheetPrintService
 app/Domain/Assignments/                      QuestionData (ตรวจ answer_key), QuestionEditor, QuestionPositions, RubricService
 app/Domain/Gemini/                           GeminiClient (interface), FakeGeminiClient, RubricDraft
-app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob}.php
+app/Domain/Scans/                            ScanIngestor (POST /scans, confirm-replace), ScanMeta, LayoutPageMatcher, ResponseWriter, SubmissionStatus, ScanFiles, ScanRetention
+app/Domain/Grading/                          McqGrader (§11.6), ReviewPriority (§11.8), Understanding, ScoreRounding (§11.7)
+app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob}.php
 resources/fonts/                             Sarabun (OFL) ที่เพิ่ม glyph U+200B ดู README ในโฟลเดอร์
 app/Providers/Filament/AdminPanelProvider.php
 config/eduvision.php                         ค่าที่อ่านจาก .env (ห้ามใช้ env() นอก config เพราะ production ใช้ config:cache)

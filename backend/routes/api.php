@@ -9,7 +9,9 @@ use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\LoginCardController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\QuestionController;
+use App\Http\Controllers\Api\V1\ResponseController;
 use App\Http\Controllers\Api\V1\RubricController;
+use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentPinController;
@@ -81,6 +83,16 @@ Route::prefix('v1')->group(function () {
 
                 Route::get('worksheet-prints/{id}', [WorksheetPrintController::class, 'show'])->whereNumber('id')->name('api.worksheet-prints.show');
                 Route::get('worksheet-prints/{id}/file', [WorksheetPrintController::class, 'download'])->whereNumber('id')->name('api.worksheet-prints.file');
+
+                // Scans (§9.4): upload, confirm a rescan of a published page, page image.
+                Route::post('scans', [ScanController::class, 'store'])->name('api.scans.store');
+                Route::post('scans/{id}/confirm-replace', [ScanController::class, 'confirmReplace'])->whereNumber('id')->name('api.scans.confirm-replace');
+                Route::get('scans/{id}/page', [ScanController::class, 'page'])->whereNumber('id')->name('api.scans.page');
+            });
+
+            // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.
+            Route::middleware('ability:teacher,student')->group(function () {
+                Route::get('responses/{id}/crop', [ResponseController::class, 'crop'])->whereNumber('id')->name('api.responses.crop');
             });
         });
     });

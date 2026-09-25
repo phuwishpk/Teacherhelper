@@ -113,6 +113,12 @@ class Assignment extends Model
         return $this->hasMany(WorksheetPrint::class);
     }
 
+    /** @return HasMany<Submission, $this> */
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(Submission::class);
+    }
+
     public function isDraft(): bool
     {
         return $this->status === self::STATUS_DRAFT;
