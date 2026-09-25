@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../review/review_labels.dart';
 import 'results_repository.dart';
 
-/// "ผลการบ้าน" tab: published results only (DESIGN §13). The per-question
-/// detail (crop, explanation, appeal) is added in Phase 4.
+/// "ผลการบ้าน" tab: published results only (DESIGN §13). Tapping one opens
+/// the per-question detail (crop, explanation, appeal).
 class ResultsPage extends ConsumerWidget {
   const ResultsPage({super.key});
 
@@ -36,8 +39,8 @@ class ResultsPage extends ConsumerWidget {
                 final score = r.totalScore == null
                     ? null
                     : r.maxScore == null
-                    ? '${r.totalScore}'
-                    : '${r.totalScore}/${r.maxScore}';
+                    ? formatScore(r.totalScore)
+                    : '${formatScore(r.totalScore)}/${formatScore(r.maxScore)}';
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.assignment_turned_in_outlined),
@@ -55,10 +58,8 @@ class ResultsPage extends ConsumerWidget {
                             score,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
-                    onTap: () => showMessage(
-                      context,
-                      'รายละเอียดรายข้อจะเปิดใช้ในขั้นถัดไป',
-                    ),
+                    onTap: () =>
+                        context.push(AppRoutes.studentResult(r.submissionId)),
                   ),
                 );
               },

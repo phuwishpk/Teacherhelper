@@ -7,6 +7,7 @@ import '../../features/assignments/assignment_detail_screen.dart';
 import '../../features/assignments/assignment_form_screen.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
+import '../../features/appeals/appeals_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/splash_screen.dart';
@@ -17,7 +18,12 @@ import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/home/teacher_shell.dart';
+import '../../features/results/result_detail_screen.dart';
+import '../../features/review/review_detail_screen.dart';
+import '../../features/review/review_labels.dart';
+import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
+import '../../features/settings/settings_screen.dart';
 import '../../features/student/student_shell.dart';
 import '../../features/upload_queue/upload_queue_screen.dart';
 import '../auth/session.dart';
@@ -53,6 +59,31 @@ abstract final class AppRoutes {
   static const scan = '/scan';
   static const uploadQueue = '/upload-queue';
 
+  /// Teacher settings: Gemini API key (DESIGN §10.1), later Google (§18.7).
+  static const settings = '/settings';
+
+  /// Review queue of one assignment (§9.5, §13).
+  static String review(int assignmentId) => '/assignments/$assignmentId/review';
+
+  /// One response of the queue on a phone; [band] keeps prev/next in its tab.
+  static String reviewResponse(
+    int assignmentId,
+    int responseId, {
+    PriorityBand? band,
+  }) =>
+      '/assignments/$assignmentId/review/$responseId'
+      '${band == null ? '' : '?band=${band.apiValue}'}';
+
+  static const appeals = '/appeals';
+
+  /// Student: one published submission (§9.7).
+  static String studentResult(int submissionId) =>
+      '/student/results/$submissionId';
+
+  /// Routes a signed-in student may open (everything else sends them home).
+  static bool isStudentArea(String location) =>
+      location == student || location.startsWith('$student/results/');
+
   static bool isPublic(String location) =>
       location == login ||
       location == register ||
@@ -76,7 +107,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = ref.read(sessionProvider);
       final location = state.matchedLocation;
       final public = AppRoutes.isPublic(location);
-      final inStudentArea = location == AppRoutes.student;
+      final inStudentArea = AppRoutes.isStudentArea(location);
       return switch (session) {
         SessionRestoring() =>
           location == AppRoutes.splash ? null : AppRoutes.splash,
@@ -113,6 +144,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.student,
         builder: (context, state) => const StudentShell(),
+      ),
+      GoRoute(
+        path: '/student/results/:sid',
+        builder: (context, state) =>
+            ResultDetailScreen(submissionId: _id(state, 'sid')),
       ),
       GoRoute(
         path: AppRoutes.home,
@@ -200,6 +236,21 @@ final routerProvider = Provider<GoRouter>((ref) {
               questionId: _id(state, 'qid'),
             ),
           ),
+          GoRoute(
+            path: 'review',
+            builder: (context, state) =>
+                ReviewQueueScreen(assignmentId: _id(state, 'id')),
+            routes: [
+              GoRoute(
+                path: ':rid',
+                builder: (context, state) => ReviewDetailScreen(
+                  assignmentId: _id(state, 'id'),
+                  responseId: _id(state, 'rid'),
+                  band: PriorityBand.fromApi(state.uri.queryParameters['band']),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -209,6 +260,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.uploadQueue,
         builder: (context, state) => const UploadQueueScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.appeals,
+        builder: (context, state) => const AppealsScreen(),
       ),
     ],
   );

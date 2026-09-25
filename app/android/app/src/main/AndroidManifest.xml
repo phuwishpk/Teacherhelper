@@ -3,6 +3,8 @@
     <!-- Worksheet scanning (DESIGN §6.3). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- FCM notifications on Android 13+ (DESIGN §9.9). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="EduVision"
         android:allowBackup="false"

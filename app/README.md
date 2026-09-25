@@ -115,6 +115,27 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
 widget test ของหน้าสแกนด้วยกล้องปลอม) และ `android/app/src/test/.../RegionMathTest.kt` ซึ่งใช้ตัวเลขชุดเดียวกับ
 `test/scan/page_layout_test.dart` ส่วนการทำงานของ OpenCV จริงต้องลองบนเครื่อง Android (Phase 1: พิมพ์ 20 แผ่นแล้ววัด crop ตรงกรอบ)
 
+## ตรวจทาน เผยแพร่ ผลของนักเรียน และการแจ้งเตือน (Phase 3–4)
+
+- **Gemini API key ของครู** (DESIGN §10.1) ใส่ได้ 3 จุด: การ์ดบนหน้าหลัก (`features/home/ai_key_card.dart`),
+  หน้าตั้งค่า `/settings` (ปุ่มเฟืองบน app bar, `features/settings/`) และแบนเนอร์ในคิวตรวจทานเมื่อ `missing_ai_key_count > 0`
+  (`features/review/missing_key_banner.dart` ปุ่ม "ไปใส่ key" และ "ตรวจข้อที่ค้างใหม่")
+  key อยู่ในช่องกรอกจนกว่า server จะทดสอบผ่าน แล้วล้างทิ้ง ไม่เก็บลงเครื่อง ไม่ log (Dio ไม่มี LogInterceptor)
+- **คิวตรวจทาน** `/assignments/{id}/review` แท็บ ต้องตรวจ / ควรดู / มั่นใจ / รายคน (เผยแพร่ทีละคน) จอกว้าง ≥ 840 dp
+  แสดงรายการกับรายละเอียดคู่กัน จอโทรศัพท์กดเข้า `/assignments/{id}/review/{response_id}?band=` แล้วเลื่อนข้อก่อน/ถัดไปในแท็บเดิม
+  ข้อ `manual` และข้อที่ AI ยังไม่ให้คะแนนอยู่แท็บต้องตรวจ บนสุด ข้อน่าสงสัยไม่นับในการอนุมัติแบบกลุ่ม
+- **รายละเอียดข้อ**: ภาพ crop โหลดผ่าน API พร้อม token (`core/api/response_crops.dart`), สิ่งที่ Gemini/CNN อ่านได้,
+  "เหตุผลของคะแนน" จาก `fuzzy_trace` (`features/review/fuzzy_trace.dart` อ่านได้ทั้งรูป `to_dict()` ของ `ml/fuzzy`
+  และ wrapper ของ backend ที่ซ้อนไว้ใต้ `trace`), แก้คำอธิบาย, คะแนนทีละ 0.5, ระดับความเข้าใจ, ประเภทข้อผิดพลาด
+  และเหตุผล (จำเป็นเมื่อคะแนนต่างจาก `ai_score`: เลือกจากรายการ + พิมพ์เพิ่ม ส่งเป็นข้อความเดียวใน `reason`)
+- **คำขอตรวจใหม่** `/appeals` (ครู) และปุ่ม "ขอให้ครูตรวจใหม่" ในผลรายข้อของนักเรียน `/student/results/{submission_id}` (ข้อละครั้ง)
+- **FCM** (`core/push/`): `firebase_core` + `firebase_messaging` ทำงานเฉพาะเมื่อมี `android/app/google-services.json`
+  (Gradle apply plugin `com.google.gms.google-services` เฉพาะตอนมีไฟล์ ไฟล์นี้อยู่ใน `.gitignore` ห้าม commit)
+  ถ้าไม่มี `Firebase.initializeApp()` ล้มแล้วแอปปิดการแจ้งเตือนเอง ทำงานต่อได้ปกติ วิธีเปิดใช้:
+  Firebase console → project เดียวกับ Google Cloud (KICKOFF ส่วนที่ 6) → Add app Android package `com.eduvision.app`
+  → ดาวน์โหลด `google-services.json` ไปวางที่ `app/android/app/` → `flutter build apk`
+  หลัง login แอปขอสิทธิ์แจ้งเตือน (Android 13+) แล้ว `POST /devices`; ออกจากระบบจะลบ token ของเครื่อง
+
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
 รูป request/response ของ `POST /classrooms/{id}/students`, `GET /subjects`, งานพิมพ์บัตร QR (`/login-cards`,
@@ -137,4 +158,13 @@ widget test ของหน้าสแกนด้วยกล้องปล�
 | `GET /assignments/{id}/layouts` | ไม่ส่ง `version` = ทุกเวอร์ชัน `[{version, pages[]}]` (รับแบบ object เดี่ยวด้วย) |
 | `meta` ของ `POST /scans` | ตาม §9.4: `mcq` ส่ง `mcq_fill` (ไม่มี `ink_ratio`), `box`/`lines` ส่ง `ink_ratio` (นิยามด้านบน: ว่าง = 0, เขียนแล้ว > 0.02), `lines` ที่มีกรอบคำตอบสุดท้ายส่ง `final_file`; `scanned_at` เป็น UTC (`...Z`); `blur_score` ปัด 1 ตำแหน่ง; สแกนจาก Classroom เพิ่ม `source: "classroom"` และ `google_submission_id` (สแกนจากกล้องไม่ส่ง `source`) |
 | `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done; 202 หรือ `state: pending_confirm` (รวม 200 ที่ส่ง body เดิมซ้ำ) → `conflict` รอครูยืนยันผ่าน `POST /scans/{scan_id}/confirm-replace` **แอปต้องการ `scan_id` ใน body ของ 202** (ถ้าไม่มีจะเก็บเป็น conflict ที่ยืนยันจากเครื่องไม่ได้ ไม่ลบไฟล์); 401/408/429/5xx/เน็ตหลุด → retry แบบ backoff; 4xx อื่น (422, 403, 404, 413, …) → failed ถาวร (แสดง `message (code)`) |
+| `GET/PUT/DELETE /me/ai-key` | `{configured, key_last4, last_verified_at, server_key_available}` (**`server_key_available` เพิ่มจาก §9.1** ใช้แสดงว่ามี key กลาง); PUT `{gemini_api_key}` → 422 `code: ai_key_invalid` แอปแสดง `errors.gemini_api_key[0]` หรือ `message`; DELETE ตอบ 204 ได้ (แอปจะ GET ใหม่) |
+| `GET /assignments/{id}/review-queue` | ไม่ส่ง `band` แล้วแบ่งแท็บเอง แถว: `{id, submission_id, question_id, question_position, question_type, max_points, student: {id, name, student_number}, grading_state, manual_reason, priority_band, review_priority, suspicious \| flags[], identity_mismatch, has_open_appeal, ai_score, final_score, ai_understanding, final_understanding, reviewed_at, submission_status}`; `meta: {next_cursor, missing_ai_key_count, pending_confirm_scans: [{scan_id, submission_id, page_no, scanned_at, student}], submissions: [{id, status, response_count, reviewed_count, total_score, student}]}` (ไม่มี `submissions` แอปคำนวณจากแถวเอง) |
+| `GET /responses/{id}` | แถวของคิว + `question: {id, position, type, prompt_text, max_points, answer_key, rubric_criteria[]}`, `extraction`, `fuzzy_trace`, `ai_error_types`, `final_error_types`, `explanation`, `next_step`, `explanation_edited`, `cnn_text`, `cnn_confidence`, `ink_ratio`, `mcq_fill`, `has_crop`, `has_final_crop`, `appeal` |
+| `PATCH /responses/{id}` | `{final_score, final_understanding, final_error_types, explanation?, reason?}` (`explanation` ส่งเฉพาะเมื่อครูแก้) ตอบ response ที่อัปเดตแล้ว |
+| bulk / publish | `approve-confident` → `{approved}`, `POST /assignments/{id}/publish` → `{published, skipped}`, `POST /assignments/{id}/requeue-missing-key` → `{requeued}` (422 `code: ai_key_missing` ถ้ายังไม่มี key) |
+| `GET /appeals?status=open`, `PATCH /appeals/{id}` | แถว `{id, response_id, status, reason, created_at, student, assignment: {id, title}, question: {position, max_points}, final_score}`; PATCH `{status: accepted\|rejected, teacher_note?, final_score?}` |
+| `GET /student/results/{submission_id}` | `{submission_id, assignment: {id, title, subject}, total_score, max_score, published_at, responses: [{id, question: {position, type, prompt_text, max_points}, final_score, final_understanding, final_error_types, explanation, next_step, has_crop, has_final_crop, appeal, can_appeal}]}`; `POST /student/responses/{id}/appeal {reason?}` ซ้ำ → 409 |
+| FCM `data` | `type` = `grading_done` (+`assignment_id`) / `appeal_opened` → ครู; `results_published` / `appeal_resolved` (+`submission_id`) → นักเรียน (ค่าทุกตัวเป็น string) |
+| `GET /assignments` | (ไม่บังคับ) `needs_review_count` ต่อการบ้าน ใช้แสดงตัวเลข "รอตรวจทาน" |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |

@@ -4,16 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
-import '../../core/widgets/async_view.dart';
 import '../assignments/assignments_page.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
+import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 
 /// Teacher-side navigation shell: a bottom NavigationBar on phones and a
 /// NavigationRail from tablet width up (the review queue is meant for
-/// tablets, DESIGN §13). The review tab stays an empty state until Phase 4.
+/// tablets, DESIGN §13).
 class TeacherShell extends ConsumerStatefulWidget {
   const TeacherShell({super.key});
 
@@ -54,13 +54,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
       DashboardPage(user: user, onNavigate: _select),
       const ClassroomsPage(),
       const AssignmentsPage(),
-      const EmptyView(
-        icon: Icons.rate_review_outlined,
-        title: 'ไม่มีงานรอตรวจทาน',
-        message:
-            'เมื่อสแกนใบงานแล้ว ระบบจะตรวจให้ก่อนและเรียงข้อที่ควรดูไว้ที่นี่ '
-            'นักเรียนจะเห็นผลหลังคุณกดเผยแพร่',
-      ),
+      const ReviewHomePage(),
     ];
     final body = IndexedStack(index: _index, children: pages);
 
@@ -90,6 +84,11 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
               child: const Icon(Icons.cloud_upload_outlined),
             ),
             onPressed: () => context.push(AppRoutes.uploadQueue),
+          ),
+          IconButton(
+            tooltip: 'ตั้งค่า',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push(AppRoutes.settings),
           ),
           IconButton(
             tooltip: 'ออกจากระบบ',
