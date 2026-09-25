@@ -4,7 +4,7 @@
 - **ผู้อ่าน:** ผู้พัฒนา (phuwishpk) และเพื่อนในทีม
 - **คู่กับ:** [DESIGN.md](DESIGN.md) คือ "ระบบเป็นอย่างไร" ส่วนเอกสารนี้คือ "เริ่มลงมืออย่างไร" ถ้าสองฉบับขัดกันเรื่อง document root (§7.6) หรือ Phase 0 (§15) ให้ยึดเอกสารนี้จนกว่า M0 จะปิด
 - **ขอบเขต:** milestone แรก (M0) และการตั้งทีม/repo เท่านั้น Phase 1 ขึ้นไปดู DESIGN §15
-- **วิธีอ่าน:** ส่วนที่ 1 คือแผนที่และลำดับงาน ส่วนที่ 2–4 คือคำสั่งของแต่ละส่วน ส่วนที่ 5 คืองานของเพื่อน
+- **วิธีอ่าน:** ส่วนที่ 1 คือแผนที่และลำดับงาน ส่วนที่ 2–4 คือคำสั่งของแต่ละส่วน ส่วนที่ 5 คืองานของเพื่อน ส่วนที่ 6 คือการตั้งค่า Google Cloud สำหรับ Google Classroom (Phase 7 ที่เพิ่มเมื่อ 25 ก.ย. 2569)
 - **เครื่องหมาย:** `⚠️ ต้องตรวจสอบ` = ยังไม่ได้ยืนยันกับของจริง (ส่วนใหญ่คือหน้าจอ Plesk ของ Hostatom) ห้ามถือเป็นข้อเท็จจริงจนกว่าจะลองแล้วบันทึกลง `docs/HOSTING.md`
 
 ## การตัดสินใจที่แผนนี้ยึด
@@ -25,6 +25,8 @@
 | Google | บัญชีส่วนตัว Gemini API key เป็น **paid tier อยู่แล้ว** (ห้ามสลับไป free tier กับข้อมูลนักเรียนจริง) Firebase ใช้เฉพาะ FCM ภายหลัง |
 | ภาษา | โค้ด, commit, comment เป็นอังกฤษ; UI, เอกสาร, issue เป็นไทย |
 | ลายมือตัวอย่าง | ช่วงแรกใช้ลายมือของทีมและเพื่อน (ผู้ใหญ่) เท่านั้น การเก็บ 30 คนสำหรับ CNN เลื่อนไป Phase 5 |
+| Google Classroom (25 ก.ย.) | เพิ่มเป็น Phase 7 และทำในรอบ build เดียวกัน ครูเท่านั้นที่เชื่อม Google: โพสต์งาน → ดึงรูปที่นักเรียนส่งมาสแกนบนมือถือครู → ส่งคะแนนกลับตอนเผยแพร่ (DESIGN §18) ใช้ Google Cloud project เดียวกับ Firebase ตั้งค่าตามส่วนที่ 6 |
+| Gemini key ในแอป (25 ก.ย.) | ครูใส่ key เองได้ 3 จุด: การ์ดบนหน้าหลัก, หน้าตั้งค่า, แบนเนอร์ในหน้าตรวจทาน (DESIGN §10.1, §13) key กลางใน `backend/.env` ไม่บังคับ |
 
 ## M0 คืออะไร
 
@@ -1827,3 +1829,112 @@ EduVision/
 - [ ] งานที่ 1 (คณิตศาสตร์ ป.4–ป.6) เริ่มแล้วและมีกำหนดเสร็จก่อน Phase 2 ส่วนวิทยาศาสตร์กำหนดเสร็จกลาง Phase 2
 - [ ] เพื่อน C ถามอาจารย์วิชา 03376133 เรื่อง MariaDB นับเป็น cloud DB หรือไม่ และบันทึกคำตอบใน `DESIGN.md` §16.2
 - [ ] วันเวลาประชุมประจำสัปดาห์ถูกกำหนดและอยู่ในปฏิทินของทุกคน
+
+---
+
+# ส่วนที่ 6
+
+## Google Classroom (Phase 7): การตั้งค่าที่ผู้ใช้ต้องทำ
+
+โค้ดของ Phase 7 ทดสอบด้วย Google API ปลอมได้ครบโดยไม่ต้องมีบัญชี แต่การใช้จริงต้องมีสิ่งต่อไปนี้ ทำครั้งเดียว ใช้เวลาประมาณ 30 นาที ออกแบบระบบอยู่ใน DESIGN §18
+
+### ภาพรวมสิ่งที่ได้
+
+| ของที่ได้ | เอาไปใส่ที่ไหน | เป็นความลับไหม |
+|---|---|---|
+| Web client ID | `backend/.env` → `GOOGLE_OAUTH_CLIENT_ID` และแอป → `--dart-define=GOOGLE_SERVER_CLIENT_ID` | ไม่ลับ |
+| Web client secret | `backend/.env` → `GOOGLE_OAUTH_CLIENT_SECRET` | **ลับ** ห้ามเข้า repo/แชต |
+| Android client | ไม่ต้องใส่ที่ไหน Google จับคู่จาก package name + SHA-1 | ไม่ลับ |
+
+### G1 ใช้ project เดียวกับ Firebase
+
+เปิด [console.cloud.google.com](https://console.cloud.google.com) → เลือก project ที่ Firebase สร้างไว้ (ชื่อเดียวกับ Firebase project) ถ้ายังไม่ได้ทำ Firebase ให้สร้าง project ใหม่ได้เลย
+
+ตรวจสอบ: มุมซ้ายบนแสดงชื่อ project ที่ถูกต้อง
+
+### G2 เปิด API
+
+APIs & Services → Library → เปิด (Enable) ทั้งสองตัว:
+1. **Google Classroom API**
+2. **Google Drive API**
+
+ตรวจสอบ: APIs & Services → Enabled APIs & services มีทั้งสองชื่อ
+
+### G3 OAuth consent screen
+
+APIs & Services → OAuth consent screen (หรือ Google Auth Platform → Branding/Audience ในหน้าจอรุ่นใหม่)
+
+1. User type: **External** (ถ้าบัญชีของคุณอยู่ใน Google Workspace ของโรงเรียน/มหาวิทยาลัยและจะใช้เฉพาะในองค์กร เลือก Internal ได้ จะไม่ติดข้อจำกัดของโหมด Testing)
+2. App name `EduVision`, User support email = อีเมลของคุณ, Developer contact = อีเมลของคุณ
+3. Scopes: เพิ่ม
+   - `.../auth/classroom.courses.readonly`
+   - `.../auth/classroom.rosters.readonly`
+   - `.../auth/classroom.profile.emails`
+   - `.../auth/classroom.coursework.students`
+   - `.../auth/drive.file`
+   - `.../auth/drive.readonly`
+4. Audience → Publishing status: **Testing** และเพิ่ม **Test users** = อีเมล Google ของครูทุกคนที่จะทดสอบ (สูงสุด 100 คน)
+
+ตรวจสอบ: หน้า Audience แสดง Testing และมีรายชื่อ test user
+
+⚠️ ข้อจำกัดของโหมด Testing: refresh token **หมดอายุใน 7 วัน** ครูต้องกด "เชื่อม Google ใหม่" ในแอปสัปดาห์ละครั้ง และ `drive.readonly` เป็น restricted scope ถ้าจะเปิดให้คนนอก test user ใช้ต้องผ่าน Google verification (หรือให้ผู้ดูแล Workspace ของโรงเรียนตั้งแอปเป็น trusted ดู DESIGN §18.5)
+
+### G4 OAuth client แบบ Web (ให้ server แลก code)
+
+APIs & Services → Credentials → Create credentials → OAuth client ID
+- Application type: **Web application**, Name: `EduVision server`
+- Authorized redirect URIs: ไม่ต้องใส่ (ใช้ server auth code จากแอป)
+- Create → คัดลอก **Client ID** และ **Client secret** (หรือ Download JSON แล้วเก็บไว้นอก repo เช่น `~/secrets/`)
+
+ใส่ใน `backend/.env`:
+
+```ini
+GOOGLE_OAUTH_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxxxxxxx
+```
+
+ตรวจสอบ: `cd backend && php artisan tinker --execute="echo config('services.google.client_id') ? 'ok' : 'missing';"` พิมพ์ `ok` (ชื่อ config ยืนยันกับ README ของ backend หลัง build)
+
+### G5 OAuth client แบบ Android
+
+1. หา SHA-1 ของ keystore ที่ใช้ build (ตอนพัฒนาคือ debug keystore):
+
+   ```bash
+   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
+   ```
+
+2. Credentials → Create credentials → OAuth client ID → Application type: **Android**
+   - Package name: `com.eduvision.app`
+   - SHA-1: ค่าจากข้อ 1
+3. Create (ไม่มี secret ไม่ต้องดาวน์โหลดอะไร)
+
+ตรวจสอบ: หน้า Credentials มี client 2 ตัว (Web + Android) ถ้าเปลี่ยนเครื่องหรือทำ release keystore ต้องเพิ่ม SHA-1 ของเครื่อง/keystore นั้นอีกตัว
+
+### G6 รันแอปพร้อม client ID
+
+```bash
+cd app
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com   # Web client ID จาก G4
+```
+
+ถ้าไม่ใส่ `GOOGLE_SERVER_CLIENT_ID` แอปจะซ่อนเมนู Google Classroom ทั้งหมด (ระบบอื่นใช้ได้ตามปกติ)
+
+### G7 คอร์สทดลอง
+
+1. ด้วยบัญชีครู (test user) เปิด [classroom.google.com](https://classroom.google.com) → สร้างชั้นเรียน `EduVision ทดสอบ`
+2. เชิญบัญชี Google อีกบัญชีหนึ่งเป็นนักเรียน (บัญชี Gmail ส่วนตัวของเพื่อนในทีมได้) แล้วให้เข้าร่วม
+3. ในแอป: ตั้งค่า → เชื่อม Google Classroom → เลือกบัญชีครู → อนุญาตทุก scope
+4. ห้องเรียนในแอป → ผูกกับ Google Classroom → เลือก `EduVision ทดสอบ` → จับคู่นักเรียน
+5. การบ้าน (สถานะ ready) → โพสต์ลง Classroom → นักเรียนเปิด Classroom เห็นงาน
+6. นักเรียนทำใบงานที่พิมพ์จากแอป ถ่ายรูปทุกหน้า แนบในงานแล้วกดส่ง
+7. ครูในแอป → ดึงงานที่ส่ง → ดาวน์โหลดและสแกน → ตรวจทาน → เผยแพร่
+8. นักเรียนเห็นคะแนนในงานของ Classroom และคำอธิบายรายข้อในแอป EduVision
+
+ตรวจสอบ: ขั้น 8 ผ่าน = Phase 7 ใช้ได้จริง
+
+### G8 ตอน deploy
+
+- ใส่ `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` ใน `.env` บน Plesk (ดู `docs/HOSTING.md`)
+- hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (hosting probe ตรวจ `oauth2.googleapis.com` ให้แล้ว)
+- ถ้า secret หลุด: Credentials → เลือก Web client → Reset secret แล้วอัปเดต `.env`

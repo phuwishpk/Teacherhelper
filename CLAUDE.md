@@ -6,7 +6,7 @@ Group course project. One developer (phuwishpk) writes all code with Claude Code
 ## Read first
 - docs/DESIGN.md is the settled system design (architecture, MariaDB schema, API, fuzzy rules, Gemini prompts, phases). Do not re-decide anything it settles. If a change is truly needed, edit DESIGN.md in the same commit/PR and explain why in the commit body.
 - docs/KICKOFF.md is the M0 plan, repo rules and definition of done. Where DESIGN §7.6 (document root) or §15 row "Phase 0" disagrees with KICKOFF.md, KICKOFF.md wins until issue M0-17 updates DESIGN.
-- Current milestone: M0 "walking skeleton". NOT in M0: CI/CD, Firebase/FCM, camera/OpenCV/Pigeon, Gemini, drift, Cloudflare. Do not add them early.
+- Current work (since 2026-09-25): M0 is done; Phases 1–7 are being built (DESIGN §15), including Google Classroom (DESIGN §18). Cloudflare stays out of scope. Gemini keys: teachers enter their own in the app (DESIGN §10.1); a server key is optional.
 
 ## Layout
 - app/      Flutter, Android only. Follow DESIGN §6.1: lib/core/{api,auth,router,theme}, lib/features/<feature>/. Riverpod + go_router + dio + flutter_secure_storage. applicationId com.eduvision.app, minSdk 26.

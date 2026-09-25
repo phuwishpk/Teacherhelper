@@ -29,6 +29,7 @@
 15. [ลำดับการพัฒนา](#15-ลำดับการพัฒนา)
 16. [เลื่อนไว้ทีหลังและข้อที่ยังเปิดอยู่](#16-เลื่อนไว้ทีหลังและข้อที่ยังเปิดอยู่)
 17. [ภาคผนวก: บันทึกการตัดสินใจ](#17-ภาคผนวก-บันทึกการตัดสินใจ)
+18. [การเชื่อม Google Classroom (Phase 7)](#18-การเชื่อม-google-classroom-phase-7)
 
 ---
 
@@ -152,6 +153,7 @@ subject_code,skill_code,parent_code,grade_level,name
 | ที่เก็บไฟล์ | disk ของ hosting (Laravel private disk) | ภาพหน้า, ภาพ crop, PDF, ไฟล์โมเดล |
 | AI | Gemini API (paid tier) | สกัดข้อมูล, ร่าง rubric, เขียนคำอธิบาย, สร้างแบบฝึก |
 | Push | FCM (Firebase ใช้**เฉพาะส่วนนี้**) | แจ้งผลออก และแจ้งครูเมื่อตรวจเสร็จ |
+| Google Classroom | Classroom API + Drive API ผ่านบัญชี Google ของครู (§18) | โพสต์ใบงาน, ดึงรูปที่นักเรียนส่ง (ดาวน์โหลดบนมือถือครู), ส่งคะแนนกลับ |
 | Edge (ไม่บังคับ) | Cloudflare | DNS proxy, WAF, rate limit ยังไม่ใช้ใน M0 เพราะต้องย้าย nameserver ของ `phuwish.com` ทั้งโดเมน |
 | ML (offline) | Python, TensorFlow/Keras (เทรนบน M5 Pro) | เทรน CRNN, export TFLite, สร้างใบเก็บข้อมูล, notebook BKT |
 
@@ -504,6 +506,7 @@ backend/resources/prompts/     prompt แยกเป็นไฟล์พร้
 - ตัวเลขคะแนนเป็น `DECIMAL`
 - JSON ใช้ชนิด `JSON` ซึ่งใน MariaDB คือ `LONGTEXT` ที่มี CHECK `json_valid`
 - table ของ Laravel เอง ได้แก่ `jobs`, `failed_jobs`, `job_batches`, `cache`, `sessions` และ `personal_access_tokens` ไม่ได้แสดงไว้ในหัวข้อนี้
+- table ของ Google Classroom อยู่ใน [§18.4](#184-schema-ที่เพิ่ม)
 
 ### 8.1 โรงเรียนและผู้ใช้
 
@@ -1012,6 +1015,10 @@ CREATE TABLE training_samples (
 | เผยแพร่ | นักเรียน | "ผลการบ้าน {title} ออกแล้ว" (**ไม่แสดงคะแนนบนหน้าจอล็อก**) |
 | มีคำขอตรวจใหม่ | ครู | "มีคำขอให้ตรวจใหม่ {n} รายการ" |
 | ตอบคำขอตรวจใหม่แล้ว | นักเรียน | "ครูตอบคำขอตรวจใหม่แล้ว" |
+
+### 9.10 Google Classroom
+
+ดู [§18.6](#186-api-ที่เพิ่ม)
 
 ---
 
@@ -1522,7 +1529,8 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | **4. HITL** | หน้าตรวจทาน, override พร้อมเหตุผล, อนุมัติแบบกลุ่ม, เผยแพร่, FCM, หน้าผลของนักเรียน, การขอตรวจใหม่, ร่าง rubric | เดินครบหนึ่งรอบตั้งแต่สร้างการบ้านจนนักเรียนเห็นผล และจูน fuzzy จากคะแนนที่ครูแก้แล้ว |
 | **5. CNN** (เริ่มคู่ขนานได้ตั้งแต่จบ Phase 1) | เก็บข้อมูลด้วยใบเก็บข้อมูล, เทรน CRNN, export TFLite, รันในแอป, ส่งค่า `D` ให้ระบบที่ 2 | CER บน test set (แบ่งตามคนเขียน) ผ่านเกณฑ์ที่ทีมตั้ง และการจับกรณี Gemini อ่านผิดดีขึ้นอย่างวัดได้ |
 | **6. ITS และ EDM** | คลังแบบฝึก (สร้างและอนุมัติ), ทำแบบฝึก, mastery, dashboard (p และ r, heatmap), notebook BKT | นักเรียนได้แบบฝึกตามทักษะที่อ่อน และครูเห็น dashboard จากข้อมูลจริง |
-| **7. งานที่เลื่อนไว้** | ดู §16 | |
+| **7. Google Classroom** (ต่อจาก Phase 2–4) | เชื่อมบัญชี Google ของครู, ผูกห้องกับคอร์ส, จับคู่นักเรียน, โพสต์ใบงาน, ดึงรูปที่นักเรียนส่งมาสแกนบนมือถือ, ส่งคะแนนกลับตอนเผยแพร่ (§18) | ครูทดสอบกับคอร์สทดลองได้ครบวงจร: โพสต์ → นักเรียนส่งรูป → ดึงมาสแกน → ตรวจ → เผยแพร่ → คะแนนขึ้นใน Classroom |
+| **8. งานที่เลื่อนไว้** | ดู §16 | |
 
 ---
 
@@ -1543,35 +1551,9 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
   - ทั้งหมดนี้รอยืนยันตอนทำจริง
 - **iOS** เขียน Swift ตาม interface ของ Pigeon ใน §6.2
 
-### 16.3 Phase 7: เชื่อม Google Classroom (ตัดสินใจ 25 ก.ย. 2569)
+### 16.3 Google Classroom
 
-ทำหลัง integration ของ Phase 1–6 ผ่านแล้ว หลักการ: **ครูเท่านั้นที่เชื่อมบัญชี Google** นักเรียนใช้ Classroom ตามปกติและใช้บัตร QR/PIN ในแอปเราเหมือนเดิม การประมวลผลภาพยังอยู่บนมือถือครู server ไม่แตะรูปดิบ
-
-**สามงานที่ทำได้**
-
-| งาน | ขั้นตอน | Google API ที่ใช้ |
-|---|---|---|
-| **สั่งงาน** | ครูกด "โพสต์ลง Classroom" ที่การบ้าน → server อัปโหลด PDF ใบงานขึ้น Drive ของครู → สร้าง `courseWork` ในคอร์สที่ผูกไว้ แนบไฟล์นั้น (ตั้ง `maxPoints` = คะแนนรวม) | Drive `files.create`, Classroom `courses.courseWork.create` |
-| **รับงาน** | นักเรียนทำบนกระดาษ ถ่ายรูป แนบใน Classroom → ครูกด "ดึงงานที่ส่ง" ในแอป → แอปดึงรายการ `studentSubmissions` ที่มีไฟล์แนบใหม่ ดาวน์โหลดรูปด้วย token ของครู → รัน pipeline สแกนบนมือถือเหมือนสแกนเอง (ArUco/QR/crop) → เข้าคิวอัปโหลดตามเดิมโดยระบุ `source = classroom` และ id ของ submission ถ้ารูปใช้ไม่ได้ (marker ไม่ครบ/เบลอ) แอปเสนอให้ครูกด "ตีกลับ" ซึ่งใส่ comment ขอถ่ายใหม่และ `return` งานใน Classroom | Classroom `studentSubmissions.list/return`, Drive `files.get?alt=media` |
-| **ส่งคะแนนกลับ** | เมื่อครูกดเผยแพร่ → server ตั้ง `assignedGrade` ของ submission นั้น, `return` งาน และเพิ่ม comment ที่มีข้อความสรุปจุดผิด (ไม่มีคะแนนรายข้อ) | Classroom `studentSubmissions.patch` (`assignedGrade`), `return` |
-
-**การผูกข้อมูล**
-
-- `classroom_google_links (classroom_id PK, course_id, course_name, owner_user_id, linked_at)` ห้องเรียนหนึ่งผูกได้หนึ่งคอร์ส
-- `assignment_google_links (assignment_id PK, course_work_id, drive_file_id, posted_at)`
-- `classroom_students` เพิ่ม `google_user_id NULL`, `google_email NULL` การจับคู่นักเรียน: ดึง roster ของคอร์สมาแล้วให้ครูจับคู่กับเลขที่ในแอป (เสนอคู่อัตโนมัติจากชื่อ ครูยืนยัน) นักเรียนที่ไม่มีคู่จะดึงงานไม่ได้และแอปเตือน
-- `google_accounts (user_id PK, google_sub, email, encrypted_refresh_token, scopes, connected_at)` เก็บเฉพาะ refresh token ของครู เข้ารหัสด้วย Laravel encrypter ส่วน access token ขอใหม่ทุกครั้งบน server
-- `scans.source ENUM('camera','classroom')` และ `scans.google_submission_id NULL`
-
-**การยืนยันตัวตน**
-
-- แอปใช้ `google_sign_in` ขอ **server auth code** แล้วส่งให้ `POST /google/connect {server_auth_code}` server แลกเป็น refresh token (client secret อยู่บน server เท่านั้น)
-- scope: `classroom.courses.readonly`, `classroom.rosters.readonly`, `classroom.coursework.students`, `classroom.student-submissions.students.readonly`, `drive.file` (อัปโหลด PDF), และ **`drive.readonly`** สำหรับดาวน์โหลดรูปที่นักเรียนแนบ (เป็น restricted scope: ใช้ได้ทันทีเมื่อ OAuth app อยู่ในโหมด Testing กับ test user ≤ 100 คน ถ้าจะเปิดสาธารณะต้องผ่าน Google verification)
-- ข้อจำกัดของ Classroom API: แอปแก้ไข submission ได้เฉพาะ `courseWork` ที่แอปสร้างเอง จึงต้อง "โพสต์ลง Classroom" ผ่านแอปเสมอ ไม่รองรับงานที่ครูสร้างในเว็บ Classroom เอง
-
-**API เพิ่ม (§9.10)**: `POST /google/connect`, `DELETE /google/disconnect`, `GET /google/courses`, `POST /classrooms/{id}/google-link {course_id}`, `GET /classrooms/{id}/google-roster` (คู่ที่เสนอ), `PUT /classrooms/{id}/google-roster` (คู่ที่ครูยืนยัน), `POST /assignments/{id}/google-post`, `GET /assignments/{id}/google-submissions` (รายการไฟล์แนบใหม่พร้อม URL ดาวน์โหลดชั่วคราวที่ server ออกให้จาก token ของครู), `POST /google-submissions/{id}/return {comment}`, และ hook ตอนเผยแพร่
-
-**สิ่งที่ผู้ใช้ต้องเตรียม**: Google Cloud project (ใช้ project เดียวกับ Firebase ได้) → เปิด Classroom API และ Drive API → OAuth consent screen แบบ External โหมด Testing ใส่อีเมลครูที่จะทดสอบเป็น test user → สร้าง OAuth client 2 ตัว (Android: package `com.eduvision.app` + SHA-1 ของ keystore; Web: สำหรับ server แลก code) → ใส่ `GOOGLE_OAUTH_CLIENT_ID/SECRET` ใน `backend/.env`
+ย้ายขึ้นเป็นงานหลักแล้ว (25 ก.ย. 2569) รายละเอียดทั้งหมดอยู่ที่ [§18](#18-การเชื่อม-google-classroom-phase-7)
 
 ### 16.2 ข้อที่ยังเปิดอยู่
 
@@ -1619,4 +1601,153 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | 25 | สถาปัตยกรรมแอป | Riverpod + go_router + repository | override ใน test ง่าย ช่วยให้ถึง coverage 70% |
 | 26 | Gemini key ของครู | ครูใส่ key ตัวเองในแอปได้ (เก็บเข้ารหัสบน server) key กลางเป็นแค่ fallback | ครูคุมค่าใช้จ่ายและข้อมูลของตัวเอง โรงเรียนใช้ระบบได้โดยไม่ต้องมี key กลาง |
 | 27 | ลำดับความสำคัญ | ทำระบบตรวจด้วย Gemini ให้ใช้งานได้ก่อน CNN เทรนด้วยข้อมูลสังเคราะห์ให้ pipeline ครบ แล้วค่อยเทรนซ้ำด้วย dataset ของทีม | dataset จริงยังไม่มา แต่ระบบต้องใช้ได้ก่อน |
-| 28 | Google Classroom | เป็น Phase 7 หลัง integration ผ่าน ครูเท่านั้นที่เชื่อม Google สั่งงาน/รับงาน/ส่งคะแนนกลับผ่าน Classroom โดยรูปของนักเรียนประมวลผลบนมือถือครู (§16.3) | นักเรียนไม่ต้องมีบัญชี Google และ server บน shared hosting รัน OpenCV ไม่ได้ |
+| 28 | Google Classroom | ทำในรอบ build เดียวกับ Phase 1–6 (ผู้ใช้ขอให้เพิ่มทันที 25 ก.ย. 2569) ครูเท่านั้นที่เชื่อม Google สั่งงาน/รับงาน/ส่งคะแนนกลับผ่าน Classroom โดยรูปของนักเรียนดาวน์โหลดและประมวลผลบนมือถือครู (§18) | นักเรียนไม่ต้องมีบัญชี Google ในแอปเรา, server บน shared hosting รัน OpenCV ไม่ได้ และรูปของเด็กไม่ผ่าน server |
+
+---
+
+## 18. การเชื่อม Google Classroom (Phase 7)
+
+ตัดสินใจ 25 ก.ย. 2569 และให้ทำในรอบ build เดียวกับ Phase 1–6 ต่อจากงานที่มันพึ่ง (ใบงาน, รับสแกน, เผยแพร่)
+
+### 18.1 หลักการ
+
+- **ครูเท่านั้นที่เชื่อมบัญชี Google** นักเรียนใช้ Google Classroom ตามปกติ และยังใช้บัตร QR/PIN เข้าแอปเราเหมือนเดิม
+- **รูปของนักเรียนไม่ผ่าน server** แอปบนมือถือครูดาวน์โหลดรูปจาก Drive แล้วรัน pipeline สแกนเดิม (§6.2) บนเครื่อง ส่งขึ้น server เฉพาะภาพหน้าที่ warp แล้วและ crop ตาม `POST /scans` ปกติ
+- **server ถือ refresh token ของครู** ใช้ทำงานที่ต้องเกิดแม้ครูไม่ได้เปิดแอป คือสร้างงานใน Classroom และส่งคะแนนกลับตอนเผยแพร่
+- เรียก Google REST API ตรงด้วย Laravel HTTP client **ไม่ใช้ `google/apiclient`** เพราะ vendor ใหญ่มากสำหรับ shared hosting
+
+### 18.2 สามงานหลัก
+
+| งาน | ขั้นตอน | Google API |
+|---|---|---|
+| **สั่งงาน** | ครูกด "โพสต์ลง Classroom" ที่การบ้าน → server สร้าง `courseWork` ในคอร์สที่ผูกไว้ ตั้ง `maxPoints` = คะแนนเต็มของการบ้าน และคำสั่ง "ทำบนใบงานที่ได้รับ ถ่ายรูปทุกหน้าให้เห็นมุมทั้ง 4 แล้วส่งที่นี่" ถ้าครูติ๊ก "แนบใบงานสำรอง" server อัปโหลด PDF ฉบับไม่ระบุชื่อ (§18.3) ขึ้น Drive ของครูแล้วแนบเป็น material แบบ `VIEW` | Classroom `courses.courseWork.create`, Drive `files.create` (multipart upload) |
+| **รับงาน** | ครูกด "ดึงงานที่ส่ง" → server ดึง `studentSubmissions` ที่ `TURNED_IN` และมีไฟล์แนบใหม่ จับคู่นักเรียนด้วย `userId` → แอปดาวน์โหลดไฟล์แนบด้วยสิทธิ์ Google ของครู**บนเครื่อง** แปลงเป็นภาพ (JPEG/PNG ใช้ตรง, HEIC ถอดด้วย `ImageDecoder`, PDF แยกหน้าด้วย `PdfRenderer` ใน Kotlin) → `detectPage` / `cropPage` → เข้าคิวอัปโหลดพร้อม `source = classroom` และ `google_submission_id` ถ้ารูปใช้ไม่ได้ แอปแสดงเหตุผลและปุ่ม "ตีกลับให้ถ่ายใหม่" | Classroom `studentSubmissions.list`, Drive `files.get?alt=media` (จากแอป) |
+| **ส่งคะแนนกลับ** | เมื่อครูเผยแพร่ submission → job บน server ตั้ง `assignedGrade` = คะแนนรวมที่เผยแพร่ แล้ว `return` งาน นักเรียนเห็นคะแนนใน Classroom ส่วนคำอธิบายรายข้ออยู่ในแอปเรา (ใส่ลิงก์ไว้ในคำสั่งของงาน) | Classroom `studentSubmissions.patch` (`updateMask=assignedGrade`), `studentSubmissions.return` |
+
+**ข้อจำกัดของ Classroom API ที่กำหนดการออกแบบ**
+
+- แอปแก้ไข submission (ให้คะแนน, return) ได้**เฉพาะ `courseWork` ที่ project ของเราสร้างเอง** ครูจึงต้องสั่งงานผ่านปุ่ม "โพสต์ลง Classroom" ในแอป งานที่ครูสร้างในเว็บ Classroom เองจะดึงรูปได้แต่ส่งคะแนนกลับไม่ได้ แอปต้องบอกเรื่องนี้ตอนผูกคอร์ส
+- Classroom API **ไม่มี endpoint สำหรับ private comment** การตีกลับจึงทำด้วย `return` (นักเรียนเห็นว่าถูกส่งคืนและส่งใหม่ได้) และแจ้งเหตุผลผ่านแอปเรา (FCM + หน้าผลของนักเรียน) พร้อมให้ลิงก์ `alternateLink` เปิด submission นั้นในเว็บ Classroom ถ้าครูอยากพิมพ์ comment เอง ⚠️ ตรวจสอบอีกครั้งตอน implement ว่า API ยังไม่รองรับ
+- ⚠️ ต้องตรวจสอบ: การตั้ง `assignedGrade` ให้ submission ที่นักเรียนยังไม่ได้กดส่ง (state `CREATED`/`NEW`) ถ้า API ไม่ยอม ให้ส่งคะแนนกลับเฉพาะคนที่ส่งงานผ่าน Classroom และแสดงในแอปว่าคนที่ส่งเป็นกระดาษไม่ได้ส่งคะแนนกลับ
+
+### 18.3 ตัวตนของนักเรียนในใบงาน
+
+- ใบงานปกติพิมพ์แยกรายคน QR มี `student_id` (§5.4) นักเรียนทำบนกระดาษที่ครูแจกแล้วถ่ายรูปส่งใน Classroom ได้ตามปกติ
+- **ใบงานสำรอง** (แนบใน Classroom สำหรับคนที่ทำใบงานหาย) ใช้ QR แบบไม่ระบุคน `EV1.{assignment_id}.0.{page}.{layout_version}.{sig}` (`student_id = 0`) และไม่มีชื่อบนหัวกระดาษ
+- ตอนรับสแกนจาก Classroom server หาตัวนักเรียนตามลำดับ: (1) `student_id` ใน QR ถ้าไม่ใช่ 0 (2) นักเรียนที่จับคู่กับ `userId` ของ submission ถ้า (1) และ (2) ไม่ตรงกัน ให้รับไว้ตาม QR และติดป้าย `identity_mismatch` ให้ครูดูในคิวตรวจทาน
+- QR ที่ `student_id = 0` รับได้**เฉพาะ** `source = classroom` ที่มี `google_submission_id` ของงานนั้นจริง ถ้าสแกนด้วยกล้องปกติตอบ 422 `code: student_unknown`
+
+### 18.4 Schema ที่เพิ่ม
+
+```sql
+-- บัญชี Google ของครู: เก็บเฉพาะ refresh token แบบเข้ารหัส (Laravel encrypter)
+CREATE TABLE google_accounts (
+  user_id                  BIGINT UNSIGNED PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  google_sub               VARCHAR(64)  NOT NULL UNIQUE,
+  email                    VARCHAR(255) NOT NULL,
+  encrypted_refresh_token  TEXT NOT NULL,
+  scopes                   TEXT NOT NULL,           -- space-separated scopes ที่ได้จริง
+  connected_at             TIMESTAMP NOT NULL,
+  last_error               VARCHAR(255) NULL,       -- เช่น invalid_grant เมื่อ token หมดอายุ/ถูกเพิกถอน
+  updated_at               TIMESTAMP NOT NULL
+);
+
+CREATE TABLE classroom_google_links (
+  classroom_id   BIGINT UNSIGNED PRIMARY KEY REFERENCES classrooms(id) ON DELETE CASCADE,
+  course_id      VARCHAR(64)  NOT NULL,
+  course_name    VARCHAR(255) NOT NULL,
+  owner_user_id  BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  linked_at      TIMESTAMP NOT NULL
+);
+
+-- เพิ่มใน classroom_students (คอลัมน์ NULL ได้ทั้งหมด)
+ALTER TABLE classroom_students
+  ADD COLUMN google_user_id VARCHAR(64)  NULL,
+  ADD COLUMN google_email   VARCHAR(255) NULL,
+  ADD UNIQUE KEY uq_class_google_user (classroom_id, google_user_id);
+
+CREATE TABLE assignment_google_links (
+  assignment_id    BIGINT UNSIGNED PRIMARY KEY REFERENCES assignments(id) ON DELETE CASCADE,
+  course_work_id   VARCHAR(64)  NOT NULL,
+  alternate_link   VARCHAR(512) NOT NULL,
+  drive_file_id    VARCHAR(128) NULL,              -- ใบงานสำรองที่แนบ (ถ้ามี)
+  posted_by        BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  posted_at        TIMESTAMP NOT NULL
+);
+
+-- สถานะของแต่ละ submission ที่ดึงมาจาก Classroom
+CREATE TABLE classroom_submission_imports (
+  id                    BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  assignment_id         BIGINT UNSIGNED NOT NULL REFERENCES assignments(id),
+  google_submission_id  VARCHAR(64) NOT NULL UNIQUE,
+  google_user_id        VARCHAR(64) NOT NULL,
+  student_id            BIGINT UNSIGNED NULL REFERENCES users(id),   -- NULL = ยังจับคู่ไม่ได้
+  state                 ENUM('new','imported','needs_retake','returned_for_retake','graded','grade_failed') NOT NULL DEFAULT 'new',
+  attachments           JSON NOT NULL,          -- [{drive_file_id, title, mime_type}]
+  google_update_time    VARCHAR(40) NOT NULL,   -- updateTime จาก Classroom ใช้ตรวจว่ามีส่งใหม่
+  retake_reason         VARCHAR(255) NULL,
+  grade_pushed_at       TIMESTAMP NULL,
+  last_error            VARCHAR(255) NULL,
+  created_at            TIMESTAMP NOT NULL,
+  updated_at            TIMESTAMP NOT NULL,
+  INDEX idx_imports_assignment (assignment_id, state)
+);
+
+-- เพิ่มใน scans
+ALTER TABLE scans
+  ADD COLUMN source ENUM('camera','classroom') NOT NULL DEFAULT 'camera',
+  ADD COLUMN google_submission_id VARCHAR(64) NULL;
+```
+
+`responses` เพิ่มป้าย `identity_mismatch` ได้ผ่านคอลัมน์ flag ที่มีอยู่ของคิวตรวจทาน (§11.8) โดยไม่ต้องเพิ่มคอลัมน์ถ้าเก็บเป็นส่วนหนึ่งของ `fuzzy_trace`/เหตุผลใน queue ได้ ให้ผู้ implement เลือกวิธีที่ไม่ทำลาย schema เดิมและบันทึกไว้
+
+### 18.5 การยืนยันตัวตนกับ Google
+
+- แอปใช้ package `google_sign_in` ขอ **server auth code** โดยใช้ Web client ID เป็น `serverClientId` (ส่งผ่าน `--dart-define=GOOGLE_SERVER_CLIENT_ID`) แล้วส่งให้ `POST /google/connect {server_auth_code}` server แลกเป็น refresh token ที่ `https://oauth2.googleapis.com/token` ด้วย `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (secret อยู่บน server เท่านั้น)
+- แอปขอ access token ของตัวเองบนเครื่อง (ผ่าน `google_sign_in` authorization สำหรับ scope `drive.readonly`) เพื่อดาวน์โหลดไฟล์แนบ token นี้ไม่ถูกเก็บลงเครื่องและไม่ส่งขึ้น server
+- scope ที่ขอ:
+
+| scope | ใช้ทำ |
+|---|---|
+| `classroom.courses.readonly` | รายการคอร์สที่ครูสอน |
+| `classroom.rosters.readonly` + `classroom.profile.emails` | รายชื่อนักเรียนในคอร์สพร้อมอีเมลไว้จับคู่ |
+| `classroom.coursework.students` | สร้างงาน, อ่าน submission, ให้คะแนน, return |
+| `drive.file` | อัปโหลด PDF ใบงานสำรองที่แอปสร้างเอง |
+| `drive.readonly` | ดาวน์โหลดรูปที่นักเรียนแนบ (**restricted scope**) |
+
+- **ข้อจำกัดช่วงทดสอบ**: OAuth app ในโหมด Testing ใช้ได้กับ test user ไม่เกิน 100 คน และ **refresh token หมดอายุใน 7 วัน** ครูต้องกด "เชื่อมใหม่" ทุกสัปดาห์ แอปต้องจับ `invalid_grant` แล้วแสดงสถานะ "ต้องเชื่อมบัญชี Google ใหม่"
+- **ใช้จริงในโรงเรียน**: ถ้าโรงเรียนใช้ Google Workspace for Education ให้ผู้ดูแล Workspace ตั้งแอปเป็น trusted (Admin console → Security → API controls → App access control) ผู้ใช้ในโดเมนนั้นจะใช้ได้โดยไม่ต้องผ่าน verification ถ้าจะเปิดให้ทุกคน ต้องผ่าน Google verification ซึ่งสำหรับ restricted scope ต้องมี security assessment ⚠️ ต้องตรวจสอบนโยบาย ณ ตอนนั้น
+- ครูกด "ยกเลิกการเชื่อม" ได้เสมอ server revoke token ที่ Google แล้วลบแถวใน `google_accounts`
+
+### 18.6 API ที่เพิ่ม
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| POST | `/google/connect` | ครู | `{server_auth_code}` แลก token เก็บเข้ารหัส ตอบ `{email, scopes}` scope ขาด → 422 `code: google_scope_missing` |
+| GET | `/google/status` | ครู | `{connected, email, scopes, needs_reconnect}` |
+| DELETE | `/google/disconnect` | ครู | revoke + ลบ |
+| GET | `/google/courses` | ครู | คอร์ส `ACTIVE` ที่ครูเป็นผู้สอน `[{course_id, name, section}]` |
+| POST / DELETE | `/classrooms/{id}/google-link` | ครู | ผูก/เลิกผูก `{course_id}` |
+| GET | `/classrooms/{id}/google-roster` | ครู | นักเรียนในคอร์สพร้อมคู่ที่เสนอ `[{google_user_id, name, email, suggested_student_id, matched_student_id}]` เสนอคู่จากชื่อที่ normalize แล้ว |
+| PUT | `/classrooms/{id}/google-roster` | ครู | `{matches: [{google_user_id, student_id\|null}]}` ห้ามจับคู่นักเรียนคนเดียวกับสองบัญชี |
+| POST | `/assignments/{id}/google-post` | ครู | `{instructions?, due_at?, attach_blank_worksheet}` การบ้านต้อง `ready` ห้องต้องผูกคอร์สแล้ว ตอบ `{course_work_id, alternate_link}` โพสต์ซ้ำไม่ได้ (409 `code: already_posted`) |
+| GET | `/assignments/{id}/google-submissions` | ครู | sync จาก Classroom แล้วคืน `[{id, google_submission_id, student: {id, name, student_number}\|null, state, attachments, alternate_link, retake_reason}]` |
+| POST | `/google-submissions/{id}/return` | ครู | `{reason}` return ใน Classroom, state `returned_for_retake`, แจ้งนักเรียนผ่าน FCM |
+| POST | `/assignments/{id}/google-grades/retry` | ครู | ส่งคะแนนกลับอีกครั้งให้แถวที่ `grade_failed` |
+
+`POST /scans` (§9.4) รับ field เพิ่มใน `meta`: `source` (`camera` เป็นค่าเริ่มต้น หรือ `classroom`) และ `google_submission_id` เมื่อรับสำเร็จ แถวใน `classroom_submission_imports` เปลี่ยนเป็น `imported`
+
+**ตอนเผยแพร่**: listener ของ `SubmissionPublished` ส่ง `PushClassroomGradeJob` ถ้าการบ้านนั้นโพสต์ลง Classroom แล้วและนักเรียนจับคู่ได้ job หา submission ของนักเรียนใน courseWork นั้น ตั้ง `assignedGrade` แล้ว `return` retry ตามปกติของ queue ถ้าล้มครบให้ state `grade_failed` พร้อม `last_error` และแสดงในแอปครู
+
+### 18.7 แอป
+
+- **หน้าตั้งค่าของครู**: การ์ด "Google Classroom" สถานะเชื่อมแล้ว/ยังไม่เชื่อม/ต้องเชื่อมใหม่ ปุ่มเชื่อมและยกเลิก (อยู่หน้าเดียวกับการ์ด Gemini API key)
+- **รายละเอียดห้องเรียน**: ปุ่ม "ผูกกับ Google Classroom" → เลือกคอร์ส → หน้าจับคู่นักเรียน (รายการจาก Classroom กับเลขที่ในห้อง เสนอคู่อัตโนมัติ ครูแก้/ยืนยัน)
+- **รายละเอียดการบ้าน**: ปุ่ม "โพสต์ลง Classroom" (ติ๊กแนบใบงานสำรองได้) และ "ดึงงานที่ส่ง" → รายการ submission พร้อมสถานะ → "ดาวน์โหลดและสแกนทั้งหมด" หรือทีละคน → ผลของแต่ละรูป (ผ่าน/ต้องถ่ายใหม่พร้อมเหตุผล) → ปุ่ม "ตีกลับให้ถ่ายใหม่"
+- ถ้าไม่ได้ตั้ง `GOOGLE_SERVER_CLIENT_ID` แอปซ่อนส่วน Classroom ทั้งหมด
+
+### 18.8 การทดสอบ
+
+- backend: `Http::fake` ของ endpoint Google ทั้งหมด (token exchange, courses, students, courseWork, studentSubmissions, patch, return, Drive upload, revoke) ครอบคลุม `invalid_grant`, scope ขาด, `ProjectPermissionDenied` (งานที่ไม่ได้สร้างผ่านแอป), การจับคู่ roster และ identity mismatch
+- app: repository test ด้วย Dio ปลอม, ตัวดาวน์โหลดไฟล์แนบด้วย HTTP ปลอม, widget test ของหน้าจับคู่และหน้ารายการ submission
+- ทดสอบของจริงต้องมี Google Cloud project และคอร์สทดลองตาม [KICKOFF ส่วนที่ 6](KICKOFF.md#ส่วนที่-6)
