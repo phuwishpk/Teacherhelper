@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,23 +9,45 @@ import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 
-/// Thai message for a failed PIN login. The server locks the account for
-/// 15 minutes after 5 wrong PINs (DESIGN §7.4); it signals that with
-/// 423/429 or `code: pin_locked`.
+/// Thai message for a failed PIN login.
+///
+/// - 423 `pin_locked`: this student's PIN is locked after 5 wrong tries
+///   (DESIGN §7.4). The server says how long in `errors.pin[0]`.
+/// - 429: the per-IP `throttle:student-auth` limiter. A whole class shares
+///   one school NAT address, so this is NOT about this student's PIN.
 String studentPinErrorMessage(Object error) {
   final status = apiStatusCode(error);
   final code = apiErrorCode(error);
-  if (status == 423 ||
-      status == 429 ||
-      code == 'pin_locked' ||
-      code == 'locked') {
+  if (status == 423 || code == 'pin_locked') {
+    // e.g. "ล็อกชั่วคราว ลองใหม่ในอีก 12 นาที" (StudentAuthenticator).
+    final remaining = _firstFieldError(error, 'pin');
+    if (remaining != null) {
+      return 'ใส่ PIN ผิดหลายครั้ง $remaining หรือให้ครูรีเซ็ต PIN';
+    }
     return 'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที แล้วค่อยลองใหม่ '
         'หรือให้ครูรีเซ็ต PIN';
+  }
+  if (status == 429) {
+    return 'มีการเข้าสู่ระบบถี่เกินไป รอสักครู่แล้วลองใหม่';
   }
   if (status == 401 || status == 422) {
     return 'รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง';
   }
   return apiErrorMessage(error);
+}
+
+String? _firstFieldError(Object error, String field) {
+  if (error is! DioException) return null;
+  final data = error.response?.data;
+  if (data is! Map) return null;
+  final errors = data['errors'];
+  if (errors is! Map) return null;
+  final list = errors[field];
+  if (list is List && list.isNotEmpty && list.first is String) {
+    final text = (list.first as String).trim();
+    return text.isEmpty ? null : text;
+  }
+  return null;
 }
 
 /// Student entry: scan the login card, or fall back to class code + number

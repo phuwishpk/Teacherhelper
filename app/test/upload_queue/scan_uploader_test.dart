@@ -133,6 +133,135 @@ void main() {
     },
   );
 
+  group('pending_confirm is never treated as done', () {
+    test('202 without scan_id becomes conflict and keeps the files', () async {
+      await enqueue('c2');
+      final adapter = FakeHttpAdapter(
+        (_) async => jsonResponse(202, {'state': 'pending_confirm'}),
+      );
+      final result = await uploader(adapter).drain();
+
+      expect(result.conflict, 1);
+      expect(result.retry, 0, reason: 'no endless re-upload of the multipart');
+      final scan = (await repo.find('c2'))!;
+      expect(scan.state, ScanState.conflict);
+      expect(scan.serverScanId, isNull);
+      expect(scan.lastError, ScanQueueRepository.missingIdMessage);
+      for (final path in scan.files.values) {
+        expect(File(path).existsSync(), isTrue, reason: 'rescan not lost');
+      }
+      expect(
+        await repo.dueForUpload(now: now.add(const Duration(days: 1))),
+        isEmpty,
+      );
+    });
+
+    test(
+      '200 replaying pending_confirm without scan_id is a conflict',
+      () async {
+        // A retry of a scan the server parked as pending_confirm: the server
+        // answers 200 with the original body (duplicate client_scan_id).
+        await enqueue('c3');
+        final adapter = FakeHttpAdapter(
+          (_) async => jsonResponse(200, {'state': 'pending_confirm'}),
+        );
+        expect(
+          await uploader(adapter).uploadOne((await repo.find('c3'))!),
+          UploadOutcome.conflict,
+        );
+        final scan = (await repo.find('c3'))!;
+        expect(scan.state, ScanState.conflict);
+        expect(File(scan.files['page']!).existsSync(), isTrue);
+      },
+    );
+
+    test('200 replaying pending_confirm with scan_id keeps the id', () async {
+      await enqueue('c4');
+      final adapter = FakeHttpAdapter(
+        (_) async => jsonResponse(200, {
+          'data': {
+            'scan_id': 91,
+            'submission_id': 5,
+            'state': 'pending_confirm',
+          },
+        }),
+      );
+      await uploader(adapter).drain();
+      final scan = (await repo.find('c4'))!;
+      expect(scan.state, ScanState.conflict);
+      expect(scan.serverScanId, 91);
+      expect(scan.lastError, isNull);
+    });
+  });
+
+  group('permanent rejections are not retried', () {
+    for (final (status, body, expected) in [
+      (
+        403,
+        {'message': 'ไม่มีสิทธิ์', 'errors': {}, 'code': 'forbidden'},
+        'ไม่มีสิทธิ์ (forbidden)',
+      ),
+      (404, {'message': 'Not Found'}, 'Not Found (404)'),
+      (
+        413,
+        '<html>413 Request Entity Too Large</html>',
+        'ไฟล์ภาพใหญ่เกินที่เซิร์ฟเวอร์รับได้ (413)',
+      ),
+    ]) {
+      test('$status marks the scan failed', () async {
+        await enqueue('p$status');
+        final adapter = FakeHttpAdapter(
+          (_) async => body is String
+              ? ResponseBody.fromString(
+                  body,
+                  status,
+                  headers: {
+                    Headers.contentTypeHeader: ['text/html'],
+                  },
+                )
+              : jsonResponse(status, body),
+        );
+        final result = await uploader(adapter).drain();
+        expect(result.failed, 1);
+        expect(result.retry, 0);
+        final scan = (await repo.find('p$status'))!;
+        expect(scan.state, ScanState.failed);
+        expect(scan.lastError, expected);
+        expect(scan.attempts, 0);
+        expect(
+          await repo.dueForUpload(now: now.add(const Duration(days: 1))),
+          isEmpty,
+        );
+      });
+    }
+  });
+
+  group('temporary answers are retried with backoff', () {
+    for (final status in [401, 408, 429]) {
+      test('$status schedules a retry', () async {
+        await enqueue('t$status');
+        final adapter = FakeHttpAdapter(
+          (_) async => jsonResponse(status, {'message': 'later'}),
+        );
+        final result = await uploader(adapter).drain();
+        expect(result.retry, 1);
+        final scan = (await repo.find('t$status'))!;
+        expect(scan.state, ScanState.pending);
+        expect(scan.attempts, 1);
+        expect(scan.nextAttemptAt, now.add(const Duration(seconds: 30)));
+      });
+    }
+  });
+
+  test('isRetryableStatus', () {
+    for (final s in [401, 408, 429, 500, 502, 503]) {
+      expect(isRetryableStatus(s), isTrue, reason: '$s');
+    }
+    for (final s in [400, 403, 404, 409, 413, 422]) {
+      expect(isRetryableStatus(s), isFalse, reason: '$s');
+    }
+  });
+
   test('422 marks failed with the reason and never retries', () async {
     await enqueue('bad');
     final adapter = FakeHttpAdapter(

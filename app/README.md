@@ -29,8 +29,12 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<โดเมน�
   คู่กับ token) จึงยังเข้าหน้าสแกน/คิวอัปโหลด/รายชื่อที่ cache ไว้ได้ ออกจากระบบเฉพาะเมื่อ server ตอบ 401 และจะเรียก `/me`
   ใหม่เมื่อแอปกลับมา foreground
 - คิวอัปโหลด: `done`/`conflict` เป็นสถานะ "ติดแน่น" (การอัปโหลดซ้ำจาก isolate อื่นที่ล้มเหลวทีหลังจะไม่เปลี่ยนกลับเป็น pending/failed),
-  แถวที่ค้าง `uploading` จะถูกหยิบใหม่หลัง 10 นาที, กด "อัปโหลดตอนนี้" จะยกเลิก task ของ WorkManager ก่อนแล้วขอใหม่ถ้ายังมี pending,
-  และ task ใน WorkManager จะขอ retry ตราบใดที่ยังมีสแกน `pending` แม้จะยังไม่ถึงเวลา backoff
+  การหยิบแถวไปส่ง (`markUploading`) เป็น UPDATE แบบมีเงื่อนไข จึงมี isolate เดียวที่ได้ส่ง, แถวที่ค้าง `uploading` จะถูกหยิบใหม่หลัง 10 นาที
+  (หน้าคิวมีปุ่ม "ลองใหม่"/"ลบ" ให้แถวที่ค้างนานกว่านั้น), กด "อัปโหลดตอนนี้" จะยกเลิก task ของ WorkManager ก่อนแล้วขอใหม่ถ้ายังมีงานค้าง,
+  และ task ใน WorkManager จะขอ retry ตราบใดที่ยังมีสแกน `pending` หรือ `uploading` แม้จะยังไม่ถึงเวลา backoff
+- ออกจากระบบ (ปุ่มในแอป): ลบ `scan_queue` พร้อมไฟล์ภาพ, `cached_rosters`, `cached_layouts` และยกเลิก task อัปโหลด
+  (`model_cache` เก็บไว้) ถ้ายังมีสแกนที่ไม่ได้ส่งจะถามยืนยันก่อน ส่วนการหลุดเพราะ 401 จะ**ไม่**ลบ เพื่อให้ครูคนเดิมเข้าใหม่แล้วส่งต่อได้
+  แอปจำ id ของเจ้าของข้อมูลในเครื่อง (secure storage `local_data_owner`) ถ้าคนอื่นเข้าสู่ระบบจะลบข้อมูลของคนก่อนก่อน
 
 ## สิ่งที่มีแล้ว (Phase 2)
 
@@ -54,14 +58,15 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<โดเมน�
 | จุด | แอปส่ง / คาดว่าได้รับ |
 |---|---|
 | `POST /auth/student/qr` | `{qr_token}` คือส่วนหลัง `EVL1.` ของ QR บนบัตร |
-| PIN ล็อก | status 423 หรือ 429 หรือ `code: pin_locked` → แอปแสดงข้อความล็อก 15 นาที |
+| PIN ล็อก | 423 `code: pin_locked` → ข้อความล็อก โดยใช้เวลาที่เหลือจาก `errors.pin[0]` ถ้ามี; 429 (limiter ต่อ IP ของ `throttle:student-auth`) → "มีการเข้าสู่ระบบถี่เกินไป" ไม่ใช่ข้อความล็อก PIN |
 | `POST /classrooms/{id}/students` | body `{students: [{name, student_number}]}` ตอบ `201 {data: [{student_id, student_number, name, status, pin}]}` แอปแสดง PIN เริ่มต้นของทุกคนครั้งเดียว (คัดลอกได้) ก่อนออกจากหน้า |
 | งานพิมพ์บัตร QR | `202 {data: {id, status, classroom_id, student_id, download_url, status_url, error}}` แอป poll ที่ `status_url` (หรือ `GET /login-card-prints/{id}` ถ้าไม่มี) จน `status = ready` แล้วดาวน์โหลด `download_url` (รับทั้ง URL เต็มและ `/api/v1/...`) |
 | `POST /students/{id}/pin` | ตอบ `{pin}` (backend ส่ง `student_id` มาด้วย) แอปแสดง `pin` ครั้งเดียว |
 | `GET /subjects` | `{data: [{id, code, name}]}` ใช้ตอนสร้างการบ้าน |
 | `GET /assignments/{id}` | มี `questions[]` แต่ละข้อมี `skills[]` และ `rubric_criteria[]` |
-| คำถาม | key ตาม §8.3 + `skill_ids[]` |
-| `PUT /questions/{id}/rubric` | `{criteria: [{position, description, points, is_core}], reference_steps?}` |
+| คำถาม | key ตาม §8.3 + `skill_ids[]`; คำตอบที่ยอมรับกรอกบรรทัดละคำตอบ (จุลภาคเป็นส่วนของคำตอบ เช่น `1,000`) |
+| `PUT /questions/{id}/rubric` | `open`: `{criteria: [{position, description, points, is_core}]}` (เกณฑ์หลักไม่เกิน 1 ข้อ); `show_work`: `{criteria: [], reference_steps: [...]}` |
+| ร่าง rubric | poll `GET /assignments/{id}` จนข้อนั้นเปลี่ยน: `show_work` ดู `answer_key.reference_steps`, `open` ดู `rubric_criteria` |
 | `GET /assignments/{id}/layouts` | ไม่ส่ง `version` = ทุกเวอร์ชัน `[{version, pages[]}]` (รับแบบ object เดี่ยวด้วย) |
-| `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done, 202 หรือ `state: pending_confirm` → รอครูยืนยันผ่าน `POST /scans/{id}/confirm-replace`, 422 → failed (แสดง `message (code)`) |
+| `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done; 202 หรือ `state: pending_confirm` (รวม 200 ที่ส่ง body เดิมซ้ำ) → `conflict` รอครูยืนยันผ่าน `POST /scans/{scan_id}/confirm-replace` **แอปต้องการ `scan_id` ใน body ของ 202** (ถ้าไม่มีจะเก็บเป็น conflict ที่ยืนยันจากเครื่องไม่ได้ ไม่ลบไฟล์); 401/408/429/5xx/เน็ตหลุด → retry แบบ backoff; 4xx อื่น (422, 403, 404, 413, …) → failed ถาวร (แสดง `message (code)`) |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |

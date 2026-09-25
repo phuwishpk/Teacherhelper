@@ -11,6 +11,11 @@ import '../../core/auth/auth_repository.dart';
 import 'queued_scan.dart';
 import 'scan_queue_repository.dart';
 
+/// HTTP answers to `POST /scans` that a later attempt can fix: 401 (sign in
+/// again), 408, 429 and every 5xx. Other 4xx are final (DESIGN §9, §9.4).
+bool isRetryableStatus(int status) =>
+    status == 401 || status == 408 || status == 429 || status >= 500;
+
 /// Delay before attempt number [attempts] + 1 (30 s, 1 min, 2 min … 1 h).
 Duration backoffFor(int attempts) {
   const base = Duration(seconds: 30);
@@ -171,40 +176,55 @@ class ScanUploader {
         : const <String, dynamic>{};
     final serverScanId = (body['scan_id'] as num?)?.toInt();
 
-    switch (status) {
-      case 200:
-      case 201:
-        if (body['state'] == 'pending_confirm' && serverScanId != null) {
-          await _repo.markConflict(
-            scan.clientScanId,
-            serverScanId: serverScanId,
-          );
-          return UploadOutcome.conflict;
-        }
-        await _repo.markDone(scan.clientScanId, serverScanId: serverScanId);
-        return UploadOutcome.done;
-      case 202:
-        if (serverScanId == null) {
-          return _scheduleRetry(scan, 'เซิร์ฟเวอร์ตอบ 202 โดยไม่มี scan_id');
-        }
-        await _repo.markConflict(scan.clientScanId, serverScanId: serverScanId);
-        return UploadOutcome.conflict;
-      case 422:
-        final code = body['code'] as String?;
-        final message = body['message'] as String? ?? 'ถูกปฏิเสธ';
-        await _repo.markFailed(
-          scan.clientScanId,
-          reason: code == null ? message : '$message ($code)',
-        );
-        return UploadOutcome.failed;
-      case 401:
-        return _scheduleRetry(scan, 'ต้องเข้าสู่ระบบใหม่ก่อนอัปโหลด');
-      default:
-        return _scheduleRetry(
-          scan,
-          body['message'] as String? ?? 'เซิร์ฟเวอร์ตอบกลับผิดพลาด ($status)',
-        );
+    // A published submission: the server keeps the scan as pending_confirm
+    // until the teacher confirms (DESIGN §9.4). This can arrive as 202, or
+    // as 200 when a retry replays the original answer. Never mark it done:
+    // that would delete the images and hide a rescan that still needs the
+    // teacher's decision.
+    if (body['state'] == 'pending_confirm' || status == 202) {
+      await _repo.markConflict(scan.clientScanId, serverScanId: serverScanId);
+      return UploadOutcome.conflict;
     }
+
+    if (status == 200 || status == 201) {
+      await _repo.markDone(scan.clientScanId, serverScanId: serverScanId);
+      return UploadOutcome.done;
+    }
+
+    if (isRetryableStatus(status)) {
+      return _scheduleRetry(scan, _retryMessage(status, body));
+    }
+
+    // Any other answer is final for this scan: 422 qr_invalid /
+    // layout_unknown / page_mismatch, 403 (someone else's assignment),
+    // 404, 413 (upload bigger than the server accepts), ... Sending the same
+    // bytes again cannot change it.
+    await _repo.markFailed(
+      scan.clientScanId,
+      reason: _rejectionMessage(status, body),
+    );
+    return UploadOutcome.failed;
+  }
+
+  static String _retryMessage(int status, Map<String, dynamic> body) =>
+      switch (status) {
+        401 => 'ต้องเข้าสู่ระบบใหม่ก่อนอัปโหลด',
+        429 => 'เซิร์ฟเวอร์รับงานไม่ทัน จะลองใหม่อัตโนมัติ',
+        _ =>
+          body['message'] as String? ?? 'เซิร์ฟเวอร์ตอบกลับผิดพลาด ($status)',
+      };
+
+  static String _rejectionMessage(int status, Map<String, dynamic> body) {
+    final message =
+        body['message'] as String? ??
+        switch (status) {
+          403 => 'ไม่มีสิทธิ์ส่งสแกนนี้ (อาจเป็นการบ้านของครูคนอื่น)',
+          404 => 'ไม่พบการบ้านหรือนักเรียนนี้บนเซิร์ฟเวอร์',
+          413 => 'ไฟล์ภาพใหญ่เกินที่เซิร์ฟเวอร์รับได้',
+          _ => 'เซิร์ฟเวอร์ปฏิเสธสแกนนี้',
+        };
+    final code = body['code'] as String?;
+    return '$message (${code ?? status})';
   }
 
   Future<UploadOutcome> _scheduleRetry(QueuedScan scan, String error) async {

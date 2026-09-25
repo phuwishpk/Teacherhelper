@@ -81,6 +81,44 @@ void main() {
     expect((await repo.find('r'))!.attempts, 1);
   });
 
+  test(
+    'an upload interrupted by a killed isolate keeps the task alive',
+    () async {
+      // The app died while this row was `uploading`; it is not due until it is
+      // stale, so WorkManager must keep coming back for it.
+      await repo.enqueue(clientScanId: 'cut', meta: meta('cut'), files: {});
+      await repo.markUploading('cut');
+      final adapter = FakeHttpAdapter((_) async => jsonResponse(201, {}));
+
+      expect(await runBackgroundDrain(uploader(adapter), repo), isFalse);
+      expect(adapter.requests, isEmpty, reason: 'not stale yet');
+    },
+  );
+
+  test('a stale interrupted upload is sent and finishes the task', () async {
+    await repo.enqueue(clientScanId: 'cut', meta: meta('cut'), files: {});
+    await repo.markUploading('cut', now: now.subtract(staleUploadingAfter));
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(201, {'scan_id': 3, 'state': 'active'}),
+    );
+
+    expect(await runBackgroundDrain(uploader(adapter), repo), isTrue);
+    expect(adapter.requests, hasLength(1));
+    expect((await repo.find('cut'))!.state, ScanState.done);
+  });
+
+  test(
+    'a 403 (another teacher\'s scan) does not keep the task alive',
+    () async {
+      await repo.enqueue(clientScanId: 'x', meta: meta('x'), files: {});
+      final adapter = FakeHttpAdapter(
+        (_) async => jsonResponse(403, {'message': 'forbidden'}),
+      );
+      expect(await runBackgroundDrain(uploader(adapter), repo), isTrue);
+      expect((await repo.find('x'))!.state, ScanState.failed);
+    },
+  );
+
   test('a rejected scan (422) does not keep the task alive', () async {
     await repo.enqueue(clientScanId: 'bad', meta: meta('bad'), files: {});
     final adapter = FakeHttpAdapter(

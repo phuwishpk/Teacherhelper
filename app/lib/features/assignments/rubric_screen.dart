@@ -12,8 +12,13 @@ import 'assignments_repository.dart';
 import 'question.dart';
 
 /// Rubric of a show_work / open question: ask Gemini for a draft
-/// (`POST /questions/{id}/rubric/draft`, then poll), edit the criteria, and
-/// approve them with `PUT /questions/{id}/rubric` (DESIGN §9.3, §10.4).
+/// (`POST /questions/{id}/rubric/draft`, then poll), edit it, and approve it
+/// with `PUT /questions/{id}/rubric` (DESIGN §9.3, §10.4).
+///
+/// The two types have different rubrics (§2.2, §11.3, §11.5):
+/// - show_work: reference steps plus the final answer from the answer key;
+///   no criteria. Approval sends `{criteria: [], reference_steps: [...]}`.
+/// - open: weighted criteria, at most one of them `is_core`.
 class RubricScreen extends ConsumerStatefulWidget {
   const RubricScreen({
     super.key,
@@ -102,9 +107,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
           final a = await notifier.refresh();
           final q = _question(a);
           final ready =
-              q != null &&
-              q.rubricCriteria.isNotEmpty &&
-              rubricFingerprint(q) != before;
+              q != null && hasRubricDraft(q) && rubricFingerprint(q) != before;
           if (ready) {
             timer.cancel();
             setState(() {
@@ -112,7 +115,12 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
               _drafting = false;
             });
             if (mounted) {
-              showMessage(context, 'AI ร่าง rubric แล้ว ตรวจและอนุมัติได้เลย');
+              showMessage(
+                context,
+                q.type == QuestionType.showWork
+                    ? 'AI ร่างขั้นตอนอ้างอิงแล้ว ตรวจและอนุมัติได้เลย'
+                    : 'AI ร่าง rubric แล้ว ตรวจและอนุมัติได้เลย',
+              );
             }
           } else if (DateTime.now().isAfter(deadline)) {
             timer.cancel();
@@ -138,7 +146,15 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
     }
   }
 
-  Future<void> _approve(Question q) async {
+  List<String> get _stepLines => _steps.text
+      .split('\n')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+
+  /// Criteria of an open question as typed, or null after showing why they
+  /// cannot be approved yet.
+  Future<List<RubricCriterion>?> _criteriaForApproval(Question q) async {
     final criteria = <RubricCriterion>[];
     for (var i = 0; i < _rows.length; i++) {
       final r = _rows[i];
@@ -146,7 +162,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
       final pts = double.tryParse(r.points.text.trim());
       if (desc.isEmpty || pts == null || pts < 0) {
         setState(() => _error = 'เกณฑ์ข้อ ${i + 1} ต้องมีคำอธิบายและคะแนน');
-        return;
+        return null;
       }
       criteria.add(
         RubricCriterion(
@@ -161,10 +177,29 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
     }
     if (criteria.isEmpty) {
       setState(() => _error = 'ต้องมีเกณฑ์อย่างน้อย 1 ข้อ');
-      return;
+      return null;
+    }
+    final cores = criteria.where((c) => c.isCore).length;
+    if (cores > 1) {
+      setState(() => _error = 'เลือกเกณฑ์หลักได้เพียงข้อเดียว');
+      return null;
+    }
+    if (cores == 0) {
+      // §11.5 grades without a core criterion (K = R), but the teacher
+      // should know that nothing then marks the essential idea.
+      final ok = await confirm(
+        context,
+        title: 'ยังไม่ได้เลือกเกณฑ์หลัก',
+        message:
+            'ถ้าไม่มีเกณฑ์หลัก ระบบจะเฉลี่ยทุกเกณฑ์ตามคะแนน คำตอบที่พลาดแก่นของเรื่องอาจได้คะแนนสูง '
+            'ต้องการอนุมัติต่อหรือไม่',
+        confirmLabel: 'อนุมัติ',
+      );
+      if (!ok) return null;
     }
     final total = criteria.fold<double>(0, (s, c) => s + c.points);
     if ((total - q.maxPoints).abs() > 0.001) {
+      if (!mounted) return null;
       final ok = await confirm(
         context,
         title: 'คะแนนรวมไม่เท่ากับคะแนนเต็ม',
@@ -172,8 +207,35 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
             'เกณฑ์รวมได้ $total คะแนน แต่ข้อนี้เต็ม ${q.maxPoints} คะแนน ต้องการอนุมัติต่อหรือไม่',
         confirmLabel: 'อนุมัติ',
       );
-      if (!ok) return;
+      if (!ok) return null;
     }
+    return criteria;
+  }
+
+  Future<void> _approve(Question q) async {
+    final List<RubricCriterion> criteria;
+    List<String>? referenceSteps;
+    if (q.type == QuestionType.showWork) {
+      // show_work has no criteria: the reference steps and the final answer
+      // of the answer key are the rubric (§11.3).
+      referenceSteps = _stepLines;
+      criteria = const [];
+      if (referenceSteps.isEmpty) {
+        final ok = await confirm(
+          context,
+          title: 'ยังไม่มีขั้นตอนอ้างอิง',
+          message:
+              'AI จะตรวจวิธีทำโดยไม่มีขั้นตอนตัวอย่างให้เทียบ ต้องการอนุมัติต่อหรือไม่',
+          confirmLabel: 'อนุมัติ',
+        );
+        if (!ok) return;
+      }
+    } else {
+      final typed = await _criteriaForApproval(q);
+      if (typed == null) return;
+      criteria = typed;
+    }
+    if (!mounted) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -184,24 +246,35 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
           .saveRubric(
             widget.questionId,
             criteria: criteria,
-            referenceSteps: q.type == QuestionType.showWork
-                ? _steps.text
-                      .split('\n')
-                      .map((s) => s.trim())
-                      .where((s) => s.isNotEmpty)
-                      .toList()
-                : null,
+            referenceSteps: referenceSteps,
           );
       await ref
           .read(assignmentDetailProvider(widget.assignmentId).notifier)
           .refresh();
       if (!mounted) return;
-      showMessage(context, 'อนุมัติ rubric แล้ว');
+      showMessage(
+        context,
+        q.type == QuestionType.showWork
+            ? 'อนุมัติขั้นตอนอ้างอิงแล้ว'
+            : 'อนุมัติ rubric แล้ว',
+      );
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  void _setCore(_CriterionRow row, bool value) {
+    setState(() {
+      // At most one core criterion (§10.4): picking one clears the others.
+      if (value) {
+        for (final r in _rows) {
+          r.isCore = false;
+        }
+      }
+      row.isCore = value;
+    });
   }
 
   @override
@@ -220,6 +293,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
             return const ErrorView(message: 'ไม่พบคำถามนี้ในการบ้าน');
           }
           if (_loadedForQuestion != q.id) _loadFrom(q);
+          final showWork = q.type == QuestionType.showWork;
           return FormColumn(
             maxWidth: 680,
             children: [
@@ -254,29 +328,33 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
                           )
                         : const Icon(Icons.auto_awesome),
                     label: Text(
-                      _drafting ? 'รอ AI ร่าง…' : 'ให้ AI ร่าง rubric',
+                      _drafting
+                          ? 'รอ AI ร่าง…'
+                          : showWork
+                          ? 'ให้ AI ร่างขั้นตอนอ้างอิง'
+                          : 'ให้ AI ร่าง rubric',
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              Text('เกณฑ์การให้คะแนน', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              for (var i = 0; i < _rows.length; i++)
-                _CriterionCard(
-                  index: i,
-                  row: _rows[i],
-                  onChanged: () => setState(() {}),
-                  onRemove: () => setState(() => _rows.removeAt(i).dispose()),
+              if (showWork) ...[
+                Text('ขั้นตอนอ้างอิง', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'ข้อแสดงวิธีทำตรวจจากวิธีทำทีละบรรทัดและคำตอบสุดท้าย '
+                  'ไม่มีเกณฑ์แยกข้อ',
+                  style: theme.textTheme.bodySmall,
                 ),
-              OutlinedButton.icon(
-                onPressed: () =>
-                    setState(() => _rows.add(_CriterionRow.empty())),
-                icon: const Icon(Icons.add),
-                label: const Text('เพิ่มเกณฑ์'),
-              ),
-              if (q.type == QuestionType.showWork) ...[
-                const SizedBox(height: 16),
+                if (_finalAnswers(q) case final answers
+                    when answers.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'คำตอบสุดท้ายตามเฉลย: ${answers.join(' / ')}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+                const SizedBox(height: 12),
                 TextField(
                   controller: _steps,
                   minLines: 3,
@@ -284,7 +362,24 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
                   decoration: const InputDecoration(
                     labelText: 'ขั้นตอนอ้างอิง (บรรทัดละขั้น)',
                     alignLabelWithHint: true,
+                    hintText: '3x + 5 = 20\n3x = 15\nx = 5',
                   ),
+                ),
+              ] else ...[
+                Text('เกณฑ์การให้คะแนน', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                for (var i = 0; i < _rows.length; i++)
+                  _CriterionCard(
+                    index: i,
+                    row: _rows[i],
+                    onCoreChanged: (v) => _setCore(_rows[i], v),
+                    onRemove: () => setState(() => _rows.removeAt(i).dispose()),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      setState(() => _rows.add(_CriterionRow.empty())),
+                  icon: const Icon(Icons.add),
+                  label: const Text('เพิ่มเกณฑ์'),
                 ),
               ],
               if (_error != null) ...[
@@ -306,16 +401,30 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
 }
 
 /// Stable summary of a question's rubric used to detect that DraftRubricJob
-/// has written something new. Null when there is no question.
+/// has written something new: status, criteria (open) and reference steps
+/// (show_work). Null when there is no question.
 String? rubricFingerprint(Question? q) {
   if (q == null) return null;
   final parts = [
     q.rubricStatus.apiValue,
     for (final c in q.rubricCriteria)
-      '${c.id}|${c.position}|${c.description}|${c.points}|${c.isCore}|${c.source}',
+      'c:${c.id}|${c.position}|${c.description}|${c.points}|${c.isCore}|${c.source}',
+    for (final step in q.referenceSteps) 's:$step',
   ];
   return parts.join('\n');
 }
+
+/// Whether [q] holds a draft the teacher can review: reference steps for
+/// show_work (DraftRubricJob writes only `reference_steps` there, §10.4),
+/// criteria for open.
+bool hasRubricDraft(Question q) => q.type == QuestionType.showWork
+    ? q.referenceSteps.isNotEmpty
+    : q.rubricCriteria.isNotEmpty;
+
+List<String> _finalAnswers(Question q) =>
+    (((q.answerKey?['final'] as Map?)?['accepted'] as List?) ?? const [])
+        .map((e) => e.toString())
+        .toList();
 
 class _CriterionRow {
   _CriterionRow({
@@ -360,13 +469,13 @@ class _CriterionCard extends StatelessWidget {
   const _CriterionCard({
     required this.index,
     required this.row,
-    required this.onChanged,
+    required this.onCoreChanged,
     required this.onRemove,
   });
 
   final int index;
   final _CriterionRow row;
-  final VoidCallback onChanged;
+  final ValueChanged<bool> onCoreChanged;
   final VoidCallback onRemove;
 
   @override
@@ -414,10 +523,7 @@ class _CriterionCard extends StatelessWidget {
               children: [
                 Checkbox(
                   value: row.isCore,
-                  onChanged: (v) {
-                    row.isCore = v ?? false;
-                    onChanged();
-                  },
+                  onChanged: (v) => onCoreChanged(v ?? false),
                 ),
                 const Expanded(
                   child: Text(

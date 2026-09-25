@@ -84,7 +84,10 @@ class ScanQueue extends Table {
 /// Downloaded TFLite models (§9.8); one row per model name.
 class ModelCache extends Table {
   TextColumn get name => text()();
-  IntColumn get version => integer()();
+
+  /// Semver string as in `model_versions.version` VARCHAR(20) (§8.6),
+  /// e.g. "0.1.0" for ml/models/digit_crnn/0.1.0.
+  TextColumn get version => text()();
   TextColumn get sha256 => text()();
   TextColumn get path => text()();
   DateTimeColumn get downloadedAt => dateTime()();

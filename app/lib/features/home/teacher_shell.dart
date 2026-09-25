@@ -6,6 +6,7 @@ import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../assignments/assignments_page.dart';
+import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
@@ -93,7 +94,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
           IconButton(
             tooltip: 'ออกจากระบบ',
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(sessionProvider.notifier).signOut(),
+            onPressed: () => confirmSignOut(context, ref),
           ),
         ],
       ),
