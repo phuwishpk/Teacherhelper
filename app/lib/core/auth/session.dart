@@ -197,3 +197,41 @@ final currentUserProvider = Provider<User?>((ref) {
     _ => null,
   };
 });
+
+/// Thrown by a per-user provider while nobody is signed in (see
+/// [watchSignedInUser]). An [Error], so Riverpod does not retry it.
+class SignedOutError extends StateError {
+  SignedOutError() : super('No user is signed in');
+}
+
+typedef _UserScope = ({bool signedOut, int? userId});
+
+_UserScope _userScopeOf(SessionState state) => switch (state) {
+  SignedIn(:final user) => (signedOut: false, userId: user.id),
+  SignedOut() => (signedOut: true, userId: null),
+  SessionRestoring() => (signedOut: false, userId: null),
+};
+
+/// Ties a provider that caches one user's server data to the session. Call
+/// it first in build(); the provider must be `autoDispose`. Returns the
+/// signed-in user's id (null while the session is still restoring).
+///
+/// A school phone or tablet is shared, and a teacher may only see their own
+/// classrooms, a student only their own results (DESIGN §9). Rebuilding a
+/// provider is not enough for that: Riverpod keeps the last value as the
+/// "previous" value of the next AsyncLoading/AsyncError, so `.value` would
+/// still hand teacher A's data to teacher B. Instead:
+///
+/// * signed in (or restoring): the provider is kept alive and caches for
+///   the whole session like a plain provider ([keepAlive] = false leaves it
+///   to autoDispose, for per-screen details);
+/// * signed out: build throws [SignedOutError] instead of calling the API
+///   without a token and drops the keep-alive, so Riverpod disposes the
+///   provider as soon as the signed-in screens stop listening. Whoever
+///   signs in next starts from an empty provider.
+int? watchSignedInUser(Ref ref, {bool keepAlive = true}) {
+  final scope = ref.watch(sessionProvider.select(_userScopeOf));
+  if (scope.signedOut) throw SignedOutError();
+  if (keepAlive) ref.keepAlive();
+  return scope.userId;
+}

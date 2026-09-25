@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
+import '../../core/auth/session.dart';
 
 /// `GET /me/ai-key` (DESIGN §9.1, §10.1). The key itself never comes back:
 /// only whether one is set, its last 4 characters and when it last worked.
@@ -88,7 +89,10 @@ final aiKeyRepositoryProvider = Provider<AiKeyRepository>(
 
 class AiKeyNotifier extends AsyncNotifier<AiKeyStatus> {
   @override
-  Future<AiKeyStatus> build() => ref.watch(aiKeyRepositoryProvider).status();
+  Future<AiKeyStatus> build() {
+    watchSignedInUser(ref);
+    return ref.watch(aiKeyRepositoryProvider).status();
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -107,9 +111,11 @@ class AiKeyNotifier extends AsyncNotifier<AiKeyStatus> {
   }
 }
 
-final aiKeyProvider = AsyncNotifierProvider<AiKeyNotifier, AiKeyStatus>(
-  AiKeyNotifier.new,
-);
+/// Per teacher: dropped on sign-out (see [watchSignedInUser]).
+final aiKeyProvider =
+    AsyncNotifierProvider.autoDispose<AiKeyNotifier, AiKeyStatus>(
+      AiKeyNotifier.new,
+    );
 
 /// Thai message for a failed save: the field error or message the server
 /// gave for `ai_key_invalid` (422), otherwise the generic API error text.

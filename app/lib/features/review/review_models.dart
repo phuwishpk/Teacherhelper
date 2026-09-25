@@ -1,3 +1,4 @@
+import 'fuzzy_trace.dart';
 import 'review_labels.dart';
 
 double? _double(Object? v) => switch (v) {
@@ -43,17 +44,38 @@ class StudentRef {
 }
 
 /// Flags that change how a response is reviewed. The API may send them as
-/// booleans or as a `flags: [...]` list; both are accepted.
-Set<String> _flags(Map<String, dynamic> json) => {
-  if (json['flags'] case final List list)
-    for (final f in list)
-      if (f is String) f,
-  if (_bool(json['suspicious']) || _bool(json['suspicious_instruction']))
-    'suspicious',
-  if (_bool(json['identity_mismatch'])) 'identity_mismatch',
-  if (_bool(json['has_open_appeal']) || _bool(json['appeal_open']))
-    'appeal_open',
-};
+/// booleans or as a `flags: [...]` list; both are accepted. They are also
+/// read from where the backend stores them when a payload carries the
+/// stored JSON but not the top-level field (none of them is a §8.4 column):
+/// `extraction.suspicious_instruction` (§10.3), the review-priority `flag`
+/// inside `fuzzy_trace` (§11.8) and an `identity_mismatch` kept in
+/// `fuzzy_trace` (§18.4). Missing the prompt-injection flag would hide the
+/// "น่าสงสัย" warning from the teacher.
+Set<String> _flags(Map<String, dynamic> json) {
+  final extraction = _map(json['extraction']);
+  final trace = _map(json['fuzzy_trace']);
+  return {
+    for (final source in [json, ?trace])
+      if (source['flags'] case final List list)
+        for (final f in list)
+          if (f is String) f,
+    if (_bool(json['suspicious']) ||
+        _bool(json['suspicious_instruction']) ||
+        _bool(extraction?['suspicious_instruction']) ||
+        FuzzyTrace.parse(trace).suspicious)
+      'suspicious',
+    if (_bool(json['identity_mismatch']) || _bool(trace?['identity_mismatch']))
+      'identity_mismatch',
+    if (_bool(json['has_open_appeal']) || _bool(json['appeal_open']))
+      'appeal_open',
+  };
+}
+
+/// `manual_reason` at the top level, or where the backend stores it
+/// (`fuzzy_trace.manual_reason`).
+String? _manualReason(Map<String, dynamic> json) =>
+    (json['manual_reason'] ?? _map(json['fuzzy_trace'])?['manual_reason'])
+        as String?;
 
 /// One row of `GET /assignments/{id}/review-queue` (DESIGN §9.5).
 class ReviewItem {
@@ -108,31 +130,41 @@ class ReviewItem {
   bool get isPublished => submissionStatus == 'published';
   bool get missingAiKey => isManual && manualReason == 'ai_key_missing';
 
+  /// A flag the teacher must look at: a possible prompt injection (§10.3)
+  /// or a Classroom scan whose QR names another student than the one who
+  /// handed it in (§18.3). Neither need raise review_priority (§11.8), so
+  /// the app places these rows itself.
+  bool get isFlagged => isSuspicious || identityMismatch;
+
   /// AI has not produced a score yet (still in the grading queue).
   bool get isGrading =>
       gradingState == 'queued' ||
       gradingState == 'extracted' ||
       (gradingState == 'failed' && aiScore == null);
 
-  /// Manual and not-yet-scored rows sit on the "ต้องตรวจ" tab (§11.8).
-  PriorityBand get tab => isManual || band == null ? PriorityBand.check : band!;
+  /// Manual, not-yet-scored and flagged rows sit on the "ต้องตรวจ" tab
+  /// (§11.8, §18.3), whatever band the priority system gave them.
+  PriorityBand get tab =>
+      isManual || isFlagged || band == null ? PriorityBand.check : band!;
 
   double? get currentScore => finalScore ?? aiScore;
   Understanding? get currentUnderstanding =>
       finalUnderstanding ?? aiUnderstanding;
 
-  /// Only confident, unflagged, scored rows go through bulk approval (§13).
+  /// Only confident, unflagged, scored rows go through bulk approval (§13):
+  /// a suspicious or identity-mismatch row always needs the teacher's eyes.
   bool get bulkApprovable =>
       !isReviewed &&
       !isManual &&
-      !isSuspicious &&
+      !isFlagged &&
       !hasOpenAppeal &&
       band == PriorityBand.confident &&
       aiScore != null;
 
-  /// Queue order: manual first, then suspicious, then review_priority desc.
+  /// Queue order: manual first, then flagged (suspicious or identity
+  /// mismatch), then review_priority descending.
   int compareQueueOrder(ReviewItem other) {
-    int rank(ReviewItem i) => i.isManual ? 0 : (i.isSuspicious ? 1 : 2);
+    int rank(ReviewItem i) => i.isManual ? 0 : (i.isFlagged ? 1 : 2);
     final r = rank(this).compareTo(rank(other));
     if (r != 0) return r;
     return (other.reviewPriority ?? 0).compareTo(reviewPriority ?? 0);
@@ -152,7 +184,7 @@ class ReviewItem {
       maxPoints: _double(json['max_points'] ?? question?['max_points']) ?? 0,
       student: StudentRef.fromJson(json['student'] ?? submission?['student']),
       gradingState: json['grading_state'] as String? ?? 'scored',
-      manualReason: json['manual_reason'] as String?,
+      manualReason: _manualReason(json),
       band: PriorityBand.fromApi(json['priority_band']),
       reviewPriority: _double(json['review_priority']),
       flags: _flags(json),
@@ -480,7 +512,7 @@ class ResponseDetail {
       student: StudentRef.fromJson(json['student'] ?? submission?['student']),
       submissionStatus:
           (json['submission_status'] ?? submission?['status']) as String?,
-      manualReason: json['manual_reason'] as String?,
+      manualReason: _manualReason(json),
       band: PriorityBand.fromApi(json['priority_band']),
       reviewPriority: _double(json['review_priority']),
       flags: _flags(json),

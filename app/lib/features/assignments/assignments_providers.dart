@@ -1,13 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/session.dart';
 import 'assignment.dart';
 import 'assignments_repository.dart';
 import 'question.dart';
 
 class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
   @override
-  Future<List<Assignment>> build() =>
-      ref.watch(assignmentsRepositoryProvider).list();
+  Future<List<Assignment>> build() {
+    watchSignedInUser(ref);
+    return ref.watch(assignmentsRepositoryProvider).list();
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -44,7 +47,7 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
 }
 
 final assignmentsProvider =
-    AsyncNotifierProvider<AssignmentsNotifier, List<Assignment>>(
+    AsyncNotifierProvider.autoDispose<AssignmentsNotifier, List<Assignment>>(
       AssignmentsNotifier.new,
     );
 
@@ -55,8 +58,10 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
   final int assignmentId;
 
   @override
-  Future<Assignment> build() =>
-      ref.watch(assignmentsRepositoryProvider).get(assignmentId);
+  Future<Assignment> build() {
+    watchSignedInUser(ref);
+    return ref.watch(assignmentsRepositoryProvider).get(assignmentId);
+  }
 
   Future<Assignment> refresh() {
     ref.invalidateSelf();
@@ -113,11 +118,12 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
   }
 }
 
-final assignmentDetailProvider =
-    AsyncNotifierProvider.family<AssignmentDetailNotifier, Assignment, int>(
+final assignmentDetailProvider = AsyncNotifierProvider.autoDispose
+    .family<AssignmentDetailNotifier, Assignment, int>(
       AssignmentDetailNotifier.new,
     );
 
-final subjectsProvider = FutureProvider<List<Subject>>(
-  (ref) => ref.watch(assignmentsRepositoryProvider).subjects(),
-);
+final subjectsProvider = FutureProvider.autoDispose<List<Subject>>((ref) {
+  watchSignedInUser(ref);
+  return ref.watch(assignmentsRepositoryProvider).subjects();
+});

@@ -277,7 +277,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
             error: true,
             text:
                 'QR บนใบงานไม่ตรงกับนักเรียนที่ส่งงานใน Google Classroom '
-                'ตรวจว่าเป็นงานของนักเรียนคนนี้จริง',
+                'ตรวจว่าเป็นงานของนักเรียนคนนี้จริง ข้อนี้อนุมัติแบบกลุ่มไม่ได้',
           ),
         if (d.appeal case final appeal? when appeal.isOpen)
           _Notice(

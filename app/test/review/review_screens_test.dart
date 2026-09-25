@@ -190,6 +190,26 @@ void main() {
       expect(repo.saved.single.$2['final_score'], 2.0);
       expect(repo.saved.single.$2.containsKey('reason'), isFalse);
     });
+    testWidgets('warns about a prompt injection that only the extraction '
+        'reports (§10.3)', (tester) async {
+      _phone(tester);
+      final json = responseJson();
+      (json['extraction'] as Map)['suspicious_instruction'] = true;
+      final repo = FakeReviewRepository(
+        rows: [queueRow(id: 11)],
+        responses: {11: json},
+      );
+      await pumpScreen(
+        tester,
+        const ReviewDetailScreen(assignmentId: 5, responseId: 11),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(repo),
+          cropLoaderProvider.overrideWithValue(NoCropLoader()),
+        ],
+      );
+      expect(find.textContaining('พยายามสั่งผู้ตรวจ'), findsOneWidget);
+      expect(find.text('น่าสงสัย'), findsWidgets);
+    });
   });
 
   group('review queue', () {
@@ -306,12 +326,13 @@ void main() {
           ),
         ],
       );
-      expect(find.text('ต้องตรวจ (1)'), findsOneWidget);
+      // A suspicious row is on "ต้องตรวจ" whatever its band (§10.7).
+      expect(find.text('ต้องตรวจ (2)'), findsOneWidget);
       expect(find.text('ควรดู (1)'), findsOneWidget);
-      expect(find.text('มั่นใจ (2)'), findsOneWidget);
-      expect(find.text('น่าสงสัย'), findsOneWidget);
+      expect(find.text('มั่นใจ (1)'), findsOneWidget);
+      expect(find.text('น่าสงสัย'), findsNWidgets(2));
 
-      await tester.tap(find.text('มั่นใจ (2)'));
+      await tester.tap(find.text('มั่นใจ (1)'));
       await tester.pumpAndSettle();
       // Suspicious rows never go through bulk approval (§10.7).
       await tester.tap(find.text('อนุมัติทั้งกลุ่มมั่นใจ (1 ข้อ)'));
@@ -337,6 +358,49 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'เผยแพร่').last);
       await tester.pumpAndSettle();
       expect(repo.published, [5]);
+    });
+
+    testWidgets('a Classroom scan whose QR names another student waits on '
+        '"ต้องตรวจ" and stays out of bulk approval (§18.3)', (tester) async {
+      _phone(tester);
+      final repo = FakeReviewRepository(
+        rows: [
+          queueRow(id: 21, band: 'check', position: 1),
+          queueRow(
+            id: 22,
+            band: 'confident',
+            position: 2,
+            identityMismatch: true,
+          ),
+          queueRow(id: 23, band: 'confident', position: 3),
+        ],
+      );
+      await pumpScreen(
+        tester,
+        const ReviewQueueScreen(assignmentId: 5),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(repo),
+          assignmentsRepositoryProvider.overrideWithValue(_OneAssignment()),
+          aiKeyRepositoryProvider.overrideWithValue(
+            FakeAiKeyRepository(const AiKeyStatus(configured: true)),
+          ),
+        ],
+      );
+      expect(find.text('ต้องตรวจ (2)'), findsOneWidget);
+      expect(find.text('มั่นใจ (1)'), findsOneWidget);
+      // The flagged row comes before a plain row with a higher priority.
+      expect(find.text('ตัวตนไม่ตรง'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('ตัวตนไม่ตรง')).dy,
+        lessThan(tester.getTopLeft(find.textContaining('ข้อ 1 ·')).dy),
+      );
+
+      await tester.tap(find.text('มั่นใจ (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('ตัวตนไม่ตรง'), findsNothing);
+      await tester.tap(find.text('อนุมัติทั้งกลุ่มมั่นใจ (1 ข้อ)'));
+      await tester.pumpAndSettle();
+      expect(find.text('อนุมัติ 1 ข้อในกลุ่มมั่นใจ?'), findsOneWidget);
     });
 
     testWidgets('rescans of published pages are confirmed from the queue', (

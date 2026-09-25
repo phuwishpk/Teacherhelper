@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
+import '../../core/auth/session.dart';
 import '../review/review_models.dart';
 import 'student_result.dart';
 
@@ -48,8 +49,10 @@ final resultsRepositoryProvider = Provider<ResultsRepository>(
 
 class StudentResultsNotifier extends AsyncNotifier<List<StudentResult>> {
   @override
-  Future<List<StudentResult>> build() =>
-      ref.watch(resultsRepositoryProvider).list();
+  Future<List<StudentResult>> build() {
+    watchSignedInUser(ref);
+    return ref.watch(resultsRepositoryProvider).list();
+  }
 
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -58,12 +61,13 @@ class StudentResultsNotifier extends AsyncNotifier<List<StudentResult>> {
 }
 
 final studentResultsProvider =
-    AsyncNotifierProvider<StudentResultsNotifier, List<StudentResult>>(
-      StudentResultsNotifier.new,
-    );
+    AsyncNotifierProvider.autoDispose<
+      StudentResultsNotifier,
+      List<StudentResult>
+    >(StudentResultsNotifier.new);
 
 final studentResultDetailProvider = FutureProvider.autoDispose
-    .family<StudentResultDetail, int>(
-      (ref, submissionId) =>
-          ref.watch(resultsRepositoryProvider).detail(submissionId),
-    );
+    .family<StudentResultDetail, int>((ref, submissionId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(resultsRepositoryProvider).detail(submissionId);
+    });
