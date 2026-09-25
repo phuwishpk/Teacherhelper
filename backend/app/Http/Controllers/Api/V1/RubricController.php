@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\RubricService;
+use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\QuestionResource;
@@ -16,12 +17,16 @@ use Illuminate\Support\Facades\Gate;
  */
 class RubricController extends Controller
 {
-    public function __construct(private readonly RubricService $rubrics) {}
+    public function __construct(
+        private readonly RubricService $rubrics,
+        private readonly GeminiKeyResolver $keys,
+    ) {}
 
     /**
      * POST /api/v1/questions/{id}/rubric/draft -> 202 {data: question}.
      * Queues DraftRubricJob; the app polls GET /assignments/{id} until the
-     * draft criteria / reference steps appear.
+     * draft criteria / reference steps appear. Without any Gemini key
+     * (teacher or server, DESIGN §10.1) nothing is queued: 422 ai_key_missing.
      */
     public function draft(Request $request, int $id): JsonResponse
     {
@@ -33,6 +38,10 @@ class RubricController extends Controller
         }
         if ($question->assignment->isClosed()) {
             throw new ApiException('การบ้านนี้ปิดแล้ว แก้ไขไม่ได้', 'assignment_closed', 409);
+        }
+
+        if ($this->keys->forTeacher($question->assignment->classroom?->teacher_id) === null) {
+            throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 
         DraftRubricJob::dispatch($question->id);

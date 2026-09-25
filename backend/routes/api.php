@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AiKeyController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\LoginCardController;
@@ -48,6 +50,11 @@ Route::prefix('v1')->group(function () {
 
             // Teacher-only (§9.2, §9.3): token ability `teacher` plus a policy per action.
             Route::middleware('ability:teacher')->group(function () {
+                // The teacher's own Gemini key (§9.1, §10.1). PUT calls Google, so it is throttled.
+                Route::get('me/ai-key', [AiKeyController::class, 'show'])->name('api.me.ai-key.show');
+                Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:10,1')->name('api.me.ai-key.update');
+                Route::delete('me/ai-key', [AiKeyController::class, 'destroy'])->name('api.me.ai-key.destroy');
+
                 Route::get('classrooms', [ClassroomController::class, 'index'])->name('api.classrooms.index');
                 Route::post('classrooms', [ClassroomController::class, 'store'])->name('api.classrooms.store');
                 Route::get('classrooms/{id}', [ClassroomController::class, 'show'])->whereNumber('id')->name('api.classrooms.show');
@@ -75,6 +82,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('assignments/{id}/layout', [LayoutController::class, 'store'])->whereNumber('id')->name('api.assignments.layout.store');
                 Route::get('assignments/{id}/layouts', [LayoutController::class, 'index'])->whereNumber('id')->name('api.assignments.layouts.index');
                 Route::post('assignments/{id}/worksheets', [WorksheetPrintController::class, 'store'])->whereNumber('id')->name('api.assignments.worksheets.store');
+                Route::post('assignments/{id}/requeue-missing-key', [GradingController::class, 'requeueMissingKey'])->whereNumber('id')->name('api.assignments.requeue-missing-key');
 
                 Route::patch('questions/{id}', [QuestionController::class, 'update'])->whereNumber('id')->name('api.questions.update');
                 Route::delete('questions/{id}', [QuestionController::class, 'destroy'])->whereNumber('id')->name('api.questions.destroy');

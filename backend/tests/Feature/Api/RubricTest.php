@@ -2,14 +2,16 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiException;
-use App\Domain\Gemini\RubricDraft;
-use App\Domain\Gemini\RubricDraftRequest;
+use App\Domain\Gemini\GeminiReply;
 use App\Jobs\DraftRubricJob;
+use App\Models\AiCall;
 use App\Models\Assignment;
 use App\Models\Question;
 use App\Models\Subject;
+use App\Models\TeacherApiKey;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -78,49 +80,83 @@ class RubricTest extends TestCase
     public function test_the_draft_job_sends_the_question_context_to_gemini(): void
     {
         [, $question] = $this->question('open');
-        $client = new class implements GeminiClient
-        {
-            public ?RubricDraftRequest $seen = null;
-
-            public function draftRubric(RubricDraftRequest $request): RubricDraft
-            {
-                $this->seen = $request;
-
-                return new RubricDraft(criteria: [['description' => 'แก่น', 'points' => 4.0, 'is_core' => true]]);
-            }
-        };
-        $this->app->instance(GeminiClient::class, $client);
+        $fake = new FakeGeminiClient;
+        $this->app->instance(GeminiClient::class, $fake);
 
         DraftRubricJob::dispatchSync($question->id);
 
-        $this->assertSame('open', $client->seen->type);
-        $this->assertSame('วิทยาศาสตร์', $client->seen->subject);
-        $this->assertSame('ป.5', $client->seen->gradeLabel);
-        $this->assertSame(4.0, $client->seen->maxPoints);
-        $this->assertSame($question->assignment->classroom->teacher_id, $client->seen->teacherId);
+        $this->assertCount(1, $fake->requests);
+        $request = $fake->requests[0];
+        $this->assertSame(['rubric_draft', 'open', 'v1'], [$request->purpose, $request->type, $request->promptVersion]);
+        $this->assertStringContainsString('subject: วิทยาศาสตร์, grade: ป.5, max points: 4', $request->userText);
+        $this->assertStringContainsString($question->prompt_text, $request->userText);
+        $this->assertStringContainsString('Points must sum to 4', $request->userText);
+        $this->assertSame([], $request->images, 'a rubric draft is text only');
+        $this->assertSame(0.2, $request->temperature);
+
+        $call = AiCall::query()->sole();
+        $this->assertSame(['rubric_draft', 'ok', 'server', $question->id, 'fake:gemini-3.8-flash', 'v1'], [
+            $call->purpose, $call->status, $call->key_source, $call->question_id, $call->model, $call->prompt_version,
+        ]);
+        $this->assertSame('draft', $question->refresh()->rubric_status);
     }
 
-    public function test_an_invalid_ai_draft_is_not_stored(): void
+    public function test_an_invalid_ai_draft_is_retried_once_then_not_stored(): void
     {
         [, $question] = $this->question('open');
-        $this->app->instance(GeminiClient::class, new class implements GeminiClient
+        $question->update(['prompt_text' => 'อธิบายการสังเคราะห์แสง [fake:rubric-invalid]']);
+
+        DraftRubricJob::dispatchSync($question->id);
+
+        $this->assertSame(0, $question->rubricCriteria()->count());
+        $this->assertSame('draft', $question->refresh()->rubric_status);
+        $this->assertSame(['invalid_output', 'invalid_output'], AiCall::query()->orderBy('id')->pluck('status')->all());
+        $this->assertStringContainsString('core criteria', (string) AiCall::query()->value('error'));
+    }
+
+    public function test_a_transport_error_is_left_to_the_queue_retry(): void
+    {
+        [, $question] = $this->question('open');
+        $this->app->instance(GeminiClient::class, new class extends FakeGeminiClient
         {
-            public function draftRubric(RubricDraftRequest $request): RubricDraft
+            public function generate(array $requests, #[\SensitiveParameter] string $apiKey): array
             {
-                return RubricDraft::fromArray(['criteria' => [
-                    ['description_th' => 'หนึ่ง', 'points' => 1, 'is_core' => true],
-                    ['description_th' => 'สอง', 'points' => 1, 'is_core' => true],
-                ]]);
+                return array_map(fn () => GeminiReply::error('HTTP 503: overloaded', 5, 503), $requests);
             }
         });
 
         try {
             DraftRubricJob::dispatchSync($question->id);
-            $this->fail('expected invalid_output');
+            $this->fail('expected the job to throw for a retry');
         } catch (GeminiException $e) {
-            $this->assertSame(GeminiException::INVALID_OUTPUT, $e->status);
+            $this->assertSame(GeminiException::ERROR, $e->status);
         }
-        $this->assertSame(0, $question->rubricCriteria()->count());
+        $this->assertSame(['error'], AiCall::query()->pluck('status')->all(), 'transport errors are not retried inside the job');
+    }
+
+    public function test_a_teacher_key_pays_for_the_draft(): void
+    {
+        [$teacher, $question] = $this->question('open');
+        TeacherApiKey::create(['user_id' => $teacher->id, 'provider' => 'gemini', 'encrypted_key' => 'TESTTeacherKey0000000000000000001234', 'key_last4' => '1234']);
+
+        DraftRubricJob::dispatchSync($question->id);
+
+        $this->assertSame('teacher', AiCall::query()->sole()->key_source);
+    }
+
+    public function test_drafting_needs_a_gemini_key(): void
+    {
+        Queue::fake();
+        config(['services.gemini.api_key' => null]);
+        [$teacher, $question] = $this->question('open');
+
+        $this->asUser($teacher)->postJson("/api/v1/questions/{$question->id}/rubric/draft")
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'ai_key_missing');
+        Queue::assertNothingPushed();
+
+        DraftRubricJob::dispatchSync($question->id); // queued earlier, key removed since: nothing happens
+        $this->assertSame(0, AiCall::query()->count());
     }
 
     public function test_a_redraft_of_an_approved_rubric_sends_a_ready_assignment_back_to_draft(): void
