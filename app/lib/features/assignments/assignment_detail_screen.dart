@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../google_classroom/assignment_google_section.dart';
 import '../worksheets/print_flow.dart';
 import 'assignment.dart';
 import 'assignments_page.dart';
@@ -230,6 +231,8 @@ class AssignmentDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  AssignmentGoogleSection(assignment: a, classroom: classroom),
                   const SizedBox(height: 16),
                   Text(
                     'คำถาม (${a.questions.length} ข้อ · รวม ${_totalPoints(a)} คะแนน)',

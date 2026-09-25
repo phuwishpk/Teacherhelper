@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/google_classroom/google_auth.dart';
 import '../../features/upload_queue/scan_queue_repository.dart';
 import '../../features/upload_queue/upload_worker.dart';
 import '../db/app_database.dart';
@@ -17,18 +18,24 @@ class LocalUserData {
     required this._db,
     required this._scans,
     required this._scheduler,
+    this._google,
   });
 
   final AppDatabase _db;
   final ScanQueueRepository _scans;
   final UploadScheduler _scheduler;
 
+  /// The teacher's Google account on this device (Classroom, §18.5).
+  final GoogleAuthGateway? _google;
+
   /// Scans the server does not have yet; signing out would discard them.
   Future<int> unsentScanCount() => _scans.countUnsent();
 
   /// Stops background uploads and deletes the queue (with its image files)
-  /// and the offline roster / layout cache.
+  /// and the offline roster / layout cache, and forgets the Google account
+  /// the Classroom downloads used (best effort, never fails the wipe).
   Future<void> wipe() async {
+    await _google?.signOut();
     await _scheduler.cancelPending();
     await _scans.removeAll();
     await _db.transaction(() async {
@@ -43,5 +50,6 @@ final localUserDataProvider = Provider<LocalUserData>(
     db: ref.watch(appDatabaseProvider),
     scans: ref.watch(scanQueueRepositoryProvider),
     scheduler: ref.watch(uploadSchedulerProvider),
+    google: ref.watch(googleAuthProvider),
   ),
 );

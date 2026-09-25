@@ -108,6 +108,13 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     await refresh();
   }
 
+  /// After "โพสต์ลง Classroom" (DESIGN §18.6), so the card shows the link
+  /// even when the server's assignment JSON has no `google_link`.
+  void setGoogleLink(AssignmentGoogleLink link) {
+    final current = state.value;
+    if (current != null) state = AsyncData(current.withGoogleLink(link));
+  }
+
   Future<LayoutVersion> createLayout() async {
     final layout = await ref
         .read(assignmentsRepositoryProvider)

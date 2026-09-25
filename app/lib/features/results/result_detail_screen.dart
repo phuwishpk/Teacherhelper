@@ -8,6 +8,7 @@ import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
 import '../review/review_labels.dart';
 import 'results_repository.dart';
+import 'retake_notice.dart';
 import 'student_result.dart';
 
 /// A student's published submission, question by question (DESIGN §9.7,
@@ -36,6 +37,8 @@ class ResultDetailScreen extends ConsumerWidget {
             child: ContentColumn(
               child: ListView(
                 children: [
+                  if (d.retakeReason case final reason?)
+                    RetakeNotice(reason: reason),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),

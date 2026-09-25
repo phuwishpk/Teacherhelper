@@ -17,6 +17,9 @@ import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/google_classroom/course_picker_screen.dart';
+import '../../features/google_classroom/roster_matching_screen.dart';
+import '../../features/google_classroom/submissions_screen.dart';
 import '../../features/home/teacher_shell.dart';
 import '../../features/results/result_detail_screen.dart';
 import '../../features/review/review_detail_screen.dart';
@@ -45,6 +48,14 @@ abstract final class AppRoutes {
   static String classroom(int id) => '/classrooms/$id';
   static String classroomEdit(int id) => '/classrooms/$id/edit';
   static String studentsAdd(int id) => '/classrooms/$id/students/add';
+
+  /// Google Classroom (DESIGN §18.7): course picker, student matching and
+  /// the submissions of a posted assignment.
+  static String classroomGoogleLink(int id) => '/classrooms/$id/google-link';
+  static String classroomGoogleRoster(int id) =>
+      '/classrooms/$id/google-roster';
+  static String googleSubmissions(int assignmentId) =>
+      '/assignments/$assignmentId/google-submissions';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -177,6 +188,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) =>
                 StudentsBulkAddScreen(classroomId: _id(state, 'id')),
           ),
+          GoRoute(
+            path: 'google-link',
+            builder: (context, state) =>
+                GoogleCoursePickerScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'google-roster',
+            builder: (context, state) =>
+                GoogleRosterScreen(classroomId: _id(state, 'id')),
+          ),
         ],
       ),
       GoRoute(
@@ -235,6 +256,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               assignmentId: _id(state, 'id'),
               questionId: _id(state, 'qid'),
             ),
+          ),
+          GoRoute(
+            path: 'google-submissions',
+            builder: (context, state) =>
+                GoogleSubmissionsScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'review',

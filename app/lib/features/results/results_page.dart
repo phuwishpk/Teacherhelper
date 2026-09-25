@@ -8,20 +8,40 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../review/review_labels.dart';
 import 'results_repository.dart';
+import 'retake_notice.dart';
 
-/// "ผลการบ้าน" tab: published results only (DESIGN §13). Tapping one opens
-/// the per-question detail (crop, explanation, appeal).
+/// "ผลการบ้าน" tab: published results only (DESIGN §13), plus a notice for
+/// each Classroom submission the teacher sent back for a new photo (§18.2).
+/// Tapping a result opens the per-question detail (crop, explanation,
+/// appeal).
 class ResultsPage extends ConsumerWidget {
   const ResultsPage({super.key});
+
+  Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(studentRetakeRequestsProvider);
+    await ref.read(studentResultsProvider.notifier).refresh();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final results = ref.watch(studentResultsProvider);
+    // Supplementary: an error just shows no notice.
+    final retakes = ref.watch(studentRetakeRequestsProvider).value ?? const [];
+    final notices = [
+      for (final r in retakes)
+        RetakeNotice(
+          key: ValueKey('retake_${r.id}'),
+          title: r.title,
+          reason: r.reason,
+          requestedAt: r.requestedAt,
+          alternateLink: r.alternateLink,
+        ),
+    ];
     return AsyncView(
       value: results,
-      onRetry: () => ref.read(studentResultsProvider.notifier).refresh(),
+      onRetry: () => _refresh(ref),
       data: (list) {
-        if (list.isEmpty) {
+        if (list.isEmpty && notices.isEmpty) {
           return const EmptyView(
             icon: Icons.inbox_outlined,
             title: 'ยังไม่มีผลการบ้าน',
@@ -30,12 +50,13 @@ class ResultsPage extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () => ref.read(studentResultsProvider.notifier).refresh(),
+          onRefresh: () => _refresh(ref),
           child: ContentColumn(
             child: ListView.builder(
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final r = list[i];
+              itemCount: notices.length + list.length,
+              itemBuilder: (context, index) {
+                if (index < notices.length) return notices[index];
+                final r = list[index - notices.length];
                 final score = r.totalScore == null
                     ? null
                     : r.maxScore == null

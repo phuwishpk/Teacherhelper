@@ -48,6 +48,16 @@ class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
     ]);
     return updated;
   }
+
+  /// After linking or unlinking a Google Classroom course (DESIGN §18.6),
+  /// so the screens update without waiting for a reload.
+  void setGoogleLink(int id, ClassroomGoogleLink? link) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list) c.id == id ? c.withGoogleLink(link) : c,
+    ]);
+  }
 }
 
 final classroomsProvider =

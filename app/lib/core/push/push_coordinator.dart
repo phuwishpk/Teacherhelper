@@ -165,6 +165,8 @@ final pushCoordinatorProvider = Provider<PushCoordinator>((ref) {
         ref.invalidate(openAppealsProvider);
       case 'results_published' || 'appeal_resolved':
         ref.invalidate(studentResultsProvider);
+      case 'retake_requested':
+        ref.invalidate(studentRetakeRequestsProvider);
     }
   }
 

@@ -14,6 +14,9 @@ abstract class ResultsRepository {
 
   /// `POST /student/responses/{id}/appeal {reason?}`: once per question.
   Future<Appeal> appeal(int responseId, {String? reason});
+
+  /// Classroom submissions the teacher returned for a new photo (§18.2).
+  Future<List<RetakeRequest>> retakeRequests();
 }
 
 class ApiResultsRepository implements ResultsRepository {
@@ -40,6 +43,12 @@ class ApiResultsRepository implements ResultsRepository {
       data: {'reason': ?reason},
     );
     return Appeal.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<List<RetakeRequest>> retakeRequests() async {
+    final res = await _dio.get<Object?>('/student/retake-requests');
+    return unwrapList(res.data).map(RetakeRequest.fromJson).toList();
   }
 }
 
@@ -70,4 +79,17 @@ final studentResultDetailProvider = FutureProvider.autoDispose
     .family<StudentResultDetail, int>((ref, submissionId) {
       watchSignedInUser(ref, keepAlive: false);
       return ref.watch(resultsRepositoryProvider).detail(submissionId);
+    });
+
+/// "ครูขอให้ถ่ายรูปใหม่" notices on the results tab. Best effort: a server
+/// without Google Classroom answers 404, which shows no notice.
+final studentRetakeRequestsProvider =
+    FutureProvider.autoDispose<List<RetakeRequest>>((ref) async {
+      watchSignedInUser(ref);
+      try {
+        return await ref.watch(resultsRepositoryProvider).retakeRequests();
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) return const [];
+        rethrow;
+      }
     });

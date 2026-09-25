@@ -439,6 +439,17 @@ interface ScanPipelineApi {
    * [layoutJson] (one page of the layout JSON, DESIGN §5.3).
    */
   suspend fun cropPage(imagePath: String, detection: PageDetection, layoutJson: String): PageCrops
+  /**
+   * Turns a file a student attached in Google Classroom (DESIGN §18.2)
+   * into JPEG pages [detectPage] can read: every page of a PDF (rendered
+   * with PdfRenderer at about 200 DPI, at most 20 pages) or the one picture
+   * of an image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
+   * ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
+   * mimeType, used as a hint; the file's own header decides.
+   * Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
+   * `storage_failed`.
+   */
+  suspend fun rasterize(inputPath: String, mimeType: String): List<String>
 
   companion object {
     /** The codec used by ScanPipelineApi. */
@@ -479,6 +490,26 @@ interface ScanPipelineApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.cropPage(imagePathArg, detectionArg, layoutJsonArg))
+              } catch (exception: Throwable) {
+                ScanApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.eduvision.ScanPipelineApi.rasterize$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val inputPathArg = args[0] as String
+            val mimeTypeArg = args[1] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.rasterize(inputPathArg, mimeTypeArg))
               } catch (exception: Throwable) {
                 ScanApiPigeonUtils.wrapError(exception)
               }

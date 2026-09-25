@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../google_classroom/classroom_google_section.dart';
 import '../scan/offline_cache_repository.dart';
 import '../worksheets/print_flow.dart';
 import 'classroom.dart';
@@ -55,7 +56,9 @@ class ClassroomDetailScreen extends ConsumerWidget {
                 _HeaderCard(classroom: c),
                 const SizedBox(height: 12),
                 _ActionsRow(classroom: c),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                ClassroomGoogleSection(classroom: c),
+                const SizedBox(height: 4),
                 Text(
                   'รายชื่อนักเรียน',
                   style: Theme.of(context).textTheme.titleMedium,

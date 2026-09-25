@@ -102,4 +102,15 @@ abstract class ScanPipelineApi {
     PageDetection detection,
     String layoutJson,
   );
+
+  /// Turns a file a student attached in Google Classroom (DESIGN §18.2)
+  /// into JPEG pages [detectPage] can read: every page of a PDF (rendered
+  /// with PdfRenderer at about 200 DPI, at most 20 pages) or the one picture
+  /// of an image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
+  /// ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
+  /// mimeType, used as a hint; the file's own header decides.
+  /// Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
+  /// `storage_failed`.
+  @async
+  List<String> rasterize(String inputPath, String mimeType);
 }
