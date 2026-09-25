@@ -3,6 +3,7 @@
 namespace App\Domain\Scans;
 
 use App\Domain\Grading\McqGrader;
+use App\Domain\Review\ReviewFlags;
 use App\Models\Assignment;
 use App\Models\Question;
 use App\Models\Response;
@@ -26,6 +27,11 @@ use App\Models\User;
  * - short / show_work / open become `queued` for GradeScanJob;
  * - a region whose printed kind no longer fits the question (the teacher
  *   changed the type after printing) becomes `manual`.
+ *
+ * $identityMismatch (Google Classroom, DESIGN §18.3: the QR names another
+ * student than the one who handed the image in) flags every answer of the
+ * page after the reset, so the review queue ranks them as flagged and never
+ * approves them in bulk. Grading keeps the flag (ReviewFlags::carry).
  *
  * Must run inside the transaction that holds the submission row lock. The
  * crop files go through the caller's CropSwap, which the caller commits
@@ -65,6 +71,7 @@ final class ResponseWriter
         CropSource $crops,
         User $actor,
         CropSwap $swap,
+        bool $identityMismatch = false,
     ): int {
         $queued = 0;
         $fileOps = [];
@@ -104,6 +111,9 @@ final class ResponseWriter
             ]);
 
             $mcq = $this->grade($response, $matched);
+            if ($identityMismatch) {
+                ReviewFlags::markIdentityMismatch($response);
+            }
             $response->save();
 
             $withFinal = $matched->hasFinalAnswer() && $region->finalFile !== null;

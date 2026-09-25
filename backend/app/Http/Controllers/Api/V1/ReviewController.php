@@ -29,7 +29,10 @@ class ReviewController extends Controller
      * GET /api/v1/assignments/{id}/review-queue?band=check|look|confident&cursor=&per_page=
      * -> {data: [row], meta: {assignment_id, band, per_page, next_cursor,
      *     missing_ai_key_count, counts: {check|look|confident: {total, unreviewed}},
-     *     bulk_approvable_count, submissions: [...], pending_confirm_scans: [...]}}
+     *     bulk_approvable_count, submissions: [{id, status, student,
+     *     response_count, reviewed_count, question_count, missing_pages,
+     *     publishable, open_appeal_count, total_score, published_at}],
+     *     pending_confirm_scans: [...]}}
      *
      * Rows: manual first, then suspicious / identity_mismatch, then
      * review_priority descending (ReviewQueue). Each row carries its

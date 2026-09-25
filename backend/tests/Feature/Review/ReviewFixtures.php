@@ -7,6 +7,7 @@ use App\Domain\Grading\ReviewPriority;
 use App\Domain\Grading\ScanGrader;
 use App\Models\Assignment;
 use App\Models\Classroom;
+use App\Models\Layout;
 use App\Models\Question;
 use App\Models\Response;
 use App\Models\Scan;
@@ -18,6 +19,7 @@ use Illuminate\Support\Str;
  * An assignment with graded answers written straight into the tables (no
  * scan pipeline), so each test sets exactly the grading state it needs:
  *   q1 short (numeric, 2 pts), q2 short (text, 2 pts), q3 show_work (5 pts), q4 mcq (1 pt)
+ * printed by layout v1 on two pages (page 1: q1, q2; page 2: q3, q4),
  * and students numbered 1..n in the teacher's classroom.
  */
 trait ReviewFixtures
@@ -50,6 +52,29 @@ trait ReviewFixtures
         $this->q['q2'] = Question::factory()->short(false)->create(['assignment_id' => $this->assignment->id]);
         $this->q['q3'] = Question::factory()->showWork()->create(['assignment_id' => $this->assignment->id]);
         $this->q['q4'] = Question::factory()->create(['assignment_id' => $this->assignment->id]);
+
+        $region = fn (string $q, string $kind) => [
+            'region_id' => 'q'.$this->q[$q]->id, 'question_id' => $this->q[$q]->id, 'kind' => $kind,
+            'rect' => ['x' => 0.08, 'y' => 0.2, 'w' => 0.6, 'h' => 0.1],
+        ];
+        Layout::create([
+            'assignment_id' => $this->assignment->id,
+            'version' => 1,
+            'pages' => [
+                ['assignment_id' => $this->assignment->id, 'version' => 1, 'page' => 1, 'page_count' => 2, 'regions' => [$region('q1', 'box'), $region('q2', 'box')]],
+                ['assignment_id' => $this->assignment->id, 'version' => 1, 'page' => 2, 'page_count' => 2, 'regions' => [$region('q3', 'lines'), $region('q4', 'mcq')]],
+            ],
+        ]);
+    }
+
+    /**
+     * AI-scored answers to every question of the sheet (both pages).
+     *
+     * @return array<string, Response> q1..q4
+     */
+    protected function answerSheet(User $student): array
+    {
+        return array_map(fn (string $q) => $this->answer($student, $q), ['q1' => 'q1', 'q2' => 'q2', 'q3' => 'q3', 'q4' => 'q4']);
     }
 
     protected function submission(User $student, string $status = Submission::STATUS_NEEDS_REVIEW): Submission

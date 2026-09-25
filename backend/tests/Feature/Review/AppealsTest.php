@@ -212,6 +212,47 @@ class AppealsTest extends TestCase
         $this->assertSame('open', $appeal->refresh()->status);
     }
 
+    public function test_an_appeal_waits_while_a_rescan_has_reopened_the_submission(): void
+    {
+        Event::fake([AppealResolved::class]);
+        $appeal = $this->openAppeal();
+        $url = "/api/v1/appeals/{$appeal->id}";
+        $submission = $this->submission($this->students[0]);
+
+        // A confirmed rescan reopened the submission; the page is queued for grading again.
+        $submission->forceFill(['status' => Submission::STATUS_GRADING, 'published_at' => null, 'published_by' => null])->save();
+        $this->work->forceFill(['grading_state' => Response::STATE_QUEUED, 'final_score' => null, 'reviewed_at' => null, 'reviewed_by' => null])->save();
+
+        $this->asUser($this->teacher)->patchJson($url, ['status' => 'accepted', 'final_score' => 5])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'submission_not_published');
+        $this->asUser($this->teacher)->patchJson($url, ['status' => 'rejected'])->assertStatus(409);
+
+        $this->work->refresh();
+        $this->assertSame(['queued', null, null], [$this->work->grading_state, $this->work->final_score, $this->work->reviewed_at]);
+        $this->assertSame('open', $appeal->refresh()->status);
+        $this->assertSame(0, ScoreEvent::query()->whereIn('action', ['appeal_accepted', 'appeal_rejected'])->count());
+        Event::assertNotDispatched(AppealResolved::class);
+
+        // Graded, reviewed and published again: now it can be answered.
+        $this->work->forceFill(['grading_state' => Response::STATE_SCORED, 'final_score' => 2.5, 'final_understanding' => 'partial', 'reviewed_at' => now(), 'reviewed_by' => $this->teacher->id])->save();
+        $submission->forceFill(['status' => Submission::STATUS_PUBLISHED, 'published_at' => now(), 'published_by' => $this->teacher->id])->save();
+        $this->asUser($this->teacher)->patchJson($url, ['status' => 'accepted', 'final_score' => 5])->assertOk();
+        $this->assertSame(5.0, $this->work->refresh()->final_score);
+        $this->assertEquals(6.0, $submission->refresh()->total_score);
+    }
+
+    public function test_an_answer_still_being_graded_cannot_be_answered(): void
+    {
+        $appeal = $this->openAppeal();
+        $this->work->forceFill(['grading_state' => Response::STATE_FAILED])->save();
+
+        $this->asUser($this->teacher)->patchJson("/api/v1/appeals/{$appeal->id}", ['status' => 'accepted', 'final_score' => 5])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'response_grading');
+        $this->assertSame('open', $appeal->refresh()->status);
+    }
+
     public function test_an_open_appeal_keeps_a_reopened_answer_out_of_bulk_approval(): void
     {
         $this->openAppeal();

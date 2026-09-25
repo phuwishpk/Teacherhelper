@@ -50,6 +50,8 @@ final class ReviewQueue
     /** @var array<int, int>|null response id => open appeal id */
     private ?array $openAppeals = null;
 
+    private ?SubmissionCoverage $coverage = null;
+
     public function __construct(private readonly Assignment $assignment) {}
 
     /**
@@ -260,12 +262,18 @@ final class ReviewQueue
             $responses = $byId->get($submission->id, collect());
             $scores = $responses->map(fn (Response $r) => $r->effectiveScore());
             $current = $responses->isNotEmpty() && $scores->every(fn ($s) => $s !== null) ? round((float) $scores->sum(), 2) : null;
+            $reviewed = $responses->whereNotNull('reviewed_at')->count();
+            $missing = $this->coverage()->missing($submission, $responses->pluck('question_id'));
             $rows[] = [
                 'id' => $submission->id,
                 'status' => $submission->status,
                 'student' => $this->student($submission),
                 'response_count' => $responses->count(),
-                'reviewed_count' => $responses->whereNotNull('reviewed_at')->count(),
+                'reviewed_count' => $reviewed,
+                // Questions of the printed sheet; pages not scanned yet block publishing (§9.5).
+                'question_count' => count($this->coverage()->expected($submission)),
+                'missing_pages' => SubmissionCoverage::pages($missing),
+                'publishable' => ! $submission->isPublished() && $responses->isNotEmpty() && $missing === [] && $reviewed === $responses->count(),
                 'open_appeal_count' => $responses->filter(fn (Response $r) => isset($this->openAppeals()[$r->id]))->count(),
                 'total_score' => $submission->isPublished() ? $submission->total_score : $current,
                 'published_at' => $submission->published_at?->toIso8601String(),
@@ -309,6 +317,11 @@ final class ReviewQueue
             'name' => (string) $submission->student?->name,
             'student_number' => $this->numbers()[$submission->student_id] ?? null,
         ];
+    }
+
+    private function coverage(): SubmissionCoverage
+    {
+        return $this->coverage ??= (new SubmissionCoverage($this->assignment))->preload();
     }
 
     /** @return Collection<int, Submission> */

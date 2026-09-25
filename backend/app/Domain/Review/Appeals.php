@@ -24,6 +24,12 @@ use Illuminate\Validation\ValidationException;
  * logged to score_events (appeal_accepted / appeal_rejected, old and new
  * score) and the student is told by push. The submission stays published,
  * so an accepted new score is what the student sees from then on.
+ *
+ * An appeal waits while a confirmed rescan has reopened the submission
+ * (SubmissionStatus::refresh reopen): the answer is being graded and
+ * reviewed again and the student cannot see it, so resolve() answers 409
+ * submission_not_published (or response_grading) until it is published
+ * again; the appeal stays open for the new result.
  */
 final class Appeals
 {
@@ -102,7 +108,7 @@ final class Appeals
     /**
      * @param  array{status: string, teacher_note?: string|null, final_score?: float|int|string|null, final_understanding?: string|null}  $data
      *
-     * @throws ApiException 409 appeal_resolved
+     * @throws ApiException 409 appeal_resolved | submission_not_published | response_grading
      */
     public function resolve(User $teacher, Appeal $appeal, array $data): Appeal
     {
@@ -113,6 +119,12 @@ final class Appeals
             $response = Response::query()->with('question')->lockForUpdate()->findOrFail($appeal->response_id);
             if ($appeal->status !== Appeal::STATUS_OPEN) {
                 throw new ApiException('ตอบคำขอนี้ไปแล้ว', 'appeal_resolved', 409);
+            }
+            if (! $submission->isPublished()) {
+                throw new ApiException('ข้อนี้ถูกสแกนใหม่และกำลังตรวจอีกครั้ง ตอบคำขอได้หลังเผยแพร่ผลใหม่', 'submission_not_published', 409);
+            }
+            if (in_array($response->grading_state, Response::IN_PROGRESS_STATES, true)) {
+                throw new ApiException('ข้อนี้ AI ยังตรวจไม่เสร็จ รอสักครู่แล้วลองใหม่', 'response_grading', 409);
             }
 
             $note = isset($data['teacher_note']) && trim((string) $data['teacher_note']) !== '' ? trim((string) $data['teacher_note']) : null;
@@ -139,9 +151,7 @@ final class Appeals
                 $response->reviewed_by = $teacher->id;
                 $response->reviewed_at = now();
                 $response->save();
-                if ($submission->isPublished()) {
-                    Publisher::refreshTotal($submission);
-                }
+                Publisher::refreshTotal($submission);
             }
 
             ScoreEvent::create([

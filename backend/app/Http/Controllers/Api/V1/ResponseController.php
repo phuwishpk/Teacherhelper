@@ -88,8 +88,8 @@ class ResponseController extends Controller
     /**
      * GET /api/v1/responses/{id}/crop[?part=final] -> image/webp of the
      * answer crop (`final`: the final-answer box of a show_work question).
-     * The teacher of the classroom, or the student once published.
-     * 404 when there is no such crop, 410 image_purged after
+     * The teacher of the classroom, or the student once published (any
+     * other student gets 404). 404 when there is no such crop, 410 image_purged after
      * schools.crop_retention_until (§7.3).
      */
     public function crop(Request $request, int $id): StreamedResponse
@@ -120,15 +120,23 @@ class ResponseController extends Controller
         );
     }
 
-    /** Responses in the caller's school; policies decide the rest (other schools get 404). */
+    /**
+     * Responses in the caller's school; policies decide the rest (other
+     * schools get 404). A student only ever finds their own published
+     * answers: anything else is 404 like the student-results endpoints, so a
+     * student cannot probe which response ids exist.
+     */
     private static function find(Request $request, int $id): Response
     {
+        $user = $request->user();
+
         return Response::query()
             ->with(['submission.assignment.classroom', 'question'])
-            ->whereIn('submission_id', Submission::query()->select('id')->whereIn(
-                'assignment_id',
-                Assignment::query()->select('id')->where('school_id', $request->user()->school_id),
-            ))
+            ->whereIn('submission_id', Submission::query()->select('id')
+                ->whereIn('assignment_id', Assignment::query()->select('id')->where('school_id', $user->school_id))
+                ->when($user->isStudent(), fn ($q) => $q
+                    ->where('student_id', $user->id)
+                    ->where('status', Submission::STATUS_PUBLISHED)))
             ->findOrFail($id);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Grading\ScanGrader;
+use App\Domain\Review\ReviewFlags;
 use App\Domain\Scans\SubmissionStatus;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -60,7 +61,7 @@ class GradingController extends Controller
                     $response->forceFill([
                         'grading_state' => Response::STATE_QUEUED,
                         'attempts' => 0,
-                        'fuzzy_trace' => null,
+                        'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, null),
                         'review_priority' => null,
                         'priority_band' => null,
                     ])->save();

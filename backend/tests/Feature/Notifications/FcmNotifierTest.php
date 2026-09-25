@@ -102,7 +102,19 @@ class FcmNotifierTest extends TestCase
 
                 return match ($byDevice[$device] ?? 'ok') {
                     'unregistered' => Http::response(['error' => ['code' => 404, 'status' => 'NOT_FOUND', 'message' => 'Requested entity was not found.', 'details' => [['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'UNREGISTERED']]]], 404),
-                    'invalid' => Http::response(['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'The registration token is not a valid FCM registration token', 'details' => [['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'INVALID_ARGUMENT']]]], 400),
+                    'invalid' => Http::response(['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'The registration token is not a valid FCM registration token', 'details' => [
+                        ['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'INVALID_ARGUMENT'],
+                        ['@type' => 'type.googleapis.com/google.rpc.BadRequest', 'fieldViolations' => [['field' => 'message.token', 'description' => 'The registration token is not a valid FCM registration token']]],
+                    ]]], 400),
+                    // A payload problem (e.g. a data value that is not a string): the token is fine.
+                    'bad_payload' => Http::response(['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'Invalid value at \'message.data[0].value\'', 'details' => [
+                        ['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'INVALID_ARGUMENT'],
+                        ['@type' => 'type.googleapis.com/google.rpc.BadRequest', 'fieldViolations' => [['field' => 'message.data[0].value', 'description' => 'Invalid value']]],
+                    ]]], 400),
+                    'bad_payload_bare' => Http::response(['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'Request contains an invalid argument.', 'details' => [['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'INVALID_ARGUMENT']]]], 400),
+                    // What a wrong project id in the URL gives: no FcmError code.
+                    'no_project' => Http::response(['error' => ['code' => 404, 'status' => 'NOT_FOUND', 'message' => 'Requested entity was not found.']], 404),
+                    'sender_mismatch' => Http::response(['error' => ['code' => 403, 'status' => 'PERMISSION_DENIED', 'message' => 'SenderId mismatch', 'details' => [['@type' => 'type.googleapis.com/google.firebase.fcm.v1.FcmError', 'errorCode' => 'SENDER_ID_MISMATCH']]]], 403),
                     'unavailable' => Http::response(['error' => ['code' => 503, 'status' => 'UNAVAILABLE']], 503),
                     default => Http::response(['name' => 'projects/eduvision-test/messages/0:1'], 200),
                 };
@@ -168,6 +180,29 @@ class FcmNotifierTest extends TestCase
         $this->assertSame('https://www.googleapis.com/auth/firebase.messaging', $claims['scope']);
         $this->assertSame(self::TOKEN_URI, $claims['aud']);
         $this->assertSame(3600, $claims['exp'] - $claims['iat']);
+    }
+
+    public function test_only_errors_that_name_the_token_delete_it(): void
+    {
+        [$teacher, $assignment] = $this->teacherWithDevices('tok-payload', 'tok-payload-bare', 'tok-no-project', 'tok-mismatch', 'tok-invalid');
+        $this->fakeGoogle([
+            'tok-payload' => 'bad_payload',
+            'tok-payload-bare' => 'bad_payload_bare',
+            'tok-no-project' => 'no_project',
+            'tok-mismatch' => 'sender_mismatch',
+            'tok-invalid' => 'invalid',
+        ]);
+        Log::spy();
+
+        $this->fcm()->gradingFinished($assignment, 3, 0);
+
+        $this->assertEqualsCanonicalizing(
+            ['tok-payload', 'tok-payload-bare', 'tok-no-project'],
+            DeviceToken::query()->pluck('fcm_token')->all(),
+            'INVALID_ARGUMENT without a message.token violation, or a bare 404, is not the token\'s fault',
+        );
+        Log::shouldHaveReceived('warning')->with('fcm.send_failed', \Mockery::any())->times(3);
+        Log::shouldHaveReceived('info')->with('notify.grading_done', \Mockery::on(fn (array $c) => $c['removed_tokens'] === 2 && $c['failed'] === 3 && $c['sent'] === 0))->once();
     }
 
     public function test_the_access_token_is_cached_encrypted_and_renewed_after_a_401(): void

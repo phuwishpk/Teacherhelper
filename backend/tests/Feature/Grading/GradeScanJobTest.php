@@ -9,15 +9,24 @@ use App\Domain\Notifications\GradingNotices;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Notifications\PushMessage;
 use App\Domain\Notifications\PushNotifier;
+use App\Domain\Review\ReviewFlags;
+use App\Domain\Scans\CropSource;
+use App\Domain\Scans\CropSwap;
+use App\Domain\Scans\LayoutPageMatcher;
+use App\Domain\Scans\ResponseWriter;
+use App\Domain\Scans\ScanFiles;
+use App\Domain\Scans\ScanRegion;
 use App\Jobs\GradeScanJob;
 use App\Jobs\NotifyGradingFinishedJob;
 use App\Models\AiCall;
 use App\Models\Assignment;
 use App\Models\Response;
+use App\Models\Scan;
 use App\Models\ScoreEvent;
 use App\Models\Submission;
 use App\Models\TeacherApiKey;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\Scans\ScanFixtures;
@@ -335,6 +344,99 @@ class GradeScanJobTest extends TestCase
 
         // The notice says the AI graded nothing for want of a key, not "done".
         $this->assertSame([[$this->assignment->id, 2, 2]], $this->notified);
+    }
+
+    /**
+     * Writes the scan's page again the way ScanIngestor does, as a Google
+     * Classroom import would when the QR names another student (§18.3).
+     */
+    private function rewriteScan(int $scanId, bool $identityMismatch): void
+    {
+        $scan = Scan::query()->with('submission')->findOrFail($scanId);
+        $regions = $scan->page_no === 1
+            ? [
+                new ScanRegion('q'.$this->mcq->id, $this->mcq->id, 'crop', null, ['A' => 0.04, 'B' => 0.83, 'C' => 0.06, 'D' => 0.05], null, null, null),
+                new ScanRegion('q'.$this->short->id, $this->short->id, 'crop', null, null, 0.08, '20', 0.97),
+            ]
+            : [
+                new ScanRegion('q'.$this->work->id, $this->work->id, 'crop', 'final', null, 0.12, '5', 0.93),
+                new ScanRegion('q'.$this->open->id, $this->open->id, 'crop', null, null, 0.2, null, null),
+            ];
+        $page = LayoutPageMatcher::page($this->assignment->layouts()->where('version', 1)->sole(), $scan->page_no);
+        $matched = LayoutPageMatcher::match($page, $regions, $this->assignment, strict: false);
+        $bytes = $this->fixtureBytes('crop.webp');
+        $crops = new class($bytes) implements CropSource
+        {
+            public function __construct(private string $bytes) {}
+
+            public function store(ScanRegion $region, bool $final, string $target): void
+            {
+                ScanFiles::disk()->put($target, $this->bytes);
+            }
+        };
+        $swap = new CropSwap('tmp/test-swap-'.$scan->id);
+        DB::transaction(fn () => app(ResponseWriter::class)->write($scan->submission, $scan, $this->assignment, $matched, $crops, $this->teacher, $swap, identityMismatch: $identityMismatch));
+        $swap->commit();
+    }
+
+    public function test_an_identity_mismatch_flag_outlives_grading_and_blocks_bulk_approval(): void
+    {
+        $scanId = $this->scan(1);
+        $this->rewriteScan($scanId, identityMismatch: true);
+
+        // mcq is scored on upload: its trace keeps the flag next to the fill.
+        $mcq = $this->response('mcq');
+        $this->assertSame(['scored', 'mcq', true], [$mcq->grading_state, $mcq->fuzzy_trace['system'], $mcq->fuzzy_trace['identity_mismatch']]);
+        $this->assertSame(['identity_mismatch' => true], $this->response('short')->fuzzy_trace);
+
+        // A failed attempt keeps it ...
+        $this->mark('short', '[fake:error]');
+        $this->runJob($scanId)->assertReleased();
+        $short = $this->response('short');
+        $this->assertSame(['failed', 'error', true], [$short->grading_state, $short->fuzzy_trace['last_error'], $short->fuzzy_trace['identity_mismatch']]);
+
+        // ... and so does the successful one that replaces the trace with fuzzy's.
+        $this->short->update(['prompt_text' => str_replace('[fake:error]', '[fake:correct]', $this->short->prompt_text)]);
+        $this->runJob($scanId)->assertNotReleased();
+        $short = $this->response('short');
+        $this->assertSame(['scored', 'confident'], [$short->grading_state, $short->priority_band]);
+        $this->assertSame('short', $short->fuzzy_trace['system']);
+        $this->assertTrue(ReviewFlags::identityMismatch($short));
+
+        // Both answers are confident, but flagged: after the manual rows, never approved in bulk.
+        $queue = $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/review-queue")->assertOk();
+        $this->assertSame([['identity_mismatch'], ['identity_mismatch']], array_column($queue->json('data'), 'flags'));
+        $queue->assertJsonPath('meta.bulk_approvable_count', 0);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/approve-confident")->assertJsonPath('data.approved', 0);
+
+        // A rescan of the page from the right student starts clean.
+        $this->rewriteScan($scanId, identityMismatch: false);
+        $this->assertFalse(ReviewFlags::identityMismatch($this->response('mcq')));
+        $this->assertNull($this->response('short')->fuzzy_trace);
+    }
+
+    public function test_an_identity_mismatch_flag_outlives_the_missing_key_path_and_its_requeue(): void
+    {
+        config(['services.gemini.api_key' => null]);
+        $scanId = $this->scan(2);
+        $this->rewriteScan($scanId, identityMismatch: true);
+        $this->mark('work', '[fake:partial]');
+        $this->mark('open', '[fake:correct]');
+
+        $this->runJob($scanId);
+        $work = $this->response('work');
+        $this->assertSame(['manual', 'ai_key_missing', true], [$work->grading_state, $work->manualReason(), $work->fuzzy_trace['identity_mismatch']]);
+
+        config(['services.gemini.api_key' => 'testing-server-gemini-key-not-real']);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/requeue-missing-key")->assertStatus(202)->assertJsonPath('data.requeued', 2);
+        $this->assertSame(['identity_mismatch' => true], $this->response('work')->fuzzy_trace);
+
+        $this->runJob($scanId);
+        foreach (['work', 'open'] as $q) {
+            $r = $this->response($q);
+            $this->assertSame('scored', $r->grading_state);
+            $this->assertTrue(ReviewFlags::identityMismatch($r), "{$q} keeps the flag after the requeue");
+        }
     }
 
     public function test_the_grading_notice_goes_out_once_per_batch_not_once_per_scan(): void

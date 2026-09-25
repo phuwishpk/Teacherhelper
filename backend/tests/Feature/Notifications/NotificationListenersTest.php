@@ -39,8 +39,7 @@ class NotificationListenersTest extends TestCase
 
     private function publishedAnswers(): array
     {
-        $a = $this->answer($this->students[0], 'q1');
-        $b = $this->answer($this->students[0], 'q2');
+        ['q1' => $a, 'q2' => $b] = $this->answerSheet($this->students[0]);
         $submission = $this->submission($this->students[0]);
         $this->reviewAll($submission);
         $submission->forceFill(['status' => Submission::STATUS_PUBLISHED, 'published_at' => now()])->save();
