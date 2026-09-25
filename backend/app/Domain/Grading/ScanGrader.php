@@ -10,6 +10,7 @@ use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDraftRequest;
 use App\Domain\Notifications\GradingNotices;
+use App\Domain\Review\ReviewFlags;
 use App\Domain\Scans\SubmissionStatus;
 use App\Models\Assignment;
 use App\Models\Question;
@@ -37,7 +38,8 @@ use Illuminate\Support\Facades\DB;
  * 6. one transaction under the submission lock writes the results, logs
  *    `ai_scored`, and counts failures: attempts++, `failed` while attempts < 3,
  *    then `manual`. A response a rescan moved to another scan meanwhile is
- *    left alone;
+ *    left alone. Every new fuzzy_trace keeps the sticky flags set at ingest
+ *    (ReviewFlags::carry, e.g. identity_mismatch);
  * 7. GradingNotices tells the teacher once nothing of the assignment is left
  *    to grade (at most once per cooldown, not once per scan).
  *
@@ -280,7 +282,7 @@ final class ScanGrader
         $response->forceFill([
             'grading_state' => $grade->isScored() ? Response::STATE_SCORED : Response::STATE_MANUAL,
             'extraction' => $extraction,
-            'fuzzy_trace' => $trace,
+            'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, $trace),
             'ai_score' => $grade->score,
             'ai_understanding' => $grade->understanding,
             'ai_error_types' => $grade->errorTypes,
@@ -325,7 +327,7 @@ final class ScanGrader
         }
 
         $response->grading_state = Response::STATE_FAILED;
-        $response->fuzzy_trace = ['last_error' => $outcome->status];
+        $response->fuzzy_trace = ReviewFlags::carry($response->fuzzy_trace, ['last_error' => $outcome->status]);
         $response->save();
 
         return Response::STATE_FAILED;
@@ -336,7 +338,7 @@ final class ScanGrader
         $priority = ReviewPriority::manual();
         $response->forceFill([
             'grading_state' => Response::STATE_MANUAL,
-            'fuzzy_trace' => array_filter(['manual_reason' => $reason, 'last_error' => $lastError]),
+            'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, array_filter(['manual_reason' => $reason, 'last_error' => $lastError])),
             'review_priority' => $priority->storedP(),
             'priority_band' => $priority->band,
         ])->save();

@@ -82,7 +82,8 @@ class StudentResultsTest extends TestCase
         $crop = $res->json('data.responses.0.crop_url');
         Storage::disk('local')->put(Response::query()->find($res->json('data.responses.0.id'))->crop_path, 'RIFF-webp');
         $this->asUser($this->students[0])->get($crop)->assertOk();
-        $this->asUser($this->students[1])->get($crop)->assertForbidden();
+        // Another student's answer does not exist for them (404, not 403), like their results.
+        $this->asUser($this->students[1])->getJson($crop)->assertNotFound()->assertJsonPath('code', 'not_found');
     }
 
     public function test_other_students_and_unpublished_results_are_404(): void
@@ -92,6 +93,8 @@ class StudentResultsTest extends TestCase
         $this->mine->forceFill(['status' => Submission::STATUS_REVIEWED, 'published_at' => null])->save();
         $this->asUser($this->students[0])->getJson("/api/v1/student/results/{$this->mine->id}")->assertNotFound();
         $this->asUser($this->students[0])->getJson('/api/v1/student/results')->assertJsonCount(0, 'data');
+        $ownCrop = '/api/v1/responses/'.$this->mine->responses()->value('id').'/crop';
+        $this->asUser($this->students[0])->getJson($ownCrop)->assertNotFound();
     }
 
     public function test_teachers_do_not_use_the_student_endpoints(): void

@@ -84,23 +84,25 @@ class ApproveAndPublishTest extends TestCase
     public function test_a_submission_is_published_only_when_every_answer_is_reviewed(): void
     {
         $s1 = $this->students[0];
-        $this->answer($s1, 'q1');
-        $this->answer($s1, 'q3');
+        $this->answerSheet($s1);
         $submission = $this->submission($s1);
         $url = "/api/v1/submissions/{$submission->id}/publish";
 
         $this->asUser($this->teacher)->postJson($url)
             ->assertStatus(409)
             ->assertJsonPath('code', 'submission_not_reviewed')
-            ->assertJsonPath('message', 'ยังตรวจทานไม่ครบ เหลืออีก 2 ข้อ');
+            ->assertJsonPath('message', 'ยังตรวจทานไม่ครบ เหลืออีก 4 ข้อ')
+            ->assertJsonPath('errors.unreviewed', ['4'])
+            ->assertJsonMissingPath('errors.missing_pages');
         $this->asUser($s1)->getJson('/api/v1/student/results')->assertOk()->assertJsonCount(0, 'data');
 
         $this->reviewAll($submission->fresh());
         Response::query()->where('question_id', $this->q['q3']->id)->update(['final_score' => 4]);
 
+        // q1 1 + q2 1 + q3 4 (teacher) + q4 0.5
         $res = $this->asUser($this->teacher)->postJson($url)->assertOk()
             ->assertJsonPath('data.status', 'published')
-            ->assertJsonPath('data.total_score', 5)
+            ->assertJsonPath('data.total_score', 6.5)
             ->assertJsonPath('data.published_by', $this->teacher->id);
         $this->assertNotNull($res->json('data.published_at'));
 
@@ -117,6 +119,70 @@ class ApproveAndPublishTest extends TestCase
         $this->asUser($s1)->getJson('/api/v1/student/results')->assertOk()->assertJsonCount(1, 'data');
     }
 
+    public function test_a_sheet_with_a_page_not_scanned_yet_is_not_published(): void
+    {
+        Event::fake([SubmissionPublished::class]);
+        [$s1, $s2] = $this->students;
+        // s1: page 1 scanned and fully reviewed, page 2 (q3, q4) never scanned.
+        $this->answer($s1, 'q1');
+        $this->answer($s1, 'q2');
+        $partial = $this->submission($s1);
+        $this->reviewAll($partial);
+        // s2: the whole sheet, reviewed.
+        $this->answerSheet($s2);
+        $this->reviewAll($this->submission($s2));
+
+        $queue = $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/review-queue")->assertOk();
+        $queue->assertJsonPath('meta.submissions.0.id', $partial->id)
+            ->assertJsonPath('meta.submissions.0.response_count', 2)
+            ->assertJsonPath('meta.submissions.0.reviewed_count', 2)
+            ->assertJsonPath('meta.submissions.0.question_count', 4)
+            ->assertJsonPath('meta.submissions.0.missing_pages', [2])
+            ->assertJsonPath('meta.submissions.0.publishable', false)
+            ->assertJsonPath('meta.submissions.1.missing_pages', [])
+            ->assertJsonPath('meta.submissions.1.publishable', true);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$partial->id}/publish")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'submission_not_reviewed')
+            ->assertJsonPath('message', 'ยังไม่ได้สแกนหน้า 2 (ข้อ 3, 4)')
+            ->assertJsonPath('errors.missing_pages', ['2'])
+            ->assertJsonPath('errors.missing_questions', [(string) $this->q['q3']->position, (string) $this->q['q4']->position])
+            ->assertJsonPath('errors.unreviewed', ['0']);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/publish")
+            ->assertOk()
+            ->assertExactJson(['data' => ['published' => 1, 'already_published' => 0, 'skipped' => 1]]);
+
+        $this->assertSame('reviewed', $partial->refresh()->status);
+        $this->assertNull($partial->published_at);
+        $this->assertNull($partial->total_score);
+        Event::assertDispatched(SubmissionPublished::class, 1);
+        Event::assertDispatched(SubmissionPublished::class, fn (SubmissionPublished $e) => $e->studentId === $s2->id);
+        $this->asUser($s1)->getJson('/api/v1/student/results')->assertOk()->assertJsonCount(0, 'data');
+
+        // Missing and unreviewed together: both are named.
+        $this->answer($s1, 'q3');
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$partial->id}/publish")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'ยังไม่ได้สแกนหน้า 2 (ข้อ 4) และยังตรวจทานไม่ครบ เหลืออีก 1 ข้อ');
+    }
+
+    public function test_a_question_deleted_after_printing_is_not_expected(): void
+    {
+        $s1 = $this->students[0];
+        $this->answer($s1, 'q1');
+        $this->answer($s1, 'q2');
+        $this->answer($s1, 'q3');
+        $submission = $this->submission($s1);
+        $this->reviewAll($submission);
+        $this->q['q4']->delete();
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'published');
+    }
+
     public function test_a_submission_without_answers_is_not_published(): void
     {
         $submission = $this->submission($this->students[0], Submission::STATUS_AWAITING_SCAN);
@@ -130,8 +196,8 @@ class ApproveAndPublishTest extends TestCase
     {
         Event::fake([SubmissionPublished::class]);
         [$s1, $s2, $s3] = $this->students;
-        $this->answer($s1, 'q1');
-        $this->answer($s2, 'q1');
+        $this->answerSheet($s1);
+        $this->answerSheet($s2);
         $this->answer($s3, 'q1');
         $this->reviewAll($this->submission($s1));
         $this->reviewAll($this->submission($s3));

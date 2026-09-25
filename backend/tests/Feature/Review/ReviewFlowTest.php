@@ -24,6 +24,55 @@ class ReviewFlowTest extends TestCase
     use RefreshDatabase;
     use ScanFixtures;
 
+    public function test_a_sheet_is_published_only_after_every_page_is_scanned(): void
+    {
+        Storage::fake('local');
+        $this->makeScanWorld();
+        $this->open->rubricCriteria()->create(['position' => 1, 'description' => 'บอกได้ว่าคลอโรฟิลล์สะท้อนแสงสีเขียว', 'points' => 4, 'is_core' => true, 'source' => 'teacher']);
+        $this->app->instance(GeminiClient::class, new FakeGeminiClient);
+        $notifier = new RecordingNotifier;
+        $this->app->instance(Notifier::class, $notifier);
+        $reviewEverything = function (): void {
+            foreach (Response::query()->whereNull('reviewed_at')->get() as $response) {
+                $this->asUser($this->teacher)->patchJson("/api/v1/responses/{$response->id}", [
+                    'final_score' => $response->ai_score ?? 0,
+                    'final_understanding' => $response->ai_understanding ?? 'not_yet',
+                ])->assertOk();
+            }
+        };
+
+        // Page 1 only (mcq + short), graded and fully reviewed.
+        $this->postScan($this->metaFor(1))->assertStatus(201);
+        $reviewEverything();
+        $submissionId = (int) Response::query()->value('submission_id');
+        $this->assertSame(2, Response::query()->count());
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submissionId}/publish")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'submission_not_reviewed')
+            ->assertJsonPath('errors.missing_pages', ['2']);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/publish")
+            ->assertOk()
+            ->assertJsonPath('data.published', 0)
+            ->assertJsonPath('data.skipped', 1);
+        $this->assertSame([], $notifier->ofType(PushMessage::RESULTS_PUBLISHED));
+        $this->asUser($this->student)->getJson("/api/v1/student/results/{$submissionId}")->assertNotFound();
+
+        // Page 2 arrives: once reviewed, the whole sheet is published with its full total.
+        $this->postScan($this->metaFor(2))->assertStatus(201);
+        $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/review-queue")
+            ->assertJsonPath('meta.submissions.0.missing_pages', [])
+            ->assertJsonPath('meta.submissions.0.publishable', false);
+        $reviewEverything();
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submissionId}/publish")->assertOk();
+        $this->assertEquals(
+            round((float) Response::query()->sum('final_score'), 2),
+            $this->asUser($this->student)->getJson("/api/v1/student/results/{$submissionId}")->assertOk()->json('data.total_score'),
+        );
+        $this->assertSame(4, Response::query()->count());
+        $this->assertCount(1, $notifier->ofType(PushMessage::RESULTS_PUBLISHED));
+    }
+
     public function test_from_scan_to_the_students_answered_appeal(): void
     {
         Storage::fake('local');

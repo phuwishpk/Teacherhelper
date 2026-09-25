@@ -81,7 +81,8 @@ class ScanImagesTest extends TestCase
 
     public function test_the_student_sees_their_own_crop_only_after_publishing(): void
     {
-        $this->asUser($this->student)->getJson("/api/v1/responses/{$this->workResponse->id}/crop")->assertStatus(403);
+        // Before publishing the answer does not exist for the student: 404, like GET /student/results/{id}.
+        $this->asUser($this->student)->getJson("/api/v1/responses/{$this->workResponse->id}/crop")->assertStatus(404);
 
         Submission::query()->whereKey($this->workResponse->submission_id)->update(['status' => 'published', 'published_at' => now()]);
 
@@ -89,7 +90,7 @@ class ScanImagesTest extends TestCase
         $this->assertSame($this->fixtureBytes('crop.webp'), $res->streamedContent());
 
         $classmate = $this->enrollStudent($this->classroom, 13)['student'];
-        $this->asUser($classmate)->getJson("/api/v1/responses/{$this->workResponse->id}/crop")->assertStatus(403);
+        $this->asUser($classmate)->getJson("/api/v1/responses/{$this->workResponse->id}/crop")->assertStatus(404);
     }
 
     public function test_other_teachers_cannot_read_crops(): void

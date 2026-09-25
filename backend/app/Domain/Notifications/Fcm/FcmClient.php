@@ -17,8 +17,16 @@ final class FcmClient
 {
     public const BASE_URL = 'https://fcm.googleapis.com/v1';
 
-    /** FcmError codes that mean "delete this registration token". */
-    private const DEAD_TOKEN_CODES = ['UNREGISTERED', 'INVALID_ARGUMENT', 'SENDER_ID_MISMATCH'];
+    /**
+     * FcmError codes that always mean "delete this registration token".
+     * INVALID_ARGUMENT is not one of them: FCM also returns it for a bad
+     * payload (too large, wrong data type), and deleting on that would wipe
+     * every recipient's token; see isDeadToken().
+     */
+    private const DEAD_TOKEN_CODES = ['UNREGISTERED', 'SENDER_ID_MISMATCH'];
+
+    /** The request field a BadRequest violation names when the token itself is malformed. */
+    private const TOKEN_FIELD = 'message.token';
 
     public function __construct(
         private readonly ServiceAccount $account,
@@ -86,17 +94,45 @@ final class FcmClient
         }
 
         $status = (string) ($response->json('error.status') ?? '');
+        $details = array_values(array_filter((array) $response->json('error.details', []), 'is_array'));
         $codes = [];
-        foreach ((array) $response->json('error.details', []) as $detail) {
-            if (is_array($detail) && is_string($detail['errorCode'] ?? null)) {
+        foreach ($details as $detail) {
+            if (is_string($detail['errorCode'] ?? null)) {
                 $codes[] = $detail['errorCode'];
             }
         }
         $error = trim('HTTP '.$response->status().' '.$status.' '.implode(',', $codes));
 
-        $dead = array_intersect($codes, self::DEAD_TOKEN_CODES) !== []
-            || ($response->status() === 404 && $status === 'NOT_FOUND');
+        return new FcmResult(self::isDeadToken($codes, $details) ? FcmResult::INVALID_TOKEN : FcmResult::FAILED, $response->status(), $error);
+    }
 
-        return new FcmResult($dead ? FcmResult::INVALID_TOKEN : FcmResult::FAILED, $response->status(), $error);
+    /**
+     * Firebase's token-management guide: UNREGISTERED (404) and
+     * SENDER_ID_MISMATCH (403) name the token; INVALID_ARGUMENT (400) does
+     * only when a google.rpc.BadRequest detail puts the violation on
+     * message.token. A bare 404 NOT_FOUND without an FcmError code is left
+     * alone too: that is what a wrong project id in the URL gives, for every
+     * device at once.
+     *
+     * @param  list<string>  $codes
+     * @param  list<array<mixed>>  $details
+     */
+    private static function isDeadToken(array $codes, array $details): bool
+    {
+        if (array_intersect($codes, self::DEAD_TOKEN_CODES) !== []) {
+            return true;
+        }
+        if (! in_array('INVALID_ARGUMENT', $codes, true)) {
+            return false;
+        }
+        foreach ($details as $detail) {
+            foreach ((array) ($detail['fieldViolations'] ?? []) as $violation) {
+                if (is_array($violation) && ($violation['field'] ?? null) === self::TOKEN_FIELD) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

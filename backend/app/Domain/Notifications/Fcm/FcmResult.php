@@ -6,8 +6,10 @@ namespace App\Domain\Notifications\Fcm;
  * Outcome of one FCM HTTP v1 send to one registration token.
  *
  * invalid_token: FCM says the token is dead or not ours (UNREGISTERED 404,
- * INVALID_ARGUMENT 400 with our fixed, tested payload, SENDER_ID_MISMATCH
- * 403). Firebase's token-management guide says to delete such tokens.
+ * SENDER_ID_MISMATCH 403, or INVALID_ARGUMENT 400 whose BadRequest field
+ * violation is message.token). Firebase's token-management guide says to
+ * delete such tokens. Any other INVALID_ARGUMENT is a payload problem and
+ * stays `failed`, so a bad message never deletes the recipients' tokens.
  */
 final readonly class FcmResult
 {
