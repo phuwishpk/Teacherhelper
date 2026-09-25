@@ -36,17 +36,19 @@ class _FakeAuth extends Fake implements AuthRepository {
       const User(id: 4567, name: 'ด.ญ. สมหญิง', role: 'student');
 }
 
-DioException _lockedError() {
+DioException _error(int status, Map<String, Object?> body) {
   final req = RequestOptions(path: '/auth/student/pin');
   return DioException(
     requestOptions: req,
-    response: Response(
-      requestOptions: req,
-      statusCode: 423,
-      data: {'message': 'ล็อก 15 นาที', 'errors': {}, 'code': 'pin_locked'},
-    ),
+    response: Response(requestOptions: req, statusCode: status, data: body),
   );
 }
+
+DioException _lockedError() => _error(423, {
+  'message': 'ล็อก 15 นาที',
+  'errors': {},
+  'code': 'pin_locked',
+});
 
 Future<void> _fill(WidgetTester tester) async {
   await tester.enterText(
@@ -103,6 +105,45 @@ void main() {
     final session = container.read(sessionProvider);
     expect(session, isA<SignedIn>());
     expect((session as SignedIn).user.isStudent, isTrue);
+  });
+
+  group('studentPinErrorMessage', () {
+    test('423 uses the remaining time the server sends', () {
+      final message = studentPinErrorMessage(
+        _error(423, {
+          'message': 'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที',
+          'errors': {
+            'pin': ['ล็อกชั่วคราว ลองใหม่ในอีก 12 นาที'],
+          },
+          'code': 'pin_locked',
+        }),
+      );
+      expect(message, contains('ลองใหม่ในอีก 12 นาที'));
+      expect(message, contains('ให้ครูรีเซ็ต PIN'));
+      expect(message, isNot(contains('15 นาที')));
+    });
+
+    test('429 from the per-IP limiter is not a PIN lockout', () {
+      final message = studentPinErrorMessage(
+        _error(429, {'message': 'Too Many Attempts.'}),
+      );
+      expect(message, 'มีการเข้าสู่ระบบถี่เกินไป รอสักครู่แล้วลองใหม่');
+      expect(message, isNot(contains('ล็อก')));
+      expect(message, isNot(contains('รีเซ็ต PIN')));
+    });
+
+    test('422 invalid_credentials is a wrong code / number / PIN', () {
+      expect(
+        studentPinErrorMessage(
+          _error(422, {
+            'message': 'x',
+            'errors': {},
+            'code': 'invalid_credentials',
+          }),
+        ),
+        'รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง',
+      );
+    });
   });
 
   testWidgets('shows the lockout message on 423 pin_locked', (tester) async {

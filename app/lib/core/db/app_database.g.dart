@@ -1361,11 +1361,11 @@ class $ModelCacheTable extends ModelCache
     'version',
   );
   @override
-  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+  late final GeneratedColumn<String> version = GeneratedColumn<String>(
     'version',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _sha256Meta = const VerificationMeta('sha256');
@@ -1474,7 +1474,7 @@ class $ModelCacheTable extends ModelCache
         data['${effectivePrefix}name'],
       )!,
       version: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}version'],
       )!,
       sha256: attachedDatabase.typeMapping.read(
@@ -1500,7 +1500,10 @@ class $ModelCacheTable extends ModelCache
 
 class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
   final String name;
-  final int version;
+
+  /// Semver string as in `model_versions.version` VARCHAR(20) (§8.6),
+  /// e.g. "0.1.0" for ml/models/digit_crnn/0.1.0.
+  final String version;
   final String sha256;
   final String path;
   final DateTime downloadedAt;
@@ -1515,7 +1518,7 @@ class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['name'] = Variable<String>(name);
-    map['version'] = Variable<int>(version);
+    map['version'] = Variable<String>(version);
     map['sha256'] = Variable<String>(sha256);
     map['path'] = Variable<String>(path);
     map['downloaded_at'] = Variable<DateTime>(downloadedAt);
@@ -1539,7 +1542,7 @@ class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ModelCacheData(
       name: serializer.fromJson<String>(json['name']),
-      version: serializer.fromJson<int>(json['version']),
+      version: serializer.fromJson<String>(json['version']),
       sha256: serializer.fromJson<String>(json['sha256']),
       path: serializer.fromJson<String>(json['path']),
       downloadedAt: serializer.fromJson<DateTime>(json['downloadedAt']),
@@ -1550,7 +1553,7 @@ class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'name': serializer.toJson<String>(name),
-      'version': serializer.toJson<int>(version),
+      'version': serializer.toJson<String>(version),
       'sha256': serializer.toJson<String>(sha256),
       'path': serializer.toJson<String>(path),
       'downloadedAt': serializer.toJson<DateTime>(downloadedAt),
@@ -1559,7 +1562,7 @@ class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
 
   ModelCacheData copyWith({
     String? name,
-    int? version,
+    String? version,
     String? sha256,
     String? path,
     DateTime? downloadedAt,
@@ -1609,7 +1612,7 @@ class ModelCacheData extends DataClass implements Insertable<ModelCacheData> {
 
 class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
   final Value<String> name;
-  final Value<int> version;
+  final Value<String> version;
   final Value<String> sha256;
   final Value<String> path;
   final Value<DateTime> downloadedAt;
@@ -1624,7 +1627,7 @@ class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
   });
   ModelCacheCompanion.insert({
     required String name,
-    required int version,
+    required String version,
     required String sha256,
     required String path,
     required DateTime downloadedAt,
@@ -1636,7 +1639,7 @@ class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
        downloadedAt = Value(downloadedAt);
   static Insertable<ModelCacheData> custom({
     Expression<String>? name,
-    Expression<int>? version,
+    Expression<String>? version,
     Expression<String>? sha256,
     Expression<String>? path,
     Expression<DateTime>? downloadedAt,
@@ -1654,7 +1657,7 @@ class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
 
   ModelCacheCompanion copyWith({
     Value<String>? name,
-    Value<int>? version,
+    Value<String>? version,
     Value<String>? sha256,
     Value<String>? path,
     Value<DateTime>? downloadedAt,
@@ -1677,7 +1680,7 @@ class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
       map['name'] = Variable<String>(name.value);
     }
     if (version.present) {
-      map['version'] = Variable<int>(version.value);
+      map['version'] = Variable<String>(version.value);
     }
     if (sha256.present) {
       map['sha256'] = Variable<String>(sha256.value);
@@ -2446,7 +2449,7 @@ typedef $$ScanQueueTableProcessedTableManager =
 typedef $$ModelCacheTableCreateCompanionBuilder =
     ModelCacheCompanion Function({
       required String name,
-      required int version,
+      required String version,
       required String sha256,
       required String path,
       required DateTime downloadedAt,
@@ -2455,7 +2458,7 @@ typedef $$ModelCacheTableCreateCompanionBuilder =
 typedef $$ModelCacheTableUpdateCompanionBuilder =
     ModelCacheCompanion Function({
       Value<String> name,
-      Value<int> version,
+      Value<String> version,
       Value<String> sha256,
       Value<String> path,
       Value<DateTime> downloadedAt,
@@ -2476,7 +2479,7 @@ class $$ModelCacheTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get version => $composableBuilder(
+  ColumnFilters<String> get version => $composableBuilder(
     column: $table.version,
     builder: (column) => ColumnFilters(column),
   );
@@ -2511,7 +2514,7 @@ class $$ModelCacheTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get version => $composableBuilder(
+  ColumnOrderings<String> get version => $composableBuilder(
     column: $table.version,
     builder: (column) => ColumnOrderings(column),
   );
@@ -2544,7 +2547,7 @@ class $$ModelCacheTableAnnotationComposer
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<int> get version =>
+  GeneratedColumn<String> get version =>
       $composableBuilder(column: $table.version, builder: (column) => column);
 
   GeneratedColumn<String> get sha256 =>
@@ -2591,7 +2594,7 @@ class $$ModelCacheTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> name = const Value.absent(),
-                Value<int> version = const Value.absent(),
+                Value<String> version = const Value.absent(),
                 Value<String> sha256 = const Value.absent(),
                 Value<String> path = const Value.absent(),
                 Value<DateTime> downloadedAt = const Value.absent(),
@@ -2607,7 +2610,7 @@ class $$ModelCacheTableTableManager
           createCompanionCallback:
               ({
                 required String name,
-                required int version,
+                required String version,
                 required String sha256,
                 required String path,
                 required DateTime downloadedAt,

@@ -4,13 +4,77 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../classrooms/classrooms_providers.dart';
 import 'answer_key.dart';
 import 'assignments_providers.dart';
 import 'question.dart';
 import 'skills_picker.dart';
 
 const _mcqOptions = ['A', 'B', 'C', 'D'];
+
+/// Route target of `/assignments/:id/questions/:qid/edit`. Uses the question
+/// handed over as route `extra` when there is one; otherwise (deep link,
+/// process restore, a plain `context.go`) it loads the question by id from
+/// the assignment, so saving always PATCHes `/questions/{qid}` and never
+/// creates a new question.
+class QuestionEditScreen extends ConsumerWidget {
+  const QuestionEditScreen({
+    super.key,
+    required this.assignmentId,
+    required this.questionId,
+    this.initial,
+    this.subjectId,
+    this.gradeLevel,
+  });
+
+  final int assignmentId;
+  final int questionId;
+  final Question? initial;
+  final int? subjectId;
+  final int? gradeLevel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (initial case final q? when q.id == questionId) {
+      return QuestionFormScreen(
+        assignmentId: assignmentId,
+        existing: q,
+        subjectId: subjectId,
+        gradeLevel: gradeLevel,
+      );
+    }
+    Widget message(Widget body) => Scaffold(
+      appBar: AppBar(title: const Text('แก้ไขข้อ')),
+      body: body,
+    );
+    final detail = ref.watch(assignmentDetailProvider(assignmentId));
+    return detail.when(
+      skipLoadingOnRefresh: true,
+      data: (a) {
+        final q = a.questions.where((q) => q.id == questionId).firstOrNull;
+        if (q == null) {
+          return message(const ErrorView(message: 'ไม่พบคำถามนี้ในการบ้าน'));
+        }
+        final classroom = ref.watch(classroomProvider(a.classroomId)).value;
+        return QuestionFormScreen(
+          assignmentId: assignmentId,
+          existing: q,
+          subjectId: subjectId ?? a.subjectId,
+          gradeLevel: gradeLevel ?? classroom?.gradeLevel,
+        );
+      },
+      loading: () => message(const Center(child: CircularProgressIndicator())),
+      error: (e, _) => message(
+        ErrorView(
+          message: apiErrorMessage(e),
+          onRetry: () => ref.invalidate(assignmentDetailProvider(assignmentId)),
+        ),
+      ),
+    );
+  }
+}
 
 /// Add or edit one question of an assignment, including its answer key
 /// (DESIGN §8.3) and skill tags.
@@ -48,7 +112,7 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
   late String _matchMode = widget.existing?.matchMode ?? 'flexible';
   late String? _mcqCorrect = _readMcq(widget.existing);
   late final _accepted = TextEditingController(
-    text: _readAccepted(widget.existing).join(', '),
+    text: _readAccepted(widget.existing).join('\n'),
   );
   late final _numericValue = TextEditingController(
     text: _readNumeric(widget.existing, 'value'),
@@ -352,11 +416,20 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
         return [
           TextFormField(
             controller: _accepted,
+            minLines: 2,
+            maxLines: 6,
+            keyboardType: TextInputType.multiline,
             decoration: InputDecoration(
               labelText: _type == QuestionType.showWork
-                  ? 'คำตอบสุดท้ายที่ยอมรับ (คั่นด้วยจุลภาค)'
-                  : 'คำตอบที่ยอมรับ (คั่นด้วยจุลภาค)',
-              hintText: 'เช่น กรุงเทพมหานคร, กรุงเทพฯ',
+                  ? 'คำตอบสุดท้ายที่ยอมรับ (บรรทัดละคำตอบ)'
+                  : 'คำตอบที่ยอมรับ (บรรทัดละคำตอบ)',
+              alignLabelWithHint: true,
+              hintText: _type == QuestionType.showWork
+                  ? 'x = 5\nx=5'
+                  : 'กรุงเทพมหานคร\nกรุงเทพฯ',
+              helperText:
+                  'ขึ้นบรรทัดใหม่เพื่อเพิ่มคำตอบ (ใส่จุลภาคในคำตอบได้ เช่น 1,000)',
+              helperMaxLines: 2,
             ),
           ),
           const SizedBox(height: 8),

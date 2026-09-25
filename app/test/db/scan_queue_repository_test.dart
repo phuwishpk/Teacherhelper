@@ -205,6 +205,101 @@ void main() {
     });
   });
 
+  group('markUploading is a conditional claim', () {
+    test('only a pending or a stale uploading row can be claimed', () async {
+      await repo.enqueue(clientScanId: 'f', meta: meta('f'), files: {});
+      await repo.markFailed('f', reason: 'qr_invalid');
+      await repo.enqueue(
+        clientScanId: 'nl',
+        meta: meta('nl'),
+        files: {},
+        state: ScanState.needsLayout,
+      );
+      expect(await repo.markUploading('f'), isFalse);
+      expect((await repo.find('f'))!.state, ScanState.failed);
+      expect(await repo.markUploading('nl'), isFalse);
+      expect((await repo.find('nl'))!.state, ScanState.needsLayout);
+    });
+
+    test('two isolates listing the same row: only one may send it', () async {
+      await repo.enqueue(clientScanId: 'twice', meta: meta('twice'), files: {});
+      final listedByA = await repo.dueForUpload(now: now);
+      final listedByB = await repo.dueForUpload(now: now);
+      expect(listedByA.single.clientScanId, 'twice');
+      expect(listedByB.single.clientScanId, 'twice');
+
+      expect(await repo.markUploading('twice'), isTrue, reason: 'A claims');
+      expect(await repo.markUploading('twice'), isFalse, reason: 'B skips');
+    });
+
+    test('a stale uploading row (dead isolate) can be claimed again', () async {
+      await repo.enqueue(clientScanId: 'dead', meta: meta('dead'), files: {});
+      expect(await repo.markUploading('dead'), isTrue);
+      expect(
+        await repo.markUploading(
+          'dead',
+          now: now.add(const Duration(minutes: 9)),
+        ),
+        isFalse,
+      );
+      expect(
+        await repo.markUploading('dead', now: now.add(staleUploadingAfter)),
+        isTrue,
+      );
+    });
+  });
+
+  test('countAwaitingUpload counts pending and uploading rows', () async {
+    for (final id in ['p', 'u', 'd', 'f', 'k', 'nl']) {
+      await repo.enqueue(clientScanId: id, meta: meta(id), files: {});
+    }
+    await repo.markUploading('u');
+    await repo.markDone('d');
+    await repo.markFailed('f', reason: 'x');
+    await repo.markConflict('k', serverScanId: 1);
+    await repo.setState('nl', ScanState.needsLayout);
+
+    expect(await repo.countAwaitingUpload(), 2);
+    expect(await repo.countUnsent(), 5, reason: 'everything but done');
+  });
+
+  test('markConflict without a server id explains why', () async {
+    await repo.enqueue(clientScanId: 'k', meta: meta('k'), files: {});
+    await repo.markConflict('k');
+    final scan = (await repo.find('k'))!;
+    expect(scan.state, ScanState.conflict);
+    expect(scan.serverScanId, isNull);
+    expect(scan.lastError, ScanQueueRepository.missingIdMessage);
+
+    // "ลองใหม่" asks the server again; a later answer with the id clears it.
+    await repo.resetToPending('k');
+    await repo.markConflict('k', serverScanId: 12);
+    final again = (await repo.find('k'))!;
+    expect(again.serverScanId, 12);
+    expect(again.lastError, isNull);
+  });
+
+  test('removeAll deletes every row and its files', () async {
+    final a = await crop('a');
+    final b = await crop('b');
+    await repo.enqueue(
+      clientScanId: 'a',
+      meta: meta('a'),
+      files: {'page': a.path},
+    );
+    await repo.enqueue(
+      clientScanId: 'b',
+      meta: meta('b'),
+      files: {'page': b.path},
+    );
+    await repo.markConflict('b', serverScanId: 3);
+
+    await repo.removeAll();
+    expect(await repo.listAll(), isEmpty);
+    expect(await a.exists(), isFalse);
+    expect(await b.exists(), isFalse);
+  });
+
   test('a live uploading row is not re-picked until it is stale', () async {
     await repo.enqueue(clientScanId: 'live', meta: meta('live'), files: {});
     await repo.markUploading('live');

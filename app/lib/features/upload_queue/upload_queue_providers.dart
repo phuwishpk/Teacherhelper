@@ -36,12 +36,13 @@ class UploadQueueActions extends Notifier<bool> {
       // Do not let the WorkManager isolate pick the same rows meanwhile.
       await scheduler.cancelPending();
       final result = await ref.read(scanUploaderProvider).drain();
-      // Anything still pending (this drain's retries, or scans whose backoff
-      // has not elapsed) goes back to WorkManager.
-      final pending = await ref
+      // Anything still pending (this drain's retries, scans whose backoff
+      // has not elapsed, or an upload left behind by a killed isolate) goes
+      // back to WorkManager.
+      final awaiting = await ref
           .read(scanQueueRepositoryProvider)
-          .countByState(ScanState.pending);
-      if (pending > 0) await scheduler.requestUpload();
+          .countAwaitingUpload();
+      if (awaiting > 0) await scheduler.requestUpload();
       return result;
     } finally {
       state = false;

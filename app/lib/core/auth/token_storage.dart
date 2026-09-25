@@ -16,7 +16,14 @@ abstract class TokenStorage {
   Future<Map<String, dynamic>?> readUser();
   Future<void> writeUser(Map<String, dynamic> user);
 
-  /// Removes both the token and the cached user.
+  /// Id of the user whose data is in the local database (offline cache and
+  /// upload queue). Survives [clear] on purpose: after a 401 the same user
+  /// can sign in again and still upload their queued scans, while a
+  /// different user signing in gets a wiped device first.
+  Future<int?> readDataOwner();
+  Future<void> writeDataOwner(int? userId);
+
+  /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
 
@@ -26,6 +33,7 @@ class SecureTokenStorage implements TokenStorage {
 
   static const _key = 'auth_token';
   static const _userKey = 'auth_user';
+  static const _ownerKey = 'local_data_owner';
   final FlutterSecureStorage _storage;
 
   @override
@@ -51,6 +59,15 @@ class SecureTokenStorage implements TokenStorage {
       _storage.write(key: _userKey, value: jsonEncode(user));
 
   @override
+  Future<int?> readDataOwner() async =>
+      int.tryParse(await _storage.read(key: _ownerKey) ?? '');
+
+  @override
+  Future<void> writeDataOwner(int? userId) => userId == null
+      ? _storage.delete(key: _ownerKey)
+      : _storage.write(key: _ownerKey, value: '$userId');
+
+  @override
   Future<void> clear() async {
     await _storage.delete(key: _key);
     await _storage.delete(key: _userKey);
@@ -58,10 +75,17 @@ class SecureTokenStorage implements TokenStorage {
 }
 
 class InMemoryTokenStorage implements TokenStorage {
-  InMemoryTokenStorage({this.token, this.user});
+  InMemoryTokenStorage({this.token, this.user, this.dataOwner});
 
   String? token;
   Map<String, dynamic>? user;
+  int? dataOwner;
+
+  @override
+  Future<int?> readDataOwner() async => dataOwner;
+
+  @override
+  Future<void> writeDataOwner(int? userId) async => dataOwner = userId;
 
   @override
   Future<String?> read() async => token;

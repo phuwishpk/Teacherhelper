@@ -47,14 +47,15 @@ void uploadCallbackDispatcher() {
 /// `DrainResult.settled` alone is not enough: when every pending scan still
 /// has `next_attempt_at` in the future the drain visits nothing, and a
 /// `true` here would let the scan sit in `pending` until the app is
-/// reopened. So the answer is "retry" whenever anything is still pending.
+/// reopened. The same goes for a row left in `uploading` by a killed
+/// isolate, which only becomes due after `staleUploadingAfter`. So the
+/// answer is "retry" whenever anything is still pending or uploading.
 Future<bool> runBackgroundDrain(
   ScanUploader uploader,
   ScanQueueRepository repository,
 ) async {
   await uploader.drain();
-  final pending = await repository.countByState(ScanState.pending);
-  return pending == 0;
+  return await repository.countAwaitingUpload() == 0;
 }
 
 /// Schedules background uploads; abstract so tests and the Chrome preview

@@ -168,7 +168,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'questions/new',
             builder: (context, state) {
-              final args = state.extra as QuestionFormArgs?;
+              final args = state.extra is QuestionFormArgs
+                  ? state.extra as QuestionFormArgs
+                  : null;
               return QuestionFormScreen(
                 assignmentId: _id(state, 'id'),
                 subjectId: args?.subjectId,
@@ -179,10 +181,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'questions/:qid/edit',
             builder: (context, state) {
-              final args = state.extra as QuestionFormArgs?;
-              return QuestionFormScreen(
+              final args = state.extra is QuestionFormArgs
+                  ? state.extra as QuestionFormArgs
+                  : null;
+              return QuestionEditScreen(
                 assignmentId: _id(state, 'id'),
-                existing: args?.question,
+                questionId: _id(state, 'qid'),
+                initial: args?.question,
                 subjectId: args?.subjectId,
                 gradeLevel: args?.gradeLevel,
               );

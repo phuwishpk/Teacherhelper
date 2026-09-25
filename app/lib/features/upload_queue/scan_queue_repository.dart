@@ -116,22 +116,54 @@ class ScanQueueRepository {
     return row?.nextAttemptAt;
   }
 
-  Future<int> countByState(ScanState state) async {
+  Future<int> countByState(ScanState state) =>
+      _countWhere(_db.scanQueue.state.equalsValue(state));
+
+  /// Scans a background upload still has to deal with: `pending` ones and
+  /// `uploading` ones. An `uploading` row may belong to an isolate that was
+  /// killed mid-upload; it only becomes due after [staleUploadingAfter], so
+  /// the WorkManager task has to stay scheduled until then or nothing would
+  /// ever pick it up again.
+  Future<int> countAwaitingUpload() => _countWhere(
+    _db.scanQueue.state.isInValues([ScanState.pending, ScanState.uploading]),
+  );
+
+  /// Scans the server does not have yet: every row except `done`. Signing
+  /// out discards these, so the UI asks first.
+  Future<int> countUnsent() =>
+      _countWhere(_db.scanQueue.state.equalsValue(ScanState.done).not());
+
+  Future<int> _countWhere(Expression<bool> predicate) async {
     final count = _db.scanQueue.clientScanId.count();
     final q = _db.selectOnly(_db.scanQueue)
       ..addColumns([count])
-      ..where(_db.scanQueue.state.equalsValue(state));
+      ..where(predicate);
     return (await q.getSingle()).read(count) ?? 0;
   }
 
-  /// Claims the row for an upload. Returns false when the row is gone or
-  /// already settled (`done` / `conflict`), in which case the caller must
-  /// not send it.
-  Future<bool> markUploading(String clientScanId) async {
-    final changed = await _updateUnlessSettled(
-      clientScanId,
-      const ScanQueueCompanion(state: Value(ScanState.uploading)),
-    );
+  /// Claims the row for an upload with a conditional UPDATE, so of two
+  /// isolates that both listed the same row only one gets to send it. Only a
+  /// `pending` row, or an `uploading` row older than [staleUploadingAfter]
+  /// (its isolate died), can be claimed. Returns false otherwise (row gone,
+  /// settled, failed, waiting for a layout, or a live upload elsewhere), in
+  /// which case the caller must not send it.
+  Future<bool> markUploading(String clientScanId, {DateTime? now}) async {
+    final at = now ?? _clock();
+    final staleBefore = at.subtract(staleUploadingAfter);
+    final changed =
+        await (_db.update(_db.scanQueue)..where(
+              (t) =>
+                  t.clientScanId.equals(clientScanId) &
+                  (t.state.equalsValue(ScanState.pending) |
+                      (t.state.equalsValue(ScanState.uploading) &
+                          t.updatedAt.isSmallerOrEqualValue(staleBefore))),
+            ))
+            .write(
+              ScanQueueCompanion(
+                state: const Value(ScanState.uploading),
+                updatedAt: Value(at),
+              ),
+            );
     return changed > 0;
   }
 
@@ -149,13 +181,15 @@ class ScanQueueRepository {
     );
   }
 
-  /// 202 pending_confirm: the submission was already published, so the
-  /// teacher has to confirm the replacement (DESIGN §9.4). Ignored once the
-  /// row is `done`.
-  Future<void> markConflict(
-    String clientScanId, {
-    required int serverScanId,
-  }) async {
+  /// `pending_confirm`: the submission was already published, so the
+  /// teacher has to confirm the replacement (DESIGN §9.4). The server holds
+  /// the scan, so the local files are kept until the teacher decides.
+  ///
+  /// Confirm-replace needs the server's scan id. When the response did not
+  /// carry one the row still becomes `conflict` (it must never be marked
+  /// done or re-sent automatically) and [missingIdMessage] explains why the
+  /// confirm button is not offered. Ignored once the row is `done`.
+  Future<void> markConflict(String clientScanId, {int? serverScanId}) async {
     await (_db.update(_db.scanQueue)..where(
           (t) =>
               t.clientScanId.equals(clientScanId) &
@@ -165,15 +199,20 @@ class ScanQueueRepository {
           ScanQueueCompanion(
             state: const Value(ScanState.conflict),
             serverScanId: Value(serverScanId),
-            lastError: const Value(null),
+            lastError: Value(serverScanId == null ? missingIdMessage : null),
             nextAttemptAt: const Value(null),
             updatedAt: Value(_clock()),
           ),
         );
   }
 
-  /// 422: the server rejected the scan for good (qr_invalid, ...). Ignored
-  /// once the row is `done` or `conflict`.
+  /// Shown on a `conflict` row whose response had no `scan_id`.
+  static const missingIdMessage =
+      'เซิร์ฟเวอร์ไม่ได้ส่งเลขสแกนกลับมา จึงยืนยันแทนที่จากเครื่องนี้ไม่ได้ '
+      'กด "ลองใหม่" เพื่อถามเซิร์ฟเวอร์อีกครั้ง';
+
+  /// The server rejected the scan for good (422 qr_invalid, 403, 404,
+  /// 413, ...). Ignored once the row is `done` or `conflict`.
   Future<void> markFailed(String clientScanId, {required String reason}) =>
       _updateUnlessSettled(
         clientScanId,
@@ -238,6 +277,15 @@ class ScanQueueRepository {
     _db.scanQueue,
   )..where((t) => t.state.equalsValue(ScanState.done))).go();
 
+  /// Deletes every row and its local image files (sign-out on a shared
+  /// device: the next user must not see or upload these scans).
+  Future<void> removeAll() async {
+    for (final scan in await listAll()) {
+      await _deleteFiles(scan);
+    }
+    await _db.delete(_db.scanQueue).go();
+  }
+
   Future<void> _update(String clientScanId, ScanQueueCompanion values) =>
       (_db.update(_db.scanQueue)
             ..where((t) => t.clientScanId.equals(clientScanId)))
@@ -258,7 +306,10 @@ class ScanQueueRepository {
 
   Future<void> _deleteFilesOf(String clientScanId) async {
     final scan = await find(clientScanId);
-    if (scan == null) return;
+    if (scan != null) await _deleteFiles(scan);
+  }
+
+  Future<void> _deleteFiles(QueuedScan scan) async {
     for (final path in scan.files.values) {
       final file = File(path);
       try {

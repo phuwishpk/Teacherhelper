@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
-import 'core/db/app_database.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/upload_queue/scan_queue_repository.dart';
@@ -46,10 +45,11 @@ class _EduVisionAppState extends ConsumerState<EduVisionApp>
 
   Future<void> _resumePendingUploads() async {
     try {
-      final pending = await ref
+      // Pending scans, and uploads interrupted when the app was killed.
+      final awaiting = await ref
           .read(scanQueueRepositoryProvider)
-          .countByState(ScanState.pending);
-      if (pending > 0) {
+          .countAwaitingUpload();
+      if (awaiting > 0) {
         await ref.read(uploadSchedulerProvider).requestUpload();
       }
     } catch (_) {

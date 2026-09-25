@@ -26,13 +26,11 @@ abstract final class AnswerKey {
     'reference_steps': referenceSteps,
   };
 
-  /// Splits a comma- or newline-separated list of accepted answers.
-  static List<String> splitAccepted(String text) => text
-      .split(RegExp(r'[\n,]'))
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
+  /// Accepted answers, one per line. Commas are part of an answer, not a
+  /// separator: "1,000", "x = 2, y = 3" and "(2, 3)" are single answers.
+  static List<String> splitAccepted(String text) => splitLines(text);
 
+  /// Non-empty trimmed lines of [text].
   static List<String> splitLines(String text) =>
       text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 }

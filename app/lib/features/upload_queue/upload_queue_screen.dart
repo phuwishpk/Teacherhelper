@@ -7,6 +7,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import 'queued_scan.dart';
+import 'scan_queue_repository.dart';
 import 'upload_queue_providers.dart';
 
 String scanStateLabel(ScanState state) => switch (state) {
@@ -110,6 +111,11 @@ class _ScanTile extends ConsumerWidget {
         ? 'สแกน ${scan.clientScanId.substring(0, 8)}'
         : 'การบ้าน #${qr.assignmentId} นักเรียน #${qr.studentId} หน้า ${qr.page}';
     final actions = ref.read(uploadQueueActionsProvider.notifier);
+    // An `uploading` row this old belongs to an isolate that died; the
+    // teacher may retry or discard it instead of waiting for WorkManager.
+    final stuck =
+        scan.state == ScanState.uploading &&
+        DateTime.now().difference(scan.updatedAt) >= staleUploadingAfter;
 
     Future<void> run(Future<void> Function() f, String okMessage) async {
       try {
@@ -160,10 +166,18 @@ class _ScanTile extends ConsumerWidget {
                   'ผลของนักเรียนคนนี้เผยแพร่ไปแล้ว ยืนยันเพื่อแทนที่ด้วยสแกนใหม่และตรวจซ้ำ',
                 ),
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            if (stuck)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'การอัปโหลดค้างอยู่ (แอปอาจถูกปิดระหว่างส่ง) กด "ลองใหม่" เพื่อส่งอีกครั้ง',
+                ),
+              ),
+            Wrap(
+              alignment: WrapAlignment.end,
               children: [
-                if (scan.state == ScanState.conflict)
+                if (scan.state == ScanState.conflict &&
+                    scan.serverScanId != null)
                   TextButton.icon(
                     onPressed: () => run(
                       () => actions.confirmReplace(scan),
@@ -173,14 +187,17 @@ class _ScanTile extends ConsumerWidget {
                     label: const Text('ยืนยันแทนที่'),
                   ),
                 if (scan.state == ScanState.failed ||
-                    scan.state == ScanState.pending)
+                    scan.state == ScanState.pending ||
+                    stuck ||
+                    (scan.state == ScanState.conflict &&
+                        scan.serverScanId == null))
                   TextButton.icon(
                     onPressed: () =>
                         run(() => actions.retry(scan), 'เริ่มอัปโหลดใหม่'),
                     icon: const Icon(Icons.refresh),
                     label: const Text('ลองใหม่'),
                   ),
-                if (scan.state != ScanState.uploading)
+                if (scan.state != ScanState.uploading || stuck)
                   TextButton.icon(
                     onPressed: () async {
                       final ok = await confirm(

@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
 import 'auth_repository.dart';
+import 'local_user_data.dart';
 import 'token_storage.dart';
 import 'user.dart';
 
@@ -127,24 +129,60 @@ class SessionNotifier extends Notifier<SessionState> {
     final storage = ref.read(tokenStorageProvider);
     await storage.write(token);
     final user = await ref.read(authRepositoryProvider).me();
+    await _claimLocalData(storage, user);
     await storage.writeUser(user.toJson());
     _restoredOffline = false;
     state = SignedIn(user);
   }
 
+  /// The local database may still hold a previous user's roster cache and
+  /// scan queue (that user was signed out by a 401, which keeps them so
+  /// the same user can sign back in and upload). Anyone else gets a clean
+  /// device.
+  Future<void> _claimLocalData(TokenStorage storage, User user) async {
+    final owner = await storage.readDataOwner();
+    if (owner != null && owner != user.id && !await _wipeLocalData()) {
+      return; // keep the old owner so a later sign-in retries the wipe
+    }
+    await storage.writeDataOwner(user.id);
+  }
+
+  /// Deliberate sign-out: revoke the token and delete this user's local
+  /// data (offline cache, queued scans and their images). The UI asks
+  /// first when scans are still unsent (see `confirmSignOut`).
   Future<void> signOut() async {
     try {
       await ref.read(authRepositoryProvider).logout();
     } on DioException {
       // Token may already be invalid; clearing locally is what matters.
     }
+    // Keep the owner when the wipe failed so the next sign-in by someone
+    // else tries again.
+    if (await _wipeLocalData()) {
+      await ref.read(tokenStorageProvider).writeDataOwner(null);
+    }
     await forceSignOut();
   }
 
+  /// Token rejected (401) or sign-out: clear the credentials. Local data is
+  /// left for [_claimLocalData] to keep or wipe at the next sign-in.
   Future<void> forceSignOut() async {
     await ref.read(tokenStorageProvider).clear();
     _restoredOffline = false;
     state = const SignedOut();
+  }
+
+  /// Returns false when the wipe failed.
+  Future<bool> _wipeLocalData() async {
+    try {
+      await ref.read(localUserDataProvider).wipe();
+      return true;
+    } catch (e) {
+      // Best effort (no local database in the web preview); never keep a
+      // user signed in because a cleanup failed.
+      debugPrint('Local data wipe failed: $e');
+      return false;
+    }
   }
 }
 

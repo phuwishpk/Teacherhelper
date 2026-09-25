@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/widgets/async_view.dart';
+import '../auth/sign_out_action.dart';
 import '../results/results_page.dart';
 
 class _Destination {
@@ -64,7 +65,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
           IconButton(
             tooltip: 'ออกจากระบบ',
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(sessionProvider.notifier).signOut(),
+            onPressed: () => confirmSignOut(context, ref),
           ),
         ],
       ),

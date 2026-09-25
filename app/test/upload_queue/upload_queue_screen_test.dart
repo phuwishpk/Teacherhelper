@@ -133,6 +133,83 @@ void main() {
     },
   );
 
+  testWidgets('a conflict without scan_id cannot be confirmed from here', (
+    tester,
+  ) async {
+    await enqueue('noid');
+    await repo.markConflict('noid');
+    final adapter = FakeHttpAdapter((_) async => jsonResponse(201, {}));
+    await pumpScreen(
+      tester,
+      const UploadQueueScreen(),
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        dioProvider.overrideWithValue(fakeDio(adapter)),
+        uploadSchedulerProvider.overrideWithValue(_RecordingScheduler()),
+      ],
+    );
+    expect(find.text('รอครูยืนยัน'), findsOneWidget);
+    expect(find.text('ยืนยันแทนที่'), findsNothing);
+    expect(find.text(ScanQueueRepository.missingIdMessage), findsOneWidget);
+    expect(find.text('ลองใหม่'), findsOneWidget);
+    expect(find.text('ลบ'), findsOneWidget);
+    await unmountScreen(tester);
+  });
+
+  testWidgets('an upload stuck after the app was killed can be retried', (
+    tester,
+  ) async {
+    await enqueue('stuck');
+    await repo.markUploading(
+      'stuck',
+      now: DateTime.now().subtract(
+        staleUploadingAfter + const Duration(minutes: 1),
+      ),
+    );
+    final scheduler = _RecordingScheduler();
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(201, {'scan_id': 5, 'state': 'active'}),
+    );
+    await pumpScreen(
+      tester,
+      const UploadQueueScreen(),
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        dioProvider.overrideWithValue(fakeDio(adapter)),
+        uploadSchedulerProvider.overrideWithValue(scheduler),
+      ],
+    );
+    expect(find.text('กำลังอัปโหลด'), findsOneWidget);
+    expect(find.textContaining('การอัปโหลดค้างอยู่'), findsOneWidget);
+    expect(find.text('ลบ'), findsOneWidget);
+
+    await tester.tap(find.text('ลองใหม่'));
+    await tester.pumpAndSettle();
+    expect(adapter.requests.single.uri.path, '/api/v1/scans');
+    expect((await repo.find('stuck'))!.state, ScanState.done);
+    await unmountScreen(tester);
+  });
+
+  testWidgets('a live upload shows no actions', (tester) async {
+    await enqueue('live');
+    await repo.markUploading('live');
+    await pumpScreen(
+      tester,
+      const UploadQueueScreen(),
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        dioProvider.overrideWithValue(
+          fakeDio(FakeHttpAdapter((_) async => jsonResponse(201, {}))),
+        ),
+        uploadSchedulerProvider.overrideWithValue(_RecordingScheduler()),
+      ],
+    );
+    expect(find.text('กำลังอัปโหลด'), findsOneWidget);
+    expect(find.text('ลองใหม่'), findsNothing);
+    expect(find.text('ลบ'), findsNothing);
+    await unmountScreen(tester);
+  });
+
   testWidgets('a conflict offers "ยืนยันแทนที่" and finishes on success', (
     tester,
   ) async {
