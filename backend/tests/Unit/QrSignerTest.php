@@ -3,9 +3,9 @@
 namespace Tests\Unit;
 
 use App\Domain\Worksheets\QrSigner;
+use App\Domain\Worksheets\QrSigningKeyMissing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * DESIGN §5.4: EV1.{assignment}.{student}.{page}.{layout_version}.{sig},
@@ -78,7 +78,7 @@ class QrSignerTest extends TestCase
 
     public function test_a_missing_key_fails_loudly(): void
     {
-        $this->expectException(RuntimeException::class);
+        $this->expectException(QrSigningKeyMissing::class);
         $this->expectExceptionMessage('QR_SIGNING_KEY');
 
         new QrSigner('   ');

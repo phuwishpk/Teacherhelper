@@ -2,8 +2,6 @@
 
 namespace App\Domain\Worksheets;
 
-use RuntimeException;
-
 /**
  * Worksheet QR payloads (DESIGN §5.4):
  *
@@ -30,7 +28,7 @@ class QrSigner
     public function __construct(?string $key)
     {
         if ($key === null || trim($key) === '') {
-            throw new RuntimeException('QR_SIGNING_KEY is not set; worksheets cannot be printed or verified.');
+            throw new QrSigningKeyMissing;
         }
         $this->key = $key;
     }
@@ -38,6 +36,12 @@ class QrSigner
     public static function fromConfig(): self
     {
         return new self(config('eduvision.qr_signing_key'));
+    }
+
+    /** Whether QR_SIGNING_KEY is set, checked before a print is queued. */
+    public static function isConfigured(): bool
+    {
+        return trim((string) config('eduvision.qr_signing_key')) !== '';
     }
 
     public function sign(int $assignmentId, int $studentId, int $page, int $layoutVersion): string

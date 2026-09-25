@@ -81,8 +81,8 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 | PUT | `/questions/{id}/rubric` | `{criteria[], reference_steps?}` เกณฑ์หลัก 1 ข้อพอดี คะแนนรวม = คะแนนเต็ม → `approved` |
 | POST | `/assignments/{id}/layout` | `201` เวอร์ชันใหม่ / `200` ถ้าหน้ากระดาษไม่เปลี่ยน การบ้านเป็น `ready` (`422 rubric_not_approved`, `assignment_empty`, `question_too_tall`) |
 | GET | `/assignments/{id}/layouts?version=` | มี version → `{data: layout}` (`404 layout_unknown`) ไม่มี → `{data: [layout...]}` ใหม่สุดก่อน |
-| POST | `/assignments/{id}/worksheets` | `202 {data: print}` (`409 assignment_not_ready`, `422 classroom_empty`) |
-| GET | `/worksheet-prints/{id}` และ `/file` | `{id, status, assignment_id, layout_version, download_url, status_url, error, created_at}` / PDF (`409 print_not_ready`) |
+| POST | `/assignments/{id}/worksheets` | `202 {data: print}` (`409 assignment_not_ready`, `422 classroom_empty`, `503 qr_key_missing` เมื่อ server ยังไม่ได้ตั้ง `QR_SIGNING_KEY`) |
+| GET | `/worksheet-prints/{id}` และ `/file` | `{id, status, assignment_id, layout_version, download_url, status_url, error, created_at}` / PDF (`409 print_not_ready`) เข้าได้เฉพาะครูที่สอนห้องนั้นอยู่ตอนนี้ |
 
 ใบงาน: `LayoutBuilder` วัดความสูงโจทย์จากการวาดจริงของ mPDF (ฟอนต์ Sarabun ใน `resources/fonts`, ตัดคำไทยด้วยพจนานุกรม) แล้ว `WorksheetPdfRenderer` วาดตาม layout เดิมทุกคนและตรวจซ้ำว่าตรงกับ layout ที่เก็บไว้ `RenderWorksheetsJob` วาดครั้งละ `WORKSHEET_BATCH_SIZE` คน (ค่าเริ่มต้น 10) แล้ว `MergeWorksheetsJob` รวมไฟล์ ทั้งสองเขียนเวลาลง log (`worksheets.render_batch`, `worksheets.merge`) ไว้วัดบน hosting ตาม §5.5 ในเครื่อง 40 คนใช้ราว 0.5–1.2 วินาทีรวมทุก job
 
@@ -96,10 +96,21 @@ php artisan eduvision:queue-work
 
 command นี้ (1) dispatch `QueueHeartbeatJob` ลง table `jobs` แล้ว (2) รัน `queue:work --queue=grading,default,pdf --stop-when-empty --max-time=50` (option ตาม DESIGN §7.2) job เขียนเวลาไว้ใน cache key `queue.last_run_at` ซึ่ง `GET /health` อ่านออกมา ถ้าค่าเก่ากว่า `HEARTBEAT_MAX_AGE_MINUTES` (ค่าเริ่มต้น 3 นาที) `status` จะเป็น `degraded` แปลว่า cron + artisan + database queue ไม่ครบวงจร
 
+## ลบไฟล์ตามนโยบาย (DESIGN §7.2, §7.3)
+
+Scheduled Task ทุกวัน 02:00 เรียก
+
+```
+php artisan eduvision:purge-images
+```
+
+ตอนนี้ลบ PDF ใบงาน (มีชื่อนักเรียน) ที่สร้างมาเกิน 30 วัน: แถวใน `worksheet_prints` ยังอยู่ แต่เปลี่ยนเป็น `failed` พร้อม `error` "ไฟล์ใบงานถูกลบแล้วเพราะเก็บไว้ครบ 30 วัน กรุณาสั่งพิมพ์ใหม่" และไฟล์ใต้ `worksheets/` ที่ไม่มีแถวชี้ถึงแต่เก่ากว่า 30 วันก็ถูกลบด้วย ภาพสแกนและภาพ crop จะเพิ่มใน command เดียวกันตอนที่ขั้นนั้นเริ่มเก็บไฟล์
+
 ## โครงสร้างโค้ด (ตาม DESIGN §7.1)
 
 ```
 app/Console/Commands/QueueWorkCommand.php    eduvision:queue-work
+app/Console/Commands/PurgeImagesCommand.php  eduvision:purge-images (ลบไฟล์ตาม §7.3)
 app/Exceptions/ApiException.php              error ที่มี code ให้แอปจัดการ (ไม่ถูกเขียนลง log)
 app/Exceptions/ApiErrorResponse.php          รูปแบบ {message, errors, code} + code กลางของ error จาก framework
 app/Http/Controllers/Api/V1/                 HealthController, TeacherAuthController, MeController
@@ -122,7 +133,7 @@ tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest
 
 ## Deploy บน Plesk
 
-ทำตาม `docs/KICKOFF.md` B7 หลัง `tools/hosting-probe.php` ผ่าน สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work` และ migration ผ่าน Scheduled Task "Run now" `artisan migrate --force`
+ทำตาม `docs/KICKOFF.md` B7 หลัง `tools/hosting-probe.php` ผ่าน สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work`, Scheduled Task ทุกวัน 02:00 `artisan eduvision:purge-images` และ migration ผ่าน Scheduled Task "Run now" `artisan migrate --force`
 
 โฟลเดอร์ `public/css/filament`, `public/js/filament` และ `public/fonts/filament` ถูก commit ไว้จงใจ (ลบบรรทัด ignore ของ skeleton ออกจาก `.gitignore` แล้ว) เพื่อให้ไปถึง Plesk ผ่าน Git โดยไม่ต้องพึ่ง script `filament:upgrade` หลัง `composer install` หรือรัน `filament:assets` บน server เมื่ออัปเกรด Filament ให้รัน `php artisan filament:assets` แล้ว commit ไฟล์ที่เปลี่ยนด้วย
 

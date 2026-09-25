@@ -9,6 +9,7 @@ use App\Models\Assignment;
 use App\Models\User;
 use App\Models\WorksheetPrint;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
 
 /**
  * POST /assignments/{id}/worksheets (DESIGN §5.5, §9.3): one PDF with every
@@ -21,6 +22,15 @@ class WorksheetPrintService
 {
     public function queue(Assignment $assignment, User $teacher): WorksheetPrint
     {
+        // Without the key every render job would fail while resolving the
+        // renderer; refuse up front with a message that names the real cause
+        // (ApiException is not logged, so record it for the operator here).
+        if (! QrSigner::isConfigured()) {
+            Log::error('worksheets.qr_key_missing', ['assignment_id' => $assignment->id]);
+
+            throw new ApiException(QrSigningKeyMissing::USER_MESSAGE, 'qr_key_missing', 503);
+        }
+
         if (! $assignment->isReady() || $assignment->current_layout_version === null) {
             throw new ApiException(
                 'ต้องสร้าง layout ให้เป็นปัจจุบันก่อนพิมพ์ใบงาน',
