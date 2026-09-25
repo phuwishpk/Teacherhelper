@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Domain\Classrooms\ClassCodeGenerator;
+use App\Domain\Gemini\FakeGeminiClient;
+use App\Domain\Gemini\GeminiClient;
+use App\Domain\Worksheets\QrSigner;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -12,7 +15,13 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Canned, offline Gemini by default (DESIGN §10): development and tests
+        // need no API key. The real HTTP client replaces this binding.
+        $this->app->bind(GeminiClient::class, FakeGeminiClient::class);
+
+        // Resolved lazily: a missing QR_SIGNING_KEY only fails the code paths
+        // that sign or verify worksheet QRs, with a clear message.
+        $this->app->bind(QrSigner::class, fn () => QrSigner::fromConfig());
     }
 
     public function boot(): void
