@@ -67,6 +67,25 @@ TOKEN=$(curl -s "${H[@]}" -X POST localhost:8000/api/v1/auth/teacher/login \
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhost:8000/api/v1/me
 ```
 
+## การบ้าน, rubric และใบงาน (DESIGN §5, §9.3)
+
+ต้องตั้ง `QR_SIGNING_KEY` ใน `.env` ก่อนพิมพ์ใบงานครั้งแรก (สร้างด้วย `php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"`) และห้ามเปลี่ยนภายหลัง เพราะใบงานที่พิมพ์ไปแล้วจะตรวจ QR ไม่ผ่าน
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET / POST | `/assignments` | list กรองด้วย `?classroom_id=&status=` (cursor) สร้างด้วย `{classroom_id, subject_id, title, strictness?, due_at?}` |
+| GET / PATCH / DELETE | `/assignments/{id}` | GET รวม `questions[]` (พร้อม `skills`, `rubric_criteria`) PATCH `status` ได้แค่ `closed`/`draft` ลบได้เฉพาะ draft ที่ยังไม่เคยพิมพ์ (`409 assignment_not_draft` / `assignment_printed`) |
+| POST | `/assignments/{id}/questions` | ตรวจ `answer_key` ตามประเภท (§8.3) `position` แทรกได้ |
+| PATCH / DELETE | `/questions/{id}` | ส่งเฉพาะ field ที่แก้ แก้สิ่งที่พิมพ์บนกระดาษ → การบ้านกลับเป็น `draft` |
+| POST | `/questions/{id}/rubric/draft` | `202` queue `DraftRubricJob` (Gemini ปลอมเป็นค่าเริ่มต้น) |
+| PUT | `/questions/{id}/rubric` | `{criteria[], reference_steps?}` เกณฑ์หลัก 1 ข้อพอดี คะแนนรวม = คะแนนเต็ม → `approved` |
+| POST | `/assignments/{id}/layout` | `201` เวอร์ชันใหม่ / `200` ถ้าหน้ากระดาษไม่เปลี่ยน การบ้านเป็น `ready` (`422 rubric_not_approved`, `assignment_empty`, `question_too_tall`) |
+| GET | `/assignments/{id}/layouts?version=` | มี version → `{data: layout}` (`404 layout_unknown`) ไม่มี → `{data: [layout...]}` ใหม่สุดก่อน |
+| POST | `/assignments/{id}/worksheets` | `202 {data: print}` (`409 assignment_not_ready`, `422 classroom_empty`) |
+| GET | `/worksheet-prints/{id}` และ `/file` | `{id, status, assignment_id, layout_version, download_url, status_url, error, created_at}` / PDF (`409 print_not_ready`) |
+
+ใบงาน: `LayoutBuilder` วัดความสูงโจทย์จากการวาดจริงของ mPDF (ฟอนต์ Sarabun ใน `resources/fonts`, ตัดคำไทยด้วยพจนานุกรม) แล้ว `WorksheetPdfRenderer` วาดตาม layout เดิมทุกคนและตรวจซ้ำว่าตรงกับ layout ที่เก็บไว้ `RenderWorksheetsJob` วาดครั้งละ `WORKSHEET_BATCH_SIZE` คน (ค่าเริ่มต้น 10) แล้ว `MergeWorksheetsJob` รวมไฟล์ ทั้งสองเขียนเวลาลง log (`worksheets.render_batch`, `worksheets.merge`) ไว้วัดบน hosting ตาม §5.5 ในเครื่อง 40 คนใช้ราว 0.5–1.2 วินาทีรวมทุก job
+
 ## Queue และ heartbeat
 
 Plesk ไม่มี process ค้าง จึงใช้ Scheduled Task ทุก 1 นาทีเรียก
@@ -88,6 +107,11 @@ app/Http/Requests/Api/V1/                    validation ของแต่ละ
 app/Http/Resources/UserResource.php
 app/Jobs/QueueHeartbeatJob.php
 app/Models/{School,User}.php
+app/Domain/Worksheets/                       LayoutBuilder, WorksheetPdfRenderer, QrSigner, PdfMerger, LayoutService, WorksheetPrintService
+app/Domain/Assignments/                      QuestionData (ตรวจ answer_key), QuestionEditor, QuestionPositions, RubricService
+app/Domain/Gemini/                           GeminiClient (interface), FakeGeminiClient, RubricDraft
+app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob}.php
+resources/fonts/                             Sarabun (OFL) ที่เพิ่ม glyph U+200B ดู README ในโฟลเดอร์
 app/Providers/Filament/AdminPanelProvider.php
 config/eduvision.php                         ค่าที่อ่านจาก .env (ห้ามใช้ env() นอก config เพราะ production ใช้ config:cache)
 database/migrations/                         0001_..._schools → users → cache → jobs → personal_access_tokens

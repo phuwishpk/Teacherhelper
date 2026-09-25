@@ -24,6 +24,18 @@ return [
     'admin_email' => env('ADMIN_EMAIL'),
     'admin_password' => env('ADMIN_PASSWORD'),
 
+    // HMAC-SHA256 key that signs the worksheet QR (DESIGN §5.4). Only the
+    // server can verify a QR, so a forged page cannot land in another
+    // student's submission. Rotating it invalidates every worksheet printed
+    // before the rotation. Generate with: php -r "echo bin2hex(random_bytes(32));"
+    'qr_signing_key' => env('QR_SIGNING_KEY'),
+
+    // Worksheet PDFs (DESIGN §5.5): RenderWorksheetsJob renders this many
+    // students per job so each job ends well inside the 50-second worker pass.
+    'worksheets' => [
+        'batch_size' => max(1, (int) env('WORKSHEET_BATCH_SIZE', 10)),
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,
