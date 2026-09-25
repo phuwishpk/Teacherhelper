@@ -214,6 +214,22 @@ class AssignmentDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  if (!a.isDraft) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.rate_review_outlined),
+                        title: const Text('ตรวจทานและเผยแพร่'),
+                        subtitle: Text(
+                          (a.needsReviewCount ?? 0) > 0
+                              ? 'รอตรวจทาน ${a.needsReviewCount} ข้อ'
+                              : 'ดูคะแนนที่ AI ให้ แก้ไข แล้วเผยแพร่ให้นักเรียน',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(AppRoutes.review(a.id)),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'คำถาม (${a.questions.length} ข้อ · รวม ${_totalPoints(a)} คะแนน)',

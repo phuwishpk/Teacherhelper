@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Push notifications (DESIGN §9.9): the Firebase config is a private file
+// (gitignored, never committed). Without it the plugin is skipped, Firebase
+// is not initialised at runtime and the app simply runs without FCM.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.eduvision.eduvision"
     compileSdk = flutter.compileSdkVersion

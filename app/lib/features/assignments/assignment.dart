@@ -30,6 +30,7 @@ class Assignment {
     this.questions = const [],
     this.classroomName,
     this.subjectName,
+    this.needsReviewCount,
   });
 
   final int id;
@@ -45,6 +46,10 @@ class Assignment {
   final List<Question> questions;
   final String? classroomName;
   final String? subjectName;
+
+  /// Responses still waiting for the teacher's review, when the list
+  /// endpoint includes it (optional `needs_review_count`).
+  final int? needsReviewCount;
 
   bool get isDraft => status == 'draft';
 
@@ -75,6 +80,7 @@ class Assignment {
             ..sort((a, b) => a.position.compareTo(b.position)),
       classroomName: classroom?['name'] as String?,
       subjectName: subject?['name'] as String?,
+      needsReviewCount: (json['needs_review_count'] as num?)?.toInt(),
     );
   }
 }

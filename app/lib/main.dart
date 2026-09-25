@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/api/api_config.dart';
+import 'core/push/push_messaging.dart';
 import 'features/upload_queue/upload_worker.dart';
 
 Future<void> main() async {
@@ -12,7 +13,11 @@ Future<void> main() async {
     runApp(const MisconfiguredApp());
     return;
   }
-  final container = ProviderContainer();
+  // FCM only when this build has a Firebase config (DESIGN §9.9).
+  final push = await initPushMessaging();
+  final container = ProviderContainer(
+    overrides: [pushMessagingProvider.overrideWithValue(push)],
+  );
   // Registers the background upload isolate (no-op off Android).
   await container.read(uploadSchedulerProvider).initialize();
   runApp(

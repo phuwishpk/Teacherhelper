@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
+import 'core/push/push_coordinator.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/upload_queue/scan_queue_repository.dart';
@@ -22,6 +23,8 @@ class _EduVisionAppState extends ConsumerState<EduVisionApp>
     WidgetsBinding.instance.addObserver(this);
     // Read the stored token once; the router shows /splash until this settles.
     Future.microtask(() => ref.read(sessionProvider.notifier).restore());
+    // FCM token registration and notification taps (no-op without Firebase).
+    Future.microtask(() => ref.read(pushCoordinatorProvider));
     // A teacher who was offline may have scans waiting: make sure WorkManager
     // has an upload task queued (it runs once the network is back, §6.4).
     Future.microtask(_resumePendingUploads);
@@ -65,6 +68,7 @@ class _EduVisionAppState extends ConsumerState<EduVisionApp>
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       routerConfig: ref.watch(routerProvider),
+      scaffoldMessengerKey: ref.watch(rootMessengerKeyProvider),
     );
   }
 }

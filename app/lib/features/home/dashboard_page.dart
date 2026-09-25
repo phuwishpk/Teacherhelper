@@ -6,10 +6,11 @@ import '../../core/auth/user.dart';
 import '../../core/router/app_router.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classrooms_providers.dart';
+import 'ai_key_card.dart';
 
-/// Teacher landing page: greeting, overview counts and the getting-started
-/// steps that mirror the main flow in DESIGN §4. The review count stays 0
-/// until Phase 4 adds the review queue.
+/// Teacher landing page: greeting, the Gemini API key card (DESIGN §10.1),
+/// overview counts and the getting-started steps that mirror the main flow
+/// in DESIGN §4.
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({
     super.key,
@@ -26,7 +27,12 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final classroomCount = ref.watch(classroomsProvider).value?.length ?? 0;
-    final assignmentCount = ref.watch(assignmentsProvider).value?.length ?? 0;
+    final assignments = ref.watch(assignmentsProvider).value ?? const [];
+    final assignmentCount = assignments.length;
+    final reviewCount = assignments.fold<int>(
+      0,
+      (sum, a) => sum + (a.needsReviewCount ?? 0),
+    );
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
@@ -51,6 +57,8 @@ class DashboardPage extends ConsumerWidget {
                 subtitle: Text(user?.schoolName ?? 'ยังไม่ระบุโรงเรียน'),
               ),
             ),
+            const SizedBox(height: 12),
+            AiKeyCard(onOpenSettings: () => context.push(AppRoutes.settings)),
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -73,7 +81,7 @@ class DashboardPage extends ConsumerWidget {
                 _StatTile(
                   icon: Icons.rate_review_outlined,
                   label: 'รอตรวจทาน',
-                  value: 0,
+                  value: reviewCount,
                   onTap: () => onNavigate(3),
                 ),
               ],
