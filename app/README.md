@@ -226,6 +226,39 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
   ของ Python ทุกตัวอย่าง; `test/practice/`, `test/mastery/`, `test/dashboard/` = widget test ของหน้าทำแบบฝึก คลังแบบฝึก
   ลิงก์ทบทวน heatmap ทั้งสองแบบ และตัวเลขบนหน้าหลัก
 
+## การทดสอบ, coverage และ CI (Phase 8 / A5, DESIGN §16.1)
+
+```bash
+flutter analyze --fatal-infos
+flutter test --coverage                        # unit + widget test ทั้งหมด → coverage/lcov.info
+dart run tool/check_coverage.dart --min 70     # เกณฑ์ ≥ 70% บรรทัดของ lib/ (ไม่นับไฟล์ generate) ไม่ต้องติดตั้ง lcov
+flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เดียวกันบน AVD/เครื่องจริง
+```
+
+- `tool/check_coverage.dart` อ่าน `lcov.info` เอง ตัด `*.g.dart`, `*.drift.dart`, `*.freezed.dart` และ `lib/platform/pigeons/` ออก
+  แล้วพิมพ์ % ต่อไดเรกทอรีกับยอดรวม ออก exit 1 เมื่อต่ำกว่าเกณฑ์ (CI ใช้คำสั่งเดียวกัน) lcov จะไม่มีไฟล์ที่ไม่มี test ไหนโหลดเลย
+  สคริปต์จึงเตือนรายชื่อไฟล์ใน `lib/` ที่หายไปจากรายงานด้วย จะได้ไม่หลอกตัวเอง
+- **integration flow** (`test/flows/teacher_flow.dart`): boot `EduVisionApp` ทั้งแอปแบบเดียวกับ `main.dart` (router, session,
+  interceptor แนบ token, drift, provider ทุกตัว) แล้วเดินตาม DESIGN §4: เข้าสู่ระบบครู → สร้างห้องเรียน → สร้างการบ้าน → เพิ่มข้อ →
+  สร้าง layout (การบ้านเป็น `ready`) → คิวตรวจทาน → ออกจากระบบ โดยคุยกับ `FakeApiServer` (`test/helpers/fake_api_server.dart`)
+  ที่อยู่ในโปรเซสเดียวกันผ่าน `HttpClientAdapter` ของ Dio: ไม่เปิด socket, ตรวจ bearer token ทุก route เหมือน Sanctum, ตอบ error
+  แบบ `{message, errors, code}` และบันทึกทุก request ไว้ให้ assert ว่าแอปส่ง body/header อะไร (ท้าย flow ตรวจว่าทุก request
+  หลัง login มี token, ไม่มี 401 และไม่มี route ที่ fake ไม่รู้จัก) flow เดียวกันรัน 2 ทาง: `test/flows/teacher_flow_test.dart`
+  บนเครื่อง dev และ CI (นับ coverage) กับ `integration_test/teacher_flow_test.dart` บนอุปกรณ์ (เครื่องพัฒนาไม่มี AVD จึงยืนยันได้แค่
+  ว่า compile ผ่านด้วย `flutter build apk --debug --target integration_test/teacher_flow_test.dart`)
+- **security test** (`test/security/`): token ถูกแนบเฉพาะ request ไป origin ของ API (ลิงก์ดาวน์โหลดภายนอก, host เดียวกันแต่คนละ
+  scheme/port ไม่ได้ token), 401 → ออกจากระบบครั้งเดียวและยัง throw ให้หน้าจอ, 403/422 ไม่ทำให้หลุด, ไม่มี `LogInterceptor`;
+  session อยู่ใน `flutter_secure_storage` (`SecureTokenStorage` ทดสอบบน test platform ของ plugin) และ `clear()` ไม่ลบ
+  `local_data_owner`; Gemini API key ถูก `PUT /me/ai-key` ครั้งเดียว ไม่อยู่ใน secure storage ไม่อยู่ใน log และข้อความ error
+  ของ `ai_key_invalid` ไม่สะท้อน key กลับมา; `apiErrorMessage` ไม่มี URL, token, HTML หรือ stack trace ของเซิร์ฟเวอร์;
+  log ตอน FCM ลงทะเบียนไม่สำเร็จ/ลบข้อมูลในเครื่องไม่สำเร็จมีแต่ชนิดของ error; ฝั่ง Android: cleartext ได้เฉพาะ debug source set,
+  `allowBackup="false"`, และ `.gitignore` กัน `google-services.json`/keystore/`.env`
+- **CI**: `.github/workflows/app.yml` รันเมื่อ push/PR แตะ `app/`: `flutter analyze --fatal-infos` → `flutter test --coverage`
+  → เกณฑ์ 70% → `flutter build apk --debug` (Flutter 3.44.5 บน ubuntu, ไม่ต้องมี key, Firebase หรือ secret ใด ๆ; release build
+  ทำเองตามหัวข้อด้านบน) coverage และ debug APK ถูกอัปโหลดเป็น artifact
+- ข้อสังเกตจาก flow: `showMessage` ใช้ `ScaffoldMessenger` ราก ซึ่งแสดง SnackBar บนทุก `Scaffold` ที่อยู่ใต้มัน ในแท็บของ shell
+  (ห้องเรียน/การบ้าน มี Scaffold ซ้อน) จึงเห็นข้อความซ้ำและสำเนาบน shell บัง FAB ของแท็บจนกว่าจะหายไป test จึงรอ SnackBar ก่อนแตะ FAB
+
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
 รูป request/response ของ `POST /classrooms/{id}/students`, `GET /subjects`, งานพิมพ์บัตร QR (`/login-cards`,
