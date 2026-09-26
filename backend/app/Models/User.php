@@ -117,6 +117,12 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(TeacherApiKey::class);
     }
 
+    /** The teacher's connected Google account (DESIGN §18.4). @return HasOne<GoogleAccount, $this> */
+    public function googleAccount(): HasOne
+    {
+        return $this->hasOne(GoogleAccount::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

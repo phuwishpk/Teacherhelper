@@ -26,6 +26,12 @@ class SchemaTest extends TestCase
             'scans.scanned_at' => ['scans', 'scanned_at'],
             'student_credentials.qr_issued_at' => ['student_credentials', 'qr_issued_at'],
             'device_tokens.last_seen_at' => ['device_tokens', 'last_seen_at'],
+            'google_accounts.connected_at' => ['google_accounts', 'connected_at'],
+            'google_accounts.updated_at' => ['google_accounts', 'updated_at'],
+            'classroom_google_links.linked_at' => ['classroom_google_links', 'linked_at'],
+            'assignment_google_links.posted_at' => ['assignment_google_links', 'posted_at'],
+            'classroom_submission_imports.created_at' => ['classroom_submission_imports', 'created_at'],
+            'classroom_submission_imports.updated_at' => ['classroom_submission_imports', 'updated_at'],
         ];
     }
 

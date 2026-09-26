@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreAppealRequest;
 use App\Http\Resources\AppealResource;
 use App\Http\Resources\StudentResultResource;
+use App\Models\ClassroomSubmissionImport;
 use App\Models\Question;
 use App\Models\Response;
 use App\Models\Submission;
@@ -50,6 +51,12 @@ class StudentResultController extends Controller
             ->with(['assignment.subject', 'responses.question', 'responses.appeal'])
             ->findOrFail($submissionId);
         Gate::authorize('view', $submission);
+        $submission->setAttribute('retake_reason', ClassroomSubmissionImport::query()
+            ->where('assignment_id', $submission->assignment_id)
+            ->where('student_id', $submission->student_id)
+            ->where('state', ClassroomSubmissionImport::STATE_RETURNED_FOR_RETAKE)
+            ->latest('updated_at')
+            ->value('retake_reason'));
 
         return new StudentResultResource($submission);
     }

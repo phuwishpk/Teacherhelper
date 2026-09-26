@@ -10,7 +10,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * {id, classroom_id, subject_id, title, strictness, status,
  *  current_layout_version, due_at, questions_count?, missing_ai_key_count?,
  *  classroom?: {id, name},
- *  subject?: {id, code, name}, questions?: [...], created_by, created_at, updated_at}
+ *  subject?: {id, code, name}, google_link?: {course_work_id, alternate_link,
+ *  drive_file_id, has_blank_worksheet, posted_at}|null, questions?: [...],
+ *  created_by, created_at, updated_at}
  *
  * missing_ai_key_count (detail only): answers waiting as `manual` because no
  * Gemini key was usable (DESIGN §13 banner; POST .../requeue-missing-key).
@@ -46,6 +48,8 @@ class AssignmentResource extends JsonResource
                 'code' => $this->subject->code,
                 'name' => $this->subject->name,
             ]),
+            // DESIGN §18.4 assignment_google_links: {course_work_id, alternate_link, drive_file_id, has_blank_worksheet, posted_at} | null
+            'google_link' => $this->whenLoaded('googleLink', fn () => $this->googleLink?->toApi()),
             'questions' => QuestionResource::collection($this->whenLoaded('questions')),
             'created_by' => $this->created_by,
             'created_at' => $this->created_at?->toIso8601String(),

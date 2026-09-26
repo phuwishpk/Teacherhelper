@@ -42,6 +42,12 @@ class ClassroomPolicy
         return $this->owns($user, $classroom);
     }
 
+    /** Link a Google Classroom course and match its students (§18.6). */
+    public function manageGoogle(User $user, Classroom $classroom): bool
+    {
+        return $this->owns($user, $classroom);
+    }
+
     private function owns(User $user, Classroom $classroom): bool
     {
         return $this->isSchoolTeacher($user)

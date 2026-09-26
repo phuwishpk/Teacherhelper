@@ -34,7 +34,7 @@ class AssignmentController extends Controller
         Gate::authorize('viewAny', Assignment::class);
 
         $query = self::ownQuery($request)
-            ->with(['classroom', 'subject'])
+            ->with(['classroom', 'subject', 'googleLink'])
             ->withCount('questions')
             ->orderByDesc('id');
 
@@ -120,6 +120,10 @@ class AssignmentController extends Controller
             if ($assignment->worksheetPrints()->exists()) {
                 throw new ApiException('การบ้านนี้พิมพ์ใบงานไปแล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_printed', 409);
             }
+            if ($assignment->googleLink()->exists()) {
+                // The courseWork lives on in Classroom and its submissions refer to this row (§18.4).
+                throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_posted', 409);
+            }
             $assignment->delete();
         });
 
@@ -142,7 +146,7 @@ class AssignmentController extends Controller
 
     public static function loadDetail(Assignment $assignment): Assignment
     {
-        return $assignment->load(['classroom', 'subject', 'questions.skills', 'questions.rubricCriteria'])
+        return $assignment->load(['classroom', 'subject', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
             ->loadCount(['questions', 'responses as missing_ai_key_count' => fn ($q) => $q->awaitingAiKey()]);
     }
 
