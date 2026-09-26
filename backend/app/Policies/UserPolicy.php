@@ -56,6 +56,17 @@ class UserPolicy
      */
     public function manageStudentCredentials(User $user, User $student): bool
     {
+        return self::teachesStudent($user, $student);
+    }
+
+    /** GET /students/{id}/mastery (DESIGN §9.6): the same teachers. */
+    public function viewMastery(User $user, User $student): bool
+    {
+        return self::teachesStudent($user, $student);
+    }
+
+    private static function teachesStudent(User $user, User $student): bool
+    {
         if (! $user->isTeacher() || ! $user->isActive() || $user->school_id === null) {
             return false;
         }

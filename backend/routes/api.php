@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AiKeyController;
+use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
@@ -13,8 +14,12 @@ use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LayoutController;
+use App\Http\Controllers\Api\V1\LearningResourceController;
 use App\Http\Controllers\Api\V1\LoginCardController;
+use App\Http\Controllers\Api\V1\MasteryController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\ModelController;
+use App\Http\Controllers\Api\V1\PracticeItemController;
 use App\Http\Controllers\Api\V1\QuestionController;
 use App\Http\Controllers\Api\V1\ResponseController;
 use App\Http\Controllers\Api\V1\ReviewController;
@@ -24,6 +29,7 @@ use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
+use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
 use App\Http\Controllers\Api\V1\StudentRetakeController;
 use App\Http\Controllers\Api\V1\SubjectController;
@@ -119,6 +125,20 @@ Route::prefix('v1')->group(function () {
                 Route::get('appeals', [AppealController::class, 'index'])->name('api.appeals.index');
                 Route::patch('appeals/{id}', [AppealController::class, 'update'])->whereNumber('id')->name('api.appeals.update');
 
+                // Practice bank, review links, mastery and analytics (§9.6, §14).
+                Route::get('practice-items', [PracticeItemController::class, 'index'])->name('api.practice-items.index');
+                Route::post('practice-items', [PracticeItemController::class, 'store'])->name('api.practice-items.store');
+                Route::patch('practice-items/{id}', [PracticeItemController::class, 'update'])->whereNumber('id')->name('api.practice-items.update');
+                // Queues a Gemini job (costs money), so it is throttled.
+                Route::post('skills/{id}/practice-items/generate', [PracticeItemController::class, 'generate'])->whereNumber('id')->middleware('throttle:10,1')->name('api.skills.practice-items.generate');
+                Route::get('skills/{id}/resources', [LearningResourceController::class, 'index'])->whereNumber('id')->name('api.skills.resources.index');
+                Route::post('skills/{id}/resources', [LearningResourceController::class, 'store'])->whereNumber('id')->name('api.skills.resources.store');
+                Route::patch('resources/{id}', [LearningResourceController::class, 'update'])->whereNumber('id')->name('api.resources.update');
+                Route::delete('resources/{id}', [LearningResourceController::class, 'destroy'])->whereNumber('id')->name('api.resources.destroy');
+                Route::get('assignments/{id}/analytics', [AnalyticsController::class, 'assignment'])->whereNumber('id')->name('api.assignments.analytics');
+                Route::get('classrooms/{id}/mastery', [MasteryController::class, 'classroom'])->whereNumber('id')->name('api.classrooms.mastery');
+                Route::get('students/{id}/mastery', [MasteryController::class, 'student'])->whereNumber('id')->name('api.students.mastery');
+
                 // Google Classroom (§18.6). Routes that call Google share the `google` limiter.
                 Route::get('google/status', [GoogleAccountController::class, 'status'])->name('api.google.status');
                 Route::delete('google/disconnect', [GoogleAccountController::class, 'disconnect'])->name('api.google.disconnect');
@@ -143,11 +163,17 @@ Route::prefix('v1')->group(function () {
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->whereNumber('id')->middleware('throttle:30,1')->name('api.student.responses.appeal');
                 Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
+                // Practice (§9.7, §14.1): recommendations and graded attempts.
+                Route::get('practice', [StudentPracticeController::class, 'index'])->name('api.student.practice.index');
+                Route::post('practice/{item_id}/attempts', [StudentPracticeController::class, 'attempt'])->whereNumber('item_id')->middleware('throttle:60,1')->name('api.student.practice.attempts');
             });
 
             // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.
             Route::middleware('ability:teacher,student')->group(function () {
                 Route::get('responses/{id}/crop', [ResponseController::class, 'crop'])->whereNumber('id')->name('api.responses.crop');
+                // On-device model distribution (§9.8).
+                Route::get('ml/models/active', [ModelController::class, 'active'])->name('api.ml.models.active');
+                Route::get('ml/models/{id}/file', [ModelController::class, 'file'])->whereNumber('id')->name('api.ml.models.file');
             });
         });
     });

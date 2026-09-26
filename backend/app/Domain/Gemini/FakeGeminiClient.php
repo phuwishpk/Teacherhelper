@@ -24,6 +24,7 @@ use App\Models\Question;
  *   [fake:error]         HTTP 503, every time
  *   [fake:explanation-error] / [fake:explanation-invalid]   for `explanation`
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
+ *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
  * A key containing "rejected" is refused on every call (key_invalid);
  * listModels() refuses keys containing "invalid" and fails for keys
@@ -105,6 +106,12 @@ class FakeGeminiClient implements GeminiClient
                 default => $this->explanation($request),
             },
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
+            'practice_gen' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('invalid') => 'not json at all {',
+                $has('practice-bad-key') => ['items' => [['prompt_th' => 'x', 'answer_type' => 'mcq', 'options' => ['ก', 'ข'], 'accepted_answers' => ['ค'], 'explanation_th' => 'y']]],
+                default => self::practice($request),
+            },
             'check' => ['ok' => true, 'word_th' => 'สวัสดี'], // eduvision:gemini-check --generate
             default => GeminiReply::error("the fake does not answer {$request->purpose}", 0, 501),
         };
@@ -310,6 +317,62 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return ['criteria' => $criteria];
+    }
+
+    /**
+     * `practice_gen` (DESIGN §10.6): n items cycling numeric, short, mcq with
+     * numbers derived from the skill code, so the same skill always gets the
+     * same bank. Markers in the skill name: [fake:invalid] (not JSON every
+     * time), [fake:error] (HTTP 503), [fake:practice-bad-key] (an mcq whose
+     * correct answer is not among its options, invalid every time).
+     *
+     * @return array<string, mixed>
+     */
+    private static function practice(GeminiRequest $request): array
+    {
+        $n = max(1, min(PracticeGenRequest::MAX_COUNT, (int) ($request->hints['n'] ?? 5)));
+        $seed = crc32((string) ($request->hints['skill_code'] ?? 'skill'));
+        $items = [];
+        for ($i = 0; $i < $n; $i++) {
+            $a = ($seed + 7 * $i) % 40 + 3;
+            $b = ($seed + 11 * $i) % 25 + 2;
+            $items[] = match ($i % 3) {
+                0 => [
+                    'prompt_th' => 'ข้อ '.($i + 1).": {$a} + {$b} เท่ากับเท่าไร",
+                    'answer_type' => 'numeric',
+                    'accepted_answers' => [(string) ($a + $b)],
+                    'numeric' => ['value' => $a + $b, 'abs_tol' => 0],
+                    'explanation_th' => "นำ {$a} มาบวกกับ {$b} ทีละหลัก ได้ ".($a + $b),
+                ],
+                1 => [
+                    'prompt_th' => 'ข้อ '.($i + 1).": จำนวนที่มากกว่า {$a} อยู่ {$b} เรียกว่าอะไร เขียนเป็นตัวเลข",
+                    'answer_type' => 'short',
+                    'accepted_answers' => [(string) ($a + $b), 'ผลบวก'],
+                    'explanation_th' => "มากกว่า {$a} อยู่ {$b} คือ {$a} + {$b} = ".($a + $b),
+                ],
+                default => [
+                    'prompt_th' => 'ข้อ '.($i + 1).": ข้อใดคือผลคูณของ {$a} กับ 2",
+                    'answer_type' => 'mcq',
+                    // Rotated so the right choice is not always A.
+                    'options' => self::rotate([(string) ($a * 2), (string) ($a + 2), (string) ($a * 2 + 1), (string) ($a * 3)], $i),
+                    'accepted_answers' => [(string) ($a * 2)],
+                    'explanation_th' => "{$a} × 2 คือ {$a} สองครั้ง ได้ ".($a * 2),
+                ],
+            };
+        }
+
+        return ['items' => $items];
+    }
+
+    /**
+     * @param  list<string>  $items
+     * @return list<string>
+     */
+    private static function rotate(array $items, int $by): array
+    {
+        $by %= count($items);
+
+        return [...array_slice($items, $by), ...array_slice($items, 0, $by)];
     }
 
     /**

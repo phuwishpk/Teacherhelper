@@ -32,6 +32,9 @@ class SchemaTest extends TestCase
             'assignment_google_links.posted_at' => ['assignment_google_links', 'posted_at'],
             'classroom_submission_imports.created_at' => ['classroom_submission_imports', 'created_at'],
             'classroom_submission_imports.updated_at' => ['classroom_submission_imports', 'updated_at'],
+            'skill_observations.observed_at' => ['skill_observations', 'observed_at'],
+            'mastery.updated_at' => ['mastery', 'updated_at'],
+            'practice_attempts.created_at' => ['practice_attempts', 'created_at'],
         ];
     }
 

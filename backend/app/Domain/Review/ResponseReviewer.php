@@ -9,6 +9,7 @@ use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDraftRequest;
 use App\Domain\Grading\FeedbackTemplates;
 use App\Domain\Scans\SubmissionStatus;
+use App\Domain\Training\TrainingSamples;
 use App\Exceptions\ApiException;
 use App\Models\Appeal;
 use App\Models\Assignment;
@@ -26,7 +27,9 @@ use Illuminate\Validation\ValidationException;
  *   error types and (optionally) explanation become final_*, the answer is
  *   marked reviewed. A score that differs from ai_score needs a reason. Every
  *   change of score or understanding is logged as score_events `override`
- *   (a manual answer's first score too), the data of the bias analysis.
+ *   (a manual answer's first score too), the data of the bias analysis. An
+ *   overridden numeric answer may also become a training sample
+ *   (TrainingSamples, §8.6): answer_text is the teacher's reading of the box.
  * - approveConfident(): "อนุมัติทั้งหมดที่มั่นใจ", AI values become final for
  *   every ReviewQueue::approvable() answer, logged as `bulk_approve`.
  * - regenerateExplanation(): a new `explanation` from Gemini (text only,
@@ -42,10 +45,11 @@ final class ResponseReviewer
         private readonly GeminiGateway $gateway,
         private readonly GeminiKeyResolver $keys,
         private readonly ExplanationRequests $explanations,
+        private readonly TrainingSamples $samples,
     ) {}
 
     /**
-     * @param  array{final_score: float|int|string, final_understanding: string, final_error_types?: list<string>|null, explanation?: string|null, reason?: string|null}  $data
+     * @param  array{final_score: float|int|string, final_understanding: string, final_error_types?: list<string>|null, explanation?: string|null, reason?: string|null, answer_text?: string|null}  $data
      */
     public function review(Response $response, User $teacher, array $data): Response
     {
@@ -93,6 +97,16 @@ final class ResponseReviewer
                     'new_understanding' => $newUnderstanding,
                     'reason' => $reason,
                 ]);
+            }
+
+            // A corrected numeric reading becomes a training sample (DESIGN §8.6,
+            // §12.3) when the score was overridden and the school allows it.
+            $answerText = self::cleanText($data['answer_text'] ?? null);
+            if (ScoreRules::differs($response->ai_score, $newScore) || $answerText !== null) {
+                $label = TrainingSamples::labelForOverride($response, $response->question, $newScore, $answerText);
+                if ($label !== null) {
+                    $this->samples->recordCorrection($response, $label);
+                }
             }
 
             SubmissionStatus::refresh($submission);

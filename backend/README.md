@@ -2,7 +2,7 @@
 
 API และ web admin ของ EduVision รันบน shared Plesk hosting (ไม่มี SSH, Docker, daemon หรือ Redis) ดู `docs/DESIGN.md` §7–§9 และ `docs/KICKOFF.md` ส่วนที่ 3 ก่อนแก้โค้ด
 
-สถานะ: **M0 "walking skeleton"** = สมัคร/login ครู, `GET /me`, logout, `GET /health` + heartbeat ของ queue และ Filament boot ได้ที่ `/admin/login` (ยังไม่มี resource)
+สถานะ: M0 → Phase 6 แล้ว (auth, ห้องเรียน/นักเรียน, การบ้าน/ใบงาน, สแกน, Gemini + fuzzy, ตรวจทาน/เผยแพร่/คำขอตรวจใหม่, FCM, Google Classroom, คลังแบบฝึก/mastery/analytics และโมเดลบนมือถือ) ดูหัวข้อด้านล่างต่อส่วน
 
 ## ส่วนประกอบ
 
@@ -120,9 +120,49 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 | GET | `/student/results` | นักเรียน | เฉพาะของตัวเองที่เผยแพร่แล้ว `{submission_id, title, subject_name, total_score, max_score, published_at}` |
 | GET | `/student/results/{submission_id}` | นักเรียน | รายข้อ: คะแนน, ระดับความเข้าใจ, ประเภทข้อผิดพลาด, คำอธิบาย, `crop_url`, คำขอตรวจใหม่, `can_appeal` (ไม่มีค่าของ AI) อย่างอื่น `404` |
 | POST | `/student/responses/{id}/appeal` | นักเรียน | `{reason?}` ข้อละครั้ง (`409 appeal_exists`) |
-| GET | `/student/mastery` | นักเรียน | ยังเป็น placeholder `{data: []}` (Phase 6) |
+| GET | `/student/mastery` | นักเรียน | ดูส่วน "ITS / EDM" ด้านล่าง |
 
 โค้ดอยู่ใน `app/Domain/Review/` (`ReviewQueue`, `ResponseReviewer`, `Publisher`, `Appeals`, `ScoreExplainer`, `ReviewFlags`, `ScoreRules`) ป้าย `suspicious` / `identity_mismatch` ไม่ใช่คอลัมน์ อ่านจาก `fuzzy_trace` / `extraction`
+
+`PATCH /responses/{id}` รับ `answer_text?` (ไม่เกิน 32 ตัว) = สิ่งที่ครูอ่านได้จากกรอบตัวเลข ใช้เป็น label ของ `training_samples` เท่านั้น (ดู "ข้อมูลเทรน" ด้านล่าง)
+
+## ITS / EDM: แบบฝึกซ่อม, mastery และ analytics (DESIGN §8.5, §9.6, §9.7, §14)
+
+**Mastery (§14.2)** — `skill_observations` เขียนเฉพาะผลที่**เผยแพร่แล้ว**: listener `RecordMasteryObservations` รับ `SubmissionPublished` (และ `AppealResolved` ที่คะแนนเปลี่ยน) แล้ว `MasteryCalculator::recordSubmission()` เขียนหนึ่งแถวต่อ (ข้อ, ทักษะ) ด้วย `score_ratio = final_score / max_points`, `observed_at = published_at` เผยแพร่ซ้ำ (หลังสแกนใหม่/คำขอตรวจใหม่) **แทนที่**แถวเดิม ไม่ซ้ำ จากนั้นคำนวณ `mastery` ใหม่ทั้งชุดของ (นักเรียน, ทักษะ) นั้นด้วย EWMA `m1 = s1`, `mt = α·st + (1 − α)·mt−1` (α = 0.30 การบ้าน, 0.15 แบบฝึก) เรียงตาม `observed_at` ปัดครึ่งขึ้นที่ 3 ตำแหน่งแบบเดียวกันทุก PHP (`round3`) ระดับที่แสดง: `good` ≥ 0.75, `partial` ≥ 0.4, `not_yet` และ `too_little` เมื่อ `n_obs < 2` ข้อที่ไม่ได้ผูกทักษะ (`question_skill`) ไม่มีผลต่อ mastery
+
+**คลังแบบฝึก (§14.1)** — ใช้ร่วมกันทั้งโรงเรียน แยกตามทักษะ รูปแบบ `answer_key` เหมือน `questions` (§8.3): `numeric` `{accepted, numeric: {value, abs_tol}}`, `short` `{accepted}`, `mcq` `options: [{key, text}]` + `{correct: "B"}` ครูกด "สร้างข้อใหม่" → `GeneratePracticeItemsJob` (queue `default`) เรียก Gemini `practice_gen` (§10.6, `PracticeGenerator` + `PracticeDraft` ตรวจ output: ประเภท, เฉลยไม่ว่าง, mcq ต้องมี 2–6 ตัวเลือกและเฉลยเป็นหนึ่งในนั้น, ข้อตัวเลขต้องมีค่าตัวเลข; ไม่ผ่านลองใหม่ 1 ครั้งแล้ว `invalid_output`) ด้วย key ของครู (`GeminiKeyResolver`) แล้วเก็บเป็น `draft` (`source = ai`) การ**อนุมัติ**ทำได้เฉพาะครูที่สอนวิชาของทักษะนั้น = มีการบ้านในวิชานั้นในห้องที่ตัวเองสอน (`403 subject_not_taught`) ส่วนแก้ไข/เลิกใช้/เขียนเองทำได้ทุกครูในโรงเรียน `GEMINI_FAKE=true` ตอบข้อจำลอง 3 ประเภทวนไป (marker ในชื่อทักษะ: `[fake:invalid]`, `[fake:error]`, `[fake:practice-bad-key]`)
+
+**นักเรียน** — `GET /student/practice` เลือกทักษะที่ `mastery.value < 0.75` เรียงจากต่ำสุด ทักษะละไม่เกิน 3 ข้อจากคลังที่ `approved` ของโรงเรียนตัวเอง ไม่ซ้ำข้อที่ทำในรอบ 7 วัน พร้อมลิงก์ทบทวน (`learning_resources`) นักเรียน**ไม่ได้รับ** `answer_key`/`explanation` `POST /student/practice/{item_id}/attempts {answer}` ตรวจทันทีแบบ deterministic ด้วย `AnswerMatcher` (§11.4: ตัวเลข = ตรง/ใกล้เคียง ≤ 0.6, ข้อความ = flexible, mcq = ตัวอักษรหรือข้อความของตัวเลือก) ตอบ `{score_ratio, correct, explanation (เฉพาะไม่เต็ม), mastery}` เขียน `practice_attempts` + observation `practice` แล้วคำนวณ mastery ทันที ทำข้อเดิมซ้ำใน 7 วันไม่ได้ (`409 practice_already_attempted`)
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| GET | `/practice-items?skill=&status=&cursor=` | ครู | คลังของโรงเรียน (ใหม่ก่อน) พร้อม `skill` |
+| POST | `/practice-items` | ครู | `{skill_id, answer_type, prompt_text, options?, answer_key, explanation, status?}` ข้อที่ครูเขียนเอง (`source = teacher`) — เพิ่มจาก DESIGN |
+| PATCH | `/practice-items/{id}` | ครู | แก้ field ใดก็ได้ของข้อ; `status` `draft\|approved\|retired` อนุมัติตั้ง `approved_by/at` |
+| POST | `/skills/{id}/practice-items/generate` | ครู | `{count?: 1–20 (5)}` → `202 {data: {queued, skill_id, count}}` จำกัด 10 ครั้ง/นาที ไม่มี key → job จบพร้อม log `practice_gen.no_ai_key` |
+| GET / POST | `/skills/{id}/resources` | ครู | ลิงก์ทบทวนของทักษะ `{title, url (http/https)}` |
+| PATCH / DELETE | `/resources/{id}` | ครู | แก้/ลบลิงก์ของโรงเรียนตัวเอง — เพิ่มจาก DESIGN |
+| GET | `/assignments/{id}/analytics` | ครู | `{published_count, min_count_for_r: 20, items: [{question_id, position, type, max_points, prompt_text, n, p, r}], most_missed: [question_id…], skill_error_counts: [{skill, error_type, count}]}` จากผลที่เผยแพร่แล้วเท่านั้น (§14.3): `p` = mean(final/max), `r` = mean กลุ่มสูง 27 % − กลุ่มต่ำ 27 % ตาม `total_score` (`null` ถ้าเผยแพร่ < 20 คน), heatmap นับ `final_error_types` ต่อทักษะของข้อ |
+| GET | `/classrooms/{id}/mastery` | ครู | `{skills, students: [{id, name, student_number}], cells: [{student_id, skill_id, value, n_obs, level}]}` |
+| GET | `/students/{id}/mastery` | ครู | นักเรียนในห้องที่ตัวเองสอน (`404` อื่นๆ) รูปแบบเดียวกับของนักเรียน + `student` |
+| GET | `/student/mastery` | นักเรียน | `{data: [{skill, skill_id, value, n_obs, level, updated_at}] (อ่อนสุดก่อน, ข้อมูลน้อยไว้ท้าย), meta: {available: true, weaknesses: [skill_id × 3]}}` |
+| GET | `/student/practice` | นักเรียน | `{data: [{skill, skill_id, mastery, items: [{id, answer_type, prompt_text, options}], resources}], meta}` |
+| POST | `/student/practice/{item_id}/attempts` | นักเรียน | `{answer}` → `201` ดูข้างบน จำกัด 60 ครั้ง/นาที ข้อที่ยังไม่อนุมัติ/ของโรงเรียนอื่น `404` |
+
+**Export สำหรับ notebook BKT (§14.4)** — `php artisan eduvision:export-observations [path] [--school=ID] [--since=YYYY-MM-DD]` เขียน CSV คอลัมน์ `id,student_id,skill_id,source,response_id,practice_attempt_id,score_ratio,observed_at` (UTC) ค่าเริ่มต้นลง `storage/app/private/exports/` (บน Plesk รันผ่าน Scheduled Task "Run now" แล้วดาวน์โหลดจาก File Manager) วางไฟล์ที่ `ml/data/skill_observations.csv`
+
+**ข้อมูลเทรน CNN (§8.6, §12.3)** — เมื่อครูแก้คะแนนข้อตัวเลข (`short` ที่มี `numeric` หรือ `show_work` ที่เฉลยสุดท้ายเป็นตัวเลข) ในโรงเรียนที่ `allow_training_data = true`, `TrainingSamples` คัดลอกภาพ crop (กรอบคำตอบสุดท้ายสำหรับ `show_work`) ไป `training/{school}/{response}.webp` (นอกนโยบายลบภาพ §7.3) แล้วบันทึก `training_samples` (`source = teacher_correction`, `writer_key` = sha256 ของ student id, หนึ่งแถวต่อข้อ) label = `answer_text` ที่ครูส่งมา (ต้องเป็น `0-9 . - /` เลขไทยแปลงให้) ไม่งั้นถ้าครูให้เต็ม = ค่าเฉลย ถ้าแก้บางส่วนโดยไม่บอกสิ่งที่อ่านได้ ไม่บันทึก
+
+## โมเดลบนมือถือ (DESIGN §8.6, §9.8, §12)
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| GET | `/ml/models/active?name=digit_crnn` | ครู/นักเรียน | `{id, name, version, sha256, size_bytes, download_url, metrics, created_at}` `metrics` คือ `metrics.json` ทั้งก้อน (decode contract, `abstain_below`) `404 model_not_found` ถ้ายังไม่เปิดใช้เวอร์ชันใด |
+| GET | `/ml/models/{id}/file` | ครู/นักเรียน | ไฟล์ .tflite (`application/octet-stream`, header `X-Checksum-Sha256`) แอปตรวจ sha256 ก่อนสลับไปใช้ `410 model_file_missing` ถ้าไฟล์ถูกลบ |
+
+- ไฟล์อยู่บน private disk ที่ `models/{name}/{version}.tflite` (§7.3) เปิดใช้ได้ทีละเวอร์ชันต่อชื่อ (`ModelVersion::activate()`)
+- ในเครื่อง/ตอน deploy: `php artisan eduvision:register-model ml/models/digit_crnn/0.1.0 [--no-activate]` อ่าน `metrics.json` (`name`, `version`, `file`, `sha256`) ตรวจ sha256 ของไฟล์ คัดลอกขึ้น disk แล้ว upsert `model_versions` (เปิดใช้ทันทีถ้าไม่ใส่ `--no-activate`) ไฟล์ `.tflite` ไม่อยู่ใน git ต้อง export/คัดลอกมาก่อน (ดู `ml/README.md`)
+- Filament: เมนู "โมเดลบนมือถือ" อัปโหลด .tflite + วาง metrics.json, เปิดใช้งาน, ลบ (ลบไฟล์ด้วย) และเมนู "การเรียก AI" อ่าน `ai_calls` (กรองตามงาน/ผล/key, รวม token ท้ายตาราง)
 
 ## Push notification (FCM, DESIGN §9.9)
 
@@ -206,7 +246,15 @@ app/Domain/Notifications/                    Notifier, PushNotifier, FcmNotifier
 app/Domain/Google/                           GoogleOAuth, GoogleAccessTokens, GoogleApi (Classroom v1 + Drive v3 ผ่าน HTTP client), GoogleAccounts, GoogleRoster + RosterMatcher + NameNormalizer, CourseWorkPoster, GoogleSubmissionSync, ClassroomGradePusher, GoogleApiException + GoogleErrors (§18)
 app/Events/, app/Listeners/                  SubmissionPublished, AppealOpened, AppealResolved, RetakeRequested, listener ที่ส่ง push (queue default) และ QueueClassroomGradePush (§18)
 app/Console/Commands/FcmCheckCommand.php     eduvision:fcm-check
-app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob,PushClassroomGradeJob}.php
+app/Console/Commands/RegisterModelCommand.php eduvision:register-model (model_versions จาก ml/models/<name>/<version>)
+app/Console/Commands/ExportObservationsCommand.php eduvision:export-observations (CSV สำหรับ notebook BKT)
+app/Domain/Mastery/                          MasteryCalculator (EWMA §14.2), Recommender (§14.1), ItemAnalysis (§14.3)
+app/Domain/Practice/                         PracticeBank, PracticeItemData (ตรวจ item), PracticeGrader (AnswerMatcher), PracticeAttempts
+app/Domain/Gemini/Practice*                  PracticeGenRequest, PracticeGenerator, PracticeDraft (practice_gen §10.6)
+app/Domain/Training/TrainingSamples.php      ตัวอย่างเทรนจากการแก้คะแนนข้อตัวเลข (§8.6)
+app/Listeners/RecordMasteryObservations.php  SubmissionPublished / AppealResolved → skill_observations + mastery
+app/Filament/Resources/{ModelVersions,AiCalls}/ web admin ของ model_versions และ ai_calls (§7.5)
+app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob,PushClassroomGradeJob,GeneratePracticeItemsJob}.php
 resources/fonts/                             Sarabun (OFL) ที่เพิ่ม glyph U+200B ดู README ในโฟลเดอร์
 app/Providers/Filament/AdminPanelProvider.php
 config/eduvision.php                         ค่าที่อ่านจาก .env (ห้ามใช้ env() นอก config เพราะ production ใช้ config:cache)
