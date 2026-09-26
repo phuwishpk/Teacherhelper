@@ -2,16 +2,20 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\Mastery\MasteryCalculator;
 use App\Domain\Scans\ScanIngestor;
 use App\Domain\Scans\SubmissionStatus;
 use App\Exceptions\ApiException;
 use App\Jobs\GradeScanJob;
 use App\Models\Assignment;
 use App\Models\Layout;
+use App\Models\Mastery;
 use App\Models\Question;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\ScoreEvent;
+use App\Models\Skill;
+use App\Models\SkillObservation;
 use App\Models\Submission;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -506,6 +510,11 @@ class ScansTest extends TestCase
         $short->update(['grading_state' => 'scored', 'ai_score' => 2, 'ai_understanding' => 'good', 'final_score' => 2,
             'final_understanding' => 'good', 'reviewed_by' => $this->teacher->id, 'reviewed_at' => now()]);
         $submission->update(['status' => 'published', 'published_at' => now(), 'published_by' => $this->teacher->id, 'total_score' => 3]);
+        // The published answer counts for mastery (§14.2) until the rescan is confirmed.
+        $this->short->skills()->attach(Skill::factory()->create(['subject_id' => $this->assignment->subject_id])->id);
+        app(MasteryCalculator::class)->recordSubmission($submission->id);
+        $this->assertSame(1, SkillObservation::query()->count());
+        $this->assertSame(1, Mastery::query()->where('student_id', $submission->student_id)->count());
         Queue::fake();
 
         $meta = $this->metaFor(1, fill: ['A' => 0.9, 'B' => 0.02, 'C' => 0.02, 'D' => 0.01]);
@@ -547,6 +556,9 @@ class ScansTest extends TestCase
         $this->assertSame('grading', $submission->status);
         $this->assertNull($submission->published_at);
         $this->assertNull($submission->published_by);
+        // SubmissionReopened: the reopened submission stops counting for mastery until the next publish.
+        $this->assertSame(0, SkillObservation::query()->count());
+        $this->assertSame(0, Mastery::query()->where('student_id', $submission->student_id)->count());
         $school = $this->assignment->school_id;
         $this->assertSame([], Storage::disk('local')->allFiles("scans/{$school}/{$this->assignment->id}/pending"));
         $this->assertSame([], Storage::disk('local')->allFiles("crops/{$school}/{$this->assignment->id}/replaced"));

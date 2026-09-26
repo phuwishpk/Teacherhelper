@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Mastery;
 
+use App\Events\SubmissionPublished;
+use App\Events\SubmissionReopened;
 use App\Models\Appeal;
 use App\Models\Mastery;
 use App\Models\Response;
@@ -9,6 +11,8 @@ use App\Models\Skill;
 use App\Models\SkillObservation;
 use App\Models\Submission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\Feature\Review\ReviewFixtures;
 use Tests\TestCase;
 
@@ -74,6 +78,42 @@ class ObservationsOnPublishTest extends TestCase
         $this->assertSame(0.5, Mastery::query()->where('student_id', $student->id)->where('skill_id', $this->s2->id)->value('value') + 0.0);
         $this->assertSame([2, 2], Mastery::query()->where('student_id', $student->id)->orderBy('skill_id')->pluck('n_obs')->all());
         $this->assertSame(0, Mastery::query()->where('student_id', $this->students[1]->id)->count());
+    }
+
+    public function test_the_rows_are_written_after_the_publish_transaction_committed(): void
+    {
+        $outer = DB::transactionLevel(); // the test's own wrapping transaction
+        $levels = [];
+        Event::listen(SubmissionPublished::class, function () use (&$levels) {
+            $levels[] = DB::transactionLevel();
+        });
+
+        $this->publishStudentOne();
+
+        $this->assertSame([$outer], $levels, 'SubmissionPublished is ShouldDispatchAfterCommit: its listeners run after Publisher\'s transaction, not inside it');
+        $this->assertSame(4, SkillObservation::query()->count());
+    }
+
+    public function test_a_confirmed_rescan_removes_the_rows_until_the_next_publish(): void
+    {
+        $submission = $this->publishStudentOne();
+        $student = $this->students[0];
+        $this->assertSame(2, Mastery::query()->where('student_id', $student->id)->count());
+
+        // ScanIngestor: SubmissionStatus::refresh(reopen) clears published_at, then SubmissionReopened after the commit.
+        $submission->forceFill(['status' => Submission::STATUS_GRADING, 'published_at' => null, 'published_by' => null])->save();
+        SubmissionReopened::dispatch($submission->id, $submission->assignment_id, $submission->student_id);
+
+        $this->assertSame(0, SkillObservation::query()->count(), 'only published results count (§14.2)');
+        $this->assertSame(0, Mastery::query()->where('student_id', $student->id)->count());
+        $this->asUser($student)->getJson('/api/v1/student/mastery')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('meta.weaknesses', []);
+
+        // Published again: the rows come back from the (re-reviewed) answers.
+        $submission->forceFill(['status' => Submission::STATUS_REVIEWED])->save();
+        $this->travel(1)->days();
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
+        $this->assertSame(4, SkillObservation::query()->count());
+        $this->assertSame(0.85, (float) Mastery::query()->where('student_id', $student->id)->where('skill_id', $this->s1->id)->value('value'));
     }
 
     public function test_the_student_sees_their_mastery_weakest_first(): void

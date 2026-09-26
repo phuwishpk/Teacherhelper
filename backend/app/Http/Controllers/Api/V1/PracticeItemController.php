@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Practice\PracticeBank;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GeneratePracticeItemsRequest;
 use App\Http\Requests\Api\V1\PracticeItemIndexRequest;
@@ -26,7 +28,10 @@ class PracticeItemController extends Controller
 {
     public const PER_PAGE = 50;
 
-    public function __construct(private readonly PracticeBank $bank) {}
+    public function __construct(
+        private readonly PracticeBank $bank,
+        private readonly GeminiKeyResolver $keys,
+    ) {}
 
     /**
      * GET /api/v1/practice-items?skill=&status=&cursor= -> cursor-paginated
@@ -80,13 +85,21 @@ class PracticeItemController extends Controller
     /**
      * POST /api/v1/skills/{id}/practice-items/generate {count?} -> 202
      * {data: {queued: true, count}}: GeneratePracticeItemsJob asks Gemini with
-     * the teacher's key and stores the items as drafts.
+     * the teacher's key and stores the items as drafts. Without any Gemini
+     * key (teacher or server, DESIGN §10.1) nothing is queued: 422
+     * ai_key_missing, the same answer as the other AI endpoints, so the app
+     * can send the teacher to the key settings instead of waiting for
+     * drafts that never come.
      */
     public function generate(GeneratePracticeItemsRequest $request, int $id): JsonResponse
     {
         Gate::authorize('generate', PracticeItem::class);
         $skill = Skill::query()->visibleToSchool($request->user()->school_id)->findOrFail($id);
         Gate::authorize('view', $skill);
+
+        if ($this->keys->forTeacher($request->user()->id) === null) {
+            throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
+        }
 
         $count = $request->count();
         GeneratePracticeItemsJob::dispatch($skill->id, (int) $request->user()->school_id, $request->user()->id, $count);

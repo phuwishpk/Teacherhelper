@@ -7,9 +7,10 @@ use App\Models\User;
 
 /**
  * DESIGN §9.6, §14.1: the practice bank is shared by the school. Any active
- * teacher of the school lists, writes and edits its items; approving needs a
- * teacher of the skill's subject (PracticeBank::teachesSubjectOf, checked in
- * the service so the error can say why).
+ * teacher of the school lists, writes and edits its items; approving, and
+ * changing the content of an item that stays approved, needs a teacher of
+ * the skill's subject (PracticeBank::teachesSubjectOf, checked in the
+ * service so the error can say why).
  */
 class PracticeItemPolicy
 {

@@ -41,8 +41,11 @@ class MasteryResource extends JsonResource
     }
 
     /**
-     * Weakest first: skills with enough data before "too little", then by
-     * value, then by code (§14.3 "จุดอ่อนรายคน" = the first three).
+     * Weakest first: by value, then skill code, then id. The same order
+     * Recommender uses to pick practice (§14.1), so meta.weaknesses (§14.3
+     * "จุดอ่อนรายคน" = the first three) and GET /student/practice name the
+     * same skills; a skill with a single observation counts like any other,
+     * its level saying too_little.
      *
      * @param  Collection<int, Mastery>  $rows
      * @return list<Mastery>
@@ -50,7 +53,6 @@ class MasteryResource extends JsonResource
     public static function weakestFirst($rows): array
     {
         return $rows->sortBy(fn (Mastery $m) => [
-            (int) $m->n_obs < MasteryCalculator::MIN_OBS_FOR_LEVEL ? 1 : 0,
             (float) $m->value,
             $m->skill?->code ?? '',
             $m->skill_id,

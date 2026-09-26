@@ -3,15 +3,18 @@
 namespace Tests\Feature\Practice;
 
 use App\Domain\Mastery\MasteryCalculator;
+use App\Domain\Practice\PracticeAttempts;
 use App\Models\Classroom;
 use App\Models\LearningResource;
 use App\Models\Mastery;
+use App\Models\PracticeAttempt;
 use App\Models\PracticeItem;
 use App\Models\Skill;
 use App\Models\SkillObservation;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -119,6 +122,14 @@ class StudentPracticeTest extends TestCase
             $this->assertStringNotContainsString($secret, $body, "{$secret} must not reach students");
         }
 
+        // GET /student/mastery uses the same order (by value): the weaknesses are the skills practised first.
+        $ids = fn (array $keys) => array_map(fn (string $k) => $this->skills[$k]->id, $keys);
+        $this->asUser($this->student)->getJson('/api/v1/student/mastery')
+            ->assertOk()
+            ->assertJsonPath('data.*.skill_id', $ids(['a', 'b', 'c']))
+            ->assertJsonPath('data.1.level', 'too_little')
+            ->assertJsonPath('meta.weaknesses', $ids(['a', 'b', 'c']));
+
         // A student without weak skills gets nothing; teachers cannot use the endpoint.
         $strong = $this->enrollStudent($this->classroom, 2)['student'];
         $this->asUser($strong)->getJson('/api/v1/student/practice')->assertOk()->assertJsonCount(0, 'data');
@@ -169,6 +180,29 @@ class StudentPracticeTest extends TestCase
         $this->assertSame(6, SkillObservation::query()->where('source', 'practice')->count());
         $mastery = Mastery::query()->where('student_id', $this->student->id)->where('skill_id', $this->skills['a']->id)->sole();
         $this->assertSame(8, $mastery->n_obs);
+    }
+
+    public function test_two_attempts_on_one_item_at_the_same_moment_count_once(): void
+    {
+        $item = $this->items['a1'];
+        $url = "/api/v1/student/practice/{$item->id}/attempts";
+        $held = Cache::lock(PracticeAttempts::lockKey($this->student->id, $item->id), 30);
+        $this->assertTrue($held->get());
+
+        // Another request of the same student holds the lock past the wait: refused like a repeat, nothing written.
+        $this->asUser($this->student)->postJson($url, ['answer' => '12'])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'practice_already_attempted');
+        $this->assertSame(0, PracticeAttempt::query()->count());
+        $this->assertSame(0, SkillObservation::query()->where('source', 'practice')->count());
+
+        // Once it is released the attempt goes through and releases the lock again.
+        $held->release();
+        $this->asUser($this->student)->postJson($url, ['answer' => '12'])->assertCreated();
+        $free = Cache::lock(PracticeAttempts::lockKey($this->student->id, $item->id), 1);
+        $this->assertTrue($free->get());
+        $free->release();
+        $this->assertSame(1, PracticeAttempt::query()->count());
     }
 
     public function test_only_approved_items_of_the_students_school_can_be_attempted(): void

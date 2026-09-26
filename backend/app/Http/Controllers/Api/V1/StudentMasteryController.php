@@ -10,8 +10,9 @@ use Illuminate\Http\Request;
 
 /**
  * GET /api/v1/student/mastery (DESIGN §9.7, §14.2): the student's own
- * mastery per skill, weakest first, with meta.weaknesses = the three
- * lowest skill ids (§14.3 "จุดอ่อนรายคน").
+ * mastery per skill, weakest first (by value, the order of GET
+ * /student/practice), with meta.weaknesses = the three lowest skill ids
+ * (§14.3 "จุดอ่อนรายคน").
  */
 class StudentMasteryController extends Controller
 {
