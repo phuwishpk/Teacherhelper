@@ -24,6 +24,12 @@ use Illuminate\Support\Facades\Log;
  * then created, so the result shows in the submissions list and can be
  * retried).
  *
+ * A grade only ever goes to the Classroom submission of the Google account
+ * matched to that student: a row filed under the student but handed in by
+ * another account (a QR of student A inside B's hand-in, flagged
+ * identity_mismatch by §18.3, or a roster re-matched since) ends as
+ * grade_failed with the reason instead of grading the classmate's work.
+ *
  * Outcome on the import row: `graded` + grade_pushed_at, or `grade_failed` +
  * last_error (Thai, shown to the teacher). A transient error is thrown for
  * the queue to retry.
@@ -59,6 +65,15 @@ final class ClassroomGradePusher
             ->value('google_user_id');
         if ($import === null && $googleUserId === null) {
             return self::SKIPPED; // not in Classroom (or not matched yet)
+        }
+        if ($import !== null && $import->google_user_id !== $googleUserId) {
+            // Someone else's hand-in carries this student's scan: never write
+            // this student's score onto the classmate's Classroom submission.
+            Log::warning('google.grade_account_mismatch', ['submission_id' => $submission->id, 'import_id' => $import->id]);
+
+            return $this->fail($import, $submission, $googleUserId === null
+                ? 'นักเรียนคนนี้ยังไม่ได้จับคู่กับบัญชี Google ที่ส่งงานนี้ จับคู่นักเรียนที่หน้าห้องเรียนแล้วกดส่งคะแนนอีกครั้ง'
+                : 'บัญชี Google ของงานที่ส่งไม่ตรงกับนักเรียนคนนี้ ตรวจสอบป้าย identity_mismatch ในคิวตรวจทาน คะแนนของเจ้าของบัญชีจะส่งเมื่อเผยแพร่งานของเขา');
         }
 
         $link = $assignment->classroom?->googleLink;
@@ -132,7 +147,8 @@ final class ClassroomGradePusher
     }
 
     /**
-     * The row that carries the student's grade: the one scanned last.
+     * The row filed under the student, the one scanned last first. push()
+     * still checks that its Google account is the student's own.
      */
     private static function importOf(Assignment $assignment, int $studentId): ?ClassroomSubmissionImport
     {
