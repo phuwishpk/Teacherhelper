@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Domain\Review\ScoreRules;
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use App\Models\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,6 +17,8 @@ use Illuminate\Validation\Rule;
  */
 class UpdateResponseRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public function authorize(): bool
     {
         return true; // ResponsePolicy::review runs in the controller

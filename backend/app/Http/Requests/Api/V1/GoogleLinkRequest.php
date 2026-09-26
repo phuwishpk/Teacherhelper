@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** POST /classrooms/{id}/google-link {course_id} (DESIGN §18.6). */
 class GoogleLinkRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public function authorize(): bool
     {
         return true; // ClassroomPolicy::manageGoogle runs in the controller

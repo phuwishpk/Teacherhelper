@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** POST /api/v1/student/practice/{item_id}/attempts {answer} (DESIGN §9.7). */
 class PracticeAttemptRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public const MAX_ANSWER = 500;
 
     public function authorize(): bool

@@ -2,7 +2,7 @@
 
 API และ web admin ของ EduVision รันบน shared Plesk hosting (ไม่มี SSH, Docker, daemon หรือ Redis) ดู `docs/DESIGN.md` §7–§9 และ `docs/KICKOFF.md` ส่วนที่ 3 ก่อนแก้โค้ด
 
-สถานะ: M0 → Phase 6 แล้ว (auth, ห้องเรียน/นักเรียน, การบ้าน/ใบงาน, สแกน, Gemini + fuzzy, ตรวจทาน/เผยแพร่/คำขอตรวจใหม่, FCM, Google Classroom, คลังแบบฝึก/mastery/analytics และโมเดลบนมือถือ) ดูหัวข้อด้านล่างต่อส่วน
+สถานะ: M0 → Phase 6 แล้ว (auth, ห้องเรียน/นักเรียน, การบ้าน/ใบงาน, สแกน, Gemini + fuzzy, ตรวจทาน/เผยแพร่/คำขอตรวจใหม่, FCM, Google Classroom, คลังแบบฝึก/mastery/analytics และโมเดลบนมือถือ) และ B7 (security suite, CI, คู่มือ deploy `docs/HOSTING.md`) ดูหัวข้อด้านล่างต่อส่วน
 
 ## ส่วนประกอบ
 
@@ -211,6 +211,8 @@ php artisan eduvision:queue-work
 
 command นี้ (1) dispatch `QueueHeartbeatJob` ลง table `jobs` แล้ว (2) รัน `queue:work --queue=grading,default,pdf --stop-when-empty --max-time=50` (option ตาม DESIGN §7.2) job เขียนเวลาไว้ใน cache key `queue.last_run_at` ซึ่ง `GET /health` อ่านออกมา ถ้าค่าเก่ากว่า `HEARTBEAT_MAX_AGE_MINUTES` (ค่าเริ่มต้น 3 นาที) `status` จะเป็น `degraded` แปลว่า cron + artisan + database queue ไม่ครบวงจร
 
+option เดียวที่มีคือ `--memory=<MB>` (ค่าเริ่มต้น 128 เท่า `queue:work`): เกณฑ์ที่ worker หยุดเองอย่างสุภาพหลังจบ job (exit code 12) เพิ่มได้เมื่อ `memory_limit` ของ PHP บน hosting สูงกว่านั้น test ที่รันคำสั่งนี้ส่ง `--memory=1024` เพราะการรันแบบ coverage (pcov) ถือข้อมูลของทั้ง suite ไว้ใน process เดียว
+
 ## ลบไฟล์ตามนโยบาย (DESIGN §7.2, §7.3)
 
 Scheduled Task ทุกวัน 02:00 เรียก
@@ -224,6 +226,26 @@ php artisan eduvision:purge-images
 - สแกนซ้ำที่รอครูยืนยัน (`pending_confirm`) เก็บภาพหน้าเต็มและที่พักไฟล์ไว้ไม่เกิน 30 วัน (`ScanRetention::PENDING_RESCAN_DAYS`) และไม่เกิน `crop_retention_until` จากนั้นหมดอายุ: ลบภาพหน้าเต็มและที่พักไฟล์ `page_image_path = NULL` และ scan เป็น `superseded` (ยืนยันไม่ได้แล้ว ตอบ `409 scan_files_missing`)
 - ภาพ crop `crops/{school}/{assignment}/{response}[_final].webp` ของสแกนที่ทำจนถึง `schools.crop_retention_until` เมื่อวันนั้นผ่านไปแล้ว → `crop_path`/`final_crop_path = NULL` คะแนนและค่าที่อ่านได้ยังอยู่
 - ไฟล์ค้างจาก request ที่ถูกตัดกลางทาง (เก่ากว่า 24 ชั่วโมง): โฟลเดอร์ `pending/{scan}` ของสแกนที่ไม่ได้รอยืนยันแล้ว และโฟลเดอร์ `crops/{school}/{assignment}/replaced/{scan}`
+
+## ความปลอดภัย (DESIGN §16.1, B7)
+
+สิ่งที่ middleware/โค้ดทำให้ทุก request และ test ที่ล็อกไว้ใน `tests/Feature/Security/`
+
+| เรื่อง | ที่ทำ | test |
+|---|---|---|
+| ทุก route ใต้ `/api/v1` ต้องมีแถวใน matrix: guest 401, ผิด role 403, ครูโรงเรียนอื่น 404 (หรือ 403 เมื่อไม่ได้ค้นหาแถวก่อน), ครูร่วมโรงเรียนที่ไม่ใช่เจ้าของ 403/404, เพื่อนร่วมห้อง 404, บัญชี `disabled` 403 `account_not_active`, admin ไม่มีสิทธิ์ API | policy ต่อ action + `role:` middleware | `AuthorizationMatrixTest` (**เพิ่ม route ใหม่ต้องเพิ่มแถว** ไม่งั้น `test_every_api_route_is_in_the_matrix` แดง) |
+| `role:teacher` / `role:student` / `role:teacher,student` ตรวจทั้ง `users.role` และ ability ของ token | `App\Http\Middleware\EnsureRole` | matrix + `test_a_token_with_a_foreign_ability_is_forbidden_everywhere` |
+| FormRequest ของ endpoint ที่มี `{id}` ตรวจ body **หลัง** policy: ขอแถวของคนอื่นได้ 403/404 เสมอ ไม่ใช่ 422 ที่บอกว่าแถวมีอยู่ | trait `App\Http\Requests\Concerns\ValidatesAfterAuthorization` (controller ต้องอ่าน body ผ่าน `validated()`/`safe()` เท่านั้น และเรียกก่อน side effect เช่นการเรียก Google) | matrix |
+| id ต้องเป็นตัวเลข 1–18 หลัก (`Route::pattern`) ไม่งั้น 404 ก่อนถึง controller; body ผิดรูป/ใหญ่เกิน/ควบคุมอักขระ → 422 ใน envelope; mass assignment ของ `school_id`, `teacher_id`, `role`, `status`, `id`, คอลัมน์ AI ถูกทิ้ง | `routes/api.php`, `$fillable`, FormRequest | `InputHardeningTest` |
+| headers ทุก response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`, ลบ `X-Powered-By`; เฉพาะ `api/*`: `Cache-Control: no-store, private` (ยกเว้น controller ที่ตั้งเองเช่นไฟล์โมเดล), `X-Robots-Tag: noindex`, CSP `default-src 'none'` สำหรับ JSON; `Strict-Transport-Security` เฉพาะ HTTPS | `App\Http\Middleware\SecurityHeaders` (append ใน `bootstrap/app.php`) | `SecurityHeadersTest` |
+| rate limit: `/auth/teacher/*` 10/นาที/IP, `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี, API 120/นาที/ผู้ใช้, Google 30/นาที/ครู, Gemini ตรง 10–20/นาที; PIN ผิด 5 ครั้งล็อก 15 นาทีที่บัญชี; token หมดอายุ/ปลอม/ถูกลบ → 401; logout ยกเลิก token | `AppServiceProvider`, `StudentAuthenticator`, Sanctum | `AuthHardeningTest`, `Api/StudentAuthTest`, `Api/TeacherAuthTest` |
+| payload ที่ส่ง Gemini มีเฉพาะ crop ของช่องคำตอบ + โจทย์/เฉลย/rubric: ไม่มีชื่อ, เลขที่, ห้อง, โรงเรียน, ภาพหน้าเต็ม, QR, key (render body จริงของ `HttpGeminiClient::payload()` แล้วค้น) และ `ai_calls`/log ก็ไม่มี | `ExtractionRequests`, `ExplanationRequests` | `GeminiPayloadPrivacyTest` |
+| prompt injection ผ่านลายมือ: `tests/fixtures/injection/*.png` (+ `manifest.json`) ผ่าน `GradeScanJob` → `suspicious_instruction` → บนสุดของคิว, `bulk_approvable: false`, ไม่สร้างคำอธิบาย; system instruction บอกว่าภาพเป็นข้อมูล และ schema บังคับ flag | `FakeGeminiClient` อ่าน marker `[fake:...]` จาก tEXt chunk ของ PNG เหมือนโมเดลที่อ่านข้อความในภาพ | `PromptInjectionTest` |
+| Gemini key ของครูไม่ออกทาง response/log/`ai_calls`/แถว DB แม้ตอน Google ปฏิเสธ key; key กลางก็เช่นกัน | `TeacherApiKey` (encrypted), `GeminiKeyResolver` | `SecretsHygieneTest` |
+| ไม่มี `env()` นอก `config/` (production ใช้ `optimize`), ทุกตัวแปรของ EduVision อยู่ใน `.env.example`, `.env.example` ไม่มีค่าจริง, suite ไม่แตะ Gemini จริง | | `ConfigCacheSafetyTest` |
+| secret scan | pre-commit hook กัน `AIza...`; CI รัน gitleaks ทั้งประวัติ | `.github/workflows/backend.yml` |
+
+CORS ของ `api/*` เป็นค่าเริ่มต้นของ Laravel (`allowed_origins: *`) จงใจคงไว้เพื่อ `flutter run -d chrome` ตอนพรีวิว UI; API ใช้ bearer token ไม่ใช่ cookie จึงไม่มี CSRF
 
 ## โครงสร้างโค้ด (ตาม DESIGN §7.1)
 
@@ -262,12 +284,16 @@ config/eduvision.php                         ค่าที่อ่านจ�
 database/migrations/                         0001_..._schools → users → cache → jobs → personal_access_tokens
 database/seeders/SchoolSeeder.php
 resources/worksheet/aruco/                   ArUco marker PNG + manifest สำหรับใบงาน (สร้างจาก ml/tools/gen_aruco.py)
-tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest, Api/ErrorFormatTest, Console/QueueWorkCommandTest, AdminPanelTest
+app/Http/Middleware/                         EnsureUserIsActive (`active`), EnsureRole (`role:`), SecurityHeaders
+app/Http/Requests/Concerns/                  ValidatesAfterAuthorization (ตรวจ body หลัง policy)
+tests/Feature/                               Api/, Scans/, Grading/, Review/, Google/, Practice/, Mastery/, Analytics/, Ml/, Notifications/, Console/, Filament/, AdminPanelTest
+tests/Feature/Security/                      AuthorizationMatrixTest (+ SecurityWorld), AuthHardeningTest, InputHardeningTest, SecurityHeadersTest, GeminiPayloadPrivacyTest, PromptInjectionTest, SecretsHygieneTest, ConfigCacheSafetyTest
+tests/fixtures/injection/                    ภาพ crop ที่มีคำสั่งแทรก + manifest.json (DESIGN §10.7 ข้อ 5)
 ```
 
 ## Deploy บน Plesk
 
-ทำตาม `docs/KICKOFF.md` B7 หลัง `tools/hosting-probe.php` ผ่าน สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work`, Scheduled Task ทุกวัน 02:00 `artisan eduvision:purge-images` และ migration ผ่าน Scheduled Task "Run now" `artisan migrate --force`
+คู่มือเต็มทีละขั้นอยู่ที่ **`docs/HOSTING.md`** (ภาษาไทย: PHP settings, Git, Composer แบบสลับ docroot, `.env` ทุกตัวแปร, Scheduled Task 3 ตัว, Gemini/FCM/Google Classroom, ลงทะเบียนโมเดล, smoke check, troubleshooting) สรุปสั้น: Plesk Git pull ทั้ง monorepo, document root = `<deployment path>/backend/public`, `.env` อยู่ที่ `backend/.env` (นอก document root), Composer extension รัน `composer install`, Scheduled Task ทุกนาที `artisan eduvision:queue-work`, Scheduled Task ทุกวัน 02:00 `artisan eduvision:purge-images` และ migration/`optimize` ผ่าน Scheduled Task "Run now"
 
 โฟลเดอร์ `public/css/filament`, `public/js/filament` และ `public/fonts/filament` ถูก commit ไว้จงใจ (ลบบรรทัด ignore ของ skeleton ออกจาก `.gitignore` แล้ว) เพื่อให้ไปถึง Plesk ผ่าน Git โดยไม่ต้องพึ่ง script `filament:upgrade` หลัง `composer install` หรือรัน `filament:assets` บน server เมื่ออัปเกรด Filament ให้รัน `php artisan filament:assets` แล้ว commit ไฟล์ที่เปลี่ยนด้วย
 
@@ -277,4 +303,15 @@ tests/Feature/                               Api/HealthTest, Api/TeacherAuthTest
 vendor/bin/pint --test && php artisan test
 ```
 
-ห้าม commit `.env`, key ใดๆ หรือข้อมูลนักเรียนจริง (repo เป็น public; pre-commit hook กัน Google API key ไว้ชั้นหนึ่ง)
+CI (`.github/workflows/backend.yml`) รันสี่งานทุก push/PR ที่แตะ `backend/`: suite บน PHP 8.3 + SQLite พร้อม coverage (pcov, ขั้นต่ำ 85% ของบรรทัด), suite เดิมบน MariaDB 11 (engine ของ production: ตอนนี้ต่างจาก SQLite แค่ enum เรียงตามลำดับประกาศ), pint และ gitleaks ทั้งประวัติ git ไม่มีขั้น deploy (ทำเองใน Plesk ตาม `docs/HOSTING.md`)
+
+coverage ในเครื่อง (PHP ของ Homebrew ไม่มี pcov/xdebug: build pcov จาก pecl แล้วโหลดเฉพาะคำสั่งนี้ด้วย `-d extension=...`):
+
+```bash
+php -d extension=/path/to/pcov.so -d pcov.enabled=1 -d pcov.directory=app vendor/bin/phpunit --coverage-text
+# 27 ก.ย. 2569: lines 94.96% (8387/8832), methods 81.21%, classes 57.88%
+```
+
+รัน suite กับ MariaDB จริงเหมือน CI (ต้องมี database ว่างชื่อ `eduvision_test` ใน container): `DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=eduvision_test DB_USERNAME=eduvision DB_PASSWORD=eduvision php artisan test` (`phpunit.xml` ตั้ง `DB_*` เฉพาะเมื่อ environment ไม่ได้ตั้ง)
+
+ห้าม commit `.env`, key ใดๆ หรือข้อมูลนักเรียนจริง (repo เป็น public; pre-commit hook กัน Google API key ไว้ชั้นหนึ่ง และ gitleaks ใน CI อีกชั้น)

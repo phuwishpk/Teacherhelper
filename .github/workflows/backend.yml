@@ -1,0 +1,182 @@
+# Laravel quality gate for backend/ (DESIGN §16.1 "CI/CD" and "(c) secret
+# scanning in CI", CLAUDE.md "keep php artisan test green"). Four jobs:
+#
+#   test      PHP 8.3 (the Plesk version composer.json pins as platform.php)
+#             + pcov: the suite on SQLite in-memory as phpunit.xml wires it,
+#             with a line-coverage floor. Runs no network calls: Gemini,
+#             FCM and Google Classroom are faked (GEMINI_FAKE, Http::fake).
+#   mariadb   the same suite against MariaDB 11, the production engine, so a
+#             migration or query that only works on SQLite cannot ship.
+#   pint      code style.
+#   gitleaks  secret scan over the whole git history (the repo is public;
+#             the local pre-commit hook only catches Google API keys).
+#
+# Nothing here deploys: production is a manual "Pull Updates" in Plesk Git
+# (docs/HOSTING.md). No secrets are needed; APP_KEY for tests is the fixed
+# non-secret value in phpunit.xml.
+name: backend
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHP_VERSION: '8.3'
+  # Extensions composer.lock requires (composer check-platform-reqs) plus the
+  # two database drivers the jobs use.
+  PHP_EXTENSIONS: ctype, dom, fileinfo, filter, gd, iconv, intl, json, libxml, mbstring, openssl, pdo_sqlite, pdo_mysql, session, tokenizer, xmlreader, zip, zlib
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    name: test (SQLite) + coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-
+
+      - run: composer validate --strict --no-check-publish
+
+      # composer.json pins platform.php = 8.3.0, so the lock resolves here
+      # exactly as the Plesk Composer extension resolves it on the server.
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      # Advisory only (a new advisory must not block a fix from merging);
+      # the result is visible in the job log.
+      - name: Dependency advisories
+        run: composer audit --no-interaction
+        continue-on-error: true
+
+      # The suite reads APP_KEY, DB_*, GEMINI_FAKE and QR_SIGNING_KEY from
+      # phpunit.xml; no .env is created.
+      # Clover goes to the runner's temp dir so nothing lands in the checkout.
+      - name: Tests with coverage (>= 85% of lines)
+        run: php artisan test --compact --coverage --min=85 --coverage-clover="$RUNNER_TEMP/clover.xml"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: ${{ runner.temp }}/clover.xml
+          if-no-files-found: ignore
+
+  mariadb:
+    name: test (MariaDB 11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: eduvision_test
+          MARIADB_USER: eduvision
+          MARIADB_PASSWORD: eduvision
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      # phpunit.xml sets DB_* only when the environment has not (no force=),
+      # so these variables switch the whole suite to the service container.
+      - name: Tests on MariaDB
+        env:
+          DB_CONNECTION: mariadb
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: eduvision_test
+          DB_USERNAME: eduvision
+          DB_PASSWORD: eduvision
+        run: php artisan test --compact
+
+  pint:
+    name: pint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - run: vendor/bin/pint --test
+
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The scan covers every commit, not only the checkout.
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

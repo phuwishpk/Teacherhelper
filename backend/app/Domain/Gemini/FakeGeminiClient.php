@@ -26,6 +26,10 @@ use App\Models\Question;
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
+ * The same markers are also read from the bytes of the images (a PNG tEXt
+ * chunk, see tests/fixtures/injection): the fake then behaves like a model
+ * that read the words written in the answer box.
+ *
  * A key containing "rejected" is refused on every call (key_invalid);
  * listModels() refuses keys containing "invalid" and fails for keys
  * containing "unavailable".
@@ -81,7 +85,7 @@ class FakeGeminiClient implements GeminiClient
             return GeminiReply::keyRejected('HTTP 400: API key not valid. Please pass a valid API key.', 0, 400);
         }
 
-        $markers = strtolower((string) ($request->hints['question_text'] ?? ''));
+        $markers = strtolower((string) ($request->hints['question_text'] ?? '')).' '.self::imageMarkers($request);
         $has = fn (string $marker) => str_contains($markers, '[fake:'.$marker.']');
         $signature = md5($request->purpose."\0".$request->userText."\0".($request->images[0]->data ?? ''));
         $this->seen[$signature] = ($this->seen[$signature] ?? 0) + 1;
@@ -127,6 +131,19 @@ class FakeGeminiClient implements GeminiClient
             outputTokens: max(1, intdiv(strlen($text), 4)),
             latencyMs: 0,
         );
+    }
+
+    /** Markers embedded in the request's images, lower-cased and space-joined. */
+    private static function imageMarkers(GeminiRequest $request): string
+    {
+        $found = [];
+        foreach ($request->images as $image) {
+            if (str_contains($image->data, '[fake:') && preg_match_all('/\[fake:[a-z-]+\]/i', $image->data, $m)) {
+                $found = [...$found, ...$m[0]];
+            }
+        }
+
+        return strtolower(implode(' ', $found));
     }
 
     /**
