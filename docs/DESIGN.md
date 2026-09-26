@@ -982,8 +982,8 @@ CREATE TABLE training_samples (
 | Method | Path | หมายเหตุ |
 |---|---|---|
 | GET | `/practice-items?skill=&status=` | คลังของโรงเรียน |
-| POST | `/skills/{id}/practice-items/generate` | queue งานให้ Gemini สร้างข้อใหม่เป็น `draft` |
-| PATCH | `/practice-items/{id}` | แก้ไข อนุมัติ หรือเลิกใช้ ครูที่สอนวิชานั้นอนุมัติได้ |
+| POST | `/skills/{id}/practice-items/generate` | queue งานให้ Gemini สร้างข้อใหม่เป็น `draft` ตอบ `202` ถ้าไม่มี key ของ Gemini ที่ใช้ได้ (ของครูหรือของ server) ตอบ `422 code: ai_key_missing` เหมือน rubric draft |
+| PATCH | `/practice-items/{id}` | แก้ไข อนุมัติ หรือเลิกใช้ ครูที่สอนวิชานั้นอนุมัติได้ และ**แก้เนื้อหาของข้อที่ `approved` อยู่ได้เฉพาะครูที่สอนวิชานั้น** (คนอื่นได้ `403 subject_not_taught` ต้องเปลี่ยนเป็น `draft` ก่อน) การแก้จะบันทึก `approved_by/approved_at` ใหม่เป็นผู้แก้ |
 | POST | `/skills/{id}/resources` | เพิ่มลิงก์เนื้อหาทบทวน |
 | GET | `/assignments/{id}/analytics` | ค่า p และ r, ข้อที่ผิดบ่อย, heatmap ทักษะ × ประเภทข้อผิดพลาด |
 | GET | `/classrooms/{id}/mastery` | heatmap นักเรียน × ทักษะ |
@@ -1483,6 +1483,8 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 ```
 
 - ถ้าคะแนนเปลี่ยนหลังเผยแพร่ ให้**คำนวณใหม่ทั้งหมด**ของ (นักเรียน, ทักษะ) นั้น ค่าใช้จ่ายต่ำเพราะข้อมูลน้อย
+- ถ้า submission ที่เผยแพร่แล้วถูกเปิดใหม่จากการสแกนซ้ำที่ครูยืนยัน (`confirm-replace`) ระบบยิง event `SubmissionReopened` แล้ว**ลบ observation ของ submission นั้นและคำนวณ mastery ใหม่** จนกว่าจะเผยแพร่อีกครั้ง (เพิ่ม 26 ก.ย. 2569)
+- การจัดอันดับ "ทักษะที่อ่อน" ทุกที่ (§14.1 คำแนะนำแบบฝึก, §14.3 จุดอ่อนรายคน, `GET /student/mastery`) ใช้กฎเดียวกัน: เรียงตามค่า mastery จากน้อยไปมาก แถวที่ `n_obs < 2` แสดงป้าย "ข้อมูลยังน้อย" แต่ไม่ถูกดันไปท้ายรายการ
 - ระดับที่แสดงใช้เกณฑ์เดียวกับ §11.7 ถ้า `n_obs < 2` แสดงว่า "ข้อมูลยังน้อย"
 
 ### 14.3 Analytics สำหรับครู
