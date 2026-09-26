@@ -285,7 +285,11 @@ void main() {
   test('server error schedules a retry with exponential backoff', () async {
     await enqueue('r1');
     final adapter = FakeHttpAdapter(
-      (_) async => jsonResponse(503, {'message': 'maintenance'}),
+      (_) async => jsonResponse(503, {
+        'message': 'maintenance',
+        'errors': <String, Object>{},
+        'code': 'maintenance',
+      }),
     );
     final up = uploader(adapter);
 

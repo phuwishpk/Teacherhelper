@@ -140,19 +140,24 @@ class FakeApiServer {
         logouts++;
         return (204, null);
       case ('GET', ['me', 'ai-key']):
+        // AiKeyController: {data: {provider, configured, key_last4,
+        // last_verified_at, server_key_available}}, never the key.
         return (
           200,
           {
-            'configured': true,
-            'key_last4': 'ABCD',
-            'last_verified_at': '2026-09-01T00:00:00Z',
-            'server_key_available': false,
+            'data': {
+              'provider': 'gemini',
+              'configured': true,
+              'key_last4': 'ABCD',
+              'last_verified_at': '2026-09-01T00:00:00+00:00',
+              'server_key_available': false,
+            },
           },
         );
       case ('GET', ['subjects']):
         return (200, {'data': subjects});
       case ('GET', ['classrooms']):
-        return (200, {'data': classrooms, 'next_cursor': null});
+        return (200, _page(classrooms));
       case ('POST', ['classrooms']):
         return _createClassroom(body);
       case ('GET', ['classrooms', final id]):
@@ -165,10 +170,7 @@ class FakeApiServer {
       case ('GET', ['assignments']):
         return (
           200,
-          {
-            'data': [for (final a in assignments) _assignmentSummary(a)],
-            'next_cursor': null,
-          },
+          _page([for (final a in assignments) _assignmentSummary(a)]),
         );
       case ('POST', ['assignments']):
         return _createAssignment(body);
@@ -204,9 +206,9 @@ class FakeApiServer {
         final r = responses[int.tryParse(id)];
         return r == null ? _notFound() : (200, {'data': r});
       case ('GET', ['appeals']):
-        return (200, {'data': <Object>[]});
+        return (200, _page(const <Object>[]));
       case ('GET', ['practice-items']):
-        return (200, {'data': <Object>[]});
+        return (200, _page(const <Object>[]));
       case ('GET', ['ml', 'models', 'active']):
         return (404, _error('ยังไม่มีโมเดลที่เปิดใช้', code: 'not_found'));
       default:
@@ -345,6 +347,14 @@ class FakeApiServer {
     final n = int.tryParse(id);
     return rows.where((r) => r['id'] == n).firstOrNull;
   }
+
+  /// One page of a cursor-paginated list the way Laravel's resource
+  /// collections and AppealController answer it: `{data, meta: {next_cursor,
+  /// prev_cursor, per_page}}` (PER_PAGE = 50 on every list controller).
+  static Map<String, dynamic> _page(List<Object?> rows) => {
+    'data': rows,
+    'meta': {'next_cursor': null, 'prev_cursor': null, 'per_page': 50},
+  };
 
   static (int, Object?) _notFound() =>
       (404, _error('ไม่พบข้อมูล', code: 'not_found'));

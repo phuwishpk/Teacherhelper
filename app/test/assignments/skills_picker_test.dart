@@ -129,7 +129,11 @@ void main() {
 
   testWidgets('a failing search shows the API message', (tester) async {
     final repo = _Repo(
-      error: apiError(500, {'message': 'ค้นหาไม่ได้ชั่วคราว'}),
+      error: apiError(503, {
+        'message': 'ค้นหาไม่ได้ชั่วคราว',
+        'errors': <String, Object>{},
+        'code': 'search_unavailable',
+      }),
     );
     await tester.pumpWidget(_host(repo, (_) {}));
 

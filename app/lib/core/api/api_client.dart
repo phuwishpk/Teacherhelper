@@ -71,19 +71,32 @@ class _AuthInterceptor extends Interceptor {
 /// Laravel errors look like {"message": "...", "errors": {...}, "code": "..."}.
 String apiErrorMessage(Object error) {
   if (error is DioException) {
-    final data = error.response?.data;
-    if (data is Map && data['message'] is String) {
-      return data['message'] as String;
-    }
-    if (error.response == null) {
+    final response = error.response;
+    if (response == null) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (${error.type.name})';
     }
-    return 'เซิร์ฟเวอร์ตอบกลับผิดพลาด (${error.response?.statusCode})';
+    final data = response.data;
+    if (data is Map &&
+        data['message'] is String &&
+        _isTrustedErrorBody(response)) {
+      return data['message'] as String;
+    }
+    return 'เซิร์ฟเวอร์ตอบกลับผิดพลาด (${response.statusCode})';
   }
   if (error is FormatException) {
     return 'ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง (${error.message})';
   }
   return 'เกิดข้อผิดพลาดที่ไม่คาดคิด';
+}
+
+/// A 4xx body is one the API wrote for the user. A 5xx body is shown only
+/// when it is the DESIGN §9 envelope (it carries a string `code`, e.g.
+/// `ai_unavailable`): Laravel's page for an uncaught exception also has a
+/// `message`, and with APP_DEBUG on that is the raw exception text.
+bool _isTrustedErrorBody(Response<dynamic> response) {
+  if ((response.statusCode ?? 0) < 500) return true;
+  final data = response.data;
+  return data is Map && data['code'] is String;
 }
 
 /// The machine-readable `code` from an error body (DESIGN §9), if any.
