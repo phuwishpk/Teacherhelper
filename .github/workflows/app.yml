@@ -1,0 +1,95 @@
+# Flutter quality gate for app/ (DESIGN §16.1 "CI/CD", CLAUDE.md "keep
+# flutter analyze and flutter test green"): analyze, test with coverage,
+# fail under 70 % line coverage of lib/ (generated files excluded), then
+# build a debug APK. No signing keys, Firebase config or API keys are
+# needed; release APKs are built by the developer (app/README.md).
+name: app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.5
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  test:
+    name: analyze, test, coverage >= 70%
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # drift tests open an in-memory SQLite through the system library.
+      - name: Install sqlite3
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev
+
+      - run: flutter pub get
+
+      - run: flutter analyze --fatal-infos
+
+      - run: flutter test --coverage
+
+      - name: Coverage threshold (70% of lib/, generated files excluded)
+        run: dart run tool/check_coverage.dart --min 70
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-coverage
+          path: app/coverage/lcov.info
+          if-no-files-found: ignore
+
+  build:
+    name: debug APK
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      # Debug build: cleartext to 10.0.2.2 allowed, no API_BASE_URL needed.
+      - run: flutter build apk --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
