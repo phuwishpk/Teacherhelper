@@ -85,7 +85,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           for (final s in students) ...[
-                            _StudentTile(student: s),
+                            _StudentTile(student: s, classroomId: c.id),
                             if (s != students.last) const Divider(height: 1),
                           ],
                         ],
@@ -215,15 +215,22 @@ class _ActionsRow extends ConsumerWidget {
           icon: const Icon(Icons.assignment_add),
           label: const Text('สร้างการบ้าน'),
         ),
+        OutlinedButton.icon(
+          onPressed: () =>
+              context.push(AppRoutes.classroomMastery(classroom.id)),
+          icon: const Icon(Icons.grid_on_outlined),
+          label: const Text('ทักษะของห้อง'),
+        ),
       ],
     );
   }
 }
 
 class _StudentTile extends ConsumerWidget {
-  const _StudentTile({required this.student});
+  const _StudentTile({required this.student, required this.classroomId});
 
   final RosterStudent student;
+  final int classroomId;
 
   Future<void> _reissueCard(BuildContext context, WidgetRef ref) async {
     final ok = await confirm(
@@ -301,14 +308,27 @@ class _StudentTile extends ConsumerWidget {
         child: Text('${student.studentNumber}'),
       ),
       title: Text(student.name),
+      onTap: () => context.push(
+        AppRoutes.studentMastery(classroomId, student.studentId),
+      ),
       trailing: PopupMenuButton<String>(
         tooltip: 'ตัวเลือก',
         onSelected: (v) => switch (v) {
+          'mastery' => context.push(
+            AppRoutes.studentMastery(classroomId, student.studentId),
+          ),
           'card' => _reissueCard(context, ref),
           'pin' => _resetPin(context, ref),
           _ => null,
         },
         itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: 'mastery',
+            child: ListTile(
+              leading: Icon(Icons.insights_outlined),
+              title: Text('ทักษะและจุดอ่อน'),
+            ),
+          ),
           PopupMenuItem(
             value: 'card',
             child: ListTile(

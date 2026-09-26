@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
-import '../../core/widgets/async_view.dart';
 import '../auth/sign_out_action.dart';
+import '../mastery/mastery_page.dart';
+import '../practice/practice_page.dart';
 import '../results/results_page.dart';
 
 class _Destination {
@@ -26,7 +27,8 @@ const _destinations = [
 
 const _railBreakpoint = 840.0;
 
-/// Student-side shell: results, practice (Phase 6) and mastery (Phase 6).
+/// Student-side shell: published results, practice by weak skill and
+/// mastery per skill (DESIGN §9.7, §14.1, §14.2).
 class StudentShell extends ConsumerStatefulWidget {
   const StudentShell({super.key});
 
@@ -44,17 +46,8 @@ class _StudentShellState extends ConsumerState<StudentShell> {
 
     final pages = <Widget>[
       const ResultsPage(),
-      const EmptyView(
-        icon: Icons.fitness_center_outlined,
-        title: 'แบบฝึกยังไม่เปิดใช้',
-        message:
-            'เมื่อครูอนุมัติคลังแบบฝึกแล้ว ระบบจะแนะนำข้อฝึกตามทักษะที่ควรทบทวน',
-      ),
-      const EmptyView(
-        icon: Icons.insights_outlined,
-        title: 'ยังไม่มีข้อมูลทักษะ',
-        message: 'ความก้าวหน้าของแต่ละทักษะจะแสดงหลังมีผลการบ้านที่เผยแพร่แล้ว',
-      ),
+      const PracticePage(),
+      MasteryPage(onPractice: () => setState(() => _index = 1)),
     ];
     final body = IndexedStack(index: _index, children: pages);
 

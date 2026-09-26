@@ -8,6 +8,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/db/app_database.dart';
+import '../../ml/digit_recognizer.dart';
+import '../../ml/ml_providers.dart';
 import '../../platform/scan_pipeline.dart';
 import '../assignments/assignments_repository.dart';
 import '../classrooms/classroom.dart';
@@ -619,8 +621,40 @@ final scanUploadTriggerProvider = Provider<void Function()>((ref) {
   };
 });
 
-/// The on-device digit reader (DESIGN §12); null until a model is loaded.
-final digitReaderProvider = Provider<DigitReader?>((ref) => null);
+/// The on-device digit reader (DESIGN §12): reads every crop that carries
+/// a `cnnInput` with the installed model. Null where no model can run
+/// (web preview, desktop tests); with no model downloaded yet it reads
+/// nothing and the scan goes up without `cnn`.
+final digitReaderProvider = Provider<DigitReader?>((ref) {
+  if (ref.watch(digitModelRunnerFactoryProvider) == null) return null;
+  return (crops) async {
+    final recognizer = await ref.read(digitRecognizerProvider.future);
+    if (recognizer == null) return const {};
+    return readNumericCrops(recognizer, crops);
+  };
+});
+
+/// Runs [recognizer] on the numeric crops of a page (those with a
+/// `cnnInput` of the model's input size). An abstained box maps to
+/// [CnnReading.abstained].
+Future<Map<String, CnnReading>> readNumericCrops(
+  DigitRecognizer recognizer,
+  PageCrops crops,
+) async {
+  final inputs = {
+    for (final c in crops.regions)
+      if (c.cnnInput case final input?
+          when input.length == recognizer.spec.inputLength)
+        c.regionId: input,
+  };
+  final readings = await recognizer.readAll(inputs);
+  return {
+    for (final MapEntry(:key, :value) in readings.entries)
+      key: value.answered
+          ? CnnReading(text: value.text, confidence: value.confidence)
+          : const CnnReading.abstained(),
+  };
+}
 
 final scanProcessorProvider = Provider<ScanProcessor>(
   (ref) => ScanProcessor(

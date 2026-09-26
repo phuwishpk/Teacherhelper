@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../ml/ml_providers.dart';
 import '../../platform/scan_pipeline.dart';
 import '../classrooms/classroom.dart';
 import '../upload_queue/upload_queue_providers.dart';
@@ -44,6 +45,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // A newer digit model is fetched in the background; scanning goes on
+    // with the cached one (or none) meanwhile.
+    syncDigitModelInBackground(ref);
     if (_processor.isSupported) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openCamera();

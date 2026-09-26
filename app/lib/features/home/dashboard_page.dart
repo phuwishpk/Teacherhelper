@@ -5,12 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/user.dart';
 import '../../core/router/app_router.dart';
 import '../assignments/assignments_providers.dart';
+import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../dashboard/teacher_overview.dart';
+import '../review/review_providers.dart';
 import 'ai_key_card.dart';
 
 /// Teacher landing page: greeting, the Gemini API key card (DESIGN §10.1),
-/// overview counts and the getting-started steps that mirror the main flow
-/// in DESIGN §4.
+/// live overview counts (classrooms, assignments, answers waiting for
+/// review, open appeals, practice drafts), shortcuts to the Phase 6
+/// dashboards (§14.3) and the getting-started steps of DESIGN §4.
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({
     super.key,
@@ -26,13 +30,19 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final classroomCount = ref.watch(classroomsProvider).value?.length ?? 0;
-    final assignments = ref.watch(assignmentsProvider).value ?? const [];
-    final assignmentCount = assignments.length;
-    final reviewCount = assignments.fold<int>(
+    final classrooms = ref.watch(classroomsProvider);
+    final assignments = ref.watch(assignmentsProvider);
+    final awaitingReview = ref.watch(awaitingReviewCountProvider);
+    final appeals = ref.watch(openAppealsProvider);
+    final drafts = ref.watch(draftPracticeCountProvider);
+    final studentCount = classrooms.value?.fold<int?>(
       0,
-      (sum, a) => sum + (a.needsReviewCount ?? 0),
+      (sum, c) =>
+          sum == null || c.studentCount == null ? null : sum + c.studentCount!,
     );
+    final openAssignments = assignments.value
+        ?.where((a) => !a.isDraft && a.status != 'closed')
+        .length;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
@@ -62,29 +72,95 @@ class DashboardPage extends ConsumerWidget {
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                _StatTile(
-                  icon: Icons.groups_outlined,
-                  label: 'ห้องเรียน',
-                  value: classroomCount,
-                  onTap: () => onNavigate(1),
-                ),
-                const SizedBox(width: 12),
-                _StatTile(
-                  icon: Icons.assignment_outlined,
-                  label: 'การบ้าน',
-                  value: assignmentCount,
-                  onTap: () => onNavigate(2),
-                ),
-                const SizedBox(width: 12),
-                _StatTile(
-                  icon: Icons.rate_review_outlined,
-                  label: 'รอตรวจทาน',
-                  value: reviewCount,
-                  onTap: () => onNavigate(3),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, box) {
+                final columns = box.maxWidth >= 600 ? 5 : 3;
+                const gap = 8.0;
+                final width = (box.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final tile in [
+                      _StatTile(
+                        key: const ValueKey('stat_classrooms'),
+                        icon: Icons.groups_outlined,
+                        label: 'ห้องเรียน',
+                        value: classrooms.whenData((l) => l.length),
+                        detail: studentCount == null
+                            ? null
+                            : 'นักเรียน $studentCount คน',
+                        onTap: () => onNavigate(1),
+                      ),
+                      _StatTile(
+                        key: const ValueKey('stat_assignments'),
+                        icon: Icons.assignment_outlined,
+                        label: 'การบ้าน',
+                        value: assignments.whenData((l) => l.length),
+                        detail: openAssignments == null
+                            ? null
+                            : 'เปิดอยู่ $openAssignments',
+                        onTap: () => onNavigate(2),
+                      ),
+                      _StatTile(
+                        key: const ValueKey('stat_review'),
+                        icon: Icons.rate_review_outlined,
+                        label: 'ข้อรอตรวจทาน',
+                        value: awaitingReview,
+                        onTap: () => onNavigate(3),
+                      ),
+                      _StatTile(
+                        key: const ValueKey('stat_appeals'),
+                        icon: Icons.feedback_outlined,
+                        label: 'คำขอตรวจใหม่',
+                        value: appeals.whenData((l) => l.length),
+                        onTap: () => context.push(AppRoutes.appeals),
+                      ),
+                      if (drafts.value != null || drafts.isLoading)
+                        _StatTile(
+                          key: const ValueKey('stat_practice_drafts'),
+                          icon: Icons.fitness_center_outlined,
+                          label: 'ข้อฝึกรออนุมัติ',
+                          value: drafts.whenData((n) => n ?? 0),
+                          onTap: () => context.push(AppRoutes.practiceBank),
+                        ),
+                    ])
+                      SizedBox(width: width, child: tile),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            Text('ติดตามผลการเรียน', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.fitness_center_outlined),
+                    title: const Text('คลังแบบฝึกและลิงก์ทบทวน'),
+                    subtitle: const Text(
+                      'ให้ AI ร่างข้อฝึกตามทักษะ ตรวจแล้วอนุมัติให้นักเรียนใช้',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(AppRoutes.practiceBank),
+                  ),
+                  for (final c in classrooms.value ?? const <Classroom>[]) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.grid_on_outlined),
+                      title: Text('ทักษะของห้อง ${c.name}'),
+                      subtitle: const Text(
+                        'heatmap นักเรียน × ทักษะ และจุดอ่อนรายคน',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () =>
+                          context.push(AppRoutes.classroomMastery(c.id)),
+                    ),
+                  ],
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             Text('เริ่มต้นใช้งาน', style: theme.textTheme.titleMedium),
@@ -134,41 +210,65 @@ class DashboardPage extends ConsumerWidget {
 
 class _StatTile extends StatelessWidget {
   const _StatTile({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
     required this.onTap,
+    this.detail,
   });
 
   final IconData icon;
   final String label;
-  final int value;
+  final AsyncValue<int> value;
+  final String? detail;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Expanded(
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-            child: Column(
-              children: [
-                Icon(icon, color: theme.colorScheme.primary),
-                const SizedBox(height: 8),
-                Text('$value', style: theme.textTheme.headlineMedium),
-                Text(
-                  label,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final text = switch (value) {
+      AsyncData(:final value) => '$value',
+      AsyncError() => '–',
+      _ => '…',
+    };
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          child: Column(
+            children: [
+              Icon(icon, color: theme.colorScheme.primary),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
-              ],
-            ),
+              ),
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+              if (detail != null)
+                Text(
+                  detail!,
+                  style: muted,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
           ),
         ),
       ),

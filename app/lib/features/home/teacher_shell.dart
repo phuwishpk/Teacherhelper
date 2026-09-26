@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
@@ -41,6 +42,14 @@ const _railBreakpoint = 840.0;
 
 class _TeacherShellState extends ConsumerState<TeacherShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch a newer on-device digit model (DESIGN §9.8) while the teacher
+    // is online, so scanning later works offline with it.
+    syncDigitModelInBackground(ref);
+  }
 
   void _select(int index) => setState(() => _index = index);
 

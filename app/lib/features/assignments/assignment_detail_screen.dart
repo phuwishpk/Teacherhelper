@@ -230,6 +230,18 @@ class AssignmentDetailScreen extends ConsumerWidget {
                         onTap: () => context.push(AppRoutes.review(a.id)),
                       ),
                     ),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.analytics_outlined),
+                        title: const Text('วิเคราะห์ผล'),
+                        subtitle: const Text(
+                          'ข้อที่ผิดบ่อย ค่า p และ r และทักษะ × ประเภทข้อผิดพลาด',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(AppRoutes.assignmentAnalytics(a.id)),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 12),
                   AssignmentGoogleSection(assignment: a, classroom: classroom),
