@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -10,6 +11,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class StoreLearningResourceRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public function authorize(): bool
     {
         return true; // LearningResourcePolicy runs in the controller

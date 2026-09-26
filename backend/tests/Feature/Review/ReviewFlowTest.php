@@ -151,9 +151,10 @@ class ReviewFlowTest extends TestCase
         $after = $this->asUser($this->student)->getJson("/api/v1/student/results/{$submissionId}")->assertOk();
         $this->assertEquals(4, collect($after->json('data.responses'))->firstWhere('type', 'open')['final_score']);
         $this->assertEquals(round($expectedTotal - $openRow['final_score'] + 4, 2), $after->json('data.total_score'));
+        // Sorted in PHP: on MariaDB an enum column orders by its declaration index, not alphabetically.
         $this->assertSame(
             ['ai_scored', 'appeal_accepted', 'bulk_approve', 'override'],
-            ScoreEvent::query()->distinct()->orderBy('action')->pluck('action')->intersect(['ai_scored', 'appeal_accepted', 'bulk_approve', 'override'])->values()->all(),
+            ScoreEvent::query()->distinct()->pluck('action')->intersect(['ai_scored', 'appeal_accepted', 'bulk_approve', 'override'])->sort()->values()->all(),
         );
     }
 }

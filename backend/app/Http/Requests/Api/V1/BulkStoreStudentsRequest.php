@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -10,6 +11,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class BulkStoreStudentsRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public const MAX_ROWS = 100;
 
     public function authorize(): bool

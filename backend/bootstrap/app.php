@@ -2,7 +2,9 @@
 
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -26,11 +28,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // Named limiter defined in AppServiceProvider; auth routes add a stricter one.
         $middleware->throttleApi();
 
-        // Sanctum token abilities (DESIGN §7.4: `teacher` vs `student`) and the
-        // account-status check that runs after authentication on every API route.
+        // Security headers on every response, API and Filament alike (DESIGN §16.1).
+        $middleware->append(SecurityHeaders::class);
+
+        // Role + Sanctum token ability (DESIGN §7.4: `teacher` vs `student`) and
+        // the account-status check that runs after authentication on every API route.
         $middleware->alias([
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
+            'role' => EnsureRole::class,
             'active' => EnsureUserIsActive::class,
         ]);
 

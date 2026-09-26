@@ -12,11 +12,18 @@ class QueueWorkCommandTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * queue:work exits 12 (memory limit) instead of 0 once the process holds
+     * more than --memory MB; a coverage run (pcov, CI) keeps the whole suite's
+     * line data in this process, so the pass is given headroom.
+     */
+    private const MEMORY = ['--memory' => 1024];
+
     public function test_it_dispatches_the_heartbeat_before_working_the_queue(): void
     {
         Queue::fake();
 
-        $this->artisan('eduvision:queue-work')->assertSuccessful();
+        $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
 
         Queue::assertPushed(QueueHeartbeatJob::class, 1);
     }
@@ -28,7 +35,7 @@ class QueueWorkCommandTest extends TestCase
         config(['queue.default' => 'database']);
         $this->assertNull(Cache::get(QueueHeartbeatJob::CACHE_KEY));
 
-        $this->artisan('eduvision:queue-work')->assertSuccessful();
+        $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
 
         $this->assertDatabaseCount('jobs', 0);
         $this->assertDatabaseCount('failed_jobs', 0);

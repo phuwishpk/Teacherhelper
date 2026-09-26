@@ -235,7 +235,8 @@ class WorksheetPrintsTest extends TestCase
         config(['eduvision.qr_signing_key' => null]);
         // Resolving WorksheetPdfRenderer -> QrSigner throws before handle()
         // runs; the worker hands that exception to failed().
-        $this->artisan('queue:work', ['--queue' => 'pdf', '--stop-when-empty' => true])->assertSuccessful();
+        // --memory: a coverage run (pcov) holds the whole suite in this process; see QueueWorkCommandTest.
+        $this->artisan('queue:work', ['--queue' => 'pdf', '--stop-when-empty' => true, '--memory' => 1024])->assertSuccessful();
 
         $this->asUser($teacher)->getJson("/api/v1/worksheet-prints/{$id}")
             ->assertOk()

@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** POST /google-submissions/{id}/return {reason} (DESIGN §18.6). */
 class GoogleReturnRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public function authorize(): bool
     {
         return true; // ClassroomSubmissionImportPolicy runs in the controller

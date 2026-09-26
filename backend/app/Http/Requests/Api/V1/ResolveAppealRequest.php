@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use App\Models\Appeal;
 use App\Models\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -15,6 +16,8 @@ use Illuminate\Validation\Rule;
  */
 class ResolveAppealRequest extends FormRequest
 {
+    use ValidatesAfterAuthorization;
+
     public function authorize(): bool
     {
         return true; // AppealPolicy::resolve runs in the controller

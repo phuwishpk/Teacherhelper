@@ -37,6 +37,9 @@ class GoogleSubmissionController extends Controller
             ->whereIn('assignment_id', AssignmentController::ownQuery($request)->select('id'))
             ->findOrFail($id);
         Gate::authorize('update', $import);
+        // Validation is deferred until after the policy (ValidatesAfterAuthorization);
+        // it must still run before anything is sent to Google.
+        $reason = (string) $request->validated('reason');
 
         if (! $import->canReturnForRetake()) {
             throw new ApiException(
@@ -54,7 +57,7 @@ class GoogleSubmissionController extends Controller
         );
 
         $import->state = ClassroomSubmissionImport::STATE_RETURNED_FOR_RETAKE;
-        $import->retake_reason = (string) $request->validated('reason');
+        $import->retake_reason = $reason;
         $import->last_error = null;
         $import->save();
         RetakeRequested::dispatch($import->id);
