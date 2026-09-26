@@ -1635,6 +1635,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 - ใบงานปกติพิมพ์แยกรายคน QR มี `student_id` (§5.4) นักเรียนทำบนกระดาษที่ครูแจกแล้วถ่ายรูปส่งใน Classroom ได้ตามปกติ
 - **ใบงานสำรอง** (แนบใน Classroom สำหรับคนที่ทำใบงานหาย) ใช้ QR แบบไม่ระบุคน `EV1.{assignment_id}.0.{page}.{layout_version}.{sig}` (`student_id = 0`) และไม่มีชื่อบนหัวกระดาษ
 - ตอนรับสแกนจาก Classroom server หาตัวนักเรียนตามลำดับ: (1) `student_id` ใน QR ถ้าไม่ใช่ 0 (2) นักเรียนที่จับคู่กับ `userId` ของ submission ถ้า (1) และ (2) ไม่ตรงกัน ให้รับไว้ตาม QR และติดป้าย `identity_mismatch` ให้ครูดูในคิวตรวจทาน
+- **แถวใน `classroom_submission_imports` เป็นของ "คนที่กดส่งใน Classroom"** (นักเรียนที่จับคู่กับ `userId`) ไม่ใช่ของคนใน QR เมื่อสองคนนี้ต่างกัน ส่วน QR ตัดสินเฉพาะว่าคำตอบเข้า submission ของใคร (ปรับ 26 ก.ย. 2569 หลังพบว่าการเก็บแถวไว้กับคนใน QR ทำให้คะแนนถูกส่งไปที่งานของเพื่อนร่วมห้อง) ถ้าบัญชีที่ส่งยังไม่จับคู่กับใคร แถวจึงเป็นของคนใน QR
 - QR ที่ `student_id = 0` รับได้**เฉพาะ** `source = classroom` ที่มี `google_submission_id` ของงานนั้นจริง ถ้าสแกนด้วยกล้องปกติตอบ 422 `code: student_unknown`
 
 ### 18.4 Schema ที่เพิ่ม
@@ -1738,6 +1739,8 @@ ALTER TABLE scans
 `POST /scans` (§9.4) รับ field เพิ่มใน `meta`: `source` (`camera` เป็นค่าเริ่มต้น หรือ `classroom`) และ `google_submission_id` เมื่อรับสำเร็จ แถวใน `classroom_submission_imports` เปลี่ยนเป็น `imported`
 
 **ตอนเผยแพร่**: listener ของ `SubmissionPublished` ส่ง `PushClassroomGradeJob` ถ้าการบ้านนั้นโพสต์ลง Classroom แล้วและนักเรียนจับคู่ได้ job หา submission ของนักเรียนใน courseWork นั้น ตั้ง `assignedGrade` แล้ว `return` retry ตามปกติของ queue ถ้าล้มครบให้ state `grade_failed` พร้อม `last_error` และแสดงในแอปครู
+
+**กันคะแนนไปผิดคน** (26 ก.ย. 2569): ก่อนเรียก Google job ต้องยืนยันว่า `google_user_id` ของแถว import ที่ผูกกับนักเรียนคนนั้น **ตรงกับ** `classroom_students.google_user_id` ของนักเรียนคนเดียวกัน ถ้านักเรียนยังไม่จับคู่บัญชี หรือแถวมาจากบัญชีอื่น (กรณี `identity_mismatch`) ให้จบเป็น `grade_failed` ทันทีโดยไม่เรียก Google พร้อมข้อความไทยบอกครูให้ไปจับคู่บัญชีแล้วกด "ส่งคะแนนกลับอีกครั้ง" (`google-grades/retry`) คะแนนจึงไปถึงเฉพาะ submission ของเจ้าของคะแนนเท่านั้น และการเรียก Google ที่ยังตอบ 401 หลังขอ token ใหม่แล้วจะตั้ง `google_accounts.last_error = invalid_grant` ให้ `GET /google/status` รายงาน `needs_reconnect`
 
 ### 18.7 แอป
 
