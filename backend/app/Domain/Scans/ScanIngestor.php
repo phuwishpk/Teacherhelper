@@ -50,7 +50,9 @@ use Throwable;
  * the student matched to the submitter's Google account (422 student_unknown
  * while unmatched). A QR naming another student than the submitter is
  * accepted by the QR and its answers are flagged identity_mismatch. The
- * import row then becomes `imported`.
+ * import row then becomes `imported` and stays the submitter's: only when
+ * nobody else is matched to the submitter's account is it filed under the
+ * QR's student, so a grade push never reaches a classmate's submission.
 
  * All changes to one submission run under its row lock, so pages of the same
  * student uploaded at the same moment apply one after the other.
@@ -89,12 +91,12 @@ final class ScanIngestor
             );
         }
 
-        [$studentId, $identityMismatch, $import] = $this->resolveStudent($qr, $assignment, $meta);
+        [$studentId, $identityMismatch, $import, $importStudentId] = $this->resolveStudent($qr, $assignment, $meta);
         $matched = LayoutPageMatcher::match($page, $meta->regions, $assignment);
         $files = $this->validatedFiles($request, $meta, $page);
 
         try {
-            [$scan, $queued, $stalePending] = $this->store($user, $assignment, $qr, $studentId, $identityMismatch, $import, $meta, $matched, $files);
+            [$scan, $queued, $stalePending] = $this->store($user, $assignment, $qr, $studentId, $identityMismatch, $import, $importStudentId, $meta, $matched, $files);
         } catch (UniqueConstraintViolationException $e) {
             // The same client_scan_id raced in on a parallel request; answer as a retry.
             $replay = $this->replay($user, $meta->clientScanId);
@@ -235,14 +237,14 @@ final class ScanIngestor
     /**
      * Whose page this is (DESIGN §18.3).
      *
-     * @return array{0: int, 1: bool, 2: ClassroomSubmissionImport|null} student id, identity mismatch, import row
+     * @return array{0: int, 1: bool, 2: ClassroomSubmissionImport|null, 3: int|null} student id, identity mismatch, import row, student the import row is filed under
      */
     private function resolveStudent(WorksheetQr $qr, Assignment $assignment, ScanMeta $meta): array
     {
         if (! $meta->fromClassroom()) {
             $this->assertStudentEnrolled($qr, $assignment);
 
-            return [$qr->studentId, false, null];
+            return [$qr->studentId, false, null, null];
         }
 
         $import = ClassroomSubmissionImport::query()
@@ -272,12 +274,16 @@ final class ScanIngestor
                 );
             }
 
-            return [$submitter, false, $import];
+            return [$submitter, false, $import, $submitter];
         }
 
         $this->assertStudentEnrolled($qr, $assignment);
 
-        return [$qr->studentId, $submitter !== null && $submitter !== $qr->studentId, $import];
+        // The Classroom submission belongs to whoever is matched to the
+        // account that handed it in; the QR only decides whose scan this is.
+        $mismatch = $submitter !== null && $submitter !== $qr->studentId;
+
+        return [$qr->studentId, $mismatch, $import, $mismatch ? $submitter : $qr->studentId];
     }
 
     private function assertStudentEnrolled(WorksheetQr $qr, Assignment $assignment): void
@@ -386,7 +392,7 @@ final class ScanIngestor
      * @param  array<string, UploadedFile>  $files
      * @return array{0: Scan, 1: int, 2: list<int>}
      */
-    private function store(User $user, Assignment $assignment, WorksheetQr $qr, int $studentId, bool $identityMismatch, ?ClassroomSubmissionImport $import, ScanMeta $meta, array $matched, array $files): array
+    private function store(User $user, Assignment $assignment, WorksheetQr $qr, int $studentId, bool $identityMismatch, ?ClassroomSubmissionImport $import, ?int $importStudentId, ScanMeta $meta, array $matched, array $files): array
     {
         // Outside the transaction: a concurrent first scan of the same student
         // may create the row first, and createOrFirst then reads the committed one.
@@ -399,7 +405,7 @@ final class ScanIngestor
         $written = [];
         $swap = null;
         try {
-            $result = DB::transaction(function () use ($user, $assignment, $qr, $studentId, $identityMismatch, $import, $meta, $matched, $files, $submissionId, &$written, &$swap) {
+            $result = DB::transaction(function () use ($user, $assignment, $qr, $identityMismatch, $import, $importStudentId, $meta, $matched, $files, $submissionId, &$written, &$swap) {
                 $submission = Submission::query()->lockForUpdate()->findOrFail($submissionId);
                 $published = $submission->isPublished();
 
@@ -438,10 +444,12 @@ final class ScanIngestor
                 }
 
                 if ($import !== null) {
-                    // §18.6: the Classroom submission now has a scan, filed under this student.
+                    // §18.6: the Classroom submission now has a scan. The row stays
+                    // the submitter's on an identity mismatch (§18.3): the QR's
+                    // student got the scan, not the classmate's Google submission.
                     ClassroomSubmissionImport::query()->whereKey($import->id)->update([
                         'state' => ClassroomSubmissionImport::STATE_IMPORTED,
-                        'student_id' => $studentId,
+                        'student_id' => $importStudentId,
                         'updated_at' => now(),
                     ]);
                 }

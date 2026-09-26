@@ -115,6 +115,82 @@ class GradePushTest extends TestCase
         $this->assertStringContainsString('ส่งคืนงานไม่ได้', (string) $row->last_error);
     }
 
+    public function test_a_sheet_inside_a_classmates_hand_in_grades_only_the_students_own_submission(): void
+    {
+        // Student 2 (g-2) handed in a photo of student 1's sheet: the ingestor
+        // filed the scan under student 1 (identity_mismatch) and left the import
+        // row with student 2. Publishing student 1 must not grade sub-2.
+        $submission = $this->reviewedSubmission(0);
+        $classmates = $this->importFor(1, 'sub-2');
+        $this->fakeGoogle([
+            $this->submissionsUrl().'/sub-1:return' => Http::response([]),
+            $this->submissionsUrl().'/sub-1*' => Http::response(['id' => 'sub-1', 'state' => 'TURNED_IN', 'assignedGrade' => 5, 'updateTime' => 'T2']),
+            $this->submissionsUrl().'*' => Http::response(['studentSubmissions' => [['id' => 'sub-1', 'userId' => 'g-1', 'state' => 'TURNED_IN', 'updateTime' => 'T1']]]),
+        ]);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
+
+        $this->assertStringContainsString('userId=g-1', $this->sentTo('/studentSubmissions?')[0]->url());
+        $this->assertCount(1, $this->sentTo('/studentSubmissions/sub-1?', 'PATCH'));
+        $this->assertCount(0, $this->sentTo('/sub-2'), 'the classmate\'s submission is untouched');
+        $classmates->refresh();
+        $this->assertSame([ClassroomSubmissionImport::STATE_IMPORTED, $this->students[1]->id, null], [$classmates->state, $classmates->student_id, $classmates->grade_pushed_at]);
+        $this->assertSame(ClassroomSubmissionImport::STATE_GRADED, ClassroomSubmissionImport::query()->where('google_submission_id', 'sub-1')->value('state'));
+    }
+
+    public function test_a_row_handed_in_by_another_account_is_never_graded(): void
+    {
+        // A row filed under student 1 that Google says was handed in by g-2
+        // (a pre-fix identity_mismatch scan, or a roster re-matched since).
+        $submission = $this->reviewedSubmission(0);
+        $import = ClassroomSubmissionImport::create([
+            'assignment_id' => $this->assignment->id,
+            'google_submission_id' => 'sub-2',
+            'google_user_id' => 'g-2',
+            'student_id' => $this->students[0]->id,
+            'state' => ClassroomSubmissionImport::STATE_IMPORTED,
+            'attachments' => [],
+            'google_update_time' => 'T1',
+        ]);
+        $this->fakeGoogle();
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
+
+        Http::assertNothingSent();
+        $import->refresh();
+        $this->assertSame(ClassroomSubmissionImport::STATE_GRADE_FAILED, $import->state);
+        $this->assertStringContainsString('identity_mismatch', (string) $import->last_error);
+        $this->assertNull($import->grade_pushed_at);
+        $this->assertNoSecretInLogs();
+    }
+
+    public function test_a_row_of_an_unmatched_student_waits_for_the_roster_match(): void
+    {
+        // Student 3 is not matched; a scan of their QR arrived inside g-3's
+        // hand-in and was filed under them. No grade until the teacher confirms g-3 is student 3.
+        $submission = $this->reviewedSubmission(2);
+        $import = $this->importFor(2, 'sub-3');
+        $this->fakeGoogle([
+            $this->submissionsUrl().'/sub-3:return' => Http::response([]),
+            $this->submissionsUrl().'/sub-3*' => Http::response(['id' => 'sub-3', 'state' => 'TURNED_IN', 'updateTime' => 'T2']),
+        ]);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
+
+        Http::assertNothingSent();
+        $import->refresh();
+        $this->assertSame(ClassroomSubmissionImport::STATE_GRADE_FAILED, $import->state);
+        $this->assertStringContainsString('จับคู่', (string) $import->last_error);
+
+        // Matched: the retry sends the grade to that very submission.
+        ClassroomStudent::query()->where('student_id', $this->students[2]->id)->update(['google_user_id' => 'g-3']);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/google-grades/retry")
+            ->assertStatus(202)
+            ->assertJsonPath('data.queued', 1);
+        $this->assertCount(1, $this->sentTo('/studentSubmissions/sub-3?', 'PATCH'));
+        $this->assertSame([ClassroomSubmissionImport::STATE_GRADED, null], [$import->refresh()->state, $import->last_error]);
+    }
+
     public function test_nothing_is_sent_for_an_unmatched_student_or_an_assignment_not_posted(): void
     {
         $this->fakeGoogle();

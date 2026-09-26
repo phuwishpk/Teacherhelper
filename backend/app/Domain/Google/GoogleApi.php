@@ -57,8 +57,16 @@ final class GoogleApi
             fn () => $tokens->get($account),
             fn () => $tokens->forget($account),
             function (GoogleApiException $e) use ($account) {
-                if ($e->kind === GoogleApiException::SCOPE_MISSING) {
-                    GoogleAccessTokens::markNeedsReconnect($account, GoogleAccount::ERROR_SCOPE_MISSING);
+                // A 401 that survives the one token retry means the grant is
+                // gone, not just the cached access token: report it like a
+                // failed refresh so GET /google/status says needs_reconnect.
+                $error = match ($e->kind) {
+                    GoogleApiException::INVALID_GRANT => GoogleAccount::ERROR_INVALID_GRANT,
+                    GoogleApiException::SCOPE_MISSING => GoogleAccount::ERROR_SCOPE_MISSING,
+                    default => null,
+                };
+                if ($error !== null) {
+                    GoogleAccessTokens::markNeedsReconnect($account, $error);
                 }
             },
         );

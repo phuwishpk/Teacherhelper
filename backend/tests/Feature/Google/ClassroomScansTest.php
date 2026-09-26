@@ -21,8 +21,8 @@ use Tests\TestCase;
  * POST /scans with meta.source = classroom (DESIGN §18.3, §18.6): the
  * submission must belong to the assignment's courseWork, the spare sheet
  * (QR student_id 0) takes the matched submitter, a QR of another student is
- * accepted by the QR and flagged identity_mismatch, and the import row
- * becomes `imported`.
+ * accepted by the QR and flagged identity_mismatch while the import row stays
+ * the submitter's, and the import row becomes `imported`.
  */
 class ClassroomScansTest extends TestCase
 {
@@ -117,7 +117,13 @@ class ClassroomScansTest extends TestCase
         $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/review-queue")
             ->assertOk()
             ->assertJsonPath('data.0.identity_mismatch', true);
-        $this->assertSame($this->student->id, $this->import->refresh()->student_id, 'filed under the QR');
+
+        // The Classroom submission is still the classmate's (the row was synced
+        // before the match, so it takes the live roster), never the QR's student:
+        // otherwise the grade push would write this student's score onto it.
+        $this->import->refresh();
+        $this->assertSame([ClassroomSubmissionImport::STATE_IMPORTED, $this->classmate->id], [$this->import->state, $this->import->student_id]);
+        $this->assertNull(Submission::query()->where('student_id', $this->classmate->id)->first(), 'the classmate got no submission from this sheet');
     }
 
     public function test_the_identity_flag_survives_a_confirmed_rescan_of_a_published_page(): void

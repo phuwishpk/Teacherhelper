@@ -79,8 +79,9 @@ final class GoogleRoster
                     ->update(['google_user_id' => $match['google_user_id'], 'google_email' => $emails[$match['google_user_id']] ?? null]);
             }
 
-            // Submissions not scanned or graded yet follow the new pairs (the
-            // student of a scanned one is whoever the scans were filed under).
+            // Submissions not scanned or graded yet follow the new pairs; a
+            // scanned one keeps the student it was filed under at scan time
+            // (ClassroomGradePusher checks the account again before grading).
             $assignmentIds = $classroom->assignments()->pluck('id');
             foreach ($matches as $match) {
                 ClassroomSubmissionImport::query()

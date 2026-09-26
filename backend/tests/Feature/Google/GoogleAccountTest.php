@@ -268,6 +268,28 @@ class GoogleAccountTest extends TestCase
         $this->assertCount(2, $this->sentTo('oauth2.googleapis.com/token'));
     }
 
+    public function test_a_401_that_survives_the_token_retry_marks_the_account(): void
+    {
+        $teacher = $this->makeTeacher();
+        $this->connectGoogle($teacher);
+        $this->fakeGoogle(['classroom.googleapis.com/v1/courses*' => Http::response(self::googleError(401, 'UNAUTHENTICATED', 'Request had invalid authentication credentials.'), 401)]);
+
+        $this->asUser($teacher)->getJson('/api/v1/google/courses')
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'google_reconnect_required');
+
+        $this->assertCount(2, $this->sentTo('classroom.googleapis.com/v1/courses'), 'one retry with a fresh token');
+        $this->assertCount(2, $this->sentTo('oauth2.googleapis.com/token'));
+        $this->asUser($teacher)->getJson('/api/v1/google/status')
+            ->assertJsonPath('data.needs_reconnect', true)
+            ->assertJsonPath('data.last_error', GoogleAccount::ERROR_INVALID_GRANT);
+
+        // Nothing more goes to Google until the teacher connects again.
+        $this->asUser($teacher)->getJson('/api/v1/google/courses')->assertStatus(409)->assertJsonPath('code', 'google_reconnect_required');
+        $this->assertCount(2, $this->sentTo('classroom.googleapis.com/v1/courses'));
+        $this->assertNoSecretInLogs();
+    }
+
     public function test_not_connected_unreachable_and_role_checks(): void
     {
         $teacher = $this->makeTeacher();
