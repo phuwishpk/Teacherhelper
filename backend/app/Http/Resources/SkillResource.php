@@ -28,4 +28,20 @@ class SkillResource extends JsonResource
             'grade_level' => $this->grade_level,
         ];
     }
+
+    /**
+     * The compact form embedded in Phase 6 payloads: {id, code, name, subject_id, grade_level}.
+     *
+     * @return array{id: int, code: string, name: string, subject_id: int, grade_level: int|null}
+     */
+    public static function summary(Skill $skill): array
+    {
+        return [
+            'id' => $skill->id,
+            'code' => $skill->code,
+            'name' => $skill->name,
+            'subject_id' => $skill->subject_id,
+            'grade_level' => $skill->grade_level,
+        ];
+    }
 }

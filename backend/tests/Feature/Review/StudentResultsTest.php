@@ -104,10 +104,10 @@ class StudentResultsTest extends TestCase
         $this->asGuest()->getJson('/api/v1/student/results')->assertUnauthorized();
     }
 
-    public function test_mastery_is_an_empty_placeholder_for_now(): void
+    public function test_mastery_is_empty_until_a_question_carries_a_skill(): void
     {
         $this->asUser($this->students[0])->getJson('/api/v1/student/mastery')
             ->assertOk()
-            ->assertExactJson(['data' => [], 'meta' => ['available' => false]]);
+            ->assertExactJson(['data' => [], 'meta' => ['available' => true, 'weaknesses' => []]]);
     }
 }

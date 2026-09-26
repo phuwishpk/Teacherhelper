@@ -48,6 +48,12 @@ class ClassroomPolicy
         return $this->owns($user, $classroom);
     }
 
+    /** The student x skill mastery heatmap (§9.6, §14.3). */
+    public function viewMastery(User $user, Classroom $classroom): bool
+    {
+        return $this->owns($user, $classroom);
+    }
+
     private function owns(User $user, Classroom $classroom): bool
     {
         return $this->isSchoolTeacher($user)

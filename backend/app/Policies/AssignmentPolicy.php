@@ -61,6 +61,12 @@ class AssignmentPolicy
         return self::owns($user, $assignment);
     }
 
+    /** Item statistics and the error heatmap (§9.6, §14.3). */
+    public function viewAnalytics(User $user, Assignment $assignment): bool
+    {
+        return self::owns($user, $assignment);
+    }
+
     public static function owns(User $user, Assignment $assignment): bool
     {
         return self::isSchoolTeacher($user)

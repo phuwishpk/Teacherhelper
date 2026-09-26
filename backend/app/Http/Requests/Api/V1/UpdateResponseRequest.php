@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * PATCH /api/v1/responses/{id} {final_score, final_understanding,
- * final_error_types?, explanation?, reason?} (DESIGN §9.5). The score's
+ * final_error_types?, explanation?, reason?, answer_text?} (DESIGN §9.5). The score's
  * range and step depend on the question (ScoreRules, in the controller);
  * "reason is required when the score differs from ai_score" is checked under
  * the row lock (ResponseReviewer).
@@ -33,6 +33,8 @@ class UpdateResponseRequest extends FormRequest
             'final_error_types.*' => ['string', 'distinct', Rule::in(ScoreRules::ERROR_TYPES)],
             'explanation' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'reason' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            // The teacher's reading of a numeric box (training sample label, DESIGN §8.6).
+            'answer_text' => ['sometimes', 'nullable', 'string', 'max:32'],
         ];
     }
 
@@ -54,6 +56,7 @@ class UpdateResponseRequest extends FormRequest
             'final_error_types.*.distinct' => 'ประเภทข้อผิดพลาดซ้ำกัน',
             'explanation.max' => 'คำอธิบายยาวเกิน 2000 ตัวอักษร',
             'reason.max' => 'เหตุผลยาวเกิน 1000 ตัวอักษร',
+            'answer_text.max' => 'คำตอบที่อ่านได้ยาวเกิน 32 ตัวอักษร',
         ];
     }
 }
