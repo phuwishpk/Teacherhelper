@@ -113,7 +113,15 @@ class PracticeBankTest extends TestCase
         $this->assertSame(0, PracticeItem::query()->count());
         $this->assertSame(['invalid_output', 'invalid_output'], AiCall::query()->orderBy('id')->pluck('status')->all(), 'invalid output is retried once');
 
+        // Without any key (teacher or server) the endpoint refuses up front, like the other AI endpoints.
         config(['services.gemini.api_key' => '']);
+        Queue::fake();
+        $this->asUser($this->teacher)->postJson("/api/v1/skills/{$this->fractions->id}/practice-items/generate", ['count' => 3])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'ai_key_missing');
+        Queue::assertNothingPushed();
+
+        // A key removed while the job waited in the queue: the job ends with a log line only.
         $this->runJob(new GeneratePracticeItemsJob($this->fractions->id, (int) $this->teacher->school_id, $this->teacher->id, 3));
         $this->assertSame(0, PracticeItem::query()->count());
         $this->assertSame(2, AiCall::query()->count(), 'no call without a key');
@@ -195,6 +203,56 @@ class PracticeBankTest extends TestCase
         $student = $this->enrollStudent($this->classroom)['student'];
         $this->asUser($student)->patchJson($url, ['status' => 'approved'])->assertForbidden();
         $this->asUser($student)->getJson('/api/v1/practice-items')->assertForbidden();
+    }
+
+    public function test_the_content_of_an_approved_item_is_changed_only_by_a_subject_teacher(): void
+    {
+        $approvedAt = now()->subDay();
+        $item = $this->item(['status' => 'approved', 'approved_by' => $this->teacher->id, 'approved_at' => $approvedAt]);
+        $url = "/api/v1/practice-items/{$item->id}";
+        $colleague = $this->makeTeacher($this->teacher->school);
+
+        // A colleague refused approval cannot rewrite the approved item either: it stays as approved.
+        $edits = [
+            ['answer_key' => ['accepted' => ['2'], 'numeric' => ['value' => 2, 'abs_tol' => 0]]],
+            ['prompt_text' => '1 + 1 = ?'],
+            ['explanation' => 'คำอธิบายใหม่'],
+            ['answer_type' => 'short', 'answer_key' => ['accepted' => ['หนึ่ง']]],
+            ['status' => 'approved', 'explanation' => 'คำอธิบายใหม่'],
+        ];
+        foreach ($edits as $edit) {
+            $this->asUser($colleague)->patchJson($url, $edit)->assertForbidden()->assertJsonPath('code', 'subject_not_taught');
+        }
+        $item->refresh();
+        $this->assertSame(['approved', 'numeric', '3/4 + 1/4 = ?', 1, $this->teacher->id], [$item->status, $item->answer_type, $item->prompt_text, $item->answer_key['numeric']['value'], $item->approved_by]);
+        $this->assertSame($approvedAt->timestamp, $item->approved_at->timestamp);
+
+        // Sending the same content back (other key order, 1.0 for 1) is not an edit.
+        $this->asUser($colleague)->patchJson($url, [
+            'prompt_text' => '3/4 + 1/4 = ?',
+            'answer_key' => ['numeric' => ['abs_tol' => 0, 'value' => 1.0], 'accepted' => ['1', '4/4']],
+        ])->assertOk()->assertJsonPath('data.status', 'approved')->assertJsonPath('data.approved_by', $this->teacher->id);
+
+        // Taking it out of the pool first is allowed; the edit then waits for a new approval. Retiring keeps the stamp.
+        $this->asUser($colleague)->patchJson($url, ['status' => 'retired', 'explanation' => 'เลิกใช้'])->assertOk()->assertJsonPath('data.approved_by', $this->teacher->id);
+        $this->asUser($colleague)->patchJson($url, ['status' => 'draft', 'explanation' => 'แก้โดยครูวิทย์'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'draft')
+            ->assertJsonPath('data.approved_by', null)
+            ->assertJsonPath('data.explanation', 'แก้โดยครูวิทย์');
+        $this->asUser($colleague)->patchJson($url, ['explanation' => 'แก้อีกครั้งตอนเป็น draft'])->assertOk();
+        $this->asUser($this->teacher)->patchJson($url, ['status' => 'approved'])->assertOk()->assertJsonPath('data.approved_by', $this->teacher->id);
+
+        // A second maths teacher may change it and thereby re-approves it (approved_by/at become theirs).
+        $maths2 = $this->makeTeacher($this->teacher->school);
+        Assignment::factory()->for_classroom($this->makeClassroom($maths2))->create(['subject_id' => $this->math->id]);
+        $this->travel(1)->hours();
+        $this->asUser($maths2)->patchJson($url, ['prompt_text' => '3/4 + 1/4 เท่ากับเท่าไร'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.prompt_text', '3/4 + 1/4 เท่ากับเท่าไร')
+            ->assertJsonPath('data.approved_by', $maths2->id);
+        $this->assertSame(now()->timestamp, $item->refresh()->approved_at->timestamp);
     }
 
     public function test_review_links_are_managed_per_skill_and_school(): void

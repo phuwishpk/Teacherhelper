@@ -21,8 +21,9 @@ use Illuminate\Support\Facades\Log;
  * pays (GeminiKeyResolver), the app lists the bank again to see them.
  *
  * Transport errors retry with backoff. Output still invalid after the
- * gateway's retry, a rejected key or no key at all end the job with a log
- * line: the teacher can ask again or write items by hand.
+ * gateway's retry, a rejected key, or a key removed while the job waited
+ * in the queue (the endpoint refuses 422 ai_key_missing up front) end the
+ * job with a log line: the teacher can ask again or write items by hand.
  */
 class GeneratePracticeItemsJob implements ShouldQueue
 {

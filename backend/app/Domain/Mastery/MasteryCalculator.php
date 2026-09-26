@@ -119,7 +119,8 @@ final class MasteryCalculator
      * Observations of every answer of a published submission, one per skill
      * of the question (§14.2), observed at the time of publishing. Earlier
      * rows of the same answers are replaced. Not published (any more): the
-     * rows are removed instead, so a reopened submission stops counting.
+     * rows are removed instead, so a submission reopened by a confirmed
+     * rescan (SubmissionReopened) stops counting until its next publish.
      *
      * @return int observations written
      */

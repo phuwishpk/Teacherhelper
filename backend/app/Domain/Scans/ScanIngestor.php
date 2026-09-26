@@ -5,6 +5,7 @@ namespace App\Domain\Scans;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\QrSigningKeyMissing;
 use App\Domain\Worksheets\WorksheetQr;
+use App\Events\SubmissionReopened;
 use App\Exceptions\ApiException;
 use App\Jobs\GradeScanJob;
 use App\Models\Assignment;
@@ -197,8 +198,13 @@ final class ScanIngestor
         $scan->save();
 
         $identityMismatch = $this->readPendingIdentityMismatch($pendingDirectory);
+        $wasPublished = $submission->isPublished();
         $queued = $this->writer->write($submission, $scan, $assignment, $matched, new PendingCropSource($pendingDirectory), $user, $swap, identityMismatch: $identityMismatch);
         SubmissionStatus::refresh($submission, reopen: true);
+        if ($wasPublished) {
+            // After the commit (ShouldDispatchAfterCommit): mastery drops the rows of the reopened submission (§14.2).
+            SubmissionReopened::dispatch($submission->id, $submission->assignment_id, $submission->student_id);
+        }
 
         return [$scan, $queued, $stalePending, true];
     }

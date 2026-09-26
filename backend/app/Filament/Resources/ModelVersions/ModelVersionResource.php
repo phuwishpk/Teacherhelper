@@ -71,7 +71,7 @@ class ModelVersionResource extends Resource
                     ->disabledOn('edit'),
                 FileUpload::make('file_path')
                     ->label('ไฟล์ .tflite')
-                    ->helperText('float16 ไม่เกิน 2 MB ตาม DESIGN §12.2 (รับได้ถึง 8 MB)')
+                    ->helperText('float16 ไม่เกิน 2 MB ตาม DESIGN §12.2 (ฟอร์มรับได้ถึง 8 MB ถ้า upload_max_filesize ของ PHP อนุญาต ไม่งั้นใช้ artisan eduvision:register-model)')
                     ->disk(self::DISK)
                     ->directory(fn (Get $get) => 'models/'.($get('name') ?: ModelVersion::DIGIT_CRNN))
                     ->getUploadedFileNameForStorageUsing(fn (TemporaryUploadedFile $file, Get $get) => ($get('version') ?: 'upload').'.tflite')
