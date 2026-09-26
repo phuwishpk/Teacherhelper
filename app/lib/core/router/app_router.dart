@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/assignments/assignment.dart';
 import '../../features/assignments/assignment_detail_screen.dart';
 import '../../features/assignments/assignment_form_screen.dart';
+import '../../features/assignments/question.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
 import '../../features/appeals/appeals_screen.dart';
@@ -17,10 +18,17 @@ import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/dashboard/assignment_analytics_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/roster_matching_screen.dart';
 import '../../features/google_classroom/submissions_screen.dart';
 import '../../features/home/teacher_shell.dart';
+import '../../features/mastery/classroom_mastery_screen.dart';
+import '../../features/mastery/student_mastery_screen.dart';
+import '../../features/practice/practice_attempt_screen.dart';
+import '../../features/practice/practice_bank_screen.dart';
+import '../../features/practice/practice_page.dart';
+import '../../features/practice/skill_resources_screen.dart';
 import '../../features/results/result_detail_screen.dart';
 import '../../features/review/review_detail_screen.dart';
 import '../../features/review/review_labels.dart';
@@ -87,13 +95,34 @@ abstract final class AppRoutes {
 
   static const appeals = '/appeals';
 
+  /// Item analysis of one assignment (DESIGN §9.6, §14.3).
+  static String assignmentAnalytics(int id) => '/assignments/$id/analytics';
+
+  /// Student x skill mastery heatmap of a classroom (§14.3).
+  static String classroomMastery(int id) => '/classrooms/$id/mastery';
+
+  /// One student's skills and weaknesses, seen by the teacher.
+  static String studentMastery(int classroomId, int studentId) =>
+      '/classrooms/$classroomId/students/$studentId/mastery';
+
+  /// The school's practice bank (§14.1).
+  static const practiceBank = '/practice-bank';
+
+  /// Review links of a skill (`learning_resources`).
+  static String skillResources(int skillId) => '/skills/$skillId/resources';
+
+  /// Student: one practice item (§9.7).
+  static String studentPractice(int itemId) => '/student/practice/$itemId';
+
   /// Student: one published submission (§9.7).
   static String studentResult(int submissionId) =>
       '/student/results/$submissionId';
 
   /// Routes a signed-in student may open (everything else sends them home).
   static bool isStudentArea(String location) =>
-      location == student || location.startsWith('$student/results/');
+      location == student ||
+      location.startsWith('$student/results/') ||
+      location.startsWith('$student/practice/');
 
   static bool isPublic(String location) =>
       location == login ||
@@ -162,6 +191,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             ResultDetailScreen(submissionId: _id(state, 'sid')),
       ),
       GoRoute(
+        path: '/student/practice/:itemId',
+        builder: (context, state) => PracticeAttemptScreen(
+          itemId: _id(state, 'itemId'),
+          args: state.extra is PracticeAttemptArgs
+              ? state.extra as PracticeAttemptArgs
+              : null,
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const TeacherShell(),
       ),
@@ -197,6 +235,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'google-roster',
             builder: (context, state) =>
                 GoogleRosterScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'mastery',
+            builder: (context, state) =>
+                ClassroomMasteryScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'students/:sid/mastery',
+            builder: (context, state) => StudentMasteryScreen(
+              classroomId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+            ),
           ),
         ],
       ),
@@ -258,6 +308,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: 'analytics',
+            builder: (context, state) =>
+                AssignmentAnalyticsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
             path: 'google-submissions',
             builder: (context, state) =>
                 GoogleSubmissionsScreen(assignmentId: _id(state, 'id')),
@@ -294,6 +349,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.appeals,
         builder: (context, state) => const AppealsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.practiceBank,
+        builder: (context, state) => PracticeBankScreen(
+          initialSkill: state.extra is Skill ? state.extra as Skill : null,
+        ),
+      ),
+      GoRoute(
+        path: '/skills/:id/resources',
+        builder: (context, state) => SkillResourcesScreen(
+          skillId: _id(state, 'id'),
+          skill: state.extra is Skill ? state.extra as Skill : null,
+        ),
       ),
     ],
   );

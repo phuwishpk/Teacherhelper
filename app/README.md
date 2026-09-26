@@ -8,7 +8,8 @@
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs   # เมื่อแก้ตารางใน lib/core/db/app_database.dart
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000  # AVD
-flutter test && flutter analyze
+flutter test && flutter analyze   # test/ml/digit_model_smoke_test.dart รันโมเดลจริงเมื่อมี ml/models/digit_crnn/0.1.0/model.tflite
+                                  # และ ml/.venv (uv sync --extra train) ถ้าไม่มีอย่างใดอย่างหนึ่งจะข้าม
 flutter build apk --debug
 (cd android && ./gradlew :app:testDebugUnitTest)             # JVM test ของ RegionMath.kt (หลัง build ครั้งแรก)
 ```
@@ -98,7 +99,8 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
   อาจไม่ถูกนับเป็นหมึกเพราะเกณฑ์ Otsu แบ่งระหว่างเส้นขอบสีดำกับกระดาษ ต้องตรวจกับภาพจริงของ KICKOFF 2b
 - `mcq_fill` = สัดส่วนพิกเซลเข้มใน 70% ของรัศมี threshold ด้วย Otsu ของทั้งแถว (ไม่ให้ใกล้สีกระดาษเกิน 25 ระดับ)
 - `cnnInput` (เฉพาะกรอบ numeric) = grayscale 32×128 byte ตาม `ml/train/preprocess.py` (tight crop + fit to canvas)
-  ฝั่ง Dart ค่อย normalize `x = 1 - g/255` ตอนรันโมเดล (ขั้น digit reader) ตอนนี้ยังไม่แนบ `cnn` ใน meta
+  ฝั่ง Dart normalize `x = 1 - g/255` แล้วอ่านด้วยโมเดลที่ดาวน์โหลดไว้ (หัวข้อ Phase 5–6 ด้านล่าง) ผลไปเป็น `cnn` ใน meta
+  ถ้ายังไม่มีโมเดลในเครื่องจะไม่ส่ง `cnn`
 - ใบงานสำรอง (`student_id = 0`, §18.3) และบัตร login (`EVL1.`) ถูกปฏิเสธที่หน้าสแกนด้วยข้อความภาษาไทย
   ใบงานสำรองผ่านได้เฉพาะ `ScanProcessor.analyze(path, source: ScanSource.classroom(googleSubmissionId: ...))`
   (ไฟล์แนบจาก Google Classroom §18.2) ซึ่งเพิ่ม `source: "classroom"` และ `google_submission_id` ใน `meta` (§18.6)
@@ -186,6 +188,44 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
   widget test หน้าจับคู่ หน้ารายการ submission การ์ดตั้งค่า/ห้อง/การบ้าน), `test/results/retake_notice_test.dart`,
   JVM `AttachmentRasterizerTest.kt` ไม่มี test ไหนต่อ Google จริง ของจริงทดสอบตาม KICKOFF ส่วนที่ 6 ข้อ G7
 
+## ตัวอ่านตัวเลขบนเครื่อง แบบฝึก mastery และ dashboard (Phase 5–6, DESIGN §12, §14, §9.6–§9.8)
+
+- **โมเดล** (`lib/ml/`): `ModelRepository` เรียก `GET /ml/models/active?name=digit_crnn` (§9.8) เมื่อเปิด shell ของครูหรือหน้าสแกน
+  (`DigitModelUpdater`: เช็กซ้ำทุก 6 ชั่วโมง ถ้าล้มเหลวลองใหม่หลัง 2 นาที ไม่บล็อกการสแกน ทำงานต่อด้วยโมเดลที่มี) ดาวน์โหลดไปที่
+  `<app support>/models/digit_crnn/<version>-<sha8>.tflite` ตรวจ sha256 **ก่อน**เปลี่ยนไปใช้ (ไม่ตรง = ลบไฟล์ ใช้ตัวเดิมต่อ)
+  แล้วบันทึกแถว `model_cache` และเก็บ `metrics` ของเวอร์ชันนั้นไว้ข้างไฟล์ (`*.metrics.json`) เพื่ออ่านสัญญา decode ตอนออฟไลน์
+- **สัญญา decode** อ่านจาก `metrics` ของโมเดล (`DigitModelSpec.fromMetrics`, ค่าเดียวกับ `ml/models/digit_crnn/0.1.0/metrics.json`):
+  `charset`, `blank_index`, `timesteps`, `input.shape`, `decode.method = ctc_greedy`, `decode.confidence = emitting_mean_max_prob`,
+  `decode.abstain_below` ถ้าเป็น method/confidence อื่น แอปปฏิเสธโมเดลนั้น (ไม่ดาวน์โหลด ไม่โหลด)
+  `ctcGreedyDecode` (`lib/ml/ctc_decoder.dart`) ต้องให้ผลเท่ากับ `ml/train/charset.py::ctc_greedy_decode`: argmax ต่อ timestep
+  (เสมอกัน = index ต่ำสุด แบบ numpy), ยุบตัวซ้ำ, ตัด blank, confidence = ค่าเฉลี่ยของ max prob เฉพาะ timestep ที่ปล่อยตัวอักษร
+  (0.0 ถ้าไม่อ่านอะไรเลย) ต่ำกว่า `abstain_below` = ไม่ตอบ
+- **ต่อกับการสแกน**: `digitReaderProvider` (`features/scan/scan_processor.dart`) อ่านทุกกรอบที่มี `cnnInput` ขนาดตรงกับโมเดล
+  ผลใส่ `cnn: {text, confidence}` ใน `meta` ของ §9.4; ไม่ตอบ = `cnn: {}` (server ตีความเป็น "CNN ไม่ตอบ" กฎ D §11.8);
+  ไม่มีโมเดลในเครื่อง (ยังไม่เคยดาวน์โหลด, web preview, `flutter test`) = ไม่ส่ง `cnn` เลย
+  TFLite (`tflite_flutter` 0.12.1 = LiteRT, ใช้ CPU เท่านั้น ตัด `libtensorflowlite_gpu_jni.so` ออกใน `build.gradle.kts`)
+  มีเฉพาะใน build Android (`lib/ml/runner_factory.dart` เลือก stub เมื่อไม่มี `dart:ffi`)
+- **นักเรียน**: แท็บ "แบบฝึก" (`features/practice/practice_page.dart`) แสดง `GET /student/practice` เป็นการ์ดต่อทักษะที่อ่อน
+  พร้อมลิงก์ทบทวน → `/student/practice/{item_id}` (`practice_attempt_screen.dart`) ช่องตอบตาม `answer_type`
+  (`numeric` แป้นตัวเลข, `short` ข้อความ, `mcq` เลือกตัวเลือก) → `POST .../attempts {answer}` แสดงถูก/ยังไม่ถูกทันที
+  พร้อม `explanation` แล้วไปข้อถัดไปของทักษะเดิม; แท็บ "ทักษะ" (`features/mastery/mastery_page.dart`) ระดับ เข้าใจดี /
+  เข้าใจบางส่วน / ยังไม่เข้าใจ ตามเกณฑ์ §11.7 และ "ข้อมูลยังน้อย" เมื่อ `n_obs < 2` (§14.2) มีปุ่มไปแท็บแบบฝึก
+- **ครู**: หน้าหลักนับจริง (ห้องเรียน + จำนวนนักเรียน, การบ้าน + ที่เปิดอยู่, ข้อรอตรวจทาน, คำขอตรวจใหม่, ข้อฝึกรออนุมัติ;
+  `features/dashboard/teacher_overview.dart`) การ์ด Gemini key อยู่ที่เดิม; `/assignments/{id}/analytics`
+  (`features/dashboard/assignment_analytics_screen.dart`: ข้อที่ทั้งห้องผิดมากที่สุด, ตาราง p/r พร้อมหมายเหตุ ยากเกินไป /
+  ง่ายเกินไป / จำแนกได้น้อย, heatmap ทักษะ × ประเภทข้อผิดพลาด แสดง r เมื่อเผยแพร่แล้ว ≥ 20 คน §14.3);
+  `/classrooms/{id}/mastery` (`features/mastery/classroom_mastery_screen.dart` heatmap นักเรียน × ทักษะ + ทักษะที่ห้องอ่อน)
+  → `/classrooms/{id}/students/{sid}/mastery` (จุดอ่อน 3 อันดับ, เข้าได้จากรายชื่อในห้องด้วย); `/practice-bank`
+  (`features/practice/practice_bank_screen.dart` ให้ AI สร้างข้อตามทักษะ, แก้ไข/อนุมัติ/เลิกใช้ร่าง) และ `/skills/{id}/resources`
+  (ลิงก์ทบทวน) heatmap เป็น widget เอง (`features/dashboard/heatmap.dart` ไม่ใช้ fl_chart) เลื่อนแนวนอนได้บนโทรศัพท์
+  ทุกช่องมีตัวเลขหรือไอคอนและ tooltip ไม่พึ่งสีอย่างเดียว
+- ทดสอบ: `test/ml/` (ตัว decode CTC เคสเดียวกับ `ml/tests/test_charset.py`, spec จาก `metrics.json` จริง, recognizer กับ runner ปลอม,
+  `ModelRepository` กับ Dio ปลอม + โฟลเดอร์ชั่วคราว + drift ในหน่วยความจำ, provider/updater) และ `digit_model_smoke_test.dart`
+  ที่รันโมเดลจริง `ml/models/digit_crnn/0.1.0/model.tflite` ผ่าน Python ใน `ml/.venv` (TFLite ตัวเดียวกับที่ใช้ validate
+  เพราะ `flutter test` ไม่มี native library ของ tflite_flutter; ข้ามถ้าไม่มีไฟล์หรือ venv) แล้วเทียบ text/confidence กับตัว decode
+  ของ Python ทุกตัวอย่าง; `test/practice/`, `test/mastery/`, `test/dashboard/` = widget test ของหน้าทำแบบฝึก คลังแบบฝึก
+  ลิงก์ทบทวน heatmap ทั้งสองแบบ และตัวเลขบนหน้าหลัก
+
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
 รูป request/response ของ `POST /classrooms/{id}/students`, `GET /subjects`, งานพิมพ์บัตร QR (`/login-cards`,
@@ -223,4 +263,12 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
 | `GET/PUT /classrooms/{id}/google-roster` | GET `[{google_user_id, name, email, suggested_student_id, matched_student_id}]`; PUT `{matches: [{google_user_id, student_id \| null}]}` แอปส่งครบทุกบัญชีในคอร์ส |
 | `GET /assignments/{id}/google-submissions` | แถว §18.6 + `last_error` (แสดงเมื่อ `grade_failed`); `attachments: [{drive_file_id, title, mime_type}]`; `POST /google-submissions/{id}/return {reason ≤ 255}` ตอบแถวที่อัปเดต (หรือ 204 แล้วแอปโหลดใหม่); `POST /assignments/{id}/google-grades/retry` ตอบ `{queued}` ได้ (ไม่บังคับ) |
 | `GET /student/retake-requests` (**ใหม่ ไม่อยู่ใน §18.6**) | นักเรียน: แถวที่ state `returned_for_retake` ของตัวเอง `[{id, assignment: {id, title}, reason, requested_at, alternate_link}]`; `GET /student/results/{id}` ใส่ `retake_reason` ได้ (ไม่บังคับ); FCM `type: retake_requested` (+`assignment_id`) |
+| `GET /ml/models/active?name=digit_crnn` | `{id, name, version, sha256, download_url, metrics}` (**`metrics` เพิ่มจาก §9.8** = `model_versions.metrics` คือ `metrics.json` ที่ export มา แอปอ่านสัญญา decode และ `decode.abstain_below` จากตรงนี้ ถ้าไม่มีใช้ค่าของ digit_crnn 0.1.0); `download_url` รับทั้ง URL เต็มและ `/api/v1/...` ถ้าไม่มีใช้ `/ml/models/{id}/file`; 404 = ยังไม่มีโมเดลที่เปิดใช้ (ไม่ใช่ error) |
+| `GET /student/practice` | `[{skill: {id, code, name}, mastery: {value, n_obs}, items: [{id, answer_type, prompt_text, options}], resources: [{id, title, url}]}]` server เรียงทักษะที่อ่อนที่สุดก่อน (§14.1) **ห้ามส่ง `answer_key` ให้นักเรียน** (รับ list ข้อเรียบ ๆ ที่แต่ละข้อมี `skill` ด้วย แอปจัดกลุ่มเอง); `options` ของ `mcq` เป็น `[{key, text}]`, `["..."]` (key = A, B, C…) หรือ `{"A": "..."}` แอปส่ง `key` เป็นคำตอบ |
+| `POST /student/practice/{item_id}/attempts` | `{answer}` → `{score_ratio, explanation, mastery?: {skill, value, n_obs}}` แอปแสดง `explanation` ถ้ามี (ถูกก็แสดงเป็นคำอธิบายเพิ่มเติม) |
+| `GET /student/mastery`, `GET /students/{id}/mastery` | `[{skill: {id, code, name}, value, n_obs, updated_at}]`; ระหว่างที่ server ยังเป็น placeholder ส่ง `meta: {available: false}` แอปแสดงหน้าว่าง |
+| `GET /classrooms/{id}/mastery` | `{skills: [{id, code, name}], students: [{id, name, student_number}], cells: [{student_id, skill_id, value, n_obs}]}` ช่องที่ไม่มีใน `cells` = ยังไม่มีผล |
+| `GET /assignments/{id}/analytics` | `{published_count, min_count_for_r (ไม่บังคับ ค่าเริ่มต้น 20), items: [{question_id, position, type, max_points, prompt_text, n, p, r}], skill_error_counts: [{skill: {id, code, name}, error_type, count}]}` `p`/`r` เป็น null เมื่อไม่มีข้อมูล (r เมื่อเผยแพร่แล้วต่ำกว่า 20 คน) |
+| `GET /practice-items?skill=&status=` | แถว `{id, skill: {id, code, name}, answer_type, prompt_text, options, answer_key, explanation, status, source, approved_at}` (แบ่งหน้าได้ แอปดึงทุกหน้า); `PATCH /practice-items/{id}` ส่งเฉพาะ field ที่แก้ `{status?, prompt_text?, options?: [{key, text}], answer_key?, explanation?}` ตอบแถวที่อัปเดต; `POST /skills/{id}/practice-items/generate {count}` ตอบ 202 ได้ (ข้อใหม่โผล่เป็น `draft` ทีหลัง); หน้าหลักถือว่า 404 ของ `/practice-items` = ยังไม่มีคลังแบบฝึกบน server |
+| `GET /skills/{id}/resources` (**เพิ่มจาก §9.6** ซึ่งมีแต่ POST) | `[{id, skill_id, title, url}]`; `POST /skills/{id}/resources {title, url}` ตอบแถวที่สร้าง |
 | list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |

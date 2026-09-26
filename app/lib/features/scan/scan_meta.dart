@@ -59,15 +59,22 @@ class ScanSource {
 
 /// A digit-reader result attached as `cnn` (DESIGN §9.4, §12).
 class CnnReading {
-  const CnnReading({required this.text, required this.confidence});
+  const CnnReading({required this.text, required this.confidence})
+    : abstained = false;
+
+  /// The reader ran but is not sure enough (below the model's
+  /// `decode.abstain_below`): sent as an empty `cnn: {}`, which the server
+  /// reads as "CNN ไม่ตอบ" (D = 0.5, DESIGN §11.8). No reading at all (no
+  /// model on the device) sends no `cnn`.
+  const CnnReading.abstained() : text = '', confidence = 0, abstained = true;
 
   final String text;
   final double confidence;
+  final bool abstained;
 
-  Map<String, dynamic> toJson() => {
-    'text': text,
-    'confidence': _round(confidence, 3),
-  };
+  Map<String, dynamic> toJson() => abstained
+      ? <String, dynamic>{}
+      : {'text': text, 'confidence': _round(confidence, 3)};
 }
 
 /// `meta` and the files of one `POST /scans` (DESIGN §9.4).

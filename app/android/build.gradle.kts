@@ -19,6 +19,17 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// tflite_flutter 0.12.1 (the on-device digit reader, DESIGN §12) compiles its
+// Java sources for JVM 11 but leaves Kotlin on the JDK default (17), which
+// fails Kotlin's JVM-target check. Align its Kotlin target with its Java one.
+subprojects {
+    if (name == "tflite_flutter") {
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

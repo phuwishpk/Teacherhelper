@@ -36,6 +36,9 @@ android {
         jniLibs {
             // OpenCV ships 32-bit x86 libraries; Flutter builds no x86 engine.
             excludes += "lib/x86/**"
+            // The digit reader runs on the CPU (a 1.3 MB CRNN); the LiteRT GPU
+            // delegate that tflite_flutter pulls in is never loaded.
+            excludes += "**/libtensorflowlite_gpu_jni.so"
         }
     }
 

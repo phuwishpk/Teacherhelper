@@ -68,6 +68,13 @@ void main() {
     });
   });
 
+  test('an abstained reading is an empty cnn; no reading, no cnn', () {
+    final upload = build(cnn: const {'q503_final': CnnReading.abstained()});
+    final regions = (upload.meta['regions'] as List).cast<Map>();
+    expect(regions[1].containsKey('cnn'), isFalse, reason: 'no model');
+    expect(regions[2]['cnn'], <String, dynamic>{});
+  });
+
   test('every file named in meta is attached, plus the page', () {
     final upload = build();
     expect(upload.files.keys, [
