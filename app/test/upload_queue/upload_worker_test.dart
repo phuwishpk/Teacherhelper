@@ -75,7 +75,11 @@ void main() {
   test('a retry scheduled by this drain also asks for another run', () async {
     await repo.enqueue(clientScanId: 'r', meta: meta('r'), files: {});
     final adapter = FakeHttpAdapter(
-      (_) async => jsonResponse(503, {'message': 'maintenance'}),
+      (_) async => jsonResponse(503, {
+        'message': 'maintenance',
+        'errors': <String, Object>{},
+        'code': 'maintenance',
+      }),
     );
     expect(await runBackgroundDrain(uploader(adapter), repo), isFalse);
     expect((await repo.find('r'))!.attempts, 1);

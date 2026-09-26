@@ -81,6 +81,16 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
             label: const Text('สแกนใบงาน'),
           );
 
+    // The tabs are bodies only and this Scaffold owns their FAB, so the root
+    // ScaffoldMessenger has exactly one Scaffold here to show a SnackBar on
+    // (the FAB moves up for it instead of being covered).
+    final tabFab = switch (_index) {
+      0 => wide ? null : scanButton,
+      1 => const ClassroomsFab(),
+      2 => const AssignmentsFab(),
+      _ => null,
+    };
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('EduVision'),
@@ -145,7 +155,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
                   ),
               ],
             ),
-      floatingActionButton: wide || _index != 0 ? null : scanButton,
+      floatingActionButton: tabFab,
     );
   }
 }

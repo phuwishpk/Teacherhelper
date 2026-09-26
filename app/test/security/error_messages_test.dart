@@ -61,6 +61,54 @@ void main() {
     expect(message, isNot(contains('QueryException')));
   });
 
+  test('a debug-mode 500 whose `message` is the exception text shows the '
+      'generic text', () {
+    // Laravel with APP_DEBUG=true: {message, exception, file, line, trace}.
+    final e = _badResponse(500, {
+      'message':
+          'SQLSTATE[42S02]: Base table or view not found: 1146 '
+          "Table 'eduvision.responses' doesn't exist (Connection: mariadb, "
+          'SQL: select * from `responses` where `id` = 42)',
+      'exception': 'Illuminate\\Database\\QueryException',
+      'file': '/var/www/vhosts/eduvision/vendor/laravel/x.php',
+      'line': 760,
+      'trace': [
+        {'file': '/var/www/vhosts/eduvision/app/Http/X.php'},
+      ],
+    });
+    final message = apiErrorMessage(e);
+    expect(message, 'เซิร์ฟเวอร์ตอบกลับผิดพลาด (500)');
+    expect(message, isNot(contains('SQLSTATE')));
+    expect(message, isNot(contains('select')));
+    expect(message, isNot(contains('/var/www')));
+    expect(apiErrorCode(e), isNull);
+  });
+
+  test('a 5xx that is our own envelope (string `code`) still shows its '
+      'message', () {
+    const text = 'ตรวจสอบ key กับ Gemini ไม่ได้ในขณะนี้ ลองใหม่อีกครั้งภายหลัง';
+    final e = _badResponse(503, {
+      'message': text,
+      'errors': <String, Object>{},
+      'code': 'ai_unavailable',
+    });
+    expect(apiErrorMessage(e), text);
+    expect(apiErrorCode(e), 'ai_unavailable');
+    expect(apiStatusCode(e), 503);
+  });
+
+  test("a 4xx message is shown even without a `code` (Laravel's own 401 and "
+      '404 bodies)', () {
+    expect(
+      apiErrorMessage(_badResponse(401, {'message': 'Unauthenticated.'})),
+      'Unauthenticated.',
+    );
+    expect(
+      apiErrorMessage(_badResponse(404, {'message': 'ไม่พบข้อมูล'})),
+      'ไม่พบข้อมูล',
+    );
+  });
+
   test('a message that is not a string is ignored, not rendered', () {
     final e = _badResponse(500, {
       'message': {'secret': 'db password'},

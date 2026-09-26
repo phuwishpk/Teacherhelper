@@ -79,6 +79,14 @@ class TeacherFlowApp {
     addTearDown(db.close);
     addTearDown(container.dispose);
 
+    // A tap whose target is covered (e.g. a FAB under a SnackBar) or off
+    // screen fails the flow instead of only printing a warning.
+    final fatalBefore = WidgetController.hitTestWarningShouldBeFatal;
+    WidgetController.hitTestWarningShouldBeFatal = true;
+    addTearDown(
+      () => WidgetController.hitTestWarningShouldBeFatal = fatalBefore,
+    );
+
     // A phone: bottom navigation bar, single-pane review queue.
     tester.view.physicalSize = const Size(480, 1280);
     tester.view.devicePixelRatio = 1;
@@ -111,14 +119,13 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
-/// Asserts the success SnackBar, then lets it run out: the root messenger
-/// shows it on every Scaffold under it, and the copy on the shell would
-/// cover the tab's floating action button.
-Future<void> _waitForSnackBar(WidgetTester tester, String text) async {
-  expect(find.textContaining(text), findsWidgets);
-  await tester.pump(const Duration(seconds: 5));
-  await tester.pumpAndSettle();
-  expect(find.textContaining(text), findsNothing);
+/// The success SnackBar is on screen exactly once: the shell tabs have no
+/// Scaffold of their own, so the root messenger has one Scaffold to show it
+/// on, and the next tap (a FAB the SnackBar lifts, a tab of the bottom bar)
+/// goes ahead while it is still visible.
+void _expectMessageOnce(String text) {
+  expect(find.textContaining(text), findsOneWidget);
+  expect(find.byType(SnackBar), findsOneWidget);
 }
 
 /// Splash -> login -> `POST /auth/teacher/login` -> `GET /me` -> teacher home.
@@ -179,7 +186,7 @@ Future<int> createClassroom(
   );
 
   expect(app.location, AppRoutes.home);
-  await _waitForSnackBar(tester, 'สร้างห้องเรียนแล้ว');
+  _expectMessageOnce('สร้างห้องเรียนแล้ว');
   expect(find.text(name), findsOneWidget);
   final created = app.lastRequest('POST', '/classrooms');
   expect(created.status, 201);
@@ -234,7 +241,7 @@ Future<int> createAssignment(
 
   final id = app.server.assignments.single['id'] as int;
   expect(app.location, AppRoutes.assignment(id));
-  await _waitForSnackBar(tester, 'สร้างการบ้านแล้ว เพิ่มคำถามได้เลย');
+  _expectMessageOnce('สร้างการบ้านแล้ว เพิ่มคำถามได้เลย');
   expect(find.text('เพิ่มคำถามก่อน จึงจะสร้าง layout ได้'), findsOneWidget);
   final created = app.lastRequest('POST', '/assignments');
   expect(created.status, 201);
@@ -272,7 +279,7 @@ Future<void> addShortQuestion(
   await _tapVisible(tester, find.widgetWithText(FilledButton, 'เพิ่มข้อ'));
 
   expect(app.location, AppRoutes.assignment(assignmentId));
-  await _waitForSnackBar(tester, 'บันทึกข้อแล้ว');
+  _expectMessageOnce('บันทึกข้อแล้ว');
   expect(find.text(prompt), findsOneWidget);
   final posted = app.lastRequest(
     'POST',
@@ -299,7 +306,7 @@ Future<void> createLayout(
     201,
   );
   expect(app.server.assignments.single['status'], 'ready');
-  await _waitForSnackBar(tester, 'สร้าง layout เวอร์ชัน 1 แล้ว');
+  _expectMessageOnce('สร้าง layout เวอร์ชัน 1 แล้ว');
   expect(find.text('ตรวจทานและเผยแพร่'), findsOneWidget);
 }
 

@@ -26,7 +26,8 @@ Color assignmentStatusColor(BuildContext context, String status) {
   };
 }
 
-/// "การบ้าน" tab of the teacher shell.
+/// "การบ้าน" tab of the teacher shell. A body only, like `ClassroomsPage`:
+/// the shell's Scaffold shows [AssignmentsFab] for it.
 class AssignmentsPage extends ConsumerStatefulWidget {
   const AssignmentsPage({super.key});
 
@@ -43,70 +44,76 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
     final classrooms = ref.watch(classroomsProvider).value ?? const [];
     final classroomNames = {for (final c in classrooms) c.id: c.name};
 
-    return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'assignment_new',
-        onPressed: () => context.push(AppRoutes.assignmentNew),
-        icon: const Icon(Icons.add),
-        label: const Text('สร้างการบ้าน'),
-      ),
-      body: AsyncView(
-        value: assignments,
-        onRetry: () => ref.read(assignmentsProvider.notifier).refresh(),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyView(
-              icon: Icons.assignment_outlined,
-              title: 'ยังไม่มีการบ้าน',
-              message:
-                  'สร้างการบ้าน เลือกตัวชี้วัด แล้วพิมพ์ใบงานแยกรายนักเรียน',
-            );
-          }
-          final visible = _classroomFilter == null
-              ? list
-              : list.where((a) => a.classroomId == _classroomFilter).toList();
-          return RefreshIndicator(
-            onRefresh: () => ref.read(assignmentsProvider.notifier).refresh(),
-            child: ContentColumn(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-              child: ListView(
-                children: [
-                  if (classrooms.length > 1)
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          ChoiceChip(
-                            label: const Text('ทุกห้อง'),
-                            selected: _classroomFilter == null,
-                            onSelected: (_) =>
-                                setState(() => _classroomFilter = null),
-                          ),
-                          for (final c in classrooms) ...[
-                            const SizedBox(width: 8),
-                            ChoiceChip(
-                              label: Text(c.name),
-                              selected: _classroomFilter == c.id,
-                              onSelected: (_) =>
-                                  setState(() => _classroomFilter = c.id),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  for (final a in visible)
-                    _AssignmentCard(
-                      assignment: a,
-                      classroomName:
-                          a.classroomName ?? classroomNames[a.classroomId],
-                    ),
-                ],
-              ),
-            ),
+    return AsyncView(
+      value: assignments,
+      onRetry: () => ref.read(assignmentsProvider.notifier).refresh(),
+      data: (list) {
+        if (list.isEmpty) {
+          return const EmptyView(
+            icon: Icons.assignment_outlined,
+            title: 'ยังไม่มีการบ้าน',
+            message: 'สร้างการบ้าน เลือกตัวชี้วัด แล้วพิมพ์ใบงานแยกรายนักเรียน',
           );
-        },
-      ),
+        }
+        final visible = _classroomFilter == null
+            ? list
+            : list.where((a) => a.classroomId == _classroomFilter).toList();
+        return RefreshIndicator(
+          onRefresh: () => ref.read(assignmentsProvider.notifier).refresh(),
+          child: ContentColumn(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            child: ListView(
+              children: [
+                if (classrooms.length > 1)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('ทุกห้อง'),
+                          selected: _classroomFilter == null,
+                          onSelected: (_) =>
+                              setState(() => _classroomFilter = null),
+                        ),
+                        for (final c in classrooms) ...[
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: Text(c.name),
+                            selected: _classroomFilter == c.id,
+                            onSelected: (_) =>
+                                setState(() => _classroomFilter = c.id),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                for (final a in visible)
+                  _AssignmentCard(
+                    assignment: a,
+                    classroomName:
+                        a.classroomName ?? classroomNames[a.classroomId],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "สร้างการบ้าน" button the shell shows while this tab is selected.
+class AssignmentsFab extends StatelessWidget {
+  const AssignmentsFab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton.extended(
+      heroTag: 'assignment_new',
+      onPressed: () => context.push(AppRoutes.assignmentNew),
+      icon: const Icon(Icons.add),
+      label: const Text('สร้างการบ้าน'),
     );
   }
 }

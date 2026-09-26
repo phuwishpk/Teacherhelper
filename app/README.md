@@ -256,8 +256,14 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 - **CI**: `.github/workflows/app.yml` รันเมื่อ push/PR แตะ `app/`: `flutter analyze --fatal-infos` → `flutter test --coverage`
   → เกณฑ์ 70% → `flutter build apk --debug` (Flutter 3.44.5 บน ubuntu, ไม่ต้องมี key, Firebase หรือ secret ใด ๆ; release build
   ทำเองตามหัวข้อด้านบน) coverage และ debug APK ถูกอัปโหลดเป็น artifact
-- ข้อสังเกตจาก flow: `showMessage` ใช้ `ScaffoldMessenger` ราก ซึ่งแสดง SnackBar บนทุก `Scaffold` ที่อยู่ใต้มัน ในแท็บของ shell
-  (ห้องเรียน/การบ้าน มี Scaffold ซ้อน) จึงเห็นข้อความซ้ำและสำเนาบน shell บัง FAB ของแท็บจนกว่าจะหายไป test จึงรอ SnackBar ก่อนแตะ FAB
+- SnackBar ใน shell: `showMessage` ใช้ `ScaffoldMessenger` ราก ซึ่งแสดง SnackBar บนทุก `Scaffold` ที่อยู่ใต้มัน แท็บของ shell
+  (ห้องเรียน/การบ้าน) จึงเป็น body ล้วน ไม่มี `Scaffold` ซ้อน และ FAB ของแต่ละแท็บ (`ClassroomsFab`, `AssignmentsFab`) เป็นของ
+  `Scaffold` ของ shell (เลือกตาม index) ข้อความจึงขึ้นครั้งเดียวและ FAB ขยับหลบ SnackBar เอง; flow test ยืนยันว่า
+  `find.byType(SnackBar)` มีตัวเดียวและแตะ FAB ต่อได้ทันที (`WidgetController.hitTestWarningShouldBeFatal = true` ระหว่าง flow
+  ทำให้การแตะ widget ที่ถูกบังกลายเป็น test ล้มเหลว ไม่ใช่แค่คำเตือน)
+- `apiErrorMessage`: body 4xx แสดง `message` ได้เสมอ (รวม 401/404 ของ Laravel เอง) แต่ body 5xx จะแสดง `message` ก็ต่อเมื่อเป็น
+  envelope ของ DESIGN §9 (มี `code` เป็น string เช่น `ai_unavailable`) มิฉะนั้นแสดง "เซิร์ฟเวอร์ตอบกลับผิดพลาด (5xx)" เพราะหน้า
+  exception ของ Laravel ตอน `APP_DEBUG=true` ก็มี `message` ที่เป็นข้อความ exception/SQL
 
 ## ข้อตกลงกับ backend ที่แอปคาดไว้ (นอกเหนือจาก DESIGN §9)
 
@@ -281,7 +287,7 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 | `GET /assignments/{id}/layouts` | ไม่ส่ง `version` = ทุกเวอร์ชัน `[{version, pages[]}]` (รับแบบ object เดี่ยวด้วย) |
 | `meta` ของ `POST /scans` | ตาม §9.4: `mcq` ส่ง `mcq_fill` (ไม่มี `ink_ratio`), `box`/`lines` ส่ง `ink_ratio` (นิยามด้านบน: ว่าง = 0, เขียนแล้ว > 0.02), `lines` ที่มีกรอบคำตอบสุดท้ายส่ง `final_file`; `scanned_at` เป็น UTC (`...Z`); `blur_score` ปัด 1 ตำแหน่ง; สแกนจาก Classroom เพิ่ม `source: "classroom"` และ `google_submission_id` (สแกนจากกล้องไม่ส่ง `source`) |
 | `POST /scans` | field `meta` (JSON string) + ไฟล์ `page` และ crop ตามชื่อใน meta; 200/201 → done; 202 หรือ `state: pending_confirm` (รวม 200 ที่ส่ง body เดิมซ้ำ) → `conflict` รอครูยืนยันผ่าน `POST /scans/{scan_id}/confirm-replace` **แอปต้องการ `scan_id` ใน body ของ 202** (ถ้าไม่มีจะเก็บเป็น conflict ที่ยืนยันจากเครื่องไม่ได้ ไม่ลบไฟล์); 401/408/429/5xx/เน็ตหลุด → retry แบบ backoff; 4xx อื่น (422, 403, 404, 413, …) → failed ถาวร (แสดง `message (code)`) |
-| `GET/PUT/DELETE /me/ai-key` | `{configured, key_last4, last_verified_at, server_key_available}` (**`server_key_available` เพิ่มจาก §9.1** ใช้แสดงว่ามี key กลาง); PUT `{gemini_api_key}` → 422 `code: ai_key_invalid` แอปแสดง `errors.gemini_api_key[0]` หรือ `message`; DELETE ตอบ 204 ได้ (แอปจะ GET ใหม่) |
+| `GET/PUT/DELETE /me/ai-key` | `{data: {provider, configured, key_last4, last_verified_at, server_key_available}}` (**`server_key_available` เพิ่มจาก §9.1** ใช้แสดงว่ามี key กลาง; แอปรับแบบไม่ห่อ `data` ได้ด้วย); PUT `{gemini_api_key}` → 422 `code: ai_key_invalid` แอปแสดง `errors.gemini_api_key[0]` หรือ `message`; DELETE ตอบ 204 ได้ (แอปจะ GET ใหม่) |
 | `GET /assignments/{id}/review-queue` | ไม่ส่ง `band` แล้วแบ่งแท็บเอง แถว: `{id, submission_id, question_id, question_position, question_type, max_points, student: {id, name, student_number}, grading_state, manual_reason, priority_band, review_priority, suspicious \| flags[], identity_mismatch, has_open_appeal, ai_score, final_score, ai_understanding, final_understanding, reviewed_at, submission_status}`; `meta: {next_cursor, missing_ai_key_count, pending_confirm_scans: [{scan_id, submission_id, page_no, scanned_at, student}], submissions: [{id, status, response_count, reviewed_count, total_score, student}]}` (ไม่มี `submissions` แอปคำนวณจากแถวเอง) |
 | `GET /responses/{id}` | แถวของคิว + `question: {id, position, type, prompt_text, max_points, answer_key, rubric_criteria[]}`, `extraction`, `fuzzy_trace`, `ai_error_types`, `final_error_types`, `explanation`, `next_step`, `explanation_edited`, `cnn_text`, `cnn_confidence`, `ink_ratio`, `mcq_fill`, `has_crop`, `has_final_crop`, `appeal` ถ้าไม่มีฟิลด์ป้ายระดับบนสุด แอปอ่านจากที่เก็บจริงด้วย: `extraction.suspicious_instruction`, `fuzzy_trace.suspicious_instruction` / `fuzzy_trace.priority.flag = suspicious`, `fuzzy_trace.identity_mismatch`, `fuzzy_trace.manual_reason` (ใช้กับแถวของคิวด้วยถ้าแถวมี `extraction`/`fuzzy_trace`) |
 | `PATCH /responses/{id}` | `{final_score, final_understanding, final_error_types, explanation?, reason?}` (`explanation` ส่งเฉพาะเมื่อครูแก้) ตอบ response ที่อัปเดตแล้ว |
@@ -304,4 +310,4 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 | `GET /assignments/{id}/analytics` | `{published_count, min_count_for_r (ไม่บังคับ ค่าเริ่มต้น 20), items: [{question_id, position, type, max_points, prompt_text, n, p, r}], skill_error_counts: [{skill: {id, code, name}, error_type, count}]}` `p`/`r` เป็น null เมื่อไม่มีข้อมูล (r เมื่อเผยแพร่แล้วต่ำกว่า 20 คน) |
 | `GET /practice-items?skill=&status=` | แถว `{id, skill: {id, code, name}, answer_type, prompt_text, options, answer_key, explanation, status, source, approved_at}` (แบ่งหน้าได้ แอปดึงทุกหน้า); `PATCH /practice-items/{id}` ส่งเฉพาะ field ที่แก้ `{status?, prompt_text?, options?: [{key, text}], answer_key?, explanation?}` ตอบแถวที่อัปเดต; `POST /skills/{id}/practice-items/generate {count}` ตอบ 202 ได้ (ข้อใหม่โผล่เป็น `draft` ทีหลัง); หน้าหลักถือว่า 404 ของ `/practice-items` = ยังไม่มีคลังแบบฝึกบน server |
 | `GET /skills/{id}/resources` (**เพิ่มจาก §9.6** ซึ่งมีแต่ POST) | `[{id, skill_id, title, url}]`; `POST /skills/{id}/resources {title, url}` ตอบแถวที่สร้าง |
-| list ทุกตัว | รับได้ทั้ง `[...]` และ `{data: [...], next_cursor}` |
+| list ทุกตัว | รับได้ทั้ง `[...]`, `{data: [...], next_cursor}` และแบบที่ backend ส่งจริง `{data: [...], meta: {next_cursor, prev_cursor, per_page}}` (`FakeApiServer` ใช้แบบหลังสำหรับ `/classrooms`, `/assignments`, `/appeals`, `/practice-items`) |
