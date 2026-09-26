@@ -4,6 +4,7 @@ namespace App\Domain\Notifications;
 
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassroomSubmissionImport;
 use App\Models\Submission;
 
 /**
@@ -32,4 +33,10 @@ interface Notifier
 
     /** The teacher accepted or rejected the appeal: tell its student. */
     public function appealResolved(Appeal $appeal): void;
+
+    /**
+     * The teacher sent the student's Google Classroom work back for a new
+     * photo (DESIGN §18.2): tell the student why (Classroom cannot).
+     */
+    public function retakeRequested(ClassroomSubmissionImport $import): void;
 }

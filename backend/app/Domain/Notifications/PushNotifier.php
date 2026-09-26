@@ -4,6 +4,7 @@ namespace App\Domain\Notifications;
 
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassroomSubmissionImport;
 use App\Models\Submission;
 
 /**
@@ -56,6 +57,18 @@ abstract class PushNotifier implements Notifier
             PushMessage::APPEAL_RESOLVED,
             NoticeTexts::appealResolved(),
             array_filter(['submission_id' => $submissionId, 'appeal_id' => $appeal->id], fn ($v) => $v !== null),
+        ));
+    }
+
+    public function retakeRequested(ClassroomSubmissionImport $import): void
+    {
+        if ($import->student_id === null) {
+            return;
+        }
+        $this->push([$import->student_id], new PushMessage(
+            PushMessage::RETAKE_REQUESTED,
+            NoticeTexts::retakeRequested((string) $import->assignment?->title, (string) $import->retake_reason),
+            ['assignment_id' => $import->assignment_id],
         ));
     }
 }

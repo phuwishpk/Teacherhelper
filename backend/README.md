@@ -90,7 +90,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
-| POST | `/scans` | ครู | multipart: `meta` (JSON ตาม §9.4), `page` (WebP) และ crop WebP หนึ่งไฟล์ต่อชื่อที่อ้างใน `meta.regions[].file` / `final_file` ตอบ `201 {scan_id, submission_id, state: "active"}`, `202 {…, state: "pending_confirm"}` (submission เผยแพร่แล้ว) หรือ `200` body เดิมเมื่อ `client_scan_id` ซ้ำ (state ปัจจุบันของ scan) ถูกปฏิเสธ: `422 qr_invalid` (ลายเซ็นผิด/ไม่พบการบ้าน), `422 layout_unknown`, `422 page_mismatch` (หน้าไม่อยู่ใน layout หรือชุดช่องคำตอบไม่ตรงกับหน้านั้น), `422 student_unknown` (ไม่อยู่ในห้อง หรือใบงานสำรอง `student_id = 0` จากกล้อง §18.3), `422 validation_failed` (meta/ไฟล์), `403` (ไม่ใช่ครูของห้อง), `503 too_many_files` (PHP `max_file_uploads` ต่ำไป แอปส่งใหม่เองหลังผู้ดูแลแก้ค่า), `503 qr_key_missing` |
+| POST | `/scans` | ครู | multipart: `meta` (JSON ตาม §9.4), `page` (WebP) และ crop WebP หนึ่งไฟล์ต่อชื่อที่อ้างใน `meta.regions[].file` / `final_file` ตอบ `201 {scan_id, submission_id, state: "active"}`, `202 {…, state: "pending_confirm"}` (submission เผยแพร่แล้ว) หรือ `200` body เดิมเมื่อ `client_scan_id` ซ้ำ (state ปัจจุบันของ scan) ถูกปฏิเสธ: `422 qr_invalid` (ลายเซ็นผิด/ไม่พบการบ้าน), `422 layout_unknown`, `422 page_mismatch` (หน้าไม่อยู่ใน layout หรือชุดช่องคำตอบไม่ตรงกับหน้านั้น), `422 student_unknown` (ไม่อยู่ในห้อง หรือใบงานสำรอง `student_id = 0` จากกล้อง §18.3), `422 google_submission_unknown` (`meta.source = classroom` แต่ `meta.google_submission_id` ไม่ใช่งานที่ sync แล้วของการบ้านนี้ ดูส่วน Google Classroom), `422 validation_failed` (meta/ไฟล์), `403` (ไม่ใช่ครูของห้อง), `503 too_many_files` (PHP `max_file_uploads` ต่ำไป แอปส่งใหม่เองหลังผู้ดูแลแก้ค่า), `503 qr_key_missing` |
 | POST | `/scans/{id}/confirm-replace` | ครู | ยืนยันใช้สแกนใหม่แทนหน้าที่เผยแพร่แล้ว → `200 {…, state: "active"}` เรียกซ้ำได้ `409 scan_superseded` (มีสแกนใหม่กว่า) / `scan_files_missing` (ไฟล์ที่พักไว้หายหรือหมดอายุ) |
 | GET | `/scans/{id}/page` | ครู | ภาพหน้าเต็ม `image/webp` (`410 image_purged` หลังเผยแพร่และ purge แล้ว) |
 | GET | `/responses/{id}/crop?part=main\|final` | ครู / นักเรียนเจ้าของ (หลังเผยแพร่) | ภาพ crop ของข้อ `final` = กรอบคำตอบสุดท้ายของ show_work (`410 image_purged` หลัง `crop_retention_until`) |
@@ -128,9 +128,37 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 - `Notifier` ผูกเป็น `FcmNotifier` เมื่อ `FIREBASE_CREDENTIALS` ชี้ไปที่ไฟล์ service account ที่ใช้ได้ (อยู่นอก document root) ไม่งั้นเป็น `LogNotifier` ที่เขียน `notify.*` ลง log แทน
 - FCM HTTP v1 เรียกด้วย Laravel HTTP client: เซ็น JWT ของ service account ด้วย `firebase/php-jwt` (RS256) แลก access token ที่ `oauth2.googleapis.com/token` แล้ว cache แบบเข้ารหัสจนเกือบหมดอายุ ส่งทีละเครื่อง token ที่ FCM บอกว่าใช้ไม่ได้ (`UNREGISTERED`, `INVALID_ARGUMENT`, `SENDER_ID_MISMATCH`) ถูกลบจาก `device_tokens` ได้ `401` จะขอ token ใหม่แล้วลองอีกครั้งเดียว
-- ข้อความ 4 แบบของ §9.9 (ไม่มีคะแนน) และ `data.type` ที่แอปใช้เปิดหน้า: `grading_done` {assignment_id}, `results_published` {submission_id, assignment_id}, `appeal_opened`, `appeal_resolved` {submission_id, appeal_id}
-- ส่งจาก queued listener บน queue `default` (worker ของ cron): `SubmissionPublished` → `NotifyStudentOfPublishedResult`, `AppealOpened` → `NotifyTeacherOfAppeals` (หน่วง 60 วินาทีแล้วส่งครั้งเดียวต่อชุดพร้อมจำนวนรวม), `AppealResolved` → `NotifyStudentOfAppealResolution`
+- ข้อความ 4 แบบของ §9.9 (ไม่มีคะแนน) และ `data.type` ที่แอปใช้เปิดหน้า: `grading_done` {assignment_id}, `results_published` {submission_id, assignment_id}, `appeal_opened`, `appeal_resolved` {submission_id, appeal_id} และของ §18.2: `retake_requested` {assignment_id} (ครูตีกลับงานใน Google Classroom ให้ถ่ายใหม่ body มีเหตุผลของครู)
+- ส่งจาก queued listener บน queue `default` (worker ของ cron): `SubmissionPublished` → `NotifyStudentOfPublishedResult`, `AppealOpened` → `NotifyTeacherOfAppeals` (หน่วง 60 วินาทีแล้วส่งครั้งเดียวต่อชุดพร้อมจำนวนรวม), `AppealResolved` → `NotifyStudentOfAppealResolution`, `RetakeRequested` → `NotifyStudentOfRetakeRequest`
 - ตรวจบน server: Scheduled Task "Run now" `artisan eduvision:fcm-check` (ขอ access token) หรือ `artisan eduvision:fcm-check --user=<id>` (ส่งข้อความทดสอบไปทุกเครื่องของผู้ใช้นั้น)
+
+## Google Classroom (DESIGN §18)
+
+ครูเชื่อมบัญชี Google ของตัวเอง (นักเรียนใช้ Classroom ตามปกติ) server เก็บเฉพาะ refresh token แบบเข้ารหัส (`google_accounts.encrypted_refresh_token`, cast `encrypted`) แล้วเรียก Classroom v1 และ Drive v3 ตรงด้วย Laravel HTTP client (`app/Domain/Google/GoogleApi`) **ไม่ใช้ `google/apiclient`** รูปของนักเรียนไม่ผ่าน server: แอปดาวน์โหลดไฟล์แนบจาก Drive ด้วยสิทธิ์ของครูบนเครื่อง รัน pipeline สแกนเดิม แล้วส่ง `POST /scans` ตามปกติ
+
+ตั้งใน `.env`: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (OAuth client ชนิด Web application ตัวเดียวกับ `GOOGLE_SERVER_CLIENT_ID` ของแอป ตาม KICKOFF ส่วนที่ 6), `GOOGLE_OAUTH_REDIRECT_URI` (เว้นว่างสำหรับ code จาก Android), `GOOGLE_TIMEOUT`, `GOOGLE_CLASSROOM_APP_LINK` (ลิงก์แอปที่แนบท้ายคำสั่งของงาน) ถ้าไม่ตั้ง client ทุก endpoint ในตารางนี้ตอบ `503 google_not_configured` และ `GET /google/status` มี `server_configured: false` ส่วนอื่นของระบบทำงานปกติ
+
+| Method | Path | ใคร | หมายเหตุ |
+|---|---|---|---|
+| POST | `/google/connect` | ครู | `{server_auth_code}` แลกที่ `oauth2.googleapis.com/token` ต้องได้ครบทุก scope ใน `GoogleScopes::REQUIRED` (ขาด → `422 google_scope_missing` พร้อม `errors.scopes` และ revoke grant ที่ไม่ครบทิ้ง) อ่านบัญชีจาก `userProfiles/me` ตอบ `{data: status}` `422 google_code_invalid` (code หมดอายุ/ใช้แล้ว), `422 google_refresh_token_missing`, `409 google_account_in_use` (บัญชี Google เดียวกันเชื่อมกับครูอีกคนอยู่) |
+| GET | `/google/status` | ครู | `{connected, email, scopes[], needs_reconnect, last_error, connected_at, server_configured}` |
+| DELETE | `/google/disconnect` | ครู | revoke ที่ Google (best effort ผลอยู่ใน `revoked`) แล้วลบแถวเสมอ เรียกซ้ำได้ |
+| GET | `/google/courses` | ครู | คอร์ส `ACTIVE` ที่ครูสอน (`teacherId=me`) `[{course_id, name, section, linked_classroom_id}]` |
+| POST / DELETE | `/classrooms/{id}/google-link` | ครู | `{course_id}` ต้องเป็นคอร์สของครู (`422 errors.course_id`) `201` ผูกใหม่ / `200` เปลี่ยนคอร์ส `409 course_already_linked` (ห้องอื่นผูกอยู่), `409 classroom_has_google_posts` (ห้องที่มีงานโพสต์แล้วย้ายคอร์สไม่ได้) DELETE → `204` การจับคู่นักเรียนคงอยู่ |
+| GET | `/classrooms/{id}/google-roster` | ครู | นักเรียนในคอร์ส `[{google_user_id, name, email, suggested_student_id, matched_student_id}]` เสนอคู่ด้วย `RosterMatcher` (ชื่อที่ normalize แล้ว → สลับลำดับคำ → ชื่อจริงที่ไม่ซ้ำ ชื่อกำกวมไม่เสนอ) `422 classroom_not_linked` |
+| PUT | `/classrooms/{id}/google-roster` | ครู | `{matches: [{google_user_id, student_id\|null}]}` บัญชีที่ไม่ส่งมาคงคู่เดิม นักเรียนคนเดียวกับสองบัญชี → `422` เก็บที่ `classroom_students.google_user_id/google_email` (unique ต่อห้อง) แถว import ที่ยังไม่สแกนย้ายตามคู่ใหม่ |
+| POST | `/assignments/{id}/google-post` | ครู | `{attach_blank_worksheet?, instructions?, due_at?}` การบ้านต้อง `ready` และห้องผูกคอร์สแล้ว สร้าง courseWork `PUBLISHED` ที่ `maxPoints` = คะแนนเต็ม พร้อมคำสั่งถ่ายรูปตาม §18.2 ถ้าแนบใบงานสำรอง อัปโหลด PDF ที่ไม่มีชื่อ (QR `student_id = 0`, `WorksheetPdfRenderer` เดิม) ขึ้น Drive ของครู (`drive.file`, multipart) แล้วแนบแบบ `VIEW` ตอบ `201 {course_work_id, alternate_link, drive_file_id, has_blank_worksheet, posted_at}` `409 already_posted` / `assignment_not_ready` / `google_post_in_progress`, `422 classroom_not_linked`, `503 qr_key_missing` การบ้านที่โพสต์แล้วลบไม่ได้ (`409 assignment_posted`) |
+| GET | `/assignments/{id}/google-submissions` | ครู | sync `studentSubmissions` ที่ `TURNED_IN` และมีไฟล์แนบใน Drive ลง `classroom_submission_imports` (จับคู่ `userId` → นักเรียนตาม roster) แล้วคืน `[{id, google_submission_id, google_user_id, student: {id, name, student_number}\|null, state, attachments: [{drive_file_id, title, mime_type}], alternate_link, retake_reason, last_error, grade_pushed_at, updated_at}]` เรียงตามเลขที่ แถวกลับเป็น `new` เมื่อไฟล์แนบเปลี่ยนหรือส่งใหม่หลังถูกตีกลับ (`updateTime` อย่างเดียวไม่พอ เพราะการให้คะแนนก็เปลี่ยนค่านี้) `409 not_posted` |
+| POST | `/google-submissions/{id}/return` | ครู | `{reason}` เรียก `studentSubmissions.return` → state `returned_for_retake` และแจ้งนักเรียนด้วย push `retake_requested` พร้อมเหตุผล (Classroom API ไม่มี private comment) `409 google_submission_not_returnable` (ตีกลับไปแล้ว/ให้คะแนนแล้ว) |
+| POST | `/assignments/{id}/google-grades/retry` | ครู | `202 {data: {queued}}` ส่ง `PushClassroomGradeJob` ให้ submission ที่เผยแพร่แล้วซึ่งเป็น `grade_failed` หรือยังไม่เคยส่ง (นักเรียนจับคู่แล้วแต่ไม่มีแถว) |
+| GET | `/student/retake-requests` | นักเรียน | (เพิ่มจาก §18.6) งานของตัวเองที่ครูตีกลับ `[{id, assignment: {id, title}, reason, requested_at, alternate_link}]` และ `GET /student/results/{id}` มี `retake_reason` |
+
+- **state ของ `classroom_submission_imports`**: `new` (มีรูปให้สแกน) → `imported` (`POST /scans` รับรูปแล้ว) → `graded` (คะแนนถึง Classroom แล้ว, `grade_pushed_at`) หรือ `grade_failed` (`last_error` ภาษาไทย แสดงในแอปครู) `returned_for_retake` (ตีกลับ, `retake_reason`) กลับเป็น `new` เมื่อนักเรียนส่งใหม่ `needs_retake` สงวนไว้ให้แอปใช้
+- **สแกนจาก Classroom** (§18.3): `POST /scans` รับ `meta.source` (`camera` ค่าเริ่มต้น หรือ `classroom`) และ `meta.google_submission_id` ซึ่งต้องเป็นแถวที่ sync แล้วของการบ้านนั้น (`422 google_submission_unknown`) นักเรียน = คนใน QR ใบงานสำรอง (`student_id = 0`) ใช้นักเรียนที่จับคู่กับบัญชีผู้ส่ง (`422 student_unknown` ถ้ายังไม่จับคู่ และเสมอเมื่อมาจากกล้อง) QR เป็นคนอื่นกว่าผู้ส่ง → รับตาม QR และติดป้าย `identity_mismatch` ไว้ใน `responses.fuzzy_trace` (คิวตรวจทานยกขึ้นก่อน ป้ายตามไปถึงสแกนซ้ำที่รอยืนยันด้วย) `scans.source/google_submission_id` บันทึกที่มา แถว import เป็น `imported` และ `student_id` เป็นคนที่สแกนถูกเก็บไว้
+- **ส่งคะแนนกลับ**: `SubmissionPublished` (และ `AppealResolved` ที่คะแนนเปลี่ยน) → listener `QueueClassroomGradePush` → `PushClassroomGradeJob` บน queue `default` (unique ต่อ submission) ใช้บัญชี Google ของครูที่โพสต์งาน เรียก `studentSubmissions.patch?updateMask=assignedGrade` = `total_score` แล้ว `return` งานที่นักเรียนส่งเป็นกระดาษหา submission ด้วย `userId` ของบัญชีที่จับคู่ (ถ้านักเรียนไม่ได้กดส่งใน Classroom ใส่คะแนนได้แต่ return ไม่ได้ บันทึกไว้ใน `last_error`) Google ล่ม/429/5xx ลองใหม่หลัง 1 และ 5 นาที ล้มครบ → `grade_failed`
+- **ข้อผิดพลาดจาก Google** (`GoogleApiException` → `GoogleErrors`): `invalid_grant` ตอนขอ access token → `google_accounts.last_error = invalid_grant`, status `needs_reconnect: true` และทุก endpoint ตอบ `409 google_reconnect_required` โดยไม่เรียก Google อีกจนครูเชื่อมใหม่ (OAuth app โหมด Testing: refresh token หมดอายุใน 7 วัน) scope ถูกถอนภายหลัง → `422 google_scope_missing` + `needs_reconnect`; `@ProjectPermissionDenied` (courseWork ที่ไม่ได้สร้างผ่านแอป) → `409 project_permission_denied`; อื่นๆ `409 google_permission_denied` / `google_not_found` / `google_failed_precondition`, `503 google_api_disabled` / `google_unavailable`, `502 google_error` ยังไม่เชื่อมบัญชี → `409 google_not_connected`
+- access token แลกจาก refresh token แล้ว cache แบบเข้ารหัสจน 5 นาทีก่อนหมดอายุ (`GoogleAccessTokens`) ได้ `401` ทิ้ง cache แล้วลองใหม่ครั้งเดียว ไม่มี token ใน response, log หรือ payload ของ job (มี test ตรวจทุกทาง) endpoint ที่เรียก Google จำกัด 30 ครั้ง/นาทีต่อครู (`throttle:google`)
+- test ทั้งหมดใช้ `Http::fake` (`tests/Feature/Google/GoogleFixtures`: token, revoke, courses, students, courseWork, studentSubmissions, patch, return, Drive upload) ทดสอบกับ Google จริงต้องมี Cloud project และคอร์สทดลองตาม KICKOFF ส่วนที่ 6
 
 ## Queue และ heartbeat
 
@@ -167,7 +195,7 @@ app/Http/Controllers/Api/V1/                 HealthController, TeacherAuthContro
 app/Http/Requests/Api/V1/                    validation ของแต่ละ endpoint
 app/Http/Resources/UserResource.php
 app/Jobs/QueueHeartbeatJob.php
-app/Models/{School,User}.php
+app/Models/{School,User}.php และ GoogleAccount, ClassroomGoogleLink, AssignmentGoogleLink, ClassroomSubmissionImport (§18.4)
 app/Domain/Worksheets/                       LayoutBuilder, WorksheetPdfRenderer, QrSigner, PdfMerger, LayoutService, WorksheetPrintService
 app/Domain/Assignments/                      QuestionData (ตรวจ answer_key), QuestionEditor, QuestionPositions, RubricService
 app/Domain/Gemini/                           GeminiClient (interface), FakeGeminiClient, RubricDraft
@@ -175,9 +203,10 @@ app/Domain/Scans/                            ScanIngestor (POST /scans, confirm-
 app/Domain/Grading/                          McqGrader (§11.6), ReviewPriority (§11.8), Understanding, ScoreRounding (§11.7)
 app/Domain/Review/                           ReviewQueue, ResponseReviewer, Publisher, Appeals, ScoreExplainer (§9.5, §13)
 app/Domain/Notifications/                    Notifier, PushNotifier, FcmNotifier + Fcm/ (HTTP v1, service-account JWT), LogNotifier, NoticeTexts (§9.9)
-app/Events/, app/Listeners/                  SubmissionPublished, AppealOpened, AppealResolved และ listener ที่ส่ง push (queue default)
+app/Domain/Google/                           GoogleOAuth, GoogleAccessTokens, GoogleApi (Classroom v1 + Drive v3 ผ่าน HTTP client), GoogleAccounts, GoogleRoster + RosterMatcher + NameNormalizer, CourseWorkPoster, GoogleSubmissionSync, ClassroomGradePusher, GoogleApiException + GoogleErrors (§18)
+app/Events/, app/Listeners/                  SubmissionPublished, AppealOpened, AppealResolved, RetakeRequested, listener ที่ส่ง push (queue default) และ QueueClassroomGradePush (§18)
 app/Console/Commands/FcmCheckCommand.php     eduvision:fcm-check
-app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob}.php
+app/Jobs/{DraftRubricJob,RenderWorksheetsJob,MergeWorksheetsJob,GradeScanJob,PushClassroomGradeJob}.php
 resources/fonts/                             Sarabun (OFL) ที่เพิ่ม glyph U+200B ดู README ในโฟลเดอร์
 app/Providers/Filament/AdminPanelProvider.php
 config/eduvision.php                         ค่าที่อ่านจาก .env (ห้ามใช้ env() นอก config เพราะ production ใช้ config:cache)

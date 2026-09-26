@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * @property int $classroom_id
  * @property int $student_id
  * @property int $student_number
+ * @property string|null $google_user_id the matched Google Classroom account (DESIGN §18.4)
+ * @property string|null $google_email
  */
 class ClassroomStudent extends Pivot
 {

@@ -9,6 +9,7 @@ use App\Exceptions\ApiException;
 use App\Jobs\GradeScanJob;
 use App\Models\Assignment;
 use App\Models\ClassroomStudent;
+use App\Models\ClassroomSubmissionImport;
 use App\Models\Layout;
 use App\Models\Scan;
 use App\Models\Submission;
@@ -41,6 +42,16 @@ use Throwable;
  *   and readings stashed on the private disk) until the teacher calls
  *   confirm-replace; the published responses stay untouched until then.
  *
+ *
+ * Google Classroom (DESIGN §18.3, §18.6): meta.source = classroom names the
+ * studentSubmission the image was downloaded from (google_submission_id). It
+ * must be a synced row of this assignment (422 google_submission_unknown).
+ * The student is the QR's; the anonymous spare sheet (student_id 0) takes
+ * the student matched to the submitter's Google account (422 student_unknown
+ * while unmatched). A QR naming another student than the submitter is
+ * accepted by the QR and its answers are flagged identity_mismatch. The
+ * import row then becomes `imported`.
+
  * All changes to one submission run under its row lock, so pages of the same
  * student uploaded at the same moment apply one after the other.
  */
@@ -78,12 +89,12 @@ final class ScanIngestor
             );
         }
 
-        $this->assertStudentEnrolled($qr, $assignment);
+        [$studentId, $identityMismatch, $import] = $this->resolveStudent($qr, $assignment, $meta);
         $matched = LayoutPageMatcher::match($page, $meta->regions, $assignment);
         $files = $this->validatedFiles($request, $meta, $page);
 
         try {
-            [$scan, $queued, $stalePending] = $this->store($user, $assignment, $qr, $meta, $matched, $files);
+            [$scan, $queued, $stalePending] = $this->store($user, $assignment, $qr, $studentId, $identityMismatch, $import, $meta, $matched, $files);
         } catch (UniqueConstraintViolationException $e) {
             // The same client_scan_id raced in on a parallel request; answer as a retry.
             $replay = $this->replay($user, $meta->clientScanId);
@@ -102,6 +113,8 @@ final class ScanIngestor
             'page' => $scan->page_no,
             'state' => $scan->state,
             'queued' => $queued,
+            'source' => $scan->source,
+            'identity_mismatch' => $identityMismatch,
         ]);
 
         return ScanOutcome::created($scan);
@@ -181,7 +194,8 @@ final class ScanIngestor
         $scan->state = Scan::STATE_ACTIVE;
         $scan->save();
 
-        $queued = $this->writer->write($submission, $scan, $assignment, $matched, new PendingCropSource($pendingDirectory), $user, $swap);
+        $identityMismatch = $this->readPendingIdentityMismatch($pendingDirectory);
+        $queued = $this->writer->write($submission, $scan, $assignment, $matched, new PendingCropSource($pendingDirectory), $user, $swap, identityMismatch: $identityMismatch);
         SubmissionStatus::refresh($submission, reopen: true);
 
         return [$scan, $queued, $stalePending, true];
@@ -216,6 +230,54 @@ final class ScanIngestor
         }
 
         return $qr;
+    }
+
+    /**
+     * Whose page this is (DESIGN §18.3).
+     *
+     * @return array{0: int, 1: bool, 2: ClassroomSubmissionImport|null} student id, identity mismatch, import row
+     */
+    private function resolveStudent(WorksheetQr $qr, Assignment $assignment, ScanMeta $meta): array
+    {
+        if (! $meta->fromClassroom()) {
+            $this->assertStudentEnrolled($qr, $assignment);
+
+            return [$qr->studentId, false, null];
+        }
+
+        $import = ClassroomSubmissionImport::query()
+            ->where('assignment_id', $assignment->id)
+            ->where('google_submission_id', $meta->googleSubmissionId)
+            ->first();
+        if ($import === null) {
+            throw new ApiException(
+                'ไม่พบงานที่ส่งใน Google Classroom นี้ในการบ้านของใบงาน กด "ดึงงานที่ส่ง" ใหม่ หรือใบงานอาจเป็นของการบ้านอื่น',
+                'google_submission_unknown',
+                422,
+            );
+        }
+
+        $submitter = ClassroomStudent::query()
+            ->where('classroom_id', $assignment->classroom_id)
+            ->where('google_user_id', $import->google_user_id)
+            ->value('student_id');
+        $submitter = $submitter === null ? null : (int) $submitter;
+
+        if ($qr->isAnonymous()) {
+            if ($submitter === null) {
+                throw new ApiException(
+                    'ใบงานสำรองไม่มีชื่อนักเรียน และบัญชี Google ของผู้ส่งยังไม่ได้จับคู่กับนักเรียนในห้อง จับคู่นักเรียนที่หน้าห้องเรียนก่อน',
+                    'student_unknown',
+                    422,
+                );
+            }
+
+            return [$submitter, false, $import];
+        }
+
+        $this->assertStudentEnrolled($qr, $assignment);
+
+        return [$qr->studentId, $submitter !== null && $submitter !== $qr->studentId, $import];
     }
 
     private function assertStudentEnrolled(WorksheetQr $qr, Assignment $assignment): void
@@ -324,20 +386,20 @@ final class ScanIngestor
      * @param  array<string, UploadedFile>  $files
      * @return array{0: Scan, 1: int, 2: list<int>}
      */
-    private function store(User $user, Assignment $assignment, WorksheetQr $qr, ScanMeta $meta, array $matched, array $files): array
+    private function store(User $user, Assignment $assignment, WorksheetQr $qr, int $studentId, bool $identityMismatch, ?ClassroomSubmissionImport $import, ScanMeta $meta, array $matched, array $files): array
     {
         // Outside the transaction: a concurrent first scan of the same student
         // may create the row first, and createOrFirst then reads the committed one.
         $submissionId = Submission::query()->createOrFirst([
             'assignment_id' => $assignment->id,
-            'student_id' => $qr->studentId,
+            'student_id' => $studentId,
         ])->id;
 
         // Files written so far, undone when the transaction or its commit fails.
         $written = [];
         $swap = null;
         try {
-            $result = DB::transaction(function () use ($user, $assignment, $qr, $meta, $matched, $files, $submissionId, &$written, &$swap) {
+            $result = DB::transaction(function () use ($user, $assignment, $qr, $studentId, $identityMismatch, $import, $meta, $matched, $files, $submissionId, &$written, &$swap) {
                 $submission = Submission::query()->lockForUpdate()->findOrFail($submissionId);
                 $published = $submission->isPublished();
 
@@ -350,6 +412,8 @@ final class ScanIngestor
                     'scanned_at' => $meta->scannedAt,
                     'blur_score' => $meta->blurScore,
                     'state' => $published ? Scan::STATE_PENDING_CONFIRM : Scan::STATE_ACTIVE,
+                    'source' => $meta->source,
+                    'google_submission_id' => $meta->googleSubmissionId,
                 ]);
                 $pagePath = ScanFiles::pagePath($assignment->school_id, $assignment->id, $scan->id);
                 $scan->page_image_path = $pagePath;
@@ -364,13 +428,22 @@ final class ScanIngestor
                     $stalePending = $this->supersedeOthers($submission, $scan, [Scan::STATE_PENDING_CONFIRM]);
                     $directory = ScanFiles::pendingDirectory($assignment->school_id, $assignment->id, $scan->id);
                     $written[] = $directory;
-                    $this->stashPending($directory, $matched, $files);
+                    $this->stashPending($directory, $matched, $files, $identityMismatch);
                     $queued = 0;
                 } else {
                     $stalePending = $this->supersedeOthers($submission, $scan);
                     $swap = new CropSwap(ScanFiles::replacedDirectory($assignment->school_id, $assignment->id, $scan->id));
-                    $queued = $this->writer->write($submission, $scan, $assignment, $matched, new UploadedCropSource($files), $user, $swap);
+                    $queued = $this->writer->write($submission, $scan, $assignment, $matched, new UploadedCropSource($files), $user, $swap, identityMismatch: $identityMismatch);
                     SubmissionStatus::refresh($submission);
+                }
+
+                if ($import !== null) {
+                    // §18.6: the Classroom submission now has a scan, filed under this student.
+                    ClassroomSubmissionImport::query()->whereKey($import->id)->update([
+                        'state' => ClassroomSubmissionImport::STATE_IMPORTED,
+                        'student_id' => $studentId,
+                        'updated_at' => now(),
+                    ]);
                 }
 
                 return [$scan, $queued, $stalePending];
@@ -420,7 +493,7 @@ final class ScanIngestor
      * @param  list<MatchedRegion>  $matched
      * @param  array<string, UploadedFile>  $files
      */
-    private function stashPending(string $directory, array $matched, array $files): void
+    private function stashPending(string $directory, array $matched, array $files, bool $identityMismatch): void
     {
         $regions = [];
         foreach ($matched as $item) {
@@ -432,7 +505,7 @@ final class ScanIngestor
             $regions[] = $region->toArray();
         }
 
-        $json = json_encode(['regions' => $regions], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $json = json_encode(['regions' => $regions, 'identity_mismatch' => $identityMismatch], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         if (! ScanFiles::disk()->put(ScanFiles::pendingMeta($directory), $json)) {
             throw new RuntimeException("Could not write {$directory}/regions.json");
         }
@@ -455,6 +528,14 @@ final class ScanIngestor
         }
 
         return array_map(fn (array $r) => ScanRegion::fromArray($r), array_values($data['regions']));
+    }
+
+    /** The identity_mismatch flag stashed with a pending rescan (§18.3). */
+    private function readPendingIdentityMismatch(string $directory): bool
+    {
+        $data = json_decode((string) ScanFiles::disk()->get(ScanFiles::pendingMeta($directory)), true);
+
+        return is_array($data) && ($data['identity_mismatch'] ?? false) === true;
     }
 
     /**

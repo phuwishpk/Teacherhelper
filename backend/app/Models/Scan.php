@@ -28,6 +28,8 @@ use Illuminate\Support\Carbon;
  * @property float $blur_score
  * @property string|null $page_image_path
  * @property string $state
+ * @property string $source camera|classroom (DESIGN §18.4)
+ * @property string|null $google_submission_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -39,6 +41,16 @@ class Scan extends Model
 
     public const STATE_PENDING_CONFIRM = 'pending_confirm';
 
+    /** Taken with the phone camera (the default). */
+    public const SOURCE_CAMERA = 'camera';
+
+    /** Downloaded from a Google Classroom submission on the teacher's phone (DESIGN §18.2). */
+    public const SOURCE_CLASSROOM = 'classroom';
+
+    protected $attributes = [
+        'source' => self::SOURCE_CAMERA,
+    ];
+
     protected $fillable = [
         'client_scan_id',
         'submission_id',
@@ -49,6 +61,8 @@ class Scan extends Model
         'blur_score',
         'page_image_path',
         'state',
+        'source',
+        'google_submission_id',
     ];
 
     /**

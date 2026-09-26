@@ -41,4 +41,17 @@ final class NoticeTexts
     {
         return 'ครูตอบคำขอตรวจใหม่แล้ว';
     }
+
+    /**
+     * To the student when the teacher sends Google Classroom work back for a
+     * new photo (§18.2). The reason is the teacher's own words about the
+     * picture, never a score.
+     */
+    public static function retakeRequested(string $title, string $reason): string
+    {
+        $text = "ครูขอให้ส่งรูปการบ้าน {$title} ใหม่ใน Google Classroom";
+        $reason = trim($reason);
+
+        return $reason !== '' ? "{$text}: {$reason}" : $text;
+    }
 }

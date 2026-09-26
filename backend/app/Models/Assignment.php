@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -124,6 +125,18 @@ class Assignment extends Model
     public function responses(): HasManyThrough
     {
         return $this->hasManyThrough(Response::class, Submission::class);
+    }
+
+    /** The Google Classroom courseWork it was posted as (DESIGN §18.4). @return HasOne<AssignmentGoogleLink, $this> */
+    public function googleLink(): HasOne
+    {
+        return $this->hasOne(AssignmentGoogleLink::class);
+    }
+
+    /** @return HasMany<ClassroomSubmissionImport, $this> */
+    public function submissionImports(): HasMany
+    {
+        return $this->hasMany(ClassroomSubmissionImport::class);
     }
 
     public function isDraft(): bool

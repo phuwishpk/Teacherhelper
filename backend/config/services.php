@@ -68,6 +68,28 @@ return [
         'timeout' => (int) env('FIREBASE_TIMEOUT', 10),
     ],
 
+    /*
+    | Google Classroom + Drive (DESIGN §18), REST through the Laravel HTTP
+    | client (no google/apiclient). client_id / client_secret: the OAuth
+    | client of type "Web application" (KICKOFF part 6, G4); the app sends
+    | its server auth code to POST /google/connect and the server exchanges it
+    | here. The secret stays on the server. Both empty = Classroom is off: the
+    | endpoints answer 503 google_not_configured.
+    | redirect_uri: sent with the code exchange; a code from Android's
+    | google_sign_in has no redirect, so it stays empty unless Google asks for
+    | one (error redirect_uri_mismatch).
+    | app_link: optional link (Play Store page, school site) added to the
+    | instructions of every courseWork, where students find the per-question
+    | explanations.
+    */
+    'google' => [
+        'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI', ''),
+        'timeout' => (int) env('GOOGLE_TIMEOUT', 20),
+        'app_link' => env('GOOGLE_CLASSROOM_APP_LINK'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

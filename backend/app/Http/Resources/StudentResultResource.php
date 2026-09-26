@@ -16,6 +16,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  assignment: {id, title, subject: {id, code, name}|null},
  *  total_score, max_score, published_at}
  * and, for GET /student/results/{submission_id} (responses loaded):
+ * retake_reason (the open Google Classroom retake request of this assignment,
+ * or null, §18.2) and
  * responses: [{id, response_id, question_id, position, type, max_points,
  *   prompt_text, final_score, final_understanding, final_error_types,
  *   explanation, has_crop, has_final_crop, crop_url, final_crop_url,
@@ -52,6 +54,8 @@ class StudentResultResource extends JsonResource
             'total_score' => $submission->total_score,
             'max_score' => $submission->getAttribute('max_score') === null ? null : round((float) $submission->getAttribute('max_score'), 2),
             'published_at' => $submission->published_at?->toIso8601String(),
+            // Detail only: the teacher asked for a new photo in Google Classroom (§18.2).
+            'retake_reason' => $this->when(array_key_exists('retake_reason', $submission->getAttributes()), fn () => $submission->getAttribute('retake_reason')),
             'responses' => $this->whenLoaded('responses', fn () => $submission->responses
                 ->sortBy(fn (Response $r) => [(int) $r->question?->position, $r->id])
                 ->values()

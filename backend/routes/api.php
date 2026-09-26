@@ -3,9 +3,13 @@
 use App\Http\Controllers\Api\V1\AiKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
+use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomController;
+use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\GoogleAccountController;
+use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LayoutController;
@@ -21,6 +25,7 @@ use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentResultController;
+use App\Http\Controllers\Api\V1\StudentRetakeController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
@@ -113,6 +118,22 @@ Route::prefix('v1')->group(function () {
                 Route::post('submissions/{id}/publish', [SubmissionController::class, 'publish'])->whereNumber('id')->name('api.submissions.publish');
                 Route::get('appeals', [AppealController::class, 'index'])->name('api.appeals.index');
                 Route::patch('appeals/{id}', [AppealController::class, 'update'])->whereNumber('id')->name('api.appeals.update');
+
+                // Google Classroom (§18.6). Routes that call Google share the `google` limiter.
+                Route::get('google/status', [GoogleAccountController::class, 'status'])->name('api.google.status');
+                Route::delete('google/disconnect', [GoogleAccountController::class, 'disconnect'])->name('api.google.disconnect');
+                Route::delete('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'unlink'])->whereNumber('id')->name('api.classrooms.google-link.destroy');
+                Route::middleware('throttle:google')->group(function () {
+                    Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
+                    Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
+                    Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->whereNumber('id')->name('api.classrooms.google-link.store');
+                    Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->whereNumber('id')->name('api.classrooms.google-roster.show');
+                    Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->whereNumber('id')->name('api.classrooms.google-roster.update');
+                    Route::post('assignments/{id}/google-post', [AssignmentGoogleController::class, 'post'])->whereNumber('id')->name('api.assignments.google-post');
+                    Route::get('assignments/{id}/google-submissions', [AssignmentGoogleController::class, 'submissions'])->whereNumber('id')->name('api.assignments.google-submissions');
+                    Route::post('assignments/{id}/google-grades/retry', [AssignmentGoogleController::class, 'retryGrades'])->whereNumber('id')->name('api.assignments.google-grades.retry');
+                    Route::post('google-submissions/{id}/return', [GoogleSubmissionController::class, 'returnForRetake'])->whereNumber('id')->name('api.google-submissions.return');
+                });
             });
 
             // Student-only (§9.7): their own published results.
@@ -121,6 +142,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->whereNumber('submission_id')->name('api.student.results.show');
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->whereNumber('id')->middleware('throttle:30,1')->name('api.student.responses.appeal');
                 Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
+                Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
             });
 
             // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.

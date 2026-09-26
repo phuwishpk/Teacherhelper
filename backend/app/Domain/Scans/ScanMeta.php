@@ -2,6 +2,7 @@
 
 namespace App\Domain\Scans;
 
+use App\Models\Scan;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -18,6 +19,9 @@ final readonly class ScanMeta
     /** More answer areas than any A4 page can hold. */
     public const MAX_REGIONS = 40;
 
+    /** meta.source values (DESIGN §18.6). */
+    public const SOURCES = [Scan::SOURCE_CAMERA, Scan::SOURCE_CLASSROOM];
+
     /** Multipart field of the warped page image. */
     public const PAGE_FIELD = 'page';
 
@@ -33,7 +37,14 @@ final readonly class ScanMeta
         public CarbonImmutable $scannedAt,
         public float $blurScore,
         public array $regions,
+        public string $source = Scan::SOURCE_CAMERA,
+        public ?string $googleSubmissionId = null,
     ) {}
+
+    public function fromClassroom(): bool
+    {
+        return $this->source === Scan::SOURCE_CLASSROOM;
+    }
 
     /**
      * The client_scan_id if `meta` carries a well-formed one, lower-cased.
@@ -68,12 +79,17 @@ final readonly class ScanMeta
             $scannedAt = CarbonImmutable::now()->utc();
         }
 
+        $source = (string) ($validated['source'] ?? Scan::SOURCE_CAMERA);
+
         return new self(
             clientScanId: strtolower($validated['client_scan_id']),
             qr: trim($validated['qr']),
             scannedAt: $scannedAt,
             blurScore: (float) $validated['blur_score'],
             regions: $regions,
+            source: $source,
+            // Only a Google Classroom scan names a submission; a camera scan's is ignored.
+            googleSubmissionId: $source === Scan::SOURCE_CLASSROOM ? (string) $validated['google_submission_id'] : null,
         );
     }
 
@@ -90,6 +106,9 @@ final readonly class ScanMeta
             'meta.qr' => ['required', 'string', 'max:128'],
             'meta.scanned_at' => ['required', 'date', 'after:2020-01-01'],
             'meta.blur_score' => ['required', 'numeric', 'min:0', 'max:1000000'],
+            // Google Classroom (§18.6): where the image came from and which submission.
+            'meta.source' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', self::SOURCES)],
+            'meta.google_submission_id' => ['nullable', 'required_if:meta.source,'.Scan::SOURCE_CLASSROOM, 'string', 'max:64', 'regex:/\A[A-Za-z0-9_=.-]+\z/'],
             'meta.regions' => ['required', 'list', 'min:1', 'max:'.self::MAX_REGIONS],
             'meta.regions.*' => ['required', 'array'],
             'meta.regions.*.region_id' => ['required', 'string', 'max:64', 'distinct'],
@@ -124,6 +143,8 @@ final readonly class ScanMeta
             'meta.scanned_at.date' => 'เวลาที่สแกนไม่ถูกต้อง',
             'meta.scanned_at.after' => 'เวลาที่สแกนไม่ถูกต้อง',
             'meta.blur_score.required' => 'ไม่มีค่าความคมชัดของภาพ (blur_score)',
+            'meta.source.in' => 'source ต้องเป็น camera หรือ classroom',
+            'meta.google_submission_id.required_if' => 'สแกนจาก Google Classroom ต้องมี google_submission_id',
             'meta.regions.required' => 'ไม่มีข้อมูลช่องคำตอบ (regions)',
             'meta.regions.list' => 'regions ต้องเป็น array',
             'meta.regions.max' => 'ช่องคำตอบในหนึ่งหน้ามีได้ไม่เกิน '.self::MAX_REGIONS.' ช่อง',
@@ -149,6 +170,8 @@ final readonly class ScanMeta
             'regex' => ':attribute มีรูปแบบไม่ถูกต้อง',
             'not_in' => ':attribute ใช้ค่านี้ไม่ได้',
             'distinct' => ':attribute ซ้ำกัน',
+            'in' => ':attribute ใช้ค่านี้ไม่ได้',
+            'required_if' => 'ไม่มี :attribute',
             'min' => [
                 'numeric' => ':attribute ต้องไม่น้อยกว่า :min',
                 'string' => ':attribute ต้องยาวอย่างน้อย :min ตัวอักษร',
@@ -180,6 +203,8 @@ final readonly class ScanMeta
             'meta.qr' => 'ข้อความ QR ของใบงาน',
             'meta.scanned_at' => 'เวลาที่สแกน',
             'meta.blur_score' => 'ค่าความคมชัดของภาพ (blur_score)',
+            'meta.source' => 'ที่มาของภาพ (source)',
+            'meta.google_submission_id' => 'google_submission_id',
             'meta.regions' => 'ข้อมูลช่องคำตอบ (regions)',
             'meta.regions.*' => 'ช่องคำตอบ',
             'meta.regions.*.region_id' => 'region_id ของช่องคำตอบ',

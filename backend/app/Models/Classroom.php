@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * DESIGN §8.1 `classrooms`.
@@ -68,5 +70,17 @@ class Classroom extends Model
             ->withPivot('student_number')
             ->withTimestamps()
             ->orderByPivot('student_number');
+    }
+
+    /** @return HasMany<Assignment, $this> */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class);
+    }
+
+    /** The linked Google Classroom course (DESIGN §18.4). @return HasOne<ClassroomGoogleLink, $this> */
+    public function googleLink(): HasOne
+    {
+        return $this->hasOne(ClassroomGoogleLink::class);
     }
 }

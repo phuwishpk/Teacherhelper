@@ -55,6 +55,12 @@ class AssignmentPolicy
         return self::owns($user, $assignment);
     }
 
+    /** Post to Google Classroom, sync its submissions, retry grades (§18.6). */
+    public function manageGoogle(User $user, Assignment $assignment): bool
+    {
+        return self::owns($user, $assignment);
+    }
+
     public static function owns(User $user, Assignment $assignment): bool
     {
         return self::isSchoolTeacher($user)

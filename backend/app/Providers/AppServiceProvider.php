@@ -80,6 +80,12 @@ class AppServiceProvider extends ServiceProvider
         // tokens are 256-bit random, so the IP limit is only abuse protection;
         // the PIN path adds a per-credential limit on top of the 5-attempt
         // lockout in StudentAuthenticator.
+        // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
+        // runaway client must not burn the Cloud project's Classroom quota.
+        RateLimiter::for('google', function (Request $request) {
+            return Limit::perMinute(30)->by('google|'.($request->user()?->getAuthIdentifier() ?: $request->ip()));
+        });
+
         RateLimiter::for('student-auth', function (Request $request) {
             $limits = [Limit::perMinute(120)->by('ip|'.$request->ip())];
 

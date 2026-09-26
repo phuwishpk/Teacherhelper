@@ -30,6 +30,7 @@ class ClassroomController extends Controller
 
         $classrooms = $this->ownQuery($request)
             ->withCount('students')
+            ->with('googleLink')
             ->orderByDesc('academic_year')
             ->orderBy('grade_level')
             ->orderBy('name')
@@ -51,7 +52,7 @@ class ClassroomController extends Controller
             ...$request->validated(),
             'class_code' => ClassCodeGenerator::unique(),
         ]);
-        $classroom->loadCount('students');
+        $classroom->loadCount('students')->load('googleLink');
 
         return (new ClassroomResource($classroom))->response()->setStatusCode(201);
     }
@@ -59,7 +60,7 @@ class ClassroomController extends Controller
     /** GET /api/v1/classrooms/{id} */
     public function show(Request $request, int $id): ClassroomResource
     {
-        $classroom = $this->ownQuery($request)->withCount('students')->findOrFail($id);
+        $classroom = $this->ownQuery($request)->withCount('students')->with('googleLink')->findOrFail($id);
         Gate::authorize('view', $classroom);
 
         return new ClassroomResource($classroom);
@@ -72,7 +73,7 @@ class ClassroomController extends Controller
         Gate::authorize('update', $classroom);
 
         $classroom->fill($request->validated())->save();
-        $classroom->loadCount('students');
+        $classroom->loadCount('students')->load('googleLink');
 
         return new ClassroomResource($classroom);
     }
