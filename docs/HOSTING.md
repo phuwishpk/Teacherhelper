@@ -416,7 +416,7 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 | Prompt injection | `tests/fixtures/injection/*.png` ข้อที่มีคำสั่งแทรก → `suspicious_instruction` → บนสุดของคิวครู, ตัดสิทธิ์อนุมัติแบบกลุ่ม, ไม่สร้างคำอธิบายอัตโนมัติ (DESIGN §10.7) |
 | Key ของครู | เข้ารหัสด้วย `APP_KEY` แสดง 4 ตัวท้าย ไม่ออกทาง response/log/`ai_calls` แม้ตอน Google ปฏิเสธ key |
 | config cache | ไม่มี `env()` นอก `config/` (test สแกน) จึงปลอดภัยกับ `optimize` |
-| CI | gitleaks สแกนทั้งประวัติ git ทุก push; pre-commit hook ในเครื่องกัน Google API key (`AIza...`) |
+| CI | gitleaks สแกนทั้งประวัติ git ทุก push ด้วยกฎ default + `google-aq-api-key` จาก `.gitleaks.toml` (key แบบ `AQ.` ที่กฎ default จับไม่ได้); pre-commit hook ในเครื่องกัน Google API key (`AIza...` และ `AQ....`) แต่ไม่ติดไปกับ clone ใหม่หรือการแก้ผ่านเว็บ GitHub |
 
 ### สิ่งที่ต้องทำเองบน Plesk
 
