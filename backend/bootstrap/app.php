@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureGoogleConfigured;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => CheckForAnyAbility::class,
             'role' => EnsureRole::class,
             'active' => EnsureUserIsActive::class,
+            'google.configured' => EnsureGoogleConfigured::class,
         ]);
 
         // There is no `login` route: the only web login is Filament's. API guests get
