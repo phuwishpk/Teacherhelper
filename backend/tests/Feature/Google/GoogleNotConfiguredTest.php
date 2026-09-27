@@ -67,6 +67,7 @@ class GoogleNotConfiguredTest extends TestCase
             'api.google.connect',
             'api.google.courses',
             'api.google.disconnect',
+            'api.google.oauth-url',
         ], array_keys($routes));
 
         $student = $this->enrollStudent($classroom)['student'];
@@ -105,6 +106,7 @@ class GoogleNotConfiguredTest extends TestCase
 
         $this->asUser($teacher)->getJson('/api/v1/google/status')
             ->assertOk()
+            ->assertJsonPath('data.configured', false)
             ->assertJsonPath('data.server_configured', false)
             ->assertJsonPath('data.connected', false);
     }

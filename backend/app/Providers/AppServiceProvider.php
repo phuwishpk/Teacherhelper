@@ -109,6 +109,9 @@ class AppServiceProvider extends ServiceProvider
         // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
         // runaway client must not burn the Cloud project's Classroom quota.
         RateLimiter::for('google', fn (Request $request) => self::perUser($request, 30));
+        // GET /google/oauth/callback has no login; a bad state is refused
+        // before anything reaches Google, so this only caps probing.
+        RateLimiter::for('google-oauth-callback', fn (Request $request) => Limit::perMinute(20)->by((string) $request->ip()));
 
         // Endpoints that reach Gemini directly or queue a Gemini job (they
         // cost the teacher's or the school's quota), and the student write

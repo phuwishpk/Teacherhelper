@@ -28,6 +28,21 @@ final class GoogleScopes
         self::PREFIX.'drive.readonly',
     ];
 
+    /** What each scope is for, in Thai (the browser flow's error page). */
+    public const LABELS = [
+        self::PREFIX.'classroom.courses.readonly' => 'ดูรายการคอร์สที่สอนใน Google Classroom',
+        self::PREFIX.'classroom.rosters.readonly' => 'ดูรายชื่อนักเรียนในคอร์ส',
+        self::PREFIX.'classroom.profile.emails' => 'ดูอีเมลของนักเรียนในคอร์ส',
+        self::PREFIX.'classroom.coursework.students' => 'สร้างงาน ดูงานที่ส่ง ให้คะแนน และส่งคืนงานใน Classroom',
+        self::PREFIX.'drive.file' => 'อัปโหลดใบงานที่แอปสร้างขึ้นไปที่ Google Drive',
+        self::PREFIX.'drive.readonly' => 'เปิดไฟล์ใน Google Drive (รูปงานที่นักเรียนแนบมา)',
+    ];
+
+    public static function label(string $scope): string
+    {
+        return self::LABELS[$scope] ?? $scope;
+    }
+
     /**
      * @param  list<string>  $granted
      * @return list<string> required scopes that were not granted

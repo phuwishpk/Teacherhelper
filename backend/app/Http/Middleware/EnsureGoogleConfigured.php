@@ -14,7 +14,9 @@ use Symfony\Component\HttpFoundation\Response;
  * any other precondition (classroom_not_linked, not_posted, ...), so the app
  * says Google is not set up instead of asking the teacher to link a course.
  * Runs after auth and role, so guests still get 401 and students 403.
- * GET /google/status stays open: it reports server_configured.
+ * GET /google/status stays open: it reports `configured` (the app hides its
+ * Classroom UI when false). The browser flow's GET /google/oauth/callback is
+ * a web route and shows its own page instead.
  * Alias `google.configured` in bootstrap/app.php.
  */
 class EnsureGoogleConfigured

@@ -71,13 +71,16 @@ return [
     /*
     | Google Classroom + Drive (DESIGN §18), REST through the Laravel HTTP
     | client (no google/apiclient). client_id / client_secret: the OAuth
-    | client of type "Web application" (KICKOFF part 6, G4); the app sends
-    | its server auth code to POST /google/connect and the server exchanges it
-    | here. The secret stays on the server. Both empty = Classroom is off: the
-    | endpoints answer 503 google_not_configured.
-    | redirect_uri: sent with the code exchange; a code from Android's
-    | google_sign_in has no redirect, so it stays empty unless Google asks for
-    | one (error redirect_uri_mismatch).
+    | client of type "Web application" (KICKOFF part 6, G4). Two ways to
+    | connect a teacher, both exchanged here: the Android app sends its
+    | server auth code to POST /google/connect (no redirect URI), or any
+    | device opens the consent page from POST /google/oauth/url in a browser
+    | and Google comes back to GET /google/oauth/callback. The secret stays
+    | on the server. Both empty = Classroom is off: the endpoints answer 503
+    | google_not_configured.
+    | redirect_uri: the browser flow's callback. Register exactly this value
+    | under "Authorized redirect URIs" of the Web client. Empty = APP_URL +
+    | /google/oauth/callback.
     | app_link: optional link (Play Store page, school site) added to the
     | instructions of every courseWork, where students find the per-question
     | explanations.
@@ -85,7 +88,7 @@ return [
     'google' => [
         'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
         'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
-        'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI', ''),
+        'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI') ?: rtrim((string) env('APP_URL', 'http://localhost'), '/').'/google/oauth/callback',
         'timeout' => (int) env('GOOGLE_TIMEOUT', 20),
         'app_link' => env('GOOGLE_CLASSROOM_APP_LINK'),
     ],

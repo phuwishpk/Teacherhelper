@@ -12,11 +12,12 @@ use Illuminate\Support\Facades\Log;
 /**
  * A teacher's Google connection (DESIGN §18.5, §18.6 /google/*):
  *
- * - connect(): exchange the app's server auth code, check every scope of
+ * - connect(): exchange a one-time code (the app's server auth code, or
+ *   the browser flow's code with its redirect URI), check every scope of
  *   GoogleScopes::REQUIRED was granted (422 google_scope_missing, and the
  *   grant is revoked again), read the account id and e-mail
  *   (userProfiles/me), store the refresh token encrypted;
- * - status(): {connected, email, scopes, needs_reconnect, ...};
+ * - status(): {connected, email, scopes, needs_reconnect, configured, ...};
  * - disconnect(): revoke at Google, then delete the row (always deleted:
  *   the teacher asked for it; `revoked` says whether Google confirmed);
  * - call(): runs Classroom/Drive calls for a teacher and turns Google's
@@ -32,18 +33,22 @@ final class GoogleAccounts
     ) {}
 
     /**
+     * $redirectUri: '' for the Android app's server auth code
+     * (POST /google/connect), GoogleOAuth::redirectUri() for a code of the
+     * browser flow (GET /google/oauth/callback).
+     *
      * @return array<string, mixed> status()
      *
      * @throws ApiException
      */
-    public function connect(User $teacher, #[\SensitiveParameter] string $serverAuthCode): array
+    public function connect(User $teacher, #[\SensitiveParameter] string $code, string $redirectUri = ''): array
     {
         if (! GoogleOAuth::isConfigured()) {
             throw GoogleErrors::notConfigured();
         }
 
         try {
-            $grant = $this->oauth->exchangeCode($serverAuthCode);
+            $grant = $this->oauth->exchangeCode($code, $redirectUri);
         } catch (GoogleApiException $e) {
             if ($e->kind === GoogleApiException::INVALID_GRANT) {
                 throw new ApiException('รหัสยืนยันจาก Google หมดอายุหรือถูกใช้ไปแล้ว กดเชื่อมอีกครั้ง', 'google_code_invalid', 422);
@@ -51,7 +56,9 @@ final class GoogleAccounts
             if ($e->kind === GoogleApiException::NOT_CONFIGURED) {
                 Log::error('google.client_rejected', ['message' => $e->getMessage()]);
                 throw new ApiException(
-                    'Google ไม่รับ OAuth client ของเซิร์ฟเวอร์ (GOOGLE_OAUTH_CLIENT_ID / SECRET ไม่ตรงกับ GOOGLE_SERVER_CLIENT_ID ของแอป) กรุณาแจ้งผู้ดูแลระบบ',
+                    $redirectUri === ''
+                        ? 'Google ไม่รับ OAuth client ของเซิร์ฟเวอร์ (GOOGLE_OAUTH_CLIENT_ID / SECRET ไม่ตรงกับ GOOGLE_SERVER_CLIENT_ID ของแอป) กรุณาแจ้งผู้ดูแลระบบ'
+                        : 'Google ไม่รับ OAuth client ของเซิร์ฟเวอร์ (ตรวจ GOOGLE_OAUTH_CLIENT_ID / SECRET) กรุณาแจ้งผู้ดูแลระบบ',
                     'google_not_configured',
                     503,
                 );
@@ -132,7 +139,11 @@ final class GoogleAccounts
     }
 
     /**
-     * @return array{connected: bool, email: string|null, scopes: list<string>, needs_reconnect: bool, last_error: string|null, connected_at: string|null, server_configured: bool}
+     * `configured` and `server_configured` are the same flag (the app shows
+     * its Google Classroom UI when it is true); the second name is kept for
+     * clients that read it.
+     *
+     * @return array{connected: bool, email: string|null, scopes: list<string>, needs_reconnect: bool, last_error: string|null, connected_at: string|null, configured: bool, server_configured: bool}
      */
     public function status(User $teacher): array
     {
@@ -145,7 +156,8 @@ final class GoogleAccounts
             'needs_reconnect' => $account?->needsReconnect() ?? false,
             'last_error' => $account?->last_error,
             'connected_at' => $account?->connected_at?->toIso8601String(),
-            'server_configured' => GoogleOAuth::isConfigured(),
+            'configured' => $configured = GoogleOAuth::isConfigured(),
+            'server_configured' => $configured,
         ];
     }
 

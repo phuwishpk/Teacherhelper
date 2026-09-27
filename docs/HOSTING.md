@@ -224,7 +224,7 @@ FIREBASE_TIMEOUT=10
 # ---- Google Classroom (§6.3) ----
 GOOGLE_OAUTH_CLIENT_ID=               # ว่างทั้งคู่ = endpoint ของ Classroom ตอบ 503 google_not_configured
 GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_OAUTH_REDIRECT_URI=
+GOOGLE_OAUTH_REDIRECT_URI=https://teacherhelper.phuwish.com/google/oauth/callback   # ว่าง = APP_URL + /google/oauth/callback ต้องตรงกับที่ลงทะเบียนใน Google (§6.3)
 GOOGLE_TIMEOUT=20
 GOOGLE_CLASSROOM_APP_LINK=
 ```
@@ -362,11 +362,12 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 ### 6.3 Google Classroom (DESIGN §18, KICKOFF ส่วนที่ 6)
 
 1. ทำ G1–G5 ใน KICKOFF ส่วนที่ 6: project เดียวกับ Firebase, เปิด Classroom API + Drive API, OAuth consent screen (โหมด Testing: refresh token หมดอายุ 7 วัน ครูต้องเชื่อมใหม่), OAuth client แบบ **Web application** (server ใช้แลก code) และแบบ **Android** (แอปใช้)
-2. `.env`: `GOOGLE_OAUTH_CLIENT_ID=` และ `GOOGLE_OAUTH_CLIENT_SECRET=` ของ client แบบ Web (`GOOGLE_OAUTH_REDIRECT_URI` เว้นว่างจนกว่า Google จะตอบ `redirect_uri_mismatch`) → `optimize:clear`/`optimize`
-3. client ID เดียวกันไปที่แอปเป็น `--dart-define=GOOGLE_SERVER_CLIENT_ID=...`
-4. hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (probe ตรวจ `oauth2.googleapis.com` แล้ว)
-5. ทดสอบจากแอป: ตั้งค่า > เชื่อม Google Classroom → `GET /api/v1/google/status` ตอบ `connected: true`
-6. ถ้า secret หลุด: Credentials > เลือก Web client > **Reset secret** แล้วแก้ `.env`
+2. **ลงทะเบียน redirect URI ของการเชื่อมผ่านเบราว์เซอร์**: Google Cloud Console → APIs & Services → Credentials → client แบบ Web → *Authorized redirect URIs* → เพิ่ม `https://teacherhelper.phuwish.com/google/oauth/callback` (ตรงทุกตัวอักษรกับ `GOOGLE_OAUTH_REDIRECT_URI` หรือ `APP_URL` + `/google/oauth/callback` ถ้าเว้นว่าง; ไม่มี `/` ท้าย) → Save (มีผลภายในไม่กี่นาที) ใช้ตอนครูเชื่อมจากเว็บ (Flutter web) หรือจากแอปที่ไม่มี `GOOGLE_SERVER_CLIENT_ID`: server ส่งครูไปหน้า consent ของ Google แล้ว Google พาเบราว์เซอร์กลับมาที่ `GET /google/oauth/callback` ของเรา *Authorized JavaScript origins* ไม่ต้องใส่ ถ้าทดสอบบนเครื่อง dev ด้วย client เดียวกัน เพิ่ม `http://127.0.0.1:8000/google/oauth/callback` ด้วย
+3. `.env`: `GOOGLE_OAUTH_CLIENT_ID=` และ `GOOGLE_OAUTH_CLIENT_SECRET=` ของ client แบบ Web และ `GOOGLE_OAUTH_REDIRECT_URI=https://teacherhelper.phuwish.com/google/oauth/callback` (code จากแอป Android ผ่าน `POST /google/connect` ไม่ใช้ค่านี้) → `optimize:clear`/`optimize`
+4. client ID เดียวกันไปที่แอป Android เป็น `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` (ไม่บังคับ: ไม่ใส่ แอปเชื่อมผ่านเบราว์เซอร์แทน แต่ดาวน์โหลดและสแกนงานที่ส่งจาก Classroom ต้องมี)
+5. hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (probe ตรวจ `oauth2.googleapis.com` แล้ว)
+6. ทดสอบจากแอป: ตั้งค่า > เชื่อม Google Classroom → (ผ่านเบราว์เซอร์: หน้า "เชื่อม Google Classroom สำเร็จ" ที่ `/google/oauth/callback`) → `GET /api/v1/google/status` ตอบ `configured: true, connected: true` ถ้าหน้า Google ขึ้น `Error 400: redirect_uri_mismatch` แปลว่า URI ในข้อ 2 กับ `.env` ไม่ตรงกัน (ดู `redirect_uri` ในลิงก์ที่แอปเปิดได้)
+7. ถ้า secret หลุด: Credentials > เลือก Web client > **Reset secret** แล้วแก้ `.env`
 
 ---
 
@@ -407,7 +408,7 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 |---|---|
 | Authorization ทุก endpoint | ทุก route ใต้ `/api/v1` มีแถวใน `AuthorizationMatrixTest` (guest 401, ผิด role 403, ครูโรงเรียนอื่น/ครูร่วมโรงเรียนที่ไม่ใช่เจ้าของ 403/404, เพื่อนร่วมห้อง 404, บัญชี disabled 403 `account_not_active`, admin ไม่มีสิทธิ์ API) เพิ่ม route ใหม่โดยไม่เพิ่มแถว test จะแดง |
 | Role + ability | middleware `role:teacher` / `role:student` ตรวจทั้ง role ของบัญชีและ ability ของ token; policy ตรวจซ้ำที่ระดับแถว |
-| Rate limit | `/auth/teacher/*` (สมัคร + login รวมกัน) 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; ต่อผู้ใช้แยก bucket กันต่อ endpoint: บันทึก Gemini key 10, สร้างคำอธิบายใหม่ 20, สร้างแบบฝึกด้วย AI 10, ขอตรวจใหม่ 30, ส่งคำตอบแบบฝึก 60 ครั้ง/นาที (ใช้ endpoint หนึ่งจนเต็มไม่ทำให้อีก endpoint โดนด้วย) ตอบ `429 too_many_requests` + `Retry-After` |
+| Rate limit | `/auth/teacher/*` (สมัคร + login รวมกัน) 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; `/google/oauth/callback` (ไม่ต้อง login) 20/นาที/IP; ต่อผู้ใช้แยก bucket กันต่อ endpoint: บันทึก Gemini key 10, สร้างคำอธิบายใหม่ 20, สร้างแบบฝึกด้วย AI 10, ขอตรวจใหม่ 30, ส่งคำตอบแบบฝึก 60 ครั้ง/นาที (ใช้ endpoint หนึ่งจนเต็มไม่ทำให้อีก endpoint โดนด้วย) ตอบ `429 too_many_requests` + `Retry-After` |
 | PIN / QR | PIN ผิด 5 ครั้งล็อกบัญชี 15 นาที (นับที่บัญชี ไม่ใช่ IP); QR token 256 บิต เก็บเป็น hash; ออกบัตรใหม่/รีเซ็ต PIN ยกเลิก token เดิมทั้งหมด; QR บนใบงานมีลายเซ็น HMAC ปลอมไม่ได้ |
 | Token | Sanctum: ครู 30 วัน นักเรียน 180 วัน หมดอายุ/ถูกลบ/ปลอม → 401 ในรูปแบบเดียวกัน |
 | Security headers | ทุก response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`; API เพิ่ม `Cache-Control: no-store, private`, `X-Robots-Tag: noindex`, CSP `default-src 'none'` สำหรับ JSON; `Strict-Transport-Security` เฉพาะ HTTPS |

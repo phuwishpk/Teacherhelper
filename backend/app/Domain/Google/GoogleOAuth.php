@@ -10,8 +10,11 @@ use Illuminate\Support\Facades\Http;
  * Google's OAuth 2.0 endpoints for the teacher's account (DESIGN §18.5),
  * with the Web client of config('services.google'):
  *
- * - exchangeCode(): the one-time server auth code from the app
- *   (google_sign_in authorizeServer) -> access + refresh token;
+ * - authorizationUrl(): the consent page of the browser flow
+ *   (POST /google/oauth/url, then GET /google/oauth/callback);
+ * - exchangeCode(): a one-time code -> access + refresh token. The server
+ *   auth code of the Android app (google_sign_in authorizeServer) has no
+ *   redirect URI; the browser flow's code needs redirectUri() again;
  * - refresh(): refresh token -> a new access token (about an hour);
  * - revoke(): ends the grant (DELETE /google/disconnect).
  *
@@ -20,6 +23,8 @@ use Illuminate\Support\Facades\Http;
  */
 final class GoogleOAuth
 {
+    public const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+
     public const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
     public const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
@@ -31,14 +36,49 @@ final class GoogleOAuth
     }
 
     /**
+     * Where Google sends the browser back to (GET /google/oauth/callback).
+     * It must be listed, character for character, under "Authorized
+     * redirect URIs" of the Web client. GOOGLE_OAUTH_REDIRECT_URI, or
+     * APP_URL + /google/oauth/callback.
+     */
+    public static function redirectUri(): string
+    {
+        $configured = trim((string) config('services.google.redirect_uri'));
+
+        return $configured !== '' ? $configured : rtrim((string) config('app.url'), '/').'/google/oauth/callback';
+    }
+
+    /**
+     * Google's consent page for the browser flow: every scope of
+     * GoogleScopes::REQUIRED, offline access and a forced consent screen,
+     * so Google always answers with a refresh token.
+     */
+    public function authorizationUrl(string $state): string
+    {
+        return self::AUTH_URL.'?'.http_build_query([
+            'client_id' => (string) config('services.google.client_id'),
+            'redirect_uri' => self::redirectUri(),
+            'response_type' => 'code',
+            'scope' => implode(' ', GoogleScopes::REQUIRED),
+            'access_type' => 'offline',
+            'prompt' => 'consent',
+            'include_granted_scopes' => 'true',
+            'state' => $state,
+        ], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
+     * $redirectUri: '' for the app's server auth code, redirectUri() for a
+     * code of the browser flow (Google compares it with the consent request).
+     *
      * @throws GoogleApiException invalid_grant (code used or expired), not_configured, unavailable, bad_request
      */
-    public function exchangeCode(#[\SensitiveParameter] string $code): OAuthGrant
+    public function exchangeCode(#[\SensitiveParameter] string $code, string $redirectUri = ''): OAuthGrant
     {
         return $this->grant('code exchange', [
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => (string) config('services.google.redirect_uri', ''),
+            'redirect_uri' => $redirectUri,
         ]);
     }
 
