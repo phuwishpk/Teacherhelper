@@ -157,6 +157,7 @@ Route::prefix('v1')->group(function () {
                     Route::delete('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'unlink'])->name('api.classrooms.google-link.destroy');
                     Route::middleware('throttle:google')->group(function () {
                         Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
+                        Route::post('google/oauth/url', [GoogleAccountController::class, 'oauthUrl'])->name('api.google.oauth-url');
                         Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
                         Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->name('api.classrooms.google-link.store');
                         Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');

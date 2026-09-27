@@ -103,6 +103,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.google.status' => ['GET', 'google/status', self::OK, self::OK],
         'api.google.disconnect' => ['DELETE', 'google/disconnect', self::OK, self::OK],
         'api.google.connect' => ['POST', 'google/connect', self::OK, self::OK],
+        'api.google.oauth-url' => ['POST', 'google/oauth/url', self::OK, self::OK],
         'api.google.courses' => ['GET', 'google/courses', self::OK, self::OK],
         'api.classrooms.google-link.store' => ['POST', 'classrooms/{classroom}/google-link', 404, 404],
         'api.classrooms.google-link.destroy' => ['DELETE', 'classrooms/{classroom}/google-link', 404, 404],

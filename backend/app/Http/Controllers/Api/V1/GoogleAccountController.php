@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Google\GoogleAccounts;
 use App\Domain\Google\GoogleApi;
+use App\Domain\Google\GoogleOAuth;
+use App\Domain\Google\GoogleOAuthStates;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GoogleConnectRequest;
 use App\Models\ClassroomGoogleLink;
@@ -11,11 +13,13 @@ use App\Models\GoogleAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The signed-in teacher's Google account (DESIGN §18.5, §18.6). Answers
  * {data: {connected, email, scopes: [...], needs_reconnect, last_error,
- * connected_at, server_configured}}; no token ever leaves the server.
+ * connected_at, configured, server_configured}}; no token ever leaves the
+ * server.
  */
 class GoogleAccountController extends Controller
 {
@@ -40,6 +44,25 @@ class GoogleAccountController extends Controller
         Gate::authorize('manage', GoogleAccount::class);
 
         return response()->json(['data' => $this->accounts->connect($request->user(), (string) $request->validated('server_auth_code'))]);
+    }
+
+    /**
+     * POST /api/v1/google/oauth/url -> {data: {url}}: Google's consent page
+     * for the browser flow, for devices without the app's server auth code
+     * (Flutter web, a build without GOOGLE_SERVER_CLIENT_ID). The app opens
+     * it in a browser; Google returns to GET /google/oauth/callback
+     * (GoogleOAuthCallbackController) with a single-use state that maps to
+     * this teacher for 10 minutes. The app polls GET /google/status.
+     */
+    public function oauthUrl(Request $request, GoogleOAuth $oauth, GoogleOAuthStates $states): JsonResponse
+    {
+        Gate::authorize('manage', GoogleAccount::class);
+        $teacher = $request->user();
+
+        $url = $oauth->authorizationUrl($states->issue($teacher));
+        Log::info('google.oauth_url_issued', ['user_id' => $teacher->id]);
+
+        return response()->json(['data' => ['url' => $url]]);
     }
 
     /** DELETE /api/v1/google/disconnect: revoke at Google (best effort) and forget the account. */
