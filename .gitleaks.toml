@@ -1,0 +1,21 @@
+# gitleaks configuration (read automatically from the repository root by the
+# gitleaks job in .github/workflows/backend.yml and by `gitleaks detect`).
+#
+# The default rules stay on. They catch classic Google API keys ("AIza..."),
+# but the newer Google / Gemini key format ("AQ." + 40 or more characters) is
+# only caught by generic-api-key when an api_key keyword sits next to it. This
+# rule catches it anywhere: in code, curl headers, JSON or docs. The local
+# pre-commit hook blocks the same pattern, but it lives only in .git/hooks, so
+# a fresh clone or an edit in the GitHub web UI relies on this scan.
+
+title = "EduVision gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "google-aq-api-key"
+description = "Google / Gemini API key in the AQ. format"
+regex = '''AQ\.[0-9A-Za-z_-]{40,}'''
+keywords = ["aq."]
+tags = ["key", "Google", "Gemini"]
