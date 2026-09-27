@@ -11,7 +11,6 @@ import '../assignments/assignment.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classroom.dart';
 import 'classroom_google_section.dart' show gradeReturnNote;
-import 'google_config.dart';
 import 'google_providers.dart';
 import 'google_repository.dart';
 
@@ -25,7 +24,8 @@ Future<void> copyLink(BuildContext context, String link) async {
 
 /// "Google Classroom" card on the assignment detail (DESIGN §18.7): post the
 /// assignment as courseWork, show its link, and fetch the submissions.
-/// Hidden without GOOGLE_SERVER_CLIENT_ID.
+/// Hidden unless the server has Google Classroom set up
+/// ([googleClassroomEnabledProvider]).
 class AssignmentGoogleSection extends ConsumerStatefulWidget {
   const AssignmentGoogleSection({
     super.key,

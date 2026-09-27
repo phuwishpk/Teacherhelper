@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_retry.dart';
 import '../../core/auth/session.dart';
 import 'classroom_importer.dart';
 import 'google_auth.dart';
@@ -9,14 +11,13 @@ import 'google_config.dart';
 import 'google_models.dart';
 import 'google_repository.dart';
 
-/// The teacher's Google connection (settings card, DESIGN §18.7).
+/// The teacher's Google connection (settings card, DESIGN §18.7). Always
+/// asked of the server: its `configured` decides whether the app shows
+/// anything about Google Classroom (see [googleClassroomEnabledProvider]).
 class GoogleStatusNotifier extends AsyncNotifier<GoogleStatus> {
   @override
   Future<GoogleStatus> build() async {
     watchSignedInUser(ref);
-    if (!ref.watch(googleClassroomEnabledProvider)) {
-      return GoogleStatus.disconnected;
-    }
     return ref.watch(googleClassroomRepositoryProvider).status();
   }
 
@@ -25,7 +26,8 @@ class GoogleStatusNotifier extends AsyncNotifier<GoogleStatus> {
     await future;
   }
 
-  /// Account picker + consent on the phone, then `POST /google/connect`.
+  /// Account picker + consent on the phone, then `POST /google/connect`
+  /// (the native flow: [GoogleAuthGateway.supportsServerAuthCode]).
   /// Throws [GoogleAuthException] or the DioException of the server.
   Future<GoogleStatus> connect() async {
     final auth = await ref.read(googleAuthProvider).requestServerAuthCode();
@@ -33,6 +35,24 @@ class GoogleStatusNotifier extends AsyncNotifier<GoogleStatus> {
         .read(googleClassroomRepositoryProvider)
         .connect(auth.serverAuthCode);
     state = AsyncData(status);
+    return status;
+  }
+
+  /// The browser flow: Google's consent page to open outside the app
+  /// (`POST /google/oauth/url`). The server finishes the connection; watch
+  /// for it with [checkConnection].
+  Future<Uri> browserConnectUrl() =>
+      ref.read(googleClassroomRepositoryProvider).oauthUrl();
+
+  /// One `GET /google/status` without showing a reload. When the teacher
+  /// is connected and ready, the new status replaces the current one and
+  /// the course list is fetched again.
+  Future<GoogleStatus> checkConnection() async {
+    final status = await ref.read(googleClassroomRepositoryProvider).status();
+    if (status.ready && ref.mounted) {
+      state = AsyncData(status);
+      ref.invalidate(googleCoursesProvider);
+    }
     return status;
   }
 
@@ -57,16 +77,40 @@ class GoogleStatusNotifier extends AsyncNotifier<GoogleStatus> {
         email: current.email,
         scopes: current.scopes,
         needsReconnect: true,
+        configured: current.configured,
       ),
     );
   }
 }
 
-/// Per teacher: dropped on sign-out (see [watchSignedInUser]).
+/// Per teacher: dropped on sign-out (see [watchSignedInUser]). A 4xx is
+/// not retried (the card offers "ลองใหม่").
 final googleStatusProvider =
     AsyncNotifierProvider.autoDispose<GoogleStatusNotifier, GoogleStatus>(
       GoogleStatusNotifier.new,
+      retry: apiRetry,
     );
+
+/// Whether the teacher sees the Google Classroom UI (settings card,
+/// classroom and assignment sections): the server has its OAuth client
+/// (`GET /google/status` -> `configured`), with or without
+/// GOOGLE_SERVER_CLIENT_ID in this build. Until the status arrives (or
+/// when it cannot be read) a build with the client id shows the UI, so its
+/// loading and retry states stay visible, and any other build hides it.
+final googleClassroomEnabledProvider = Provider.autoDispose<bool>((ref) {
+  final status = ref.watch(googleStatusProvider);
+  return status.value?.configured ?? googleNativeSignInBuild;
+});
+
+/// Thai note wherever the web cannot do what the phone does (§18.2 "รับงาน").
+const phoneOnlyScanNote = 'ดาวน์โหลดและสแกนงานที่ส่งต้องทำบนแอป Android';
+
+/// Downloading and scanning Classroom submissions needs the phone (Drive
+/// token from Google Sign-In, the native scan pipeline). False on the web,
+/// where the importer is not even built.
+final classroomScanSupportedProvider = Provider<bool>(
+  (ref) => !kIsWeb && ref.watch(classroomImporterProvider).isSupported,
+);
 
 /// Active courses the teacher teaches (course picker).
 final googleCoursesProvider = FutureProvider.autoDispose<List<GoogleCourse>>((

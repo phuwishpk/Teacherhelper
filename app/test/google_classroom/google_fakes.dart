@@ -24,6 +24,8 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
 
   final connected = <String>[];
   int disconnects = 0;
+  int oauthUrls = 0;
+  int statusCalls = 0;
   final linked = <(int, String)>[];
   final savedMatches = <Map<String, int?>>[];
   final posts = <(int, bool, String?)>[];
@@ -38,7 +40,17 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
   @override
   Future<GoogleStatus> status() async {
     await _maybeFail();
+    statusCalls++;
     return statusValue;
+  }
+
+  @override
+  Future<Uri> oauthUrl() async {
+    await _maybeFail();
+    oauthUrls++;
+    return Uri.parse(
+      'https://accounts.google.com/o/oauth2/v2/auth?state=s$oauthUrls',
+    );
   }
 
   @override
@@ -137,9 +149,15 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
 
 /// Gateway that "signs in" without the plugin.
 class FakeGoogleAuth implements GoogleAuthGateway {
-  FakeGoogleAuth({this.error});
+  FakeGoogleAuth({this.error, this.native = true});
 
   GoogleAuthException? error;
+
+  /// False: a device without the native sign-in (the web, no client id).
+  final bool native;
+
+  @override
+  bool get supportsServerAuthCode => native;
   int serverCodes = 0;
   int signOuts = 0;
 

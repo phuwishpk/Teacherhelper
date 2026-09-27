@@ -1,6 +1,6 @@
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
-import 'package:eduvision/features/google_classroom/google_config.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
 import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/google_classroom/roster_matching_screen.dart';

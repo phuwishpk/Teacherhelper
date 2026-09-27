@@ -49,6 +49,85 @@ void main() {
     expect(status.scopes, isEmpty);
   });
 
+  test('status reads configured, falling back to server_configured', () async {
+    Future<GoogleStatus> statusOf(Map<String, dynamic> body) => repoWith(
+      FakeHttpAdapter((_) async => jsonResponse(200, body)),
+    ).status();
+
+    final off = await statusOf({
+      'data': {'connected': false, 'configured': false},
+    });
+    expect(off.configured, isFalse);
+    expect(
+      (await statusOf({
+        'connected': false,
+        'server_configured': false,
+      })).configured,
+      isFalse,
+      reason: 'the older field name',
+    );
+    expect(
+      (await statusOf({'connected': false, 'configured': true})).configured,
+      isTrue,
+    );
+    expect(
+      (await statusOf({'email': 'kru@school.ac.th'})).configured,
+      isTrue,
+      reason: 'an answer without the field comes from a configured server',
+    );
+  });
+
+  test('oauthUrl posts to /google/oauth/url and reads {url}', () async {
+    const consent =
+        'https://accounts.google.com/o/oauth2/v2/auth?client_id=c&state=abc';
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(200, {
+        'data': {'url': consent},
+      }),
+    );
+    final url = await repoWith(adapter).oauthUrl();
+    final req = adapter.requests.single;
+    expect(req.method, 'POST');
+    expect(req.uri.path, '/api/v1/google/oauth/url');
+    expect(url, Uri.parse(consent));
+    expect(url.queryParameters['state'], 'abc');
+  });
+
+  test('oauthUrl refuses anything but an https page', () async {
+    for (final body in [
+      {'url': 'javascript:alert(1)'},
+      {'url': 'http://accounts.google.com/o/oauth2/v2/auth'},
+      {'url': ''},
+      <String, dynamic>{},
+    ]) {
+      await expectLater(
+        repoWith(
+          FakeHttpAdapter((_) async => jsonResponse(200, {'data': body})),
+        ).oauthUrl(),
+        throwsFormatException,
+        reason: '$body',
+      );
+    }
+  });
+
+  test('oauthUrl surfaces google_not_configured', () async {
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(503, {
+        'message': 'x',
+        'errors': <String, dynamic>{},
+        'code': 'google_not_configured',
+      }),
+    );
+    await expectLater(
+      repoWith(adapter).oauthUrl(),
+      throwsA(
+        predicate<Object>(
+          (e) => googleErrorMessage(e).contains('ยังไม่ได้ตั้งค่า Google'),
+        ),
+      ),
+    );
+  });
+
   test('connect posts {server_auth_code} and reads {email, scopes}', () async {
     final adapter = FakeHttpAdapter(
       (_) async => jsonResponse(200, {

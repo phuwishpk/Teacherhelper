@@ -16,6 +16,12 @@ abstract class GoogleClassroomRepository {
   /// Sends the one-time server auth code; the server exchanges it for a
   /// refresh token. 422 `google_scope_missing` when a scope was not granted.
   Future<GoogleStatus> connect(String serverAuthCode);
+
+  /// Google's consent page for the browser flow (`POST /google/oauth/url`):
+  /// the teacher finishes it in a browser, Google returns to the server,
+  /// and [status] shows the connection. For devices without the native
+  /// sign-in (the web, a build without GOOGLE_SERVER_CLIENT_ID).
+  Future<Uri> oauthUrl();
   Future<void> disconnect();
 
   Future<List<GoogleCourse>> courses();
@@ -74,6 +80,17 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
       'needs_reconnect': false,
       ...body,
     });
+  }
+
+  @override
+  Future<Uri> oauthUrl() async {
+    final res = await _dio.post<Object?>('/google/oauth/url');
+    final url = Uri.tryParse('${unwrapJson(res.data)['url'] ?? ''}');
+    // Only ever open an https page (Google's consent screen).
+    if (url == null || url.scheme != 'https' || url.host.isEmpty) {
+      throw const FormatException('ไม่มีลิงก์หน้าเชื่อม Google');
+    }
+    return url;
   }
 
   @override

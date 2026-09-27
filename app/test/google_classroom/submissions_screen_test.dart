@@ -5,7 +5,7 @@ import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/google_classroom/classroom_importer.dart';
 import 'package:eduvision/features/google_classroom/google_auth.dart';
-import 'package:eduvision/features/google_classroom/google_config.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
 import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/google_classroom/submissions_screen.dart';
@@ -332,6 +332,56 @@ void main() {
     expect(repo.retries, 1);
     expect(repo.submissionLoads, loads + 1, reason: 'the list reloads');
     expect(find.text('กำลังส่งคะแนนกลับอีกครั้ง 1 คน'), findsOneWidget);
+  });
+
+  testWidgets('on the web: no scanning, everything else works', (tester) async {
+    tester.view.physicalSize = const Size(1000, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = FakeGoogleRepository(submissionRows: _rows);
+    await pumpScreen(
+      tester,
+      const GoogleSubmissionsScreen(assignmentId: 12),
+      overrides: [
+        googleClassroomEnabledProvider.overrideWithValue(true),
+        googleClassroomRepositoryProvider.overrideWithValue(repo),
+        googleAuthProvider.overrideWithValue(const DisabledGoogleAuth()),
+        assignmentsRepositoryProvider.overrideWithValue(_Assignments()),
+        // What kIsWeb gives: the importer (drift, dart:io, the native
+        // pipeline) is never built.
+        classroomScanSupportedProvider.overrideWithValue(false),
+        classroomImporterProvider.overrideWith(
+          (ref) => throw StateError('the importer was built on the web'),
+        ),
+      ],
+    );
+
+    expect(find.byKey(const ValueKey('phone_only_note')), findsOneWidget);
+    expect(
+      find.textContaining('ดาวน์โหลดและสแกนงานที่ส่งต้องทำบนแอป Android'),
+      findsOneWidget,
+    );
+    expect(_button(tester, 'import_all').onPressed, isNull);
+    expect(_button(tester, 'scan_31').onPressed, isNull);
+    expect(find.text('ส่งใน Classroom 3 คน'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('return_33')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('retake_reason')),
+      'ถ่ายใหม่ให้เห็น QR',
+    );
+    await tester.tap(find.byKey(const ValueKey('retake_confirm')));
+    await tester.pumpAndSettle();
+    expect(repo.returns.single, (33, 'ถ่ายใหม่ให้เห็น QR'));
+
+    await tester.tap(find.byKey(const ValueKey('retry_grades')));
+    await tester.pumpAndSettle();
+    expect(repo.retries, 1);
+
+    await tester.tap(find.byTooltip('ดึงงานที่ส่งอีกครั้ง'));
+    await tester.pumpAndSettle();
+    expect(repo.submissionLoads, greaterThanOrEqualTo(3));
   });
 
   testWidgets('an expired connection says to reconnect', (tester) async {

@@ -79,6 +79,9 @@ class _FakeAuth implements GoogleAuthGateway {
       invalidated.add(token.value);
 
   @override
+  bool get supportsServerAuthCode => true;
+
+  @override
   Future<GoogleServerAuth> requestServerAuthCode() =>
       throw UnimplementedError();
 
