@@ -360,6 +360,12 @@ void main() {
     expect(isGoogleReconnectError(error('google_not_connected')), isTrue);
     expect(isGoogleReconnectError(error('already_posted')), isFalse);
     expect(googleErrorMessage(error('invalid_grant')), contains('เชื่อมใหม่'));
+    // A server without the OAuth client answers 503 before any precondition.
+    expect(isGoogleReconnectError(error('google_not_configured')), isFalse);
+    expect(
+      googleErrorMessage(error('google_not_configured')),
+      contains('ยังไม่ได้ตั้งค่า Google Classroom'),
+    );
   });
 
   test('classroom and assignment JSON carry the optional google_link', () {
