@@ -16,6 +16,8 @@ import 'google_repository.dart';
 /// Classroom submissions of one assignment (DESIGN §18.2, §18.7): states
 /// from the server, "ดาวน์โหลดและสแกน" for all or one (on this phone), the
 /// result of every picture, "ตีกลับให้ถ่ายใหม่" and "ส่งคะแนนกลับอีกครั้ง".
+/// On the web everything but downloading and scanning works; those buttons
+/// stay off with [phoneOnlyScanNote].
 class GoogleSubmissionsScreen extends ConsumerWidget {
   const GoogleSubmissionsScreen({super.key, required this.assignmentId});
 
@@ -27,9 +29,12 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(googleSubmissionsProvider(assignmentId));
-    final running = ref.watch(
-      classroomImportProvider(assignmentId).select((s) => s.running),
-    );
+    // Without scanning (the web) the importer is never built.
+    final running =
+        ref.watch(classroomScanSupportedProvider) &&
+        ref.watch(
+          classroomImportProvider(assignmentId).select((s) => s.running),
+        );
     final title = ref
         .watch(assignmentDetailProvider(assignmentId))
         .value
@@ -176,8 +181,10 @@ class SubmissionsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final import = ref.watch(classroomImportProvider(assignmentId));
-    final supported = ref.watch(classroomImporterProvider).isSupported;
+    final supported = ref.watch(classroomScanSupportedProvider);
+    final import = supported
+        ? ref.watch(classroomImportProvider(assignmentId))
+        : const ClassroomImportState();
     final waiting = rows.where((r) => r.state.awaitsScan).toList();
     final failedGrades = rows
         .where((r) => r.state == SubmissionImportState.gradeFailed)
@@ -215,15 +222,31 @@ class SubmissionsList extends ConsumerWidget {
                       ),
                     ],
                     const SizedBox(height: 8),
-                    Text(
-                      supported
-                          ? 'รูปถูกดาวน์โหลดจาก Google Drive มาที่เครื่องนี้ ตัดภาพแล้วอัปโหลดผ่านคิวอัปโหลดตามปกติ '
-                                'รูปที่ใช้ไม่ได้จะแสดงเหตุผลให้ตีกลับให้นักเรียนถ่ายใหม่'
-                          : 'ดาวน์โหลดและสแกนได้เฉพาะในแอป Android บนมือถือหรือแท็บเล็ต',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    if (supported)
+                      Text(
+                        'รูปถูกดาวน์โหลดจาก Google Drive มาที่เครื่องนี้ ตัดภาพแล้วอัปโหลดผ่านคิวอัปโหลดตามปกติ '
+                        'รูปที่ใช้ไม่ได้จะแสดงเหตุผลให้ตีกลับให้นักเรียนถ่ายใหม่',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    else
+                      Row(
+                        key: const ValueKey('phone_only_note'),
+                        children: [
+                          Icon(
+                            Icons.phone_android,
+                            size: 18,
+                            color: theme.colorScheme.tertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$phoneOnlyScanNote (ตีกลับ ส่งคะแนนกลับ และดูสถานะทำที่นี่ได้)',
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
                     if (import.batch case final batch?) ...[
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),

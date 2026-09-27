@@ -7,6 +7,7 @@ class GoogleStatus {
     this.email,
     this.scopes = const [],
     this.needsReconnect = false,
+    this.configured = true,
   });
 
   static const disconnected = GoogleStatus(connected: false);
@@ -19,6 +20,11 @@ class GoogleStatus {
   /// 7-day limit of an OAuth app in Testing mode, §18.5).
   final bool needsReconnect;
 
+  /// The server has its Google OAuth client (GOOGLE_OAUTH_CLIENT_ID /
+  /// SECRET). The app shows its Google Classroom UI only when true. An
+  /// answer without the field (`POST /google/connect`) counts as true.
+  final bool configured;
+
   /// Connected and usable right now.
   bool get ready => connected && !needsReconnect;
 
@@ -30,6 +36,10 @@ class GoogleStatus {
     email: json['email'] as String?,
     scopes: _scopes(json['scopes']),
     needsReconnect: json['needs_reconnect'] == true,
+    configured: switch (json['configured'] ?? json['server_configured']) {
+      bool b => b,
+      _ => true,
+    },
   );
 
   static List<String> _scopes(Object? value) => switch (value) {

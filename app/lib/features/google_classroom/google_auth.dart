@@ -66,6 +66,11 @@ final class GoogleAccountMismatch extends GoogleAuthException {
 /// Google Sign-In behind an interface so screens and tests do not depend on
 /// the plugin.
 abstract class GoogleAuthGateway {
+  /// Whether [requestServerAuthCode] can work on this device (Android with
+  /// GOOGLE_SERVER_CLIENT_ID). When false the app connects the teacher
+  /// through the server's browser flow instead (`POST /google/oauth/url`).
+  bool get supportsServerAuthCode;
+
   /// Account picker + consent for [googleServerScopes], then the server
   /// auth code (offline access) for `POST /google/connect`.
   Future<GoogleServerAuth> requestServerAuthCode();
@@ -106,6 +111,16 @@ class PluginGoogleAuth implements GoogleAuthGateway {
     } catch (_) {
       if (identical(_initialized, attempt)) _initialized = null;
       rethrow;
+    }
+  }
+
+  @override
+  bool get supportsServerAuthCode {
+    try {
+      return _signIn.supportsAuthenticate();
+    } catch (e) {
+      debugPrint('supportsAuthenticate failed: $e');
+      return false;
     }
   }
 
@@ -221,14 +236,19 @@ class PluginGoogleAuth implements GoogleAuthGateway {
   }
 }
 
-/// Used when the build has no client id: every call fails politely (the
-/// UI is hidden anyway).
+/// Used on the web and when the build has no client id: the teacher
+/// connects through the browser flow, and downloading the students'
+/// pictures (which needs Google Sign-In on the device) fails politely.
 class DisabledGoogleAuth implements GoogleAuthGateway {
   const DisabledGoogleAuth();
 
   static const _off = GoogleAuthFailed(
-    'แอปรุ่นนี้ไม่ได้ตั้งค่า Google Classroom (GOOGLE_SERVER_CLIENT_ID)',
+    'แอปรุ่นนี้ลงชื่อเข้าใช้ Google บนเครื่องไม่ได้ (ไม่ได้ตั้ง GOOGLE_SERVER_CLIENT_ID) '
+    'จึงดาวน์โหลดรูปจาก Google Drive ไม่ได้',
   );
+
+  @override
+  bool get supportsServerAuthCode => false;
 
   @override
   Future<GoogleServerAuth> requestServerAuthCode() => Future.error(_off);
@@ -244,8 +264,11 @@ class DisabledGoogleAuth implements GoogleAuthGateway {
   Future<void> signOut() async {}
 }
 
+/// google_sign_in on the web cannot give a server auth code
+/// (`supportsAuthenticate()` is false), so the web always uses the
+/// browser flow.
 final googleAuthProvider = Provider<GoogleAuthGateway>(
-  (ref) => googleServerClientId.isEmpty
-      ? const DisabledGoogleAuth()
-      : PluginGoogleAuth(serverClientId: googleServerClientId),
+  (ref) => googleNativeSignInBuild
+      ? PluginGoogleAuth(serverClientId: googleServerClientId)
+      : const DisabledGoogleAuth(),
 );

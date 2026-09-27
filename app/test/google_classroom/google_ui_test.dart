@@ -10,7 +10,7 @@ import 'package:eduvision/features/google_classroom/assignment_google_section.da
 import 'package:eduvision/features/google_classroom/classroom_google_section.dart';
 import 'package:eduvision/features/google_classroom/course_picker_screen.dart';
 import 'package:eduvision/features/google_classroom/google_auth.dart';
-import 'package:eduvision/features/google_classroom/google_config.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
 import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/settings/ai_key.dart';
@@ -85,7 +85,9 @@ Finder _inCard(Finder matching) => find.descendant(
 
 void main() {
   group('settings card (DESIGN §18.7)', () {
-    testWidgets('hidden without GOOGLE_SERVER_CLIENT_ID', (tester) async {
+    testWidgets('hidden when the server has no Google Classroom', (
+      tester,
+    ) async {
       await _pumpSettings(tester, enabled: false);
       expect(find.byKey(const ValueKey('google_classroom_card')), findsNothing);
       expect(find.text('Gemini API key'), findsOneWidget);
@@ -231,7 +233,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('hidden without a client id', (tester) async {
+    testWidgets('hidden when Google Classroom is off', (tester) async {
       await pumpSection(tester, enabled: false);
       expect(find.text('Google Classroom'), findsNothing);
     });

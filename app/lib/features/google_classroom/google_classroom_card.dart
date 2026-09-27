@@ -1,17 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets/content_column.dart';
 import 'google_auth.dart';
-import 'google_config.dart';
+import 'google_browser_connect.dart';
 import 'google_models.dart';
 import 'google_providers.dart';
 import 'google_repository.dart';
 
 /// "Google Classroom" card of the teacher settings page, next to the Gemini
 /// key (DESIGN §18.7): connected / not connected / needs reconnect, with
-/// connect and disconnect. Renders nothing when the build has no
-/// GOOGLE_SERVER_CLIENT_ID.
+/// connect and disconnect. Renders nothing unless the server has Google
+/// Classroom set up ([googleClassroomEnabledProvider]).
+///
+/// "เชื่อม" uses Google Sign-In on the phone when this build can
+/// (Android with GOOGLE_SERVER_CLIENT_ID), else the browser flow of the
+/// server ([connectGoogleInBrowser]).
 class GoogleClassroomCard extends ConsumerStatefulWidget {
   const GoogleClassroomCard({super.key});
 
@@ -26,8 +31,11 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
   Future<void> _connect() async {
     setState(() => _busy = true);
     try {
-      final status = await ref.read(googleStatusProvider.notifier).connect();
-      if (mounted) {
+      final native = ref.read(googleAuthProvider).supportsServerAuthCode;
+      final status = native
+          ? await ref.read(googleStatusProvider.notifier).connect()
+          : await connectGoogleInBrowser(context, ref);
+      if (status != null && mounted) {
         showMessage(
           context,
           'เชื่อม Google Classroom กับ ${status.email ?? 'บัญชีนี้'} แล้ว',
@@ -145,6 +153,10 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
               'เซิร์ฟเวอร์เก็บเฉพาะสิทธิ์ที่ใช้สร้างงานและส่งคะแนน (เข้ารหัสไว้)',
               style: muted,
             ),
+            if (kIsWeb) ...[
+              const SizedBox(height: 4),
+              Text(phoneOnlyScanNote, style: muted),
+            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,

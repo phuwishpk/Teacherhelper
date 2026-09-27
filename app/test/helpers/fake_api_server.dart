@@ -211,6 +211,24 @@ class FakeApiServer {
         return (200, _page(const <Object>[]));
       case ('GET', ['ml', 'models', 'active']):
         return (404, _error('ยังไม่มีโมเดลที่เปิดใช้', code: 'not_found'));
+      // A server without Google Classroom (no OAuth client): the app hides
+      // every Google section (DESIGN §18.6, `configured`).
+      case ('GET', ['google', 'status']):
+        return (
+          200,
+          {
+            'data': {
+              'connected': false,
+              'email': null,
+              'scopes': <Object>[],
+              'needs_reconnect': false,
+              'last_error': null,
+              'connected_at': null,
+              'configured': false,
+              'server_configured': false,
+            },
+          },
+        );
       default:
         unrouted.add('$method $path');
         return _notFound();

@@ -147,19 +147,43 @@ widget test ของหน้าสแกนด้วยกล้องปล�
 
 ## Google Classroom (Phase 7, DESIGN §18)
 
-เปิดใช้เมื่อ build ด้วย Web client ID (KICKOFF ส่วนที่ 6 ข้อ G4/G6) ถ้าไม่ใส่ แอปซ่อนทุกอย่างเกี่ยวกับ Classroom
-และ build/ทดสอบได้ตามปกติ (ไม่ต้องมี `google-services.json`):
+**server เป็นคนตัดสินว่าแสดงหรือไม่**: การ์ดตั้งค่า ส่วนของห้องเรียน และส่วนของการบ้านแสดงเมื่อ `GET /google/status`
+ตอบ `configured: true` (server มี `GOOGLE_OAUTH_CLIENT_ID/SECRET`) ไม่ว่า build จะมี `GOOGLE_SERVER_CLIENT_ID` หรือไม่
+(`googleClassroomEnabledProvider` ใน `google_providers.dart`; ระหว่างรอสถานะหรืออ่านสถานะไม่ได้ ใช้ค่าตาม build:
+มี client id = แสดง) server ที่ไม่ได้ตั้งค่าตอบ `configured: false` แอปซ่อนทุกอย่างเกี่ยวกับ Classroom
+
+`GOOGLE_SERVER_CLIENT_ID` (Web client ID, KICKOFF ส่วนที่ 6 ข้อ G4/G6) ใช้เฉพาะการลงชื่อเข้าใช้ Google **บนเครื่อง Android**
+(เชื่อมแบบ native และดาวน์โหลดรูปที่นักเรียนส่ง) ไม่ใส่ก็ build/ทดสอบได้ตามปกติ (ไม่ต้องมี `google-services.json`):
 
 ```bash
+# Android: เชื่อมแบบ native (ค่าเริ่มต้นเมื่อมี client id)
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
             --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+# Chrome บน Mac: เชื่อมผ่านหน้าเว็บของ Google (ไม่ต้องมี client id ในแอป)
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
 
-- **เชื่อมบัญชี** (ตั้งค่า → การ์ด "Google Classroom" ข้างการ์ด Gemini key): `google_sign_in` 7.x
-  `initialize(serverClientId)` → `authenticate()` (ครูเลือกบัญชี) → `authorizeServer(scopes §18.5)` ได้ server auth code
-  → `POST /google/connect` สถานะ เชื่อมแล้ว / ยังไม่เชื่อม / ต้องเชื่อมใหม่ (`needs_reconnect` หรือ error code
-  `google_reconnect_required` / `invalid_grant` จาก endpoint ใดก็ได้) ปุ่มยกเลิกการเชื่อม = `DELETE /google/disconnect`
-  + sign out ในเครื่อง; ออกจากระบบแอปก็ sign out Google ในเครื่องด้วย (`LocalUserData.wipe`)
+- **เชื่อมบัญชี** (ตั้งค่า → การ์ด "Google Classroom" ข้างการ์ด Gemini key) มีสองทาง เลือกด้วย
+  `GoogleAuthGateway.supportsServerAuthCode`:
+  - **native** (Android ที่ build ด้วย `GOOGLE_SERVER_CLIENT_ID`): `google_sign_in` 7.x `initialize(serverClientId)` →
+    `authenticate()` (ครูเลือกบัญชี) → `authorizeServer(scopes §18.5)` ได้ server auth code → `POST /google/connect`
+  - **ผ่านเบราว์เซอร์** (เว็บ ซึ่ง `google_sign_in` ให้ server auth code ไม่ได้ / build ที่ไม่มี client id /
+    `supportsAuthenticate()` เป็น false): `POST /google/oauth/url` → เปิดหน้า consent ของ Google ด้วย `url_launcher`
+    (Android: `LaunchMode.externalApplication` คือเบราว์เซอร์ของระบบ, เว็บ: แท็บใหม่) → กล่อง "ทำขั้นตอนในหน้าต่าง Google
+    ให้เสร็จ แล้วกดตรวจสอบ" ถาม `GET /google/status` ทุก 3 วินาทีนานสุด 3 นาที (ปุ่ม "ตรวจสอบการเชื่อม" ถามทันที,
+    "เปิดหน้า Google อีกครั้ง" ขอลิงก์ใหม่ เพราะ state ใช้ได้ครั้งเดียวและ 10 นาที) พอ `connected && !needs_reconnect`
+    ก็อัปเดต provider แล้วปิดกล่อง (`google_browser_connect.dart`) server เป็นคนแลก code ที่
+    `GET /google/oauth/callback` แล้วแสดงหน้าผลภาษาไทยในเบราว์เซอร์ ต้องลงทะเบียน redirect URI ตาม `backend/README.md`
+    ทางนี้ใช้กับ emulator ที่ต่อ `http://10.0.2.2:8000` ไม่ได้ (เบราว์เซอร์ของ emulator ไปถึง `127.0.0.1` ของ Mac ไม่ได้)
+    ใช้กับ server จริง (https) ได้
+
+  สถานะ เชื่อมแล้ว / ยังไม่เชื่อม / ต้องเชื่อมใหม่ (`needs_reconnect` หรือ error code `google_reconnect_required` /
+  `invalid_grant` จาก endpoint ใดก็ได้) ปุ่มยกเลิกการเชื่อม = `DELETE /google/disconnect` + sign out ในเครื่อง;
+  ออกจากระบบแอปก็ sign out Google ในเครื่องด้วย (`LocalUserData.wipe`)
+- **บนเว็บ** (Chrome): ผูกคอร์ส จับคู่นักเรียน โพสต์งาน ดูรายการงานที่ส่ง ตีกลับ และส่งคะแนนกลับอีกครั้งทำได้ครบ
+  แต่ **ดาวน์โหลดและสแกนงานที่ส่งต้องทำบนแอป Android** (ปุ่มปิดพร้อมข้อความนี้; `classroomScanSupportedProvider`
+  เป็น false บนเว็บโดยไม่สร้าง `ClassroomImporter` เลย) เพราะต้องใช้ token Drive จาก Google Sign-In บนเครื่องและ pipeline
+  สแกนแบบ native build Android ที่ไม่มี client id ก็ดาวน์โหลดรูปไม่ได้เช่นกัน (บอกเหตุผลเมื่อกด)
 - **ห้องเรียน**: การ์ด "Google Classroom" → เลือกคอร์ส (`/classrooms/{id}/google-link`) → หน้าจับคู่นักเรียน
   (`/classrooms/{id}/google-roster`) คู่ที่เสนอเติมไว้ให้ ครูแก้ได้ เตือนบัญชีที่ยังไม่จับคู่และนักเรียนที่ไม่มีบัญชี
   ห้ามเลือกนักเรียนคนเดียวให้สองบัญชี (ปุ่มบันทึกปิด) และบอกข้อจำกัดว่าส่งคะแนนกลับได้เฉพาะงานที่โพสต์จากแอป
@@ -185,7 +209,8 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
 - **นักเรียน**: แท็บผลการบ้านแสดงการ์ด "ครูขอให้ถ่ายรูปใหม่" พร้อมเหตุผลจาก `GET /student/retake-requests`
   (404 = server ไม่มี Classroom → ไม่แสดง) และในหน้าผลรายชุดถ้ามี `retake_reason`; FCM `retake_requested` เปิดแท็บนี้
 - ทดสอบ: `test/google_classroom/` (repository ด้วย Dio ปลอม, ตัวดาวน์โหลดด้วย HTTP ปลอม, importer กับ pipeline/rasterizer ปลอม,
-  widget test หน้าจับคู่ หน้ารายการ submission การ์ดตั้งค่า/ห้อง/การบ้าน), `test/results/retake_notice_test.dart`,
+  widget test หน้าจับคู่ หน้ารายการ submission การ์ดตั้งค่า/ห้อง/การบ้าน, `google_browser_connect_test.dart`: กฎการแสดงผลตาม
+  `configured` และกล่องเชื่อมผ่านเบราว์เซอร์กับ clock ปลอมของ widget test), `test/results/retake_notice_test.dart`,
   JVM `AttachmentRasterizerTest.kt` ไม่มี test ไหนต่อ Google จริง ของจริงทดสอบตาม KICKOFF ส่วนที่ 6 ข้อ G7
 
 ## ตัวอ่านตัวเลขบนเครื่อง แบบฝึก mastery และ dashboard (Phase 5–6, DESIGN §12, §14, §9.6–§9.8)
@@ -296,7 +321,7 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 | `GET /student/results/{submission_id}` | `{submission_id, assignment: {id, title, subject}, total_score, max_score, published_at, responses: [{id, question: {position, type, prompt_text, max_points}, final_score, final_understanding, final_error_types, explanation, next_step, has_crop, has_final_crop, appeal, can_appeal}]}`; `POST /student/responses/{id}/appeal {reason?}` ซ้ำ → 409 |
 | FCM `data` | `type` = `grading_done` (+`assignment_id`) / `appeal_opened` → ครู; `results_published` / `appeal_resolved` (+`submission_id`) → นักเรียน (ค่าทุกตัวเป็น string) |
 | `GET /assignments` | (ไม่บังคับ) `needs_review_count` ต่อการบ้าน ใช้แสดงตัวเลข "รอตรวจทาน" |
-| `GET /google/status` | `{connected, email, scopes (string คั่นช่องว่าง หรือ list), needs_reconnect}`; `POST /google/connect {server_auth_code}` ตอบ `{email, scopes}`; 422 `code: google_scope_missing`; endpoint ใดตอบ `code` = `google_not_connected` / `google_reconnect_required` / `invalid_grant` แอปเปลี่ยนการ์ดเป็น "ต้องเชื่อมใหม่" |
+| `GET /google/status` | `{connected, email, scopes (string คั่นช่องว่าง หรือ list), needs_reconnect, configured}` (`configured` ไม่มี → อ่าน `server_configured`, ไม่มีทั้งคู่ถือว่า true); `POST /google/oauth/url` ตอบ `{url}` (https เท่านั้น); `POST /google/connect {server_auth_code}` ตอบ `{email, scopes}`; 422 `code: google_scope_missing`; endpoint ใดตอบ `code` = `google_not_connected` / `google_reconnect_required` / `invalid_grant` แอปเปลี่ยนการ์ดเป็น "ต้องเชื่อมใหม่" |
 | `google_link` ของห้อง (**เพิ่มจาก §18.6**) | `GET /classrooms` และ `/classrooms/{id}` ใส่ `google_link: {course_id, course_name, linked_at} \| null` แอปใช้ตัดสินว่าจะแสดง "ผูกกับ Google Classroom" หรือ "จับคู่นักเรียน"; `POST /classrooms/{id}/google-link {course_id}` ตอบ `{course_id, course_name, linked_at}` (หรือ 204) |
 | `google_link` ของการบ้าน (**เพิ่มจาก §18.6**) | `GET /assignments/{id}` ใส่ `google_link: {course_work_id, alternate_link, drive_file_id, posted_at} \| null`; `POST /assignments/{id}/google-post {attach_blank_worksheet, instructions?, due_at?}` ตอบ `{course_work_id, alternate_link}` (409 `already_posted`, 422 `classroom_not_linked`) |
 | `GET/PUT /classrooms/{id}/google-roster` | GET `[{google_user_id, name, email, suggested_student_id, matched_student_id}]`; PUT `{matches: [{google_user_id, student_id \| null}]}` แอปส่งครบทุกบัญชีในคอร์ส |

@@ -1,20 +1,23 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 /// Web OAuth client id of the Google Cloud project (KICKOFF part 6, G4),
 /// injected at build time:
 ///   flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxx.apps.googleusercontent.com
 ///
-/// It is not a secret (the client secret stays on the server). Without it
-/// the app hides everything about Google Classroom (DESIGN §18.7).
+/// It is not a secret (the client secret stays on the server). Only the
+/// native Google Sign-In on Android needs it: the server auth code for
+/// `POST /google/connect` and the Drive token that downloads the students'
+/// pictures. Without it, and always on the web, the teacher connects
+/// through the server's browser flow (`POST /google/oauth/url`). Whether
+/// the Google Classroom UI shows at all is decided by the server
+/// (`GET /google/status` -> `configured`, see googleClassroomEnabledProvider).
 const String googleServerClientId = String.fromEnvironment(
   'GOOGLE_SERVER_CLIENT_ID',
 );
 
-/// Whether this build shows the Google Classroom features. A provider so
-/// widget tests can switch it on without a real client id.
-final googleClassroomEnabledProvider = Provider<bool>(
-  (ref) => googleServerClientId.isNotEmpty,
-);
+/// This build can use Google Sign-In on the device (not the web, and a
+/// client id was given).
+const bool googleNativeSignInBuild = !kIsWeb && googleServerClientId.length > 0;
 
 /// Scopes the teacher grants for the server (DESIGN §18.5). The server
 /// checks it received all of them (`google_scope_missing` otherwise).

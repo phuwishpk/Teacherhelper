@@ -6,7 +6,6 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
-import 'google_config.dart';
 import 'google_providers.dart';
 import 'google_repository.dart';
 
@@ -17,7 +16,8 @@ const gradeReturnNote =
     'งานที่สร้างในเว็บ Classroom เองดึงรูปมาสแกนได้ แต่ส่งคะแนนกลับไม่ได้';
 
 /// "Google Classroom" card on the classroom detail (DESIGN §18.7): link a
-/// course, match students, unlink. Hidden without GOOGLE_SERVER_CLIENT_ID.
+/// course, match students, unlink. Hidden unless the server has Google
+/// Classroom set up ([googleClassroomEnabledProvider]).
 class ClassroomGoogleSection extends ConsumerStatefulWidget {
   const ClassroomGoogleSection({super.key, required this.classroom});
 
