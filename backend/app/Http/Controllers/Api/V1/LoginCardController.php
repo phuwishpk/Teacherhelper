@@ -46,7 +46,11 @@ class LoginCardController extends Controller
     /** POST /api/v1/students/{id}/login-card -> 202 {data: print}; the old card stops working once rendered */
     public function storeForStudent(Request $request, int $id): JsonResponse
     {
-        $student = User::query()->where('role', User::ROLE_STUDENT)->findOrFail($id);
+        // Another school's student is a 404, like StudentPinController.
+        $student = User::query()
+            ->where('role', User::ROLE_STUDENT)
+            ->where('school_id', $request->user()->school_id)
+            ->findOrFail($id);
         Gate::authorize('manageStudentCredentials', $student);
 
         $print = $this->prints->queueForStudent($student, $request->user());

@@ -198,10 +198,13 @@ class StudentCredentialsTest extends TestCase
         $colleague = $this->makeTeacher($teacher->school);
         $stranger = $this->makeTeacher();
 
-        foreach ([$colleague, $stranger] as $other) {
-            $this->asUser($other)->postJson("/api/v1/students/{$s['student']->id}/pin")->assertForbidden()->assertJsonPath('code', 'forbidden');
-            $this->asUser($other)->postJson("/api/v1/students/{$s['student']->id}/login-card")->assertForbidden();
-        }
+        // Same school: the student is found but the policy denies it.
+        $this->asUser($colleague)->postJson("/api/v1/students/{$s['student']->id}/pin")->assertForbidden()->assertJsonPath('code', 'forbidden');
+        $this->asUser($colleague)->postJson("/api/v1/students/{$s['student']->id}/login-card")->assertForbidden();
+        // Other school: scoped out entirely, so the answer does not reveal that the id exists.
+        $this->asUser($stranger)->postJson("/api/v1/students/{$s['student']->id}/pin")->assertNotFound()->assertJsonPath('code', 'not_found');
+        $this->asUser($stranger)->postJson("/api/v1/students/{$s['student']->id}/login-card")->assertNotFound();
+        $this->assertDatabaseCount('login_card_prints', 1);
         // Same school: the print row is visible in the query but the policy denies it.
         $this->asUser($colleague)->getJson("/api/v1/login-card-prints/{$print->id}")->assertForbidden();
         $this->asUser($colleague)->get("/api/v1/login-card-prints/{$print->id}/file")->assertForbidden();

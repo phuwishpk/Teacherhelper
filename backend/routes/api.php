@@ -50,10 +50,12 @@ Route::prefix('v1')->group(function () {
     Route::get('health', HealthController::class)->name('api.health');
 
     // Public auth endpoints (DESIGN §7.4). Teachers get the strict per-IP
-    // limiter; students the wider `student-auth` limiter (AppServiceProvider),
-    // because a whole class logs in from one school NAT address at once.
+    // `teacher-auth` limiter; students the wider `student-auth` limiter, because
+    // a whole class logs in from one school NAT address at once. Every
+    // `throttle:<name>` below is a named limiter in AppServiceProvider with its
+    // own bucket (never a bare throttle:N,M, which shares one per user).
     Route::prefix('auth')->group(function () {
-        Route::middleware('throttle:10,1')->group(function () {
+        Route::middleware('throttle:teacher-auth')->group(function () {
             Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
             Route::post('teacher/login', [TeacherAuthController::class, 'login'])->name('api.auth.teacher.login');
         });
@@ -75,7 +77,7 @@ Route::prefix('v1')->group(function () {
             Route::middleware('role:teacher')->group(function () {
                 // The teacher's own Gemini key (§9.1, §10.1). PUT calls Google, so it is throttled.
                 Route::get('me/ai-key', [AiKeyController::class, 'show'])->name('api.me.ai-key.show');
-                Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:10,1')->name('api.me.ai-key.update');
+                Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:ai-key')->name('api.me.ai-key.update');
                 Route::delete('me/ai-key', [AiKeyController::class, 'destroy'])->name('api.me.ai-key.destroy');
 
                 Route::get('classrooms', [ClassroomController::class, 'index'])->name('api.classrooms.index');
@@ -127,7 +129,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('responses/{id}', [ResponseController::class, 'show'])->name('api.responses.show');
                 Route::patch('responses/{id}', [ResponseController::class, 'update'])->name('api.responses.update');
                 // Calls Gemini synchronously (and costs money), so it is throttled.
-                Route::post('responses/{id}/regenerate-explanation', [ResponseController::class, 'regenerateExplanation'])->middleware('throttle:20,1')->name('api.responses.regenerate-explanation');
+                Route::post('responses/{id}/regenerate-explanation', [ResponseController::class, 'regenerateExplanation'])->middleware('throttle:explanation')->name('api.responses.regenerate-explanation');
                 Route::post('submissions/{id}/publish', [SubmissionController::class, 'publish'])->name('api.submissions.publish');
                 Route::get('appeals', [AppealController::class, 'index'])->name('api.appeals.index');
                 Route::patch('appeals/{id}', [AppealController::class, 'update'])->name('api.appeals.update');
@@ -137,7 +139,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('practice-items', [PracticeItemController::class, 'store'])->name('api.practice-items.store');
                 Route::patch('practice-items/{id}', [PracticeItemController::class, 'update'])->name('api.practice-items.update');
                 // Queues a Gemini job (costs money), so it is throttled.
-                Route::post('skills/{id}/practice-items/generate', [PracticeItemController::class, 'generate'])->middleware('throttle:10,1')->name('api.skills.practice-items.generate');
+                Route::post('skills/{id}/practice-items/generate', [PracticeItemController::class, 'generate'])->middleware('throttle:practice-generate')->name('api.skills.practice-items.generate');
                 Route::get('skills/{id}/resources', [LearningResourceController::class, 'index'])->name('api.skills.resources.index');
                 Route::post('skills/{id}/resources', [LearningResourceController::class, 'store'])->name('api.skills.resources.store');
                 Route::patch('resources/{id}', [LearningResourceController::class, 'update'])->name('api.resources.update');
@@ -167,12 +169,12 @@ Route::prefix('v1')->group(function () {
             Route::middleware('role:student')->prefix('student')->group(function () {
                 Route::get('results', [StudentResultController::class, 'index'])->name('api.student.results.index');
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->name('api.student.results.show');
-                Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:30,1')->name('api.student.responses.appeal');
+                Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:appeal')->name('api.student.responses.appeal');
                 Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Practice (§9.7, §14.1): recommendations and graded attempts.
                 Route::get('practice', [StudentPracticeController::class, 'index'])->name('api.student.practice.index');
-                Route::post('practice/{item_id}/attempts', [StudentPracticeController::class, 'attempt'])->middleware('throttle:60,1')->name('api.student.practice.attempts');
+                Route::post('practice/{item_id}/attempts', [StudentPracticeController::class, 'attempt'])->middleware('throttle:practice-attempt')->name('api.student.practice.attempts');
             });
 
             // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.

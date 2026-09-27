@@ -6,13 +6,16 @@ use App\Models\Classroom;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * DESIGN §7.4 beyond the happy paths in TeacherAuthTest / StudentAuthTest:
  * token lifetime and revocation, the PIN lockout being a property of the
- * account (not of the caller's address), the per-IP teacher throttle, and
- * credentials never stored in clear.
+ * account (not of the caller's address), the per-IP teacher throttle, one
+ * bucket per throttled route, and credentials never stored in clear.
  */
 class AuthHardeningTest extends TestCase
 {
@@ -130,6 +133,90 @@ class AuthHardeningTest extends TestCase
         }
         $this->postJson('/api/v1/auth/teacher/register', ['school_code' => 'WRONG000', 'name' => 'x', 'email' => 't99@example.com', 'password' => 'secret1234'])
             ->assertStatus(429);
+    }
+
+    public function test_teacher_register_and_login_share_one_bucket_per_address_on_purpose(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/v1/auth/teacher/login', ['email' => 'teacher@example.com', 'password' => 'wrong-password'])->assertStatus(422);
+        }
+        $this->postJson('/api/v1/auth/teacher/register', ['school_code' => 'WRONG000', 'name' => 'x', 'email' => 'new@example.com', 'password' => 'secret1234'])
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'too_many_requests');
+    }
+
+    /**
+     * Every throttle on /api/v1 is a registered named limiter. A bare
+     * `throttle:N,M` keys on the user id alone, so all routes using one
+     * would share a single counter per user.
+     */
+    public function test_every_api_throttle_is_a_registered_named_limiter(): void
+    {
+        $throttled = [];
+        foreach (Route::getRoutes() as $route) {
+            if (! str_starts_with($route->uri(), 'api/v1/')) {
+                continue;
+            }
+            foreach ($route->gatherMiddleware() as $middleware) {
+                if (! is_string($middleware) || ! str_starts_with($middleware, 'throttle:')) {
+                    continue;
+                }
+                $args = explode(',', substr($middleware, strlen('throttle:')));
+                $this->assertCount(1, $args, "{$route->getName()} uses a bare {$middleware}: give it a named limiter in AppServiceProvider");
+                $this->assertFalse(is_numeric($args[0]), "{$route->getName()} uses a bare {$middleware}");
+                $this->assertNotNull(RateLimiter::limiter($args[0]), "{$route->getName()}: limiter '{$args[0]}' is not registered");
+                $throttled[$args[0]][] = $route->getName();
+            }
+        }
+
+        $this->assertSame(
+            ['ai-key', 'appeal', 'explanation', 'google', 'practice-attempt', 'practice-generate', 'student-auth', 'teacher-auth'],
+            collect($throttled)->keys()->sort()->values()->all(),
+        );
+    }
+
+    /**
+     * [role, method, uri, per-minute limit]. The ids do not exist: the
+     * limiter counts the hit before the controller answers 404/422, so
+     * nothing reaches Gemini.
+     *
+     * @return array<string, array{string, string, string, int}>
+     */
+    public static function throttledRoutes(): array
+    {
+        return [
+            'ai-key' => ['teacher', 'PUT', '/api/v1/me/ai-key', 10],
+            'explanation' => ['teacher', 'POST', '/api/v1/responses/999999/regenerate-explanation', 20],
+            'practice-generate' => ['teacher', 'POST', '/api/v1/skills/999999/practice-items/generate', 10],
+            'appeal' => ['student', 'POST', '/api/v1/student/responses/999999/appeal', 30],
+            'practice-attempt' => ['student', 'POST', '/api/v1/student/practice/999999/attempts', 60],
+        ];
+    }
+
+    #[DataProvider('throttledRoutes')]
+    public function test_each_throttled_route_has_its_own_bucket(string $role, string $method, string $uri, int $limit): void
+    {
+        $token = $this->tokenFor($role === 'teacher' ? $this->teacher : $this->student);
+        $call = fn (string $m, string $u) => $this->withToken($token)->json($m, $u);
+
+        for ($i = 1; $i <= $limit; $i++) {
+            $this->assertNotSame(429, $call($method, $uri)->status(), "request {$i} of {$limit}");
+        }
+        $call($method, $uri)
+            ->assertStatus(429)
+            ->assertHeader('Retry-After')
+            ->assertJsonPath('code', 'too_many_requests');
+
+        // The same user's other throttled routes still answer.
+        $others = 0;
+        foreach (self::throttledRoutes() as $name => [$otherRole, $otherMethod, $otherUri]) {
+            if ($otherRole !== $role || $otherUri === $uri) {
+                continue;
+            }
+            $this->assertNotSame(429, $call($otherMethod, $otherUri)->status(), "{$name} shares the bucket of {$uri}");
+            $others++;
+        }
+        $this->assertGreaterThan(0, $others);
     }
 
     public function test_credentials_are_stored_hashed_and_tokens_are_not_reusable_after_logout(): void

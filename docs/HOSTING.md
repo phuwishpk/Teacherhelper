@@ -266,6 +266,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | ล้าง cache | `optimize:clear` แล้ว `filament:optimize-clear` | หลังจากนี้ `queue_last_run_at` ใน /health เป็น null ราว 1 นาทีจนกว่า worker รอบถัดไปจะเขียนใหม่ (cache:clear ล้าง table `cache`) ถือว่าปกติ |
 | asset ของ Filament | `filament:assets` | เฉพาะถ้า `/admin/login` ขึ้นแต่ไม่มี CSS (asset ถูก commit มาใน `public/css/filament`, `public/js/filament`, `public/fonts/filament` แล้ว) |
 | ตรวจ Gemini | `eduvision:gemini-check --generate` | §6.1 |
+| ตรวจว่าโมเดลจริงจับ prompt injection ได้ | `eduvision:gemini-check --injection` | ส่งภาพตัวอย่าง 5 ภาพใน `backend/tests/fixtures/injection` (ภาพสังเคราะห์ ไม่มีข้อมูลนักเรียน) = 5 request; ทุกภาพต้องขึ้น `ok` และบรรทัดสุดท้าย `injection: 5/5 as expected` ถ้ามี `MISMATCH` แจ้งผู้พัฒนาเพื่อปรับ prompt |
 | ตรวจ FCM | `eduvision:fcm-check` | §6.2 |
 | ลงทะเบียนโมเดล | `eduvision:register-model <path เต็มของโฟลเดอร์โมเดล>` | §7 |
 | import ตัวชี้วัดจาก CSV | `eduvision:import-skills <path เต็มของไฟล์ csv>` | §8 (หรือใช้หน้า Filament) |
@@ -406,7 +407,7 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 |---|---|
 | Authorization ทุก endpoint | ทุก route ใต้ `/api/v1` มีแถวใน `AuthorizationMatrixTest` (guest 401, ผิด role 403, ครูโรงเรียนอื่น/ครูร่วมโรงเรียนที่ไม่ใช่เจ้าของ 403/404, เพื่อนร่วมห้อง 404, บัญชี disabled 403 `account_not_active`, admin ไม่มีสิทธิ์ API) เพิ่ม route ใหม่โดยไม่เพิ่มแถว test จะแดง |
 | Role + ability | middleware `role:teacher` / `role:student` ตรวจทั้ง role ของบัญชีและ ability ของ token; policy ตรวจซ้ำที่ระดับแถว |
-| Rate limit | `/auth/teacher/*` 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; endpoint ที่เรียก Gemini ตรง 10–20/นาที ตอบ `429 too_many_requests` + `Retry-After` |
+| Rate limit | `/auth/teacher/*` (สมัคร + login รวมกัน) 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; ต่อผู้ใช้แยก bucket กันต่อ endpoint: บันทึก Gemini key 10, สร้างคำอธิบายใหม่ 20, สร้างแบบฝึกด้วย AI 10, ขอตรวจใหม่ 30, ส่งคำตอบแบบฝึก 60 ครั้ง/นาที (ใช้ endpoint หนึ่งจนเต็มไม่ทำให้อีก endpoint โดนด้วย) ตอบ `429 too_many_requests` + `Retry-After` |
 | PIN / QR | PIN ผิด 5 ครั้งล็อกบัญชี 15 นาที (นับที่บัญชี ไม่ใช่ IP); QR token 256 บิต เก็บเป็น hash; ออกบัตรใหม่/รีเซ็ต PIN ยกเลิก token เดิมทั้งหมด; QR บนใบงานมีลายเซ็น HMAC ปลอมไม่ได้ |
 | Token | Sanctum: ครู 30 วัน นักเรียน 180 วัน หมดอายุ/ถูกลบ/ปลอม → 401 ในรูปแบบเดียวกัน |
 | Security headers | ทุก response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`; API เพิ่ม `Cache-Control: no-store, private`, `X-Robots-Tag: noindex`, CSP `default-src 'none'` สำหรับ JSON; `Strict-Transport-Security` เฉพาะ HTTPS |

@@ -26,10 +26,35 @@ final class ExtractionRequests
      */
     public function forResponse(Response $response, Question $question, array $criteria, string $subject, string $gradeLabel): GeminiCall
     {
+        $crop = new GeminiImage(self::crop($response->crop_path));
+        $finalCrop = $question->type === Question::TYPE_SHOW_WORK && $response->final_crop_path !== null
+            ? new GeminiImage(self::crop($response->final_crop_path))
+            : null;
+
+        $type = $question->type;
+        $criteriaCount = count($criteria);
+
+        return new GeminiCall(
+            request: $this->request($question, $criteria, $subject, $gradeLabel, $crop, $finalCrop),
+            responseId: $response->id,
+            questionId: $question->id,
+            check: fn (array $data) => ExtractionValidator::normalize($type, $data, $criteriaCount),
+        );
+    }
+
+    /**
+     * The `extract` request for crops already in memory: the grading job via
+     * forResponse(), and eduvision:gemini-check --injection with the fixtures.
+     *
+     * @param  list<RubricCriterion>  $criteria  open questions, in position order
+     * @param  ?GeminiImage  $finalCrop  show_work only: the final answer box
+     */
+    public function request(Question $question, array $criteria, string $subject, string $gradeLabel, GeminiImage $crop, ?GeminiImage $finalCrop = null): GeminiRequest
+    {
         $type = $question->type;
         $prompt = $this->prompts->get(self::PURPOSE, $type);
         $key = $question->answer_key ?? [];
-        $images = [new GeminiImage(self::crop($response->crop_path))];
+        $images = [$crop];
 
         $vars = [
             'subject' => $subject,
@@ -40,9 +65,9 @@ final class ExtractionRequests
 
         if ($type === Question::TYPE_SHOW_WORK) {
             $final = (array) ($key['final'] ?? []);
-            $hasFinal = $response->final_crop_path !== null;
+            $hasFinal = $finalCrop !== null;
             if ($hasFinal) {
-                $images[] = new GeminiImage(self::crop($response->final_crop_path));
+                $images[] = $finalCrop;
             }
             $vars += [
                 'accepted_final' => PromptText::quotedList(array_map('strval', (array) ($final['accepted'] ?? []))),
@@ -87,7 +112,7 @@ final class ExtractionRequests
             ];
         }
 
-        $request = new GeminiRequest(
+        return new GeminiRequest(
             purpose: self::PURPOSE,
             type: $type,
             promptVersion: $prompt->versionLabel(),
@@ -97,15 +122,6 @@ final class ExtractionRequests
             responseSchema: ResponseSchemas::get(self::PURPOSE, $type),
             temperature: $prompt->temperature,
             hints: $hints,
-        );
-
-        $criteriaCount = count($criteria);
-
-        return new GeminiCall(
-            request: $request,
-            responseId: $response->id,
-            questionId: $question->id,
-            check: fn (array $data) => ExtractionValidator::normalize($type, $data, $criteriaCount),
         );
     }
 

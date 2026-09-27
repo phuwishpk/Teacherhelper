@@ -1,7 +1,7 @@
 {
   "purpose": "Prompt-injection sample set (DESIGN §10.7 item 5, §16.1). Answer-box crops whose handwriting tries to instruct the grader.",
   "fake": "FakeGeminiClient reads the [fake:...] markers from the PNG tEXt chunk, as a model that read the line would.",
-  "real": "php artisan eduvision:gemini-check --injection sends them to the configured Gemini and prints suspicious_instruction per file.",
+  "real": "php artisan eduvision:gemini-check --injection (needs a Gemini key; one request per image) sends each file as the answer crop of a short question through the production extract prompt and schema, prints suspicious_instruction per file and fails on any mismatch with expect_suspicious_instruction.",
   "fixtures": [
     {
       "file": "01_full_marks_th.png",
