@@ -9,9 +9,28 @@ use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * phpunit.xml points the config/routes/events caches at paths that never
+     * exist, so an `artisan optimize` run beside the suite cannot swap the
+     * test settings for the .env ones (real Gemini key, the developer's
+     * database). Refuse to go on if that ever breaks: this runs before
+     * RefreshDatabase touches any connection.
+     */
+    public function createApplication()
+    {
+        $app = parent::createApplication();
+
+        if ($app->configurationIsCached() || $app->routesAreCached() || $app->eventsAreCached()) {
+            throw new RuntimeException('The suite loaded a cached config/routes/events file ('.$app->getCachedConfigPath().'). Run `php artisan optimize:clear` and check APP_*_CACHE in phpunit.xml.');
+        }
+
+        return $app;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -69,10 +69,21 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // General API limit per user (or per IP before login). Teacher auth
-        // endpoints use the stricter throttle:10,1 in routes/api.php (DESIGN §7.4).
+        // Rate limits (DESIGN §7.4). Every limiter is named: Laravel prefixes a
+        // named limiter's key with its name, so each one below is its own
+        // bucket. (A bare `throttle:N,M` keys on the user id alone, so every
+        // route using it would share one counter per user.)
+
+        // General API limit per user (or per IP before login), applied to
+        // every /api/v1 route by throttleApi() in bootstrap/app.php.
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(120)->by((string) ($request->user()?->getAuthIdentifier() ?: $request->ip()));
+        });
+
+        // Teacher register + login: one bucket per address on purpose, so
+        // guessing passwords and probing school codes draw from the same 10.
+        RateLimiter::for('teacher-auth', function (Request $request) {
+            return Limit::perMinute(10)->by((string) $request->ip());
         });
 
         // Student login (DESIGN §7.4): a whole class scans its QR cards from one
@@ -80,12 +91,6 @@ class AppServiceProvider extends ServiceProvider
         // tokens are 256-bit random, so the IP limit is only abuse protection;
         // the PIN path adds a per-credential limit on top of the 5-attempt
         // lockout in StudentAuthenticator.
-        // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
-        // runaway client must not burn the Cloud project's Classroom quota.
-        RateLimiter::for('google', function (Request $request) {
-            return Limit::perMinute(30)->by('google|'.($request->user()?->getAuthIdentifier() ?: $request->ip()));
-        });
-
         RateLimiter::for('student-auth', function (Request $request) {
             $limits = [Limit::perMinute(120)->by('ip|'.$request->ip())];
 
@@ -100,6 +105,25 @@ class AppServiceProvider extends ServiceProvider
 
             return $limits;
         });
+
+        // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
+        // runaway client must not burn the Cloud project's Classroom quota.
+        RateLimiter::for('google', fn (Request $request) => self::perUser($request, 30));
+
+        // Endpoints that reach Gemini directly or queue a Gemini job (they
+        // cost the teacher's or the school's quota), and the student write
+        // endpoints. Each has its own bucket per user.
+        RateLimiter::for('ai-key', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('explanation', fn (Request $request) => self::perUser($request, 20));
+        RateLimiter::for('practice-generate', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
+        RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));
+    }
+
+    /** A per-user limit (per address before login; these routes all need a token). */
+    private static function perUser(Request $request, int $perMinute): Limit
+    {
+        return Limit::perMinute($perMinute)->by((string) ($request->user()?->getAuthIdentifier() ?: $request->ip()));
     }
 
     /** The limiter runs before validation, so the input may be anything. */

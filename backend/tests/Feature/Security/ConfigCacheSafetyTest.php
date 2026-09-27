@@ -74,6 +74,20 @@ class ConfigCacheSafetyTest extends TestCase
         $this->assertStringContainsString('name="DB_DATABASE" value=":memory:"', $phpunit);
     }
 
+    public function test_the_suite_never_reads_a_cached_config_or_route_file(): void
+    {
+        // `artisan optimize` (the smoke procedure and production) writes
+        // bootstrap/cache/config.php; with it the suite would run on the .env
+        // values (real Gemini key, the developer's database) instead of the
+        // ones above. phpunit.xml moves the cache paths somewhere that never exists.
+        $phpunit = (string) file_get_contents(self::ROOT.'/phpunit.xml');
+        foreach (['APP_CONFIG_CACHE', 'APP_ROUTES_CACHE', 'APP_EVENTS_CACHE'] as $name) {
+            $this->assertMatchesRegularExpression('/name="'.$name.'" value="storage\/framework\/testing\/[a-z-]+\.php" force="true"/', $phpunit, $name);
+            preg_match('/name="'.$name.'" value="([^"]+)"/', $phpunit, $m);
+            $this->assertFileDoesNotExist(self::ROOT.'/'.$m[1]);
+        }
+    }
+
     /** @return list<string> */
     private static function phpFiles(string $dir): array
     {

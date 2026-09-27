@@ -52,6 +52,53 @@ class GeminiCheckCommandTest extends TestCase
             ->assertFailed();
     }
 
+    public function test_it_runs_the_injection_sample_set_through_the_extract_prompt(): void
+    {
+        $fake = new FakeGeminiClient('gemini-3.8-flash');
+        $this->app->instance(GeminiClient::class, $fake);
+
+        $run = $this->artisan('eduvision:gemini-check', ['--injection' => true]);
+        foreach (glob(base_path('tests/fixtures/injection/*.png')) ?: [] as $path) {
+            $file = basename($path);
+            $expected = str_contains($file, 'control') ? 'false' : 'true';
+            $run->expectsOutputToContain("{$file}: suspicious_instruction={$expected} (expected {$expected}) ok");
+        }
+        $run->expectsOutputToContain('injection: 5/5 as expected')
+            ->doesntExpectOutputToContain('testing-server-gemini-key-not-real')
+            ->assertSuccessful()
+            ->run();
+
+        // The production prompt and schema, the PNG itself, nothing about a student.
+        $this->assertCount(5, $fake->requests);
+        foreach ($fake->requests as $request) {
+            $this->assertSame('extract', $request->purpose);
+            $this->assertSame('short', $request->type);
+            $this->assertSame('image/png', $request->images[0]->mimeType);
+            $this->assertStringStartsWith("\x89PNG", $request->images[0]->data);
+            $this->assertStringContainsString('12 + 8 = ?', $request->userText);
+        }
+    }
+
+    public function test_a_missed_injection_fails_the_check(): void
+    {
+        $this->app->instance(GeminiClient::class, new class extends FakeGeminiClient
+        {
+            public function generate(array $requests, #[\SensitiveParameter] string $apiKey): array
+            {
+                return array_map(fn () => GeminiReply::ok((string) json_encode([
+                    'blank' => false, 'suspicious_instruction' => false, 'legibility' => 'clear',
+                    'answer_text' => '20', 'key_match' => 'exact', 'error_types' => [],
+                ])), $requests);
+            }
+        });
+
+        $this->artisan('eduvision:gemini-check', ['--injection' => true])
+            ->expectsOutputToContain('01_full_marks_th.png: suspicious_instruction=false (expected true) MISMATCH')
+            ->expectsOutputToContain('05_control_plain_th.png: suspicious_instruction=false (expected false) ok')
+            ->expectsOutputToContain('injection: 1/5 as expected')
+            ->assertFailed();
+    }
+
     public function test_it_can_check_a_teachers_saved_key(): void
     {
         $teacher = $this->makeTeacher();

@@ -21,6 +21,12 @@
         <!-- The whole suite runs in one process; mPDF (worksheets, login cards) needs headroom. -->
         <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
+        <!-- Never read a cached config/routes/events: after `artisan optimize` bootstrap/cache/config.php
+             holds the .env values (and would ignore every value below, e.g. run RefreshDatabase against the
+             developer's database). These paths never exist; TestCase::setUp also refuses a cached app. -->
+        <env name="APP_CONFIG_CACHE" value="storage/framework/testing/no-config-cache.php" force="true"/>
+        <env name="APP_ROUTES_CACHE" value="storage/framework/testing/no-routes-cache.php" force="true"/>
+        <env name="APP_EVENTS_CACHE" value="storage/framework/testing/no-events-cache.php" force="true"/>
         <!-- Fixed test-only key so the suite (and CI) never depends on a local .env. Not a secret. -->
         <env name="APP_KEY" value="base64:dGVzdGluZy1vbmx5LWtleS1ub3QtYS1zZWNyZXQtMDA="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
