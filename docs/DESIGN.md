@@ -1092,7 +1092,12 @@ Image 2: the final answer box labelled "คำตอบ".
 
 For each written line, decide whether it follows validly from the previous line
 (line 1 from the question). A valid step may differ from the reference steps.
+Error carried forward: a line that correctly follows from an earlier wrong line is
+valid; only the line where the mistake first appears is invalid
+(e.g. "3 × 12 = 38" is invalid, the next line "ตอบ 38 แท่ง" is valid).
 ```
+
+(ประโยค error carried forward เพิ่มใน `extract.show_work.v2` เมื่อ 27 ก.ย. 2569 หลังทดสอบกับ Gemini จริงแล้วพบว่า v1 ตัดสินบรรทัดสรุปที่ต่อจากบรรทัดผิดว่าผิดด้วย ทำให้ S ต่ำเกินจริง กรณีนี้เป็น calibration test ทั้งใน `backend/tests/Unit/Grading/ShowWorkCalibrationTest.php` และ `ml/tests/test_show_work.py`)
 
 ต่อด้วย image part 2 ภาพแบบ `inlineData` (`image/webp`)
 
@@ -1177,6 +1182,7 @@ Schema: `{reference_steps?: string[], criteria?: [{description_th, points, is_co
 ```text
 System: You write short feedback in Thai for a {grade_label} student about one homework question.
 Tone: warm, encouraging, specific. Speak to the student directly without names or gendered words.
+Use one neutral voice: never end sentences with ครับ, ค่ะ or คะ (use นะ when a softener is needed) and never refer to yourself.
 Never mention scores, points, AI, or how the answer was checked.
 Do not include anything unrelated to this question.
 
@@ -1397,7 +1403,7 @@ Fuzzy sets ของทุกตัวแปรคือ ต่ำ = `1 − x` �
 ### 11.9 การจูนและการทดสอบ
 
 - ค่า singleton และจุดหักของ membership ด้านบนเป็น**ค่าเริ่มต้น** ให้จูนจากข้อมูลที่ครูแก้จริง (`score_events`) ใน Phase 4 เป้าหมายคือลดค่าเฉลี่ยความต่างระหว่างคะแนนของ AI กับคะแนนสุดท้ายของครู
-- `FuzzyEngine` และกฎทั้งหมดเป็น PHP ล้วน **เขียน unit test ได้ครบทุกกฎ** และใช้ตัวอย่างใน §11.3 เป็น golden test
+- `FuzzyEngine` และกฎทั้งหมดเป็น PHP ล้วน **เขียน unit test ได้ครบทุกกฎ** และใช้ตัวอย่างใน §11.3 เป็น golden test ค่าทุกจุดต้องตรงกับ reference ใน `ml/fuzzy` (ไฟล์ `backend/tests/fixtures/fuzzy_golden.json`) และมี calibration case ของ error carried forward (§10.3)
 - ถ้าต้องการใช้ในรายงานวิชา AI ทำ implementation คู่ขนานเป็น Python ใน `ml/fuzzy/` สำหรับวาดกราฟ membership และ surface ได้
 
 ---
@@ -1726,6 +1732,7 @@ ALTER TABLE scans
 
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
+| (ทุก route ด้านล่าง ยกเว้น `GET /google/status`) | | ครู | ถ้า server ไม่ได้ตั้ง `GOOGLE_OAUTH_CLIENT_ID/SECRET` ตอบ `503 code: google_not_configured` **ก่อน**เงื่อนไขอื่นทั้งหมด (หลังตรวจ auth และ role) |
 | POST | `/google/connect` | ครู | `{server_auth_code}` แลก token เก็บเข้ารหัส ตอบ `{email, scopes}` scope ขาด → 422 `code: google_scope_missing` |
 | GET | `/google/status` | ครู | `{connected, email, scopes, needs_reconnect}` |
 | DELETE | `/google/disconnect` | ครู | revoke + ลบ |
