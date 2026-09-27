@@ -5,6 +5,8 @@ import itertools
 import pytest
 
 from fuzzy.grading import grade_show_work
+from fuzzy.matching import final_answer_value
+from fuzzy.priority import boundary_closeness, review_priority
 from fuzzy.rulesets import SHOW_WORK, STRICTNESS_LEVELS
 
 GRID = [i / 20 for i in range(21)]
@@ -29,6 +31,34 @@ def test_golden_example_from_design_11_3():
     assert all(weights[name] == 0.0 for name in ("R1", "R2", "R3", "R6"))
     assert [r.name for r in trace.fired()] == ["R4", "R5"]
     assert trace.weight_sum == pytest.approx(0.667, abs=0.001)
+
+
+# Calibration case (11.9), twin of backend tests/Unit/Grading/ShowWorkCalibrationTest.php:
+# "3 boxes of 12 pencils", key 36, 4 points; the student wrote "3 x 12 = 38" then "answer 38".
+# extract.show_work.v2 marks line 3 valid (error carried forward), S = 2/3; the v1 reading
+# of the real model marked it invalid, S = 1/3. F is the numeric near-miss of 38 vs 36.
+CARRIED_FORWARD = {
+    "v2 reading, line 3 valid": (2 / 3, 0.6373, 2.5, "partial", 0.6, 0.0, "confident"),
+    "v1 reading, line 3 invalid": (1 / 3, 0.3831, 1.5, "not_yet", 0.3254, 0.1525, "confident"),
+}
+
+
+@pytest.mark.parametrize("case", list(CARRIED_FORWARD))
+def test_calibration_error_carried_forward(case):
+    step_ratio, ratio, score, understanding, u, p, band = CARRIED_FORWARD[case]
+    f = final_answer_value("different", "38", {"accepted": ["36"], "numeric": {"value": 36, "abs_tol": 0}})
+    assert f == pytest.approx(0.2667, abs=1e-4)
+
+    result = grade_show_work(f, step_ratio, "normal")
+    assert result.score_ratio == pytest.approx(ratio, abs=1e-4)
+    assert result.score(max_points=4) == score
+    assert result.understanding == understanding
+    assert result.u == pytest.approx(u, abs=1e-4)
+
+    # CNN and Gemini both read 38, legibility clear: only B can raise p.
+    priority = review_priority(0.0, 0.0, boundary_closeness(result.u))
+    assert priority.p == pytest.approx(p, abs=1e-4)
+    assert priority.band == band
 
 
 # crisp corners: exactly one rule fires with weight 1, so the output is that rule's singleton
