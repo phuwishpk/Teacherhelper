@@ -1883,7 +1883,10 @@ APIs & Services → OAuth consent screen (หรือ Google Auth Platform → 
 
 APIs & Services → Credentials → Create credentials → OAuth client ID
 - Application type: **Web application**, Name: `EduVision server`
-- Authorized redirect URIs: ไม่ต้องใส่ (ใช้ server auth code จากแอป)
+- Authorized redirect URIs: ใส่ทั้งสองตัว (ใช้กับการเชื่อมผ่านเบราว์เซอร์ DESIGN §18.5 ทางที่ 2 ต้องตรงทุกตัวอักษร)
+  - `http://127.0.0.1:8000/google/oauth/callback` (ในเครื่อง ตรงกับ `GOOGLE_OAUTH_REDIRECT_URI` ใน `backend/.env`)
+  - `https://teacherhelper.phuwish.com/google/oauth/callback` (production)
+- Authorized JavaScript origins: ไม่ต้องใส่
 - Create → คัดลอก **Client ID** และ **Client secret** (หรือ Download JSON แล้วเก็บไว้นอก repo เช่น `~/secrets/`)
 
 ใส่ใน `backend/.env`:
@@ -1918,7 +1921,13 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
             --dart-define=GOOGLE_SERVER_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com   # Web client ID จาก G4
 ```
 
-ถ้าไม่ใส่ `GOOGLE_SERVER_CLIENT_ID` แอปจะซ่อนเมนู Google Classroom ทั้งหมด (ระบบอื่นใช้ได้ตามปกติ)
+เมนู Google Classroom แสดงเมื่อ `backend/.env` มี `GOOGLE_OAUTH_CLIENT_ID` + `SECRET` แล้ว ไม่ขึ้นกับ `GOOGLE_SERVER_CLIENT_ID` ถ้าไม่ใส่ค่านี้ (หรือรันใน Chrome) แอปจะเชื่อมผ่านเบราว์เซอร์แทน ทดสอบใน Chrome บน Mac ได้เลยโดยไม่ต้องมีมือถือ:
+
+```bash
+cd app && flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+ใน Chrome ทำได้ทุกอย่างยกเว้น "ดาวน์โหลดและสแกนงานที่ส่ง" ซึ่งต้องใช้แอป Android
 
 ### G7 คอร์สทดลอง
 

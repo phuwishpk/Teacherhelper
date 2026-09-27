@@ -1712,7 +1712,16 @@ ALTER TABLE scans
 
 ### 18.5 การยืนยันตัวตนกับ Google
 
-- แอปใช้ package `google_sign_in` ขอ **server auth code** โดยใช้ Web client ID เป็น `serverClientId` (ส่งผ่าน `--dart-define=GOOGLE_SERVER_CLIENT_ID`) แล้วส่งให้ `POST /google/connect {server_auth_code}` server แลกเป็น refresh token ที่ `https://oauth2.googleapis.com/token` ด้วย `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (secret อยู่บน server เท่านั้น)
+มีสองทางเชื่อม ใช้ทางไหนก็ได้ผลเหมือนกัน (แถวใน `google_accounts` ชุดเดียวกัน)
+
+- **ทางที่ 1: native บน Android** แอปใช้ package `google_sign_in` ขอ **server auth code** โดยใช้ Web client ID เป็น `serverClientId` (ส่งผ่าน `--dart-define=GOOGLE_SERVER_CLIENT_ID`) แล้วส่งให้ `POST /google/connect {server_auth_code}` server แลกเป็น refresh token ที่ `https://oauth2.googleapis.com/token` ด้วย `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (secret อยู่บน server เท่านั้น)
+- **ทางที่ 2: ผ่านเบราว์เซอร์** (เพิ่ม 27 ก.ย. 2569 เพื่อให้เชื่อมจากแอปบน Chrome ได้โดยไม่ต้องมีมือถือ และใช้บน Android ได้ด้วยเมื่อไม่ได้ตั้ง `GOOGLE_SERVER_CLIENT_ID`)
+  1. แอปเรียก `POST /google/oauth/url` server สร้าง `state` สุ่ม 32 byte ใช้ได้ครั้งเดียว อายุ 10 นาที (เก็บเฉพาะ SHA-256 ใน cache ผูกกับครู) แล้วคืน URL หน้าอนุญาตของ Google (`access_type=offline`, `prompt=consent`)
+  2. แอปเปิด URL ในเบราว์เซอร์ ครูเลือกบัญชีและกดอนุญาต
+  3. Google พากลับมาที่ `GET /google/oauth/callback` (web route ไม่ต้อง login) server ตรวจและใช้ `state` แลก code ด้วย redirect URI เดียวกัน แล้วเก็บบัญชีด้วย logic เดิมของทางที่ 1 หน้าที่แสดงเป็นหน้าภาษาไทยบอกผล ไม่มี code, token หรือ secret อยู่ในหน้า, log หรือ redirect
+  4. แอปถาม `GET /google/status` ทุก 3 วินาที (สูงสุด 3 นาที) จนเห็นว่าเชื่อมแล้ว
+  - redirect URI มาจาก `GOOGLE_OAUTH_REDIRECT_URI` (ค่าเริ่มต้น `APP_URL` + `/google/oauth/callback`) ต้องลงทะเบียน**ให้ตรงทุกตัวอักษร**ใน "Authorized redirect URIs" ของ Web client (ในเครื่อง `http://127.0.0.1:8000/google/oauth/callback`, production `https://teacherhelper.phuwish.com/google/oauth/callback`)
+  - ข้อจำกัด: callback ผูกกับเบราว์เซอร์ที่เริ่มไม่ได้ เพราะหน้าเปิดนอกแอป จึงพึ่ง `state` ที่สั้นและใช้ครั้งเดียว และหน้าสำเร็จแสดงชื่อครูให้ตรวจ; access log ของ web server จะเห็น code ใช้ครั้งเดียว ซึ่งไร้ค่าถ้าไม่มี client secret
 - แอปขอ access token ของตัวเองบนเครื่อง (ผ่าน `google_sign_in` authorization สำหรับ scope `drive.readonly`) เพื่อดาวน์โหลดไฟล์แนบ token นี้ไม่ถูกเก็บลงเครื่องและไม่ส่งขึ้น server
 - scope ที่ขอ:
 
@@ -1734,7 +1743,9 @@ ALTER TABLE scans
 |---|---|---|---|
 | (ทุก route ด้านล่าง ยกเว้น `GET /google/status`) | | ครู | ถ้า server ไม่ได้ตั้ง `GOOGLE_OAUTH_CLIENT_ID/SECRET` ตอบ `503 code: google_not_configured` **ก่อน**เงื่อนไขอื่นทั้งหมด (หลังตรวจ auth และ role) |
 | POST | `/google/connect` | ครู | `{server_auth_code}` แลก token เก็บเข้ารหัส ตอบ `{email, scopes}` scope ขาด → 422 `code: google_scope_missing` |
-| GET | `/google/status` | ครู | `{connected, email, scopes, needs_reconnect}` |
+| GET | `/google/status` | ครู | `{configured, connected, email, scopes, needs_reconnect}` (`configured` = server ตั้ง client ID + secret แล้ว แอปใช้ค่านี้ตัดสินว่าจะแสดงส่วน Classroom ไหม) |
+| POST | `/google/oauth/url` | ครู | ทางที่ 2 (§18.5) คืน `{data: {url}}` ของหน้าอนุญาต Google |
+| GET | `/google/oauth/callback` (web route) | เบราว์เซอร์ | ปลายทางของ Google หลังกดอนุญาต ตอบเป็นหน้า HTML ภาษาไทย: สำเร็จ 200, ยกเลิก 200, state ผิด/หมดอายุ/ใช้แล้ว 400, scope ไม่ครบ 422 (เพิกถอนสิทธิ์ที่ได้บางส่วน), ไม่ได้ตั้งค่า 503 |
 | DELETE | `/google/disconnect` | ครู | revoke + ลบ |
 | GET | `/google/courses` | ครู | คอร์ส `ACTIVE` ที่ครูเป็นผู้สอน `[{course_id, name, section}]` |
 | POST / DELETE | `/classrooms/{id}/google-link` | ครู | ผูก/เลิกผูก `{course_id}` |
@@ -1756,10 +1767,12 @@ ALTER TABLE scans
 - **หน้าตั้งค่าของครู**: การ์ด "Google Classroom" สถานะเชื่อมแล้ว/ยังไม่เชื่อม/ต้องเชื่อมใหม่ ปุ่มเชื่อมและยกเลิก (อยู่หน้าเดียวกับการ์ด Gemini API key)
 - **รายละเอียดห้องเรียน**: ปุ่ม "ผูกกับ Google Classroom" → เลือกคอร์ส → หน้าจับคู่นักเรียน (รายการจาก Classroom กับเลขที่ในห้อง เสนอคู่อัตโนมัติ ครูแก้/ยืนยัน)
 - **รายละเอียดการบ้าน**: ปุ่ม "โพสต์ลง Classroom" (ติ๊กแนบใบงานสำรองได้) และ "ดึงงานที่ส่ง" → รายการ submission พร้อมสถานะ → "ดาวน์โหลดและสแกนทั้งหมด" หรือทีละคน → ผลของแต่ละรูป (ผ่าน/ต้องถ่ายใหม่พร้อมเหตุผล) → ปุ่ม "ตีกลับให้ถ่ายใหม่"
-- ถ้าไม่ได้ตั้ง `GOOGLE_SERVER_CLIENT_ID` แอปซ่อนส่วน Classroom ทั้งหมด
+- ส่วน Classroom **แสดงเมื่อ `GET /google/status` ตอบ `configured: true`** (server ตั้งค่าแล้ว) ไม่ขึ้นกับ `GOOGLE_SERVER_CLIENT_ID` อีกต่อไป ค่านั้นใช้เฉพาะเลือกทางเชื่อม: Android ที่ตั้งค่านี้ใช้ทางที่ 1 นอกนั้นใช้ทางที่ 2 (§18.5)
+- **บนเว็บ (Chrome)** ทำได้ทุกอย่างยกเว้น "ดาวน์โหลดและสแกนงานที่ส่ง" ซึ่งแสดงข้อความว่าต้องทำบนแอป Android
 
 ### 18.8 การทดสอบ
 
 - backend: `Http::fake` ของ endpoint Google ทั้งหมด (token exchange, courses, students, courseWork, studentSubmissions, patch, return, Drive upload, revoke) ครอบคลุม `invalid_grant`, scope ขาด, `ProjectPermissionDenied` (งานที่ไม่ได้สร้างผ่านแอป), การจับคู่ roster และ identity mismatch
-- app: repository test ด้วย Dio ปลอม, ตัวดาวน์โหลดไฟล์แนบด้วย HTTP ปลอม, widget test ของหน้าจับคู่และหน้ารายการ submission
+- app: repository test ด้วย Dio ปลอม, ตัวดาวน์โหลดไฟล์แนบด้วย HTTP ปลอม, widget test ของหน้าจับคู่และหน้ารายการ submission, และ dialog เชื่อมผ่านเบราว์เซอร์ (polling)
+- backend ทางที่ 2: `GoogleOAuthBrowserFlowTest` ครอบ URL + state, callback สำเร็จ/ใช้ซ้ำ/หมดอายุ/ยกเลิก/แลก code ล้ม/scope ไม่ครบ/ไม่ได้ตั้งค่า และสิทธิ์
 - ทดสอบของจริงต้องมี Google Cloud project และคอร์สทดลองตาม [KICKOFF ส่วนที่ 6](KICKOFF.md#ส่วนที่-6)
