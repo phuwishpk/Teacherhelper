@@ -1,5 +1,5 @@
 # Laravel quality gate for backend/ (DESIGN §16.1 "CI/CD" and "(c) secret
-# scanning in CI", CLAUDE.md "keep php artisan test green"). Four jobs:
+# scanning in CI", CLAUDE.md "keep php artisan test green"). Three jobs:
 #
 #   test      PHP 8.3 (the Plesk version composer.json pins as platform.php)
 #             + pcov: the suite on SQLite in-memory as phpunit.xml wires it,
@@ -8,8 +8,9 @@
 #   mariadb   the same suite against MariaDB 11, the production engine, so a
 #             migration or query that only works on SQLite cannot ship.
 #   pint      code style.
-#   gitleaks  secret scan over the whole git history (the repo is public;
-#             the local pre-commit hook only catches Google API keys).
+#
+# The secret scan lives in secrets.yml so it also runs for changes outside
+# backend/.
 #
 # Nothing here deploys: production is a manual "Pull Updates" in Plesk Git
 # (docs/HOSTING.md). No secrets are needed; APP_KEY for tests is the fixed
@@ -166,17 +167,3 @@ jobs:
       - run: composer install --no-interaction --prefer-dist --no-progress
 
       - run: vendor/bin/pint --test
-
-  gitleaks:
-    name: gitleaks (secret scan)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # The scan covers every commit, not only the checkout.
-          fetch-depth: 0
-
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
