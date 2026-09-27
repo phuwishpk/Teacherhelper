@@ -29,7 +29,8 @@ docker run -d --name eduvision-mariadb --restart unless-stopped \
 cd backend
 composer install
 cp -n .env.example .env && php artisan key:generate
-php artisan migrate --seed          # สร้าง schools, users, cache, jobs, personal_access_tokens + โรงเรียนสาธิต 1 แห่ง
+# ตั้ง ADMIN_EMAIL / ADMIN_PASSWORD ใน .env ก่อน seed ไม่งั้นไม่มีบัญชี /admin ไว้อนุมัติครู (seeder ขึ้น WARN)
+php artisan migrate --seed          # สร้าง schools, users, cache, jobs, personal_access_tokens + โรงเรียนสาธิต 1 แห่ง + admin
 
 # 3. รัน
 php artisan serve                                  # AVD: http://10.0.2.2:8000
@@ -37,6 +38,10 @@ php artisan serve --host=0.0.0.0 --port=8000       # มือถือจริ
 php artisan eduvision:queue-work                   # รัน worker หนึ่งรอบ (แทน cron ของ Plesk)
 php artisan test                                   # ใช้ SQLite in-memory ไม่แตะ MariaDB
 ```
+
+**Gemini ในเครื่อง**: `GEMINI_FAKE=true` ใช้ `FakeGeminiClient` (ไม่ออกเน็ต ไม่เสียเงิน ผลจำลองจาก hash ของภาพ) ส่วน `GEMINI_FAKE=false` + `GEMINI_API_KEY` เรียก Gemini จริงด้วย key แบบ paid (§10.1) สลับด้วยการ**แก้ `.env` แล้วรีสตาร์ท server และ worker** เป็นหลัก ถ้าจะ override ด้วยตัวแปรใน shell (`GEMINI_FAKE=true php artisan ...`) ต้องใช้ `php artisan serve --no-reload` เสมอ: โหมดปกติ `serve` ลบตัวแปรทุกตัวที่ PHP อ่านจาก `.env` ออกจาก environment ของ server ลูกแล้วให้มันอ่าน `.env` ใหม่ ถ้า PHP ตั้ง `variables_order` ที่มี `E` (เช่น `EGPCS`) ค่าที่ export ไว้จะหายไปด้วย และ server อาจเรียก Gemini จริงด้วย key ใน `.env` ตอนร่าง rubric / สร้างคำอธิบายใหม่ / สร้างแบบฝึก (ทดสอบแล้ว: `GPCS` ของ Homebrew ส่งค่าถึง ส่วน `EGPCS` ไม่ถึง) worker (`eduvision:queue-work`) และคำสั่ง artisan อื่นใช้ค่าจาก shell เสมอ `tools/smoke.sh` ทำแบบนี้อยู่แล้ว
+
+prompt ของ Gemini อยู่ที่ `resources/prompts/{purpose}.{type}.v{n}.md` ระบบใช้เวอร์ชันสูงสุดและบันทึกลง `ai_calls.prompt_version` (แก้ prompt = เพิ่มไฟล์เวอร์ชันใหม่ ไม่แก้ไฟล์เดิม) ตอนนี้ `extract.show_work.v2` (ระบุกฎ error carried forward: บรรทัดที่คิดต่อจากบรรทัดผิดก่อนหน้าได้ถูกต้องนับว่า valid เฉพาะบรรทัดแรกที่ผิดเป็น invalid) และ `explanation.general.v2` (น้ำเสียงกลางแบบเดียว ไม่ใช้ ครับ/ค่ะ/คะ) ที่เหลือ v1 เคสเทียบของ show_work อยู่ใน `tests/Unit/Grading/ShowWorkCalibrationTest.php`
 
 รหัสโรงเรียนสำหรับสมัครครูอ่านจาก `SEED_TEACHER_JOIN_CODE` ใน `.env` (ค่าเริ่มต้นในเครื่อง `DEMO2569`) **บน hosting ต้องตั้งเป็นรหัสสุ่ม 8 ตัว** เพราะ repo เป็น public และใน M0 รหัสนี้เป็นด่านเดียวที่กันคนแปลกหน้าสมัครเป็นครู
 
@@ -54,7 +59,7 @@ base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุ
 
 `user` = `{id, name, email, role, status, school: {id, name} | null}`
 
-**stub ของ M0** (แก้ใน Phase 2, ดู `TODO(phase-2)` ใน `TeacherAuthController`): บัญชีที่สมัครใหม่เป็น `active` ทันที ยังไม่ผ่านการอนุมัติของ admin ใน Filament
+บัญชีครูที่สมัครใหม่เป็น `pending` (login ได้ `403 account_not_active`) จนกว่า admin อนุมัติใน Filament (`/admin` → ผู้ใช้และครู)
 
 ตัวอย่างด้วย curl (zsh)
 
@@ -97,7 +102,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 - **ขั้นตอน** (`App\Domain\Scans\ScanIngestor`): ตรวจ QR ด้วย `QrSigner` → สิทธิ์ครู → layout เวอร์ชันตาม QR → หน้าและชุดช่องคำตอบต้องตรงกับ layout → นักเรียนอยู่ในห้อง → ไฟล์ WebP ไม่เกิน `SCAN_MAX_PAGE_KB` / `SCAN_MAX_CROP_KB` จากนั้นทำใน transaction ที่ล็อกแถว submission
 - **กติกาสแกนซ้ำ** (key = การบ้าน, นักเรียน, หน้า): ยังไม่เผยแพร่ → สแกนใหม่ `active` ของเก่า `superseded` และ response ของหน้านั้น (แถวเดิม, id เดิม) ถูกล้างผลตรวจแล้วตรวจใหม่ เผยแพร่แล้ว → `pending_confirm` เก็บ crop + `regions.json` ไว้ที่ `scans/{school}/{assignment}/pending/{scan}/` จนครูยืนยัน แล้ว submission กลับไป `grading` (ล้าง `published_at`) ทุกคะแนนที่ถูกแทนบันทึก `score_events.action = rescan` สแกนใหม่เขียน crop ทับ path เดิมของ response โดยย้ายไฟล์เดิมไปพักที่ `crops/{school}/{assignment}/replaced/{scan}/` ก่อน (`CropSwap`) ถ้า transaction ล้มจะคืนไฟล์เดิม ถ้าสำเร็จจะลบไฟล์ที่พักไว้
-- **ตรวจตอนรับ**: ปรนัยให้คะแนนทันทีจากค่าการฝน (§11.6, `App\Domain\Grading\McqGrader`) พร้อม `review_priority` ตาม §11.8 (`ReviewPriority`) และ `score_events` `ai_scored` (actor `system`) ข้ออื่นเป็น `queued` แล้ว dispatch `GradeScanJob` ลง queue `grading` (**ตอนนี้เป็น stub** ขั้น B4 เติม Gemini + fuzzy) ข้อที่ชนิดคำถามถูกแก้หลังพิมพ์จนไม่ตรงกับช่องบนกระดาษเป็น `manual` (`fuzzy_trace.manual_reason`)
+- **ตรวจตอนรับ**: ปรนัยให้คะแนนทันทีจากค่าการฝน (§11.6, `App\Domain\Grading\McqGrader`) พร้อม `review_priority` ตาม §11.8 (`ReviewPriority`) และ `score_events` `ai_scored` (actor `system`) ข้ออื่นเป็น `queued` แล้ว dispatch `GradeScanJob` ลง queue `grading` (Gemini `extract` → fuzzy §11 → คำอธิบาย) ข้อที่ชนิดคำถามถูกแก้หลังพิมพ์จนไม่ตรงกับช่องบนกระดาษเป็น `manual` (`fuzzy_trace.manual_reason`)
 - **สถานะ submission** (`SubmissionStatus::refresh`): `awaiting_scan` → `grading` (มีข้อ queued/extracted/failed) → `needs_review` → `reviewed` (ครูตรวจครบ) → `published` (ตั้งโดยการเผยแพร่เท่านั้น)
 - ลบคำถามที่มีคำตอบสแกนแล้วไม่ได้ (`409 question_has_responses`)
 - **PHP บน server** ต้องรับ request ได้: `upload_max_filesize` ≥ 8M, `post_max_size` ≥ 16M, `max_file_uploads` ≥ 100 (หน้าหนึ่งมีได้ถึง 1 + 2 × จำนวนข้อ ไฟล์ที่เกิน PHP ทิ้งเงียบๆ)
@@ -177,7 +182,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhos
 
 ครูเชื่อมบัญชี Google ของตัวเอง (นักเรียนใช้ Classroom ตามปกติ) server เก็บเฉพาะ refresh token แบบเข้ารหัส (`google_accounts.encrypted_refresh_token`, cast `encrypted`) แล้วเรียก Classroom v1 และ Drive v3 ตรงด้วย Laravel HTTP client (`app/Domain/Google/GoogleApi`) **ไม่ใช้ `google/apiclient`** รูปของนักเรียนไม่ผ่าน server: แอปดาวน์โหลดไฟล์แนบจาก Drive ด้วยสิทธิ์ของครูบนเครื่อง รัน pipeline สแกนเดิม แล้วส่ง `POST /scans` ตามปกติ
 
-ตั้งใน `.env`: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (OAuth client ชนิด Web application ตัวเดียวกับ `GOOGLE_SERVER_CLIENT_ID` ของแอป ตาม KICKOFF ส่วนที่ 6), `GOOGLE_OAUTH_REDIRECT_URI` (เว้นว่างสำหรับ code จาก Android), `GOOGLE_TIMEOUT`, `GOOGLE_CLASSROOM_APP_LINK` (ลิงก์แอปที่แนบท้ายคำสั่งของงาน) ถ้าไม่ตั้ง client ทุก endpoint ในตารางนี้ตอบ `503 google_not_configured` และ `GET /google/status` มี `server_configured: false` ส่วนอื่นของระบบทำงานปกติ
+ตั้งใน `.env`: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` (OAuth client ชนิด Web application ตัวเดียวกับ `GOOGLE_SERVER_CLIENT_ID` ของแอป ตาม KICKOFF ส่วนที่ 6), `GOOGLE_OAUTH_REDIRECT_URI` (เว้นว่างสำหรับ code จาก Android), `GOOGLE_TIMEOUT`, `GOOGLE_CLASSROOM_APP_LINK` (ลิงก์แอปที่แนบท้ายคำสั่งของงาน) ถ้าไม่ตั้ง client ทุก endpoint ในตารางนี้ยกเว้น `GET /google/status` ตอบ `503 google_not_configured` ก่อนเงื่อนไขอื่นทั้งหมด (`classroom_not_linked`, `not_posted`, ห้องหรืองานของคนอื่น ฯลฯ แต่หลัง 401/403 ของ auth และ role: middleware `google.configured`, `App\Http\Middleware\EnsureGoogleConfigured`) ส่วน `GET /google/status` ตอบ `server_configured: false` ส่วนอื่นของระบบทำงานปกติ
 
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
@@ -243,7 +248,7 @@ php artisan eduvision:purge-images
 | prompt injection ผ่านลายมือ: `tests/fixtures/injection/*.png` (+ `manifest.json`) ผ่าน `GradeScanJob` → `suspicious_instruction` → บนสุดของคิว, `bulk_approvable: false`, ไม่สร้างคำอธิบาย; system instruction บอกว่าภาพเป็นข้อมูล และ schema บังคับ flag ตรวจกับโมเดลจริงได้ด้วย `php artisan eduvision:gemini-check --injection` (ต้องมี key, 1 request ต่อภาพ, ส่งแต่ละภาพเป็น crop ของข้อเติมคำผ่าน prompt/schema `extract` ของจริง แล้วเทียบกับ `expect_suspicious_instruction` ไม่ตรงแม้ภาพเดียว = exit 1) | `FakeGeminiClient` อ่าน marker `[fake:...]` จาก tEXt chunk ของ PNG เหมือนโมเดลที่อ่านข้อความในภาพ | `PromptInjectionTest`, `Console/GeminiCheckCommandTest` |
 | Gemini key ของครูไม่ออกทาง response/log/`ai_calls`/แถว DB แม้ตอน Google ปฏิเสธ key; key กลางก็เช่นกัน | `TeacherApiKey` (encrypted), `GeminiKeyResolver` | `SecretsHygieneTest` |
 | ไม่มี `env()` นอก `config/` (production ใช้ `optimize`), ทุกตัวแปรของ EduVision อยู่ใน `.env.example`, `.env.example` ไม่มีค่าจริง, suite ไม่แตะ Gemini จริง; suite ไม่อ่าน config/route/event cache (`phpunit.xml` ชี้ `APP_CONFIG_CACHE`/`APP_ROUTES_CACHE`/`APP_EVENTS_CACHE` ไปที่ไฟล์ที่ไม่มีอยู่ใน `storage/framework/testing/` และ `tests/TestCase::setUp` fail ถ้าเจอ cache) จึงรัน `php artisan optimize` คู่กับ suite ได้โดย test ไม่ไปใช้ค่าใน `.env` (key Gemini จริง, database ในเครื่อง) | `phpunit.xml`, `tests/TestCase.php` | `ConfigCacheSafetyTest` |
-| secret scan | pre-commit hook กัน `AIza...`; CI รัน gitleaks ทั้งประวัติ | `.github/workflows/backend.yml` |
+| secret scan | pre-commit hook (`.git/hooks`, ในเครื่องเท่านั้น) กัน `AIza...` และ `AQ....`; CI รัน gitleaks ทั้งประวัติด้วยกฎ default + `google-aq-api-key` (`AQ\.[0-9A-Za-z_-]{40,}`) จาก `.gitleaks.toml` ที่ root เพราะกฎ default จับ key แบบ `AQ.` ได้เฉพาะเมื่ออยู่ติดคำว่า api_key | `.github/workflows/backend.yml`, `.gitleaks.toml` |
 
 CORS ของ `api/*` เป็นค่าเริ่มต้นของ Laravel (`allowed_origins: *`) จงใจคงไว้เพื่อ `flutter run -d chrome` ตอนพรีวิว UI; API ใช้ bearer token ไม่ใช่ cookie จึงไม่มี CSRF
 
@@ -314,4 +319,6 @@ php -d extension=/path/to/pcov.so -d pcov.enabled=1 -d pcov.directory=app vendor
 
 รัน suite กับ MariaDB จริงเหมือน CI (ต้องมี database ว่างชื่อ `eduvision_test` ใน container): `DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=eduvision_test DB_USERNAME=eduvision DB_PASSWORD=eduvision php artisan test` (`phpunit.xml` ตั้ง `DB_*` เฉพาะเมื่อ environment ไม่ได้ตั้ง)
 
-ห้าม commit `.env`, key ใดๆ หรือข้อมูลนักเรียนจริง (repo เป็น public; pre-commit hook กัน Google API key ไว้ชั้นหนึ่ง และ gitleaks ใน CI อีกชั้น)
+ห้าม commit `.env`, key ใดๆ หรือข้อมูลนักเรียนจริง (repo เป็น public; pre-commit hook กัน Google API key ไว้ชั้นหนึ่ง และ gitleaks ใน CI อีกชั้น) clone ใหม่หรือแก้ผ่านเว็บ GitHub ไม่มี hook จึงเหลือแค่ gitleaks ใน CI
+
+`php artisan test` ไม่เขียน `storage/logs/laravel.log` (`phpunit.xml` ตั้ง `LOG_CHANNEL=discard` ซึ่งเป็น `NullHandler` ใน `config/logging.php` ข้อความ error ที่ test ตั้งใจสร้าง เช่น "FCM down" จึงไม่ปนกับ log จริง) อยากเห็น log ของ test ให้รัน `LOG_CHANNEL=single php artisan test`

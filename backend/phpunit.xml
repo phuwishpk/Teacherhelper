@@ -36,6 +36,10 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Keep the suite's expected errors ("FCM down", stray-request fakes, ...) out of the developer's
+             storage/logs/laravel.log (channel `discard` in config/logging.php). Log::spy / Log::listen still
+             see every line. Run `LOG_CHANNEL=single php artisan test` to write them to the log. -->
+        <env name="LOG_CHANNEL" value="discard"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
