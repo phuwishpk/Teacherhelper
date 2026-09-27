@@ -17,8 +17,10 @@
 # expects 404). Run from anywhere:  bash backend/tools/smoke.sh
 #
 # The server is started here with `php artisan serve --no-reload` so the
-# overrides below reach it (without --no-reload artisan serve hides every
-# variable that .env also defines from the child PHP server). Set
+# overrides below reach it (without --no-reload artisan serve removes every
+# variable PHP read from .env from the child PHP server's environment; when
+# php.ini's variables_order includes E that drops the shell overrides too,
+# and the child reads .env again). Set
 # SMOKE_START_SERVER=0 to use a server you started yourself with the same
 # environment. The worker is `php artisan eduvision:queue-work`, the same
 # command Plesk's cron runs.
@@ -487,23 +489,24 @@ expect 503
 check '.code == "google_not_configured"'
 api GET /google/courses
 expect 503
-# Routes scoped to a classroom/assignment check their own preconditions
-# (link, post) before the server config, so they may answer 409/422 here.
-probe() { # METHOD PATH JSON allowed-codes...
-  local m=$1 p=$2 d=$3; shift 3
+# Every Google route but /google/status answers 503 google_not_configured
+# before its own preconditions (classroom_not_linked, not_posted, 404, ...).
+probe() { # METHOD PATH JSON
+  local m=$1 p=$2 d=$3
   api "$m" "$p" "$d"
   local c; c=$(j '.code // empty')
-  case " $* " in *" $STATUS:$c "*) printf '   %-6s %-48s %s %s\n' "$m" "$p" "$STATUS" "$c" ;; *) fail "$m $p -> $STATUS $c (allowed: $*)" ;; esac
+  [ "$STATUS:$c" = "503:google_not_configured" ] || fail "$m $p -> $STATUS $c (want 503 google_not_configured)"
+  printf '   %-6s %-48s %s %s\n' "$m" "$p" "$STATUS" "$c"
 }
-probe DELETE /google/disconnect '' 200: 204: 503:google_not_configured
-probe POST "/classrooms/$CLASSROOM_ID/google-link" '{"course_id":"123456"}' 503:google_not_configured
-probe GET "/classrooms/$CLASSROOM_ID/google-roster" '' 503:google_not_configured 422:classroom_not_linked
-probe PUT "/classrooms/$CLASSROOM_ID/google-roster" '{"matches":[]}' 503:google_not_configured 422:classroom_not_linked 422:validation_failed
-probe DELETE "/classrooms/$CLASSROOM_ID/google-link" '' 204: 503:google_not_configured 422:classroom_not_linked
-probe POST "/assignments/$ASSIGNMENT_ID/google-post" '{}' 503:google_not_configured 422:classroom_not_linked
-probe GET "/assignments/$ASSIGNMENT_ID/google-submissions" '' 503:google_not_configured 409:not_posted
-probe POST "/assignments/$ASSIGNMENT_ID/google-grades/retry" '' 202: 503:google_not_configured 409:not_posted
-probe POST /google-submissions/999999/return '{"reason":"ถ่ายใหม่"}' 404:not_found 503:google_not_configured
+probe DELETE /google/disconnect ''
+probe POST "/classrooms/$CLASSROOM_ID/google-link" '{"course_id":"123456"}'
+probe GET "/classrooms/$CLASSROOM_ID/google-roster" ''
+probe PUT "/classrooms/$CLASSROOM_ID/google-roster" '{"matches":[]}'
+probe DELETE "/classrooms/$CLASSROOM_ID/google-link" ''
+probe POST "/assignments/$ASSIGNMENT_ID/google-post" '{}'
+probe GET "/assignments/$ASSIGNMENT_ID/google-submissions" ''
+probe POST "/assignments/$ASSIGNMENT_ID/google-grades/retry" ''
+probe POST /google-submissions/999999/return '{"reason":"ถ่ายใหม่"}'
 TOKEN=""
 api GET /google/status
 expect 401

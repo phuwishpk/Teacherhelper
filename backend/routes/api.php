@@ -148,20 +148,24 @@ Route::prefix('v1')->group(function () {
                 Route::get('classrooms/{id}/mastery', [MasteryController::class, 'classroom'])->name('api.classrooms.mastery');
                 Route::get('students/{id}/mastery', [MasteryController::class, 'student'])->name('api.students.mastery');
 
-                // Google Classroom (§18.6). Routes that call Google share the `google` limiter.
+                // Google Classroom (§18.6). Without the OAuth client every route but
+                // /google/status answers 503 google_not_configured first; routes that
+                // call Google share the `google` limiter.
                 Route::get('google/status', [GoogleAccountController::class, 'status'])->name('api.google.status');
-                Route::delete('google/disconnect', [GoogleAccountController::class, 'disconnect'])->name('api.google.disconnect');
-                Route::delete('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'unlink'])->name('api.classrooms.google-link.destroy');
-                Route::middleware('throttle:google')->group(function () {
-                    Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
-                    Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
-                    Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->name('api.classrooms.google-link.store');
-                    Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');
-                    Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->name('api.classrooms.google-roster.update');
-                    Route::post('assignments/{id}/google-post', [AssignmentGoogleController::class, 'post'])->name('api.assignments.google-post');
-                    Route::get('assignments/{id}/google-submissions', [AssignmentGoogleController::class, 'submissions'])->name('api.assignments.google-submissions');
-                    Route::post('assignments/{id}/google-grades/retry', [AssignmentGoogleController::class, 'retryGrades'])->name('api.assignments.google-grades.retry');
-                    Route::post('google-submissions/{id}/return', [GoogleSubmissionController::class, 'returnForRetake'])->name('api.google-submissions.return');
+                Route::middleware('google.configured')->group(function () {
+                    Route::delete('google/disconnect', [GoogleAccountController::class, 'disconnect'])->name('api.google.disconnect');
+                    Route::delete('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'unlink'])->name('api.classrooms.google-link.destroy');
+                    Route::middleware('throttle:google')->group(function () {
+                        Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
+                        Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
+                        Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->name('api.classrooms.google-link.store');
+                        Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');
+                        Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->name('api.classrooms.google-roster.update');
+                        Route::post('assignments/{id}/google-post', [AssignmentGoogleController::class, 'post'])->name('api.assignments.google-post');
+                        Route::get('assignments/{id}/google-submissions', [AssignmentGoogleController::class, 'submissions'])->name('api.assignments.google-submissions');
+                        Route::post('assignments/{id}/google-grades/retry', [AssignmentGoogleController::class, 'retryGrades'])->name('api.assignments.google-grades.retry');
+                        Route::post('google-submissions/{id}/return', [GoogleSubmissionController::class, 'returnForRetake'])->name('api.google-submissions.return');
+                    });
                 });
             });
 
