@@ -227,6 +227,8 @@ bool isGoogleReconnectError(Object error) =>
 String googleErrorMessage(Object error) {
   final code = apiErrorCode(error);
   return switch (code) {
+    'google_not_configured' =>
+      'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google Classroom กรุณาแจ้งผู้ดูแลระบบ',
     'google_not_connected' =>
       'ยังไม่ได้เชื่อมบัญชี Google ไปที่ ตั้งค่า → Google Classroom ก่อน',
     'google_reconnect_required' ||
