@@ -139,8 +139,10 @@ class GradeScanJobTest extends TestCase
         $this->assertSame(['extract', 'extract', 'explanation'], $calls->pluck('purpose')->all());
         $this->assertSame([$work->id, $open->id, $work->id], $calls->pluck('response_id')->all());
         $this->assertSame([$this->work->id, $this->open->id, $this->work->id], $calls->pluck('question_id')->all());
+        // The version of each prompt file in use: extract.show_work.v2, extract.open.v1, explanation.general.v2.
+        $this->assertSame(['v2', 'v1', 'v2'], $calls->pluck('prompt_version')->all());
         foreach ($calls as $call) {
-            $this->assertSame(['ok', 'server', 'fake:gemini-3.8-flash', 'v1'], [$call->status, $call->key_source, $call->model, $call->prompt_version]);
+            $this->assertSame(['ok', 'server', 'fake:gemini-3.8-flash'], [$call->status, $call->key_source, $call->model]);
             $this->assertGreaterThan(0, $call->input_tokens);
             $this->assertGreaterThan(0, $call->output_tokens);
             $this->assertNotNull($call->latency_ms);
