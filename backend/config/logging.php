@@ -131,6 +131,15 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        // `php artisan test` (phpunit.xml LOG_CHANNEL=discard): the suite's expected errors stay out
+        // of storage/logs/laravel.log. Not "null": env() turns LOG_CHANNEL=null into PHP null, and a
+        // test that switches the app to production then falls back to the emergency logger, which
+        // writes to laravel.log. Log::spy / Log::listen still see every message.
+        'discard' => [
+            'driver' => 'monolog',
+            'handler' => NullHandler::class,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

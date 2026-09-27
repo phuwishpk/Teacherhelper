@@ -43,6 +43,17 @@ class SeedersTest extends TestCase
         $this->assertSame(0, User::query()->count());
     }
 
+    public function test_admin_seeder_warns_when_it_skips(): void
+    {
+        config(['eduvision.admin_email' => 'admin@example.com', 'eduvision.admin_password' => '']);
+
+        $this->artisan('db:seed', ['--class' => AdminSeeder::class, '--no-interaction' => true])
+            ->expectsOutputToContain('ADMIN_EMAIL / ADMIN_PASSWORD are not set in .env, so no admin was created')
+            ->assertSuccessful();
+
+        $this->assertSame(0, User::query()->count());
+    }
+
     public function test_the_database_seeder_runs_end_to_end(): void
     {
         config(['eduvision.admin_email' => 'admin@example.com', 'eduvision.admin_password' => 'admin-secret-1']);
