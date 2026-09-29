@@ -1,0 +1,4714 @@
+{
+    "version": 1,
+    "description": "Golden fixtures of the Gemini calibration harness (DESIGN §21.10). Labels are what is written on each image. Synthetic entries come from tools/calibration/make-synthetic-fixtures.php; add the team's own handwriting with source \"team\" (never real students', §16.2).",
+    "subject": "คณิตศาสตร์",
+    "grade_level": 5,
+    "items": [
+        {
+            "id": "short-001",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-001.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "66 - 42 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "24"
+                    ],
+                    "numeric": {
+                        "value": 24,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "24",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-002",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-002.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "86 × 2 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "172"
+                    ],
+                    "numeric": {
+                        "value": 172,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "172",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-003",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-003.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "น้ำแข็งละลายกลายเป็นอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "น้ำ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "น้ำ",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-004",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-004.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "80 - 45 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "35"
+                    ],
+                    "numeric": {
+                        "value": 35,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "44",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-005",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-005.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "17 × 8 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "136"
+                    ],
+                    "numeric": {
+                        "value": 136,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "135",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-006",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-006.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "63 + 14 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "77"
+                    ],
+                    "numeric": {
+                        "value": 77,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "78",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-007",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-007.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "เมืองหลวงของประเทศไทยคือจังหวัดใด",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "กรุงเทพมหานคร",
+                        "กรุงเทพฯ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "กรุงเทพฯ",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-008",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-008.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "43 × 6 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "258"
+                    ],
+                    "numeric": {
+                        "value": 258,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "267",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-009",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-009.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "47 + 13 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "60"
+                    ],
+                    "numeric": {
+                        "value": 60,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "61",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-010",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-010.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "29 - 31 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "-2"
+                    ],
+                    "numeric": {
+                        "value": -2,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "-2",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-011",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-011.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "เมืองหลวงของประเทศไทยคือจังหวัดใด",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "กรุงเทพมหานคร",
+                        "กรุงเทพฯ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "กรุงเทพมหานคร",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-012",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-012.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "94 + 28 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "122"
+                    ],
+                    "numeric": {
+                        "value": 122,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "122",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-013",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-013.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "61 - 35 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "26"
+                    ],
+                    "numeric": {
+                        "value": 26,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "26",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-014",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-014.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "89 × 3 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "267"
+                    ],
+                    "numeric": {
+                        "value": 267,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "267",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-015",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-015.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "สัตว์ที่ออกลูกเป็นไข่และบินได้เรียกว่าอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "นก"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "ปลา",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-016",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-016.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "95 - 19 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "76"
+                    ],
+                    "numeric": {
+                        "value": 76,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "77",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-017",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-017.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "42 × 2 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "84"
+                    ],
+                    "numeric": {
+                        "value": 84,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "74",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-018",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-018.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "19 + 11 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "30"
+                    ],
+                    "numeric": {
+                        "value": 30,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "31",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-019",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-019.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "เมืองหลวงของประเทศไทยคือจังหวัดใด",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "กรุงเทพมหานคร",
+                        "กรุงเทพฯ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "ขอนแก่น",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-020",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-020.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "95 × 9 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "855"
+                    ],
+                    "numeric": {
+                        "value": 855,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "865",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-021",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-021.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "75 + 28 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "103"
+                    ],
+                    "numeric": {
+                        "value": 103,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "103",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-022",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-022.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "93 - 15 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "78"
+                    ],
+                    "numeric": {
+                        "value": 78,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "88",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-023",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-023.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "สัตว์ที่ออกลูกเป็นไข่และบินได้เรียกว่าอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "นก"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "นก",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-024",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-024.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "34 + 40 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "74"
+                    ],
+                    "numeric": {
+                        "value": 74,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "64",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-025",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-025.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "75 - 16 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "59"
+                    ],
+                    "numeric": {
+                        "value": 59,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "49",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-026",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-026.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "34 × 6 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "204"
+                    ],
+                    "numeric": {
+                        "value": 204,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "214",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-027",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-027.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "สัตว์ที่ออกลูกเป็นไข่และบินได้เรียกว่าอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "นก"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "แมว",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-028",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-028.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "51 - 47 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "4"
+                    ],
+                    "numeric": {
+                        "value": 4,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "14",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-029",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-029.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "49 × 6 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "294"
+                    ],
+                    "numeric": {
+                        "value": 294,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "294",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-030",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-030.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "41 + 39 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "80"
+                    ],
+                    "numeric": {
+                        "value": 80,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "70",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-031",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-031.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "เมืองหลวงของประเทศไทยคือจังหวัดใด",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "กรุงเทพมหานคร",
+                        "กรุงเทพฯ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "กรุงเทพฯ",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-032",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-032.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "44 × 8 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "352"
+                    ],
+                    "numeric": {
+                        "value": 352,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "353",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-033",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-033.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "14 + 16 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "30"
+                    ],
+                    "numeric": {
+                        "value": 30,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "20",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-034",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-034.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "81 - 39 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "42"
+                    ],
+                    "numeric": {
+                        "value": 42,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "52",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-035",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-035.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "การสังเคราะห์ด้วยแสง",
+                        "สังเคราะห์แสง"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "การหายใจ",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-036",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-036.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "81 + 10 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "91"
+                    ],
+                    "numeric": {
+                        "value": 91,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "100",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-037",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-037.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "14 - 40 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "-26"
+                    ],
+                    "numeric": {
+                        "value": -26,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "-26",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-038",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-038.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "33 × 2 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "66"
+                    ],
+                    "numeric": {
+                        "value": 66,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "67",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-039",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-039.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "สัตว์ที่ออกลูกเป็นไข่และบินได้เรียกว่าอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "นก"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "ปลา",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-040",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-040.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "28 - 37 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "-9"
+                    ],
+                    "numeric": {
+                        "value": -9,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "-19",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-041",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-041.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "12 × 5 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "60"
+                    ],
+                    "numeric": {
+                        "value": 60,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "60",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-042",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-042.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "37 + 22 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "59"
+                    ],
+                    "numeric": {
+                        "value": 59,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "68",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-043",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-043.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "น้ำแข็งละลายกลายเป็นอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "น้ำ"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "น้ำ",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-044",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-044.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "41 × 4 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "164"
+                    ],
+                    "numeric": {
+                        "value": 164,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "165",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-045",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-045.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "95 + 4 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "99"
+                    ],
+                    "numeric": {
+                        "value": 99,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "99",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-046",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-046.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "20 - 33 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "-13"
+                    ],
+                    "numeric": {
+                        "value": -13,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "-12",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "short-047",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-047.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                "max_points": 1,
+                "is_numeric": false,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "การสังเคราะห์ด้วยแสง",
+                        "สังเคราะห์แสง"
+                    ]
+                }
+            },
+            "label": {
+                "answer_text": "การสังเคราะห์ด้วยแสง",
+                "key_match": [
+                    "exact",
+                    "equivalent"
+                ]
+            }
+        },
+        {
+            "id": "short-048",
+            "kind": "short",
+            "source": "synthetic",
+            "file": "synthetic/short-048.webp",
+            "question": {
+                "type": "short",
+                "prompt_text": "40 + 12 เท่ากับเท่าไร",
+                "max_points": 1,
+                "is_numeric": true,
+                "match_mode": "flexible",
+                "answer_key": {
+                    "accepted": [
+                        "52"
+                    ],
+                    "numeric": {
+                        "value": 52,
+                        "abs_tol": 0
+                    }
+                }
+            },
+            "label": {
+                "answer_text": "53",
+                "key_match": [
+                    "different",
+                    "partial"
+                ]
+            }
+        },
+        {
+            "id": "work-001",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-001.webp",
+            "final_file": "synthetic/work-001-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 3 = 18 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "3",
+                            "x = 3"
+                        ],
+                        "numeric": {
+                            "value": 3,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 3 = 18",
+                        "5x = 15",
+                        "x = 3"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "3",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-002",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-002.webp",
+            "final_file": "synthetic/work-002-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 2x + 5 = 13 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "4",
+                            "x = 4"
+                        ],
+                        "numeric": {
+                            "value": 4,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "2x + 5 = 13",
+                        "2x = 8",
+                        "x = 4"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "5",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-003",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-003.webp",
+            "final_file": "synthetic/work-003-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 3x + 15 = 39 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "8",
+                            "x = 8"
+                        ],
+                        "numeric": {
+                            "value": 8,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "3x + 15 = 39",
+                        "3x = 24",
+                        "x = 8"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-004",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-004.webp",
+            "final_file": "synthetic/work-004-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 2 = 50 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "6",
+                            "x = 6"
+                        ],
+                        "numeric": {
+                            "value": 6,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 2 = 50",
+                        "8x = 48",
+                        "x = 6"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "6",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-005",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-005.webp",
+            "final_file": "synthetic/work-005-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 12 = 27 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "3",
+                            "x = 3"
+                        ],
+                        "numeric": {
+                            "value": 3,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 12 = 27",
+                        "5x = 15",
+                        "x = 3"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "3",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-006",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-006.webp",
+            "final_file": "synthetic/work-006-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 3x + 6 = 36 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "3x + 6 = 36",
+                        "3x = 30",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-007",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-007.webp",
+            "final_file": "synthetic/work-007-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 13 = 63 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 13 = 63",
+                        "5x = 50",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "15",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-008",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-008.webp",
+            "final_file": "synthetic/work-008-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 3x + 16 = 28 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "4",
+                            "x = 4"
+                        ],
+                        "numeric": {
+                            "value": 4,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "3x + 16 = 28",
+                        "3x = 12",
+                        "x = 4"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "4",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-009",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-009.webp",
+            "final_file": "synthetic/work-009-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 18 = 88 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 18 = 88",
+                        "7x = 70",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "10",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-010",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-010.webp",
+            "final_file": "synthetic/work-010-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 7 = 55 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "6",
+                            "x = 6"
+                        ],
+                        "numeric": {
+                            "value": 6,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 7 = 55",
+                        "8x = 48",
+                        "x = 6"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "7",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-011",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-011.webp",
+            "final_file": "synthetic/work-011-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 4x + 7 = 55 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "12",
+                            "x = 12"
+                        ],
+                        "numeric": {
+                            "value": 12,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "4x + 7 = 55",
+                        "4x = 48",
+                        "x = 12"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "17",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-012",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-012.webp",
+            "final_file": "synthetic/work-012-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 9x + 3 = 57 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "6",
+                            "x = 6"
+                        ],
+                        "numeric": {
+                            "value": 6,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "9x + 3 = 57",
+                        "9x = 54",
+                        "x = 6"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "6",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-013",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-013.webp",
+            "final_file": "synthetic/work-013-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 15 = 60 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 15 = 60",
+                        "5x = 45",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-014",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-014.webp",
+            "final_file": "synthetic/work-014-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 11 = 83 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 11 = 83",
+                        "8x = 72",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "10",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-015",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-015.webp",
+            "final_file": "synthetic/work-015-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 9 = 81 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 9 = 81",
+                        "8x = 72",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-016",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-016.webp",
+            "final_file": "synthetic/work-016-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 14 = 70 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "7",
+                            "x = 7"
+                        ],
+                        "numeric": {
+                            "value": 7,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 14 = 70",
+                        "8x = 56",
+                        "x = 7"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "7",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-017",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-017.webp",
+            "final_file": "synthetic/work-017-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 4x + 4 = 44 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "4x + 4 = 44",
+                        "4x = 40",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "10",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-018",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-018.webp",
+            "final_file": "synthetic/work-018-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 10 = 87 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "11",
+                            "x = 11"
+                        ],
+                        "numeric": {
+                            "value": 11,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 10 = 87",
+                        "7x = 77",
+                        "x = 11"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "12",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-019",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-019.webp",
+            "final_file": "synthetic/work-019-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 9 = 33 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "3",
+                            "x = 3"
+                        ],
+                        "numeric": {
+                            "value": 3,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 9 = 33",
+                        "8x = 24",
+                        "x = 3"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "5",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-020",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-020.webp",
+            "final_file": "synthetic/work-020-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 4x + 9 = 41 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "8",
+                            "x = 8"
+                        ],
+                        "numeric": {
+                            "value": 8,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "4x + 9 = 41",
+                        "4x = 32",
+                        "x = 8"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "8",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-021",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-021.webp",
+            "final_file": "synthetic/work-021-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 4x + 5 = 41 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "4x + 5 = 41",
+                        "4x = 36",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-022",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-022.webp",
+            "final_file": "synthetic/work-022-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 6x + 6 = 48 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "7",
+                            "x = 7"
+                        ],
+                        "numeric": {
+                            "value": 7,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "6x + 6 = 48",
+                        "6x = 42",
+                        "x = 7"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "8",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-023",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-023.webp",
+            "final_file": "synthetic/work-023-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 19 = 74 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "11",
+                            "x = 11"
+                        ],
+                        "numeric": {
+                            "value": 11,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 19 = 74",
+                        "5x = 55",
+                        "x = 11"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "16",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-024",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-024.webp",
+            "final_file": "synthetic/work-024-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 20 = 76 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "8",
+                            "x = 8"
+                        ],
+                        "numeric": {
+                            "value": 8,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 20 = 76",
+                        "7x = 56",
+                        "x = 8"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "8",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-025",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-025.webp",
+            "final_file": "synthetic/work-025-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 16 = 93 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "11",
+                            "x = 11"
+                        ],
+                        "numeric": {
+                            "value": 11,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 16 = 93",
+                        "7x = 77",
+                        "x = 11"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-026",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-026.webp",
+            "final_file": "synthetic/work-026-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 2x + 17 = 31 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "7",
+                            "x = 7"
+                        ],
+                        "numeric": {
+                            "value": 7,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "2x + 17 = 31",
+                        "2x = 14",
+                        "x = 7"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "8",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-027",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-027.webp",
+            "final_file": "synthetic/work-027-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 2x + 14 = 28 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "7",
+                            "x = 7"
+                        ],
+                        "numeric": {
+                            "value": 7,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "2x + 14 = 28",
+                        "2x = 14",
+                        "x = 7"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "12",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-028",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-028.webp",
+            "final_file": "synthetic/work-028-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 2x + 15 = 33 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "2x + 15 = 33",
+                        "2x = 18",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-029",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-029.webp",
+            "final_file": "synthetic/work-029-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 11 = 83 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 11 = 83",
+                        "8x = 72",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-030",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-030.webp",
+            "final_file": "synthetic/work-030-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 8 = 53 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 8 = 53",
+                        "5x = 45",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "10",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-031",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-031.webp",
+            "final_file": "synthetic/work-031-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 9x + 1 = 46 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "5",
+                            "x = 5"
+                        ],
+                        "numeric": {
+                            "value": 5,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "9x + 1 = 46",
+                        "9x = 45",
+                        "x = 5"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-032",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-032.webp",
+            "final_file": "synthetic/work-032-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 10 = 50 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "8",
+                            "x = 8"
+                        ],
+                        "numeric": {
+                            "value": 8,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 10 = 50",
+                        "5x = 40",
+                        "x = 8"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "8",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-033",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-033.webp",
+            "final_file": "synthetic/work-033-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 2 = 37 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "5",
+                            "x = 5"
+                        ],
+                        "numeric": {
+                            "value": 5,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 2 = 37",
+                        "7x = 35",
+                        "x = 5"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "5",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-034",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-034.webp",
+            "final_file": "synthetic/work-034-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 4x + 19 = 59 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "4x + 19 = 59",
+                        "4x = 40",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-035",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-035.webp",
+            "final_file": "synthetic/work-035-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 6x + 16 = 46 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "5",
+                            "x = 5"
+                        ],
+                        "numeric": {
+                            "value": 5,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "6x + 16 = 46",
+                        "6x = 30",
+                        "x = 5"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "9",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-036",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-036.webp",
+            "final_file": "synthetic/work-036-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 3x + 19 = 37 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "6",
+                            "x = 6"
+                        ],
+                        "numeric": {
+                            "value": 6,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "3x + 19 = 37",
+                        "3x = 18",
+                        "x = 6"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "6",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-037",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-037.webp",
+            "final_file": "synthetic/work-037-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 2 = 30 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "4",
+                            "x = 4"
+                        ],
+                        "numeric": {
+                            "value": 4,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 2 = 30",
+                        "7x = 28",
+                        "x = 4"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "4",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-038",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-038.webp",
+            "final_file": "synthetic/work-038-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 9x + 3 = 84 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "9",
+                            "x = 9"
+                        ],
+                        "numeric": {
+                            "value": 9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "9x + 3 = 84",
+                        "9x = 81",
+                        "x = 9"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "10",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-039",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-039.webp",
+            "final_file": "synthetic/work-039-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 12 = 92 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 12 = 92",
+                        "8x = 80",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "14",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-040",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-040.webp",
+            "final_file": "synthetic/work-040-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 8x + 14 = 70 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "7",
+                            "x = 7"
+                        ],
+                        "numeric": {
+                            "value": 7,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "8x + 14 = 70",
+                        "8x = 56",
+                        "x = 7"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "7",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-041",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-041.webp",
+            "final_file": "synthetic/work-041-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 7x + 4 = 18 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "2",
+                            "x = 2"
+                        ],
+                        "numeric": {
+                            "value": 2,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "7x + 4 = 18",
+                        "7x = 14",
+                        "x = 2"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "2",
+                "final_answer_match": [
+                    "exact",
+                    "equivalent"
+                ],
+                "steps_valid": [
+                    true,
+                    true,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "work-042",
+            "kind": "work",
+            "source": "synthetic",
+            "file": "synthetic/work-042.webp",
+            "final_file": "synthetic/work-042-final.webp",
+            "question": {
+                "type": "show_work",
+                "prompt_text": "จงหาค่า x จากสมการ 5x + 7 = 57 แสดงวิธีทำ",
+                "max_points": 3,
+                "is_numeric": true,
+                "answer_lines": 3,
+                "answer_key": {
+                    "final": {
+                        "accepted": [
+                            "10",
+                            "x = 10"
+                        ],
+                        "numeric": {
+                            "value": 10,
+                            "abs_tol": 0
+                        }
+                    },
+                    "reference_steps": [
+                        "5x + 7 = 57",
+                        "5x = 50",
+                        "x = 10"
+                    ]
+                }
+            },
+            "label": {
+                "final_answer_text": "11",
+                "final_answer_match": [
+                    "different",
+                    "partial"
+                ],
+                "steps_valid": [
+                    true,
+                    false,
+                    true
+                ]
+            }
+        },
+        {
+            "id": "page-001",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-001.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "71 + 37 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "108"
+                        ],
+                        "numeric": {
+                            "value": 108,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "108",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "การสังเคราะห์ด้วยแสง",
+                            "สังเคราะห์แสง"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "การสังเคราะห์ด้วยแสง",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "21 × 6 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "126"
+                        ],
+                        "numeric": {
+                            "value": 126,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "126",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 5x + 18 = 78 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "12",
+                                "x = 12"
+                            ],
+                            "numeric": {
+                                "value": 12,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "5x + 18 = 78",
+                            "5x = 60",
+                            "x = 12"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "12",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 3x + 10 = 43 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "11",
+                                "x = 11"
+                            ],
+                            "numeric": {
+                                "value": 11,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "3x + 10 = 43",
+                            "3x = 33",
+                            "x = 11"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "11",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-002",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-002.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "การสังเคราะห์ด้วยแสง",
+                            "สังเคราะห์แสง"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "การสังเคราะห์ด้วยแสง",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "27 + 16 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "43"
+                        ],
+                        "numeric": {
+                            "value": 43,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "53",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "98 - 5 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "93"
+                        ],
+                        "numeric": {
+                            "value": 93,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "102",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 3x + 2 = 17 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "5",
+                                "x = 5"
+                            ],
+                            "numeric": {
+                                "value": 5,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "3x + 2 = 17",
+                            "3x = 15",
+                            "x = 5"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "6",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            false,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 3x + 18 = 30 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "4",
+                                "x = 4"
+                            ],
+                            "numeric": {
+                                "value": 4,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "3x + 18 = 30",
+                            "3x = 12",
+                            "x = 4"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "4",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-003",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-003.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "96 - 26 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "70"
+                        ],
+                        "numeric": {
+                            "value": 70,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "70",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "72 × 2 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "144"
+                        ],
+                        "numeric": {
+                            "value": 144,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "153",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "43 + 44 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "87"
+                        ],
+                        "numeric": {
+                            "value": 87,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "87",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 3x + 12 = 27 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "5",
+                                "x = 5"
+                            ],
+                            "numeric": {
+                                "value": 5,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "3x + 12 = 27",
+                            "3x = 15",
+                            "x = 5"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "6",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            false,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 4x + 14 = 46 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "8",
+                                "x = 8"
+                            ],
+                            "numeric": {
+                                "value": 8,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "4x + 14 = 46",
+                            "4x = 32",
+                            "x = 8"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "10",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-004",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-004.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "43 + 26 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "69"
+                        ],
+                        "numeric": {
+                            "value": 69,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "79",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "67 - 3 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "64"
+                        ],
+                        "numeric": {
+                            "value": 64,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "64",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "การสังเคราะห์ด้วยแสง",
+                            "สังเคราะห์แสง"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "การหายใจ",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 6x + 16 = 70 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "9",
+                                "x = 9"
+                            ],
+                            "numeric": {
+                                "value": 9,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "6x + 16 = 70",
+                            "6x = 54",
+                            "x = 9"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "9",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 2x + 6 = 28 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "11",
+                                "x = 11"
+                            ],
+                            "numeric": {
+                                "value": 11,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "2x + 6 = 28",
+                            "2x = 22",
+                            "x = 11"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "12",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            false,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-005",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-005.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "74 × 6 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "444"
+                        ],
+                        "numeric": {
+                            "value": 444,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "444",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "การสังเคราะห์ด้วยแสง",
+                            "สังเคราะห์แสง"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "การสังเคราะห์ด้วยแสง",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "24 - 33 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "-9"
+                        ],
+                        "numeric": {
+                            "value": -9,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "0",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 9x + 4 = 85 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "9",
+                                "x = 9"
+                            ],
+                            "numeric": {
+                                "value": 9,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "9x + 4 = 85",
+                            "9x = 81",
+                            "x = 9"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "10",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            false,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 7x + 1 = 85 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "12",
+                                "x = 12"
+                            ],
+                            "numeric": {
+                                "value": 12,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "7x + 1 = 85",
+                            "7x = 84",
+                            "x = 12"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "12",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-006",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-006.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "พืชใช้แสงสร้างอาหารเรียกว่ากระบวนการอะไร",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "การสังเคราะห์ด้วยแสง",
+                            "สังเคราะห์แสง"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "การสังเคราะห์ด้วยแสง",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "60 × 10 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "600"
+                        ],
+                        "numeric": {
+                            "value": 600,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "600",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "37 + 47 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "84"
+                        ],
+                        "numeric": {
+                            "value": 84,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "84",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 2x + 2 = 16 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "7",
+                                "x = 7"
+                            ],
+                            "numeric": {
+                                "value": 7,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "2x + 2 = 16",
+                            "2x = 14",
+                            "x = 7"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "10",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 4x + 6 = 34 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "7",
+                                "x = 7"
+                            ],
+                            "numeric": {
+                                "value": 7,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "4x + 6 = 34",
+                            "4x = 28",
+                            "x = 7"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "7",
+                        "final_answer_match": [
+                            "exact",
+                            "equivalent"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-007",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-007.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "76 + 8 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "84"
+                        ],
+                        "numeric": {
+                            "value": 84,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "93",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "78 - 45 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "33"
+                        ],
+                        "numeric": {
+                            "value": 33,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "34",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "93 × 9 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "837"
+                        ],
+                        "numeric": {
+                            "value": 837,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "837",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 8x + 19 = 59 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "5",
+                                "x = 5"
+                            ],
+                            "numeric": {
+                                "value": 5,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "8x + 19 = 59",
+                            "8x = 40",
+                            "x = 5"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "9",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 2x + 13 = 33 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "10",
+                                "x = 10"
+                            ],
+                            "numeric": {
+                                "value": 10,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "2x + 13 = 33",
+                            "2x = 20",
+                            "x = 10"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "15",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "page-008",
+            "kind": "page",
+            "source": "synthetic",
+            "file": "synthetic/page-008.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "57 × 4 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "228"
+                        ],
+                        "numeric": {
+                            "value": 228,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "229",
+                        "key_match": [
+                            "different",
+                            "partial"
+                        ]
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "38 + 36 เท่ากับเท่าไร",
+                    "max_points": 1,
+                    "is_numeric": true,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "74"
+                        ],
+                        "numeric": {
+                            "value": 74,
+                            "abs_tol": 0
+                        }
+                    },
+                    "label": {
+                        "answer_text": "74",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "เมืองหลวงของประเทศไทยคือจังหวัดใด",
+                    "max_points": 1,
+                    "is_numeric": false,
+                    "match_mode": "flexible",
+                    "answer_key": {
+                        "accepted": [
+                            "กรุงเทพมหานคร",
+                            "กรุงเทพฯ"
+                        ]
+                    },
+                    "label": {
+                        "answer_text": "กรุงเทพฯ",
+                        "key_match": [
+                            "exact",
+                            "equivalent"
+                        ]
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 4x + 16 = 40 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "6",
+                                "x = 6"
+                            ],
+                            "numeric": {
+                                "value": 6,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "4x + 16 = 40",
+                            "4x = 24",
+                            "x = 6"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "7",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            false,
+                            true
+                        ]
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "show_work",
+                    "prompt_text": "จงหาค่า x จากสมการ 8x + 6 = 54 แสดงวิธีทำ",
+                    "max_points": 3,
+                    "is_numeric": true,
+                    "answer_lines": 3,
+                    "answer_key": {
+                        "final": {
+                            "accepted": [
+                                "6",
+                                "x = 6"
+                            ],
+                            "numeric": {
+                                "value": 6,
+                                "abs_tol": 0
+                            }
+                        },
+                        "reference_steps": [
+                            "8x + 6 = 54",
+                            "8x = 48",
+                            "x = 6"
+                        ]
+                    },
+                    "label": {
+                        "final_answer_text": "9",
+                        "final_answer_match": [
+                            "different",
+                            "partial"
+                        ],
+                        "steps_valid": [
+                            true,
+                            true,
+                            true
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "document-001",
+            "kind": "document",
+            "source": "synthetic",
+            "file": "synthetic/document-001.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "37 + 63 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "100"
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "15 × 3 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "45"
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "18 + 21 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "39"
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 4 (ปรนัย)",
+                    "label": {
+                        "answer": "B"
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "short",
+                    "prompt_text": "81 + 14 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "95"
+                    }
+                },
+                {
+                    "position": 6,
+                    "type": "short",
+                    "prompt_text": "26 × 7 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "182"
+                    }
+                },
+                {
+                    "position": 7,
+                    "type": "short",
+                    "prompt_text": "69 + 49 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "118"
+                    }
+                },
+                {
+                    "position": 8,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 8 (ปรนัย)",
+                    "label": {
+                        "answer": "A"
+                    }
+                },
+                {
+                    "position": 9,
+                    "type": "short",
+                    "prompt_text": "51 + 35 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "86"
+                    }
+                },
+                {
+                    "position": 10,
+                    "type": "short",
+                    "prompt_text": "78 × 4 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "312"
+                    }
+                },
+                {
+                    "position": 11,
+                    "type": "short",
+                    "prompt_text": "87 + 56 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "143"
+                    }
+                },
+                {
+                    "position": 12,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 12 (ปรนัย)",
+                    "label": {
+                        "answer": "A"
+                    }
+                },
+                {
+                    "position": 13,
+                    "type": "short",
+                    "prompt_text": "42 + 35 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "77"
+                    }
+                },
+                {
+                    "position": 14,
+                    "type": "short",
+                    "prompt_text": "28 × 3 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "84"
+                    }
+                },
+                {
+                    "position": 15,
+                    "type": "short",
+                    "prompt_text": "39 + 14 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "53"
+                    }
+                },
+                {
+                    "position": 16,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 16 (ปรนัย)",
+                    "label": {
+                        "answer": "A"
+                    }
+                },
+                {
+                    "position": 17,
+                    "type": "short",
+                    "prompt_text": "54 + 49 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "103"
+                    }
+                },
+                {
+                    "position": 18,
+                    "type": "short",
+                    "prompt_text": "87 × 6 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "522"
+                    }
+                },
+                {
+                    "position": 19,
+                    "type": "short",
+                    "prompt_text": "48 + 56 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "104"
+                    }
+                },
+                {
+                    "position": 20,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 20 (ปรนัย)",
+                    "label": {
+                        "answer": "C"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "document-002",
+            "kind": "document",
+            "source": "synthetic",
+            "file": "synthetic/document-002.webp",
+            "questions": [
+                {
+                    "position": 1,
+                    "type": "short",
+                    "prompt_text": "49 + 28 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "77"
+                    }
+                },
+                {
+                    "position": 2,
+                    "type": "short",
+                    "prompt_text": "19 × 3 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "57"
+                    }
+                },
+                {
+                    "position": 3,
+                    "type": "short",
+                    "prompt_text": "71 + 14 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "85"
+                    }
+                },
+                {
+                    "position": 4,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 4 (ปรนัย)",
+                    "label": {
+                        "answer": "D"
+                    }
+                },
+                {
+                    "position": 5,
+                    "type": "short",
+                    "prompt_text": "94 + 21 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "115"
+                    }
+                },
+                {
+                    "position": 6,
+                    "type": "short",
+                    "prompt_text": "41 × 4 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "164"
+                    }
+                },
+                {
+                    "position": 7,
+                    "type": "short",
+                    "prompt_text": "88 + 49 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "137"
+                    }
+                },
+                {
+                    "position": 8,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 8 (ปรนัย)",
+                    "label": {
+                        "answer": "A"
+                    }
+                },
+                {
+                    "position": 9,
+                    "type": "short",
+                    "prompt_text": "48 + 42 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "90"
+                    }
+                },
+                {
+                    "position": 10,
+                    "type": "short",
+                    "prompt_text": "55 × 2 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "110"
+                    }
+                },
+                {
+                    "position": 11,
+                    "type": "short",
+                    "prompt_text": "60 + 35 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "95"
+                    }
+                },
+                {
+                    "position": 12,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 12 (ปรนัย)",
+                    "label": {
+                        "answer": "B"
+                    }
+                },
+                {
+                    "position": 13,
+                    "type": "short",
+                    "prompt_text": "76 + 14 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "90"
+                    }
+                },
+                {
+                    "position": 14,
+                    "type": "short",
+                    "prompt_text": "63 × 3 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "189"
+                    }
+                },
+                {
+                    "position": 15,
+                    "type": "short",
+                    "prompt_text": "46 + 49 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "95"
+                    }
+                },
+                {
+                    "position": 16,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 16 (ปรนัย)",
+                    "label": {
+                        "answer": "A"
+                    }
+                },
+                {
+                    "position": 17,
+                    "type": "short",
+                    "prompt_text": "57 + 56 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "113"
+                    }
+                },
+                {
+                    "position": 18,
+                    "type": "short",
+                    "prompt_text": "11 × 3 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "33"
+                    }
+                },
+                {
+                    "position": 19,
+                    "type": "short",
+                    "prompt_text": "16 + 35 เท่ากับเท่าไร",
+                    "label": {
+                        "answer": "51"
+                    }
+                },
+                {
+                    "position": 20,
+                    "type": "mcq",
+                    "prompt_text": "ข้อ 20 (ปรนัย)",
+                    "label": {
+                        "answer": "B"
+                    }
+                }
+            ]
+        }
+    ]
+}
