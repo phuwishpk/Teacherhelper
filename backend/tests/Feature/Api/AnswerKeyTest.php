@@ -483,9 +483,10 @@ class AnswerKeyTest extends TestCase
 
     public function test_mode_score_only_and_late_policy_on_create_and_update(): void
     {
+        $course = $this->makeCourse($this->teacher, [$this->classroom], ['subject_id' => $this->assignment->subject_id]);
         $created = $this->asUser($this->teacher)->postJson('/api/v1/assignments', [
             'classroom_id' => $this->classroom->id,
-            'subject_id' => $this->assignment->subject_id,
+            'course_id' => $course->id,
             'title' => 'งานจากหนังสือเรียน',
             'mode' => 'freeform',
             'score_only' => true,
@@ -497,7 +498,7 @@ class AnswerKeyTest extends TestCase
             ->assertJsonPath('data.accept_late', false)
             ->assertJsonPath('data.key_approved_at', null);
         $id = $created->json('data.id');
-        $this->asUser($this->teacher)->postJson('/api/v1/assignments', ['classroom_id' => $this->classroom->id, 'subject_id' => $this->assignment->subject_id, 'title' => 'x', 'mode' => 'paper'])
+        $this->asUser($this->teacher)->postJson('/api/v1/assignments', ['classroom_id' => $this->classroom->id, 'course_id' => $course->id, 'title' => 'x', 'mode' => 'paper'])
             ->assertStatus(422)->assertJsonValidationErrors('mode');
 
         $this->asUser($this->teacher)->patchJson("/api/v1/assignments/{$id}", ['mode' => 'worksheet', 'score_only' => false])

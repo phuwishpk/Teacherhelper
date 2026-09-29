@@ -3,6 +3,7 @@
 namespace App\Domain\AnswerKeys;
 
 use App\Domain\Assignments\AssignmentLocked;
+use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
 use App\Domain\Gemini\GeminiException;
@@ -18,7 +19,6 @@ use App\Models\Assignment;
 use App\Models\DocumentExtraction;
 use App\Models\Question;
 use App\Models\SourceDocument;
-use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -242,25 +242,28 @@ final class AnswerKeyService
     }
 
     /**
-     * $subjectId: required when the assignment has no subject yet (a mirror
-     * of courseWork created on the Classroom website, DESIGN §19.3, §19.9):
-     * 422 course_required without one.
+     * $courseId: required while the assignment has no course and is a
+     * mirror of courseWork created on the Classroom website (DESIGN §19.3,
+     * §20.1): 422 course_required without one. The course must be bound to
+     * the classroom; the subject follows it. An older assignment without a
+     * course may take one here as well.
      *
      * @throws ApiException 422 assignment_empty / answer_key_incomplete / course_required, 409 assignment_closed
      */
-    public function approve(User $teacher, Assignment $assignment, ?int $subjectId = null): Assignment
+    public function approve(User $teacher, Assignment $assignment, ?int $courseId = null): Assignment
     {
-        $assignment = AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($teacher, $subjectId) {
-            if ($locked->subject_id === null) {
-                if ($subjectId === null || ! Subject::query()->whereKey($subjectId)->exists()) {
+        $assignment = AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($teacher, $courseId) {
+            if ($locked->course_id === null) {
+                if ($courseId !== null) {
+                    AssignmentCourses::assign($locked, AssignmentCourses::courseFor($teacher, $locked->classroom_id, $courseId));
+                } elseif ($locked->source === Assignment::SOURCE_CLASSROOM_WEB || $locked->subject_id === null) {
                     throw new ApiException(
-                        'เลือกวิชาของการบ้านนี้ก่อนอนุมัติเฉลย',
+                        'เลือกรายวิชาของการบ้านนี้ก่อนอนุมัติเฉลย',
                         'course_required',
                         422,
-                        ['subject_id' => ['กรุณาเลือกวิชา']],
+                        ['course_id' => ['กรุณาเลือกรายวิชา']],
                     );
                 }
-                $locked->subject_id = $subjectId;
             }
             KeyCompleteness::assertComplete($locked);
             $locked->key_approved_at = now();

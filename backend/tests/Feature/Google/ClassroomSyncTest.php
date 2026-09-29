@@ -274,11 +274,12 @@ class ClassroomSyncTest extends TestCase
         $this->assertCount(1, $this->notifier->ofType(PushMessage::CLASSROOM_WORK_IMPORTED));
     }
 
-    public function test_hand_ins_wait_for_the_key_and_approving_a_mirror_needs_a_subject(): void
+    public function test_hand_ins_wait_for_the_key_and_approving_a_mirror_needs_a_course(): void
     {
         $this->courseWork = [self::webWork('cw-web')];
         $this->round();
         $mirror = Assignment::query()->where('source', Assignment::SOURCE_CLASSROOM_WEB)->sole();
+        $this->assertSame([null, null], [$mirror->course_id, $mirror->subject_id], 'the classroom has no course yet');
         $mirror->questions()->update(['rubric_status' => Question::RUBRIC_APPROVED]);
 
         $this->drive['f-1'] = ['name' => 'IMG_1.jpg', 'mime' => 'image/jpeg', 'bytes' => self::jpeg()];
@@ -294,17 +295,40 @@ class ClassroomSyncTest extends TestCase
         $this->asUser($this->teacher)->postJson($url)
             ->assertStatus(422)
             ->assertJsonPath('code', 'course_required')
-            ->assertJsonStructure(['errors' => ['subject_id']]);
+            ->assertJsonStructure(['errors' => ['course_id']]);
+        // A subject alone no longer does (DESIGN §19.3 after Phase 9).
+        $this->asUser($this->teacher)->postJson($url, ['subject_id' => Subject::factory()->create()->id])->assertStatus(422)->assertJsonPath('code', 'course_required');
+        $this->asUser($this->teacher)->postJson($url, ['course_id' => 'x'])->assertStatus(422)->assertJsonPath('code', 'validation_failed');
+        // A course of another classroom is not this classroom's course.
+        $elsewhere = $this->makeCourse($this->teacher, [$this->makeClassroom($this->teacher)], ['code' => 'ค21101']);
+        $this->asUser($this->teacher)->postJson($url, ['course_id' => $elsewhere->id])->assertStatus(422)->assertJsonValidationErrors(['course_id']);
+
         $subject = Subject::factory()->create();
-        $this->asUser($this->teacher)->postJson($url, ['subject_id' => 'x'])->assertStatus(422)->assertJsonPath('code', 'validation_failed');
-        $this->asUser($this->teacher)->postJson($url, ['subject_id' => $subject->id])
+        $course = $this->makeCourse($this->teacher, [$this->classroom], ['subject_id' => $subject->id]);
+        $this->asUser($this->teacher)->postJson($url, ['course_id' => $course->id])
             ->assertOk()
             ->assertJsonPath('data.status', Assignment::STATUS_READY);
 
-        $this->assertSame($subject->id, $mirror->refresh()->subject_id);
+        $this->assertSame([$course->id, $subject->id], [$mirror->refresh()->course_id, $mirror->subject_id]);
         $this->assertSame(ClassroomSubmissionImport::STATE_IMPORTED, $import->refresh()->state);
         $this->assertNotEmpty($this->sent('extract_page'));
         $this->assertSame(4, Submission::query()->where('assignment_id', $mirror->id)->sole()->responses()->count());
+    }
+
+    public function test_a_mirror_takes_the_classrooms_only_course(): void
+    {
+        $course = $this->makeCourse($this->teacher, [$this->classroom]);
+        $this->courseWork = [self::webWork('cw-one')];
+        $this->round();
+        $mirror = Assignment::query()->where('source', Assignment::SOURCE_CLASSROOM_WEB)->sole();
+        $this->assertSame([$course->id, $course->subject_id], [$mirror->course_id, $mirror->subject_id]);
+
+        // With two courses the teacher picks one when approving.
+        $this->makeCourse($this->teacher, [$this->classroom], ['code' => 'ค15102']);
+        $this->courseWork = [self::webWork('cw-one'), self::webWork('cw-two')];
+        $this->round();
+        $second = Assignment::query()->where('source', Assignment::SOURCE_CLASSROOM_WEB)->whereKeyNot($mirror->id)->sole();
+        $this->assertNull($second->course_id);
     }
 
     public function test_grades_are_never_pushed_for_web_coursework(): void

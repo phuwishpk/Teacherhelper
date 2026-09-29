@@ -4,6 +4,7 @@ namespace App\Domain\Google;
 
 use App\Domain\AnswerKeys\AnswerKeyResult;
 use App\Domain\AnswerKeys\AnswerKeyService;
+use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Documents\SourceDocuments;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Pages\PageFiles;
@@ -125,10 +126,14 @@ final class CourseWorkImporter
                 return null;
             }
             $title = trim((string) ($work['title'] ?? ''));
+            // DESIGN §19.3 after Phase 9: the classroom's only course, if it has
+            // exactly one; otherwise the teacher picks one when approving the key.
+            $course = AssignmentCourses::onlyCourseOf($classroom->id);
             $assignment = Assignment::create([
                 'school_id' => $classroom->school_id,
                 'classroom_id' => $classroom->id,
-                'subject_id' => null,
+                'subject_id' => $course?->subject_id,
+                'course_id' => $course?->id,
                 'created_by' => $owner->id,
                 'title' => Str::limit($title !== '' ? $title : self::DEFAULT_TITLE, 250, ''),
                 'status' => Assignment::STATUS_DRAFT,

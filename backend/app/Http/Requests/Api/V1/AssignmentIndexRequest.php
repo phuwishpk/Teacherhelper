@@ -6,7 +6,7 @@ use App\Models\Assignment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-/** GET /api/v1/assignments?classroom_id=&status= (DESIGN §9.3), cursor-paginated. */
+/** GET /api/v1/assignments?classroom_id=&course_id=&lesson_plan_id=&status= (DESIGN §9.3, §20.1), cursor-paginated. */
 class AssignmentIndexRequest extends FormRequest
 {
     public function authorize(): bool
@@ -21,6 +21,8 @@ class AssignmentIndexRequest extends FormRequest
     {
         return [
             'classroom_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'course_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'status' => ['sometimes', 'nullable', Rule::in([Assignment::STATUS_DRAFT, Assignment::STATUS_READY, Assignment::STATUS_CLOSED])],
             'cursor' => ['sometimes', 'nullable', 'string'],
         ];

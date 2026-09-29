@@ -7,12 +7,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * {id, classroom_id, subject_id, title, strictness, status,
+ * {id, classroom_id, subject_id, course_id, lesson_plan_id, title, strictness, status,
  *  current_layout_version, due_at, mode, source, accept_late, score_only,
  *  key_origin, key_approved_at, questions_count?, submissions_count? (list
  *  only: students with a submission row), missing_ai_key_count?,
  *  classroom?: {id, name},
- *  subject?: {id, code, name}, google_link?: {course_work_id, alternate_link,
+ *  subject?: {id, code, name}, course?: {id, code, name}|null,
+ *  lesson_plan?: {id, title, unit_id}|null, google_link?: {course_work_id, alternate_link,
  *  drive_file_id, has_blank_worksheet, posted_at, origin, can_push_grades,
  *  materials, last_synced_at}|null, questions?: [...],
  *  created_by, created_at, updated_at}
@@ -39,6 +40,9 @@ class AssignmentResource extends JsonResource
             'id' => $this->id,
             'classroom_id' => $this->classroom_id,
             'subject_id' => $this->subject_id,
+            // DESIGN §20.1: every new assignment has a course; older ones and mirrors may not.
+            'course_id' => $this->course_id,
+            'lesson_plan_id' => $this->lesson_plan_id,
             'title' => $this->title,
             'strictness' => $this->strictness,
             'status' => $this->status,
@@ -62,6 +66,16 @@ class AssignmentResource extends JsonResource
                 'id' => $this->subject->id,
                 'code' => $this->subject->code,
                 'name' => $this->subject->name,
+            ]),
+            'course' => $this->whenLoaded('course', fn () => $this->course === null ? null : [
+                'id' => $this->course->id,
+                'code' => $this->course->code,
+                'name' => $this->course->name,
+            ]),
+            'lesson_plan' => $this->whenLoaded('lessonPlan', fn () => $this->lessonPlan === null ? null : [
+                'id' => $this->lessonPlan->id,
+                'title' => $this->lessonPlan->title,
+                'unit_id' => $this->lessonPlan->unit_id,
             ]),
             // DESIGN §18.4, §19.8 assignment_google_links (AssignmentGoogleLink::toApi) | null
             'google_link' => $this->whenLoaded('googleLink', fn () => $this->googleLink?->toApi()),

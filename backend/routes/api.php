@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
+use App\Http\Controllers\Api\V1\CourseController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\LearningResourceController;
+use App\Http\Controllers\Api\V1\LessonPlanController;
 use App\Http\Controllers\Api\V1\LoginCardController;
 use App\Http\Controllers\Api\V1\MasteryController;
 use App\Http\Controllers\Api\V1\MeController;
@@ -42,6 +44,7 @@ use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\SubmissionPageController;
 use App\Http\Controllers\Api\V1\TeacherAttentionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
+use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
 use Illuminate\Support\Facades\Route;
 
@@ -110,6 +113,24 @@ Route::prefix('v1')->group(function () {
                 Route::post('skills', [SkillController::class, 'store'])->name('api.skills.store');
                 Route::patch('skills/{id}', [SkillController::class, 'update'])->name('api.skills.update');
                 Route::get('subjects', [SubjectController::class, 'index'])->name('api.subjects.index');
+
+                // Courses, units and lesson plans of the teacher (§20.1, §20.7).
+                Route::get('courses', [CourseController::class, 'index'])->name('api.courses.index');
+                Route::post('courses', [CourseController::class, 'store'])->name('api.courses.store');
+                Route::get('courses/{id}', [CourseController::class, 'show'])->name('api.courses.show');
+                Route::patch('courses/{id}', [CourseController::class, 'update'])->name('api.courses.update');
+                Route::delete('courses/{id}', [CourseController::class, 'destroy'])->name('api.courses.destroy');
+                Route::put('courses/{id}/classrooms', [CourseController::class, 'classrooms'])->name('api.courses.classrooms');
+                Route::put('courses/{id}/indicators', [CourseController::class, 'indicators'])->name('api.courses.indicators');
+                Route::post('courses/{id}/units', [UnitController::class, 'store'])->name('api.courses.units.store');
+                Route::patch('units/{id}', [UnitController::class, 'update'])->name('api.units.update');
+                Route::delete('units/{id}', [UnitController::class, 'destroy'])->name('api.units.destroy');
+                Route::put('units/{id}/indicators', [UnitController::class, 'indicators'])->name('api.units.indicators');
+                Route::post('courses/{id}/lesson-plans', [LessonPlanController::class, 'store'])->name('api.courses.lesson-plans.store');
+                Route::get('lesson-plans/{id}', [LessonPlanController::class, 'show'])->name('api.lesson-plans.show');
+                Route::patch('lesson-plans/{id}', [LessonPlanController::class, 'update'])->name('api.lesson-plans.update');
+                Route::delete('lesson-plans/{id}', [LessonPlanController::class, 'destroy'])->name('api.lesson-plans.destroy');
+                Route::put('lesson-plans/{id}/indicators', [LessonPlanController::class, 'indicators'])->name('api.lesson-plans.indicators');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');

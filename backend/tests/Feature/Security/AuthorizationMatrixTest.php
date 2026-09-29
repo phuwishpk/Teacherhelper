@@ -64,6 +64,23 @@ class AuthorizationMatrixTest extends TestCase
         // A teacher-added indicator is shared by the school but edited by its creator only (§20.2).
         'api.skills.update' => ['PATCH', 'skills/{teacher_skill}', 403, 404],
         'api.subjects.index' => ['GET', 'subjects', self::OK, self::OK],
+        // A course, its units and plans belong to their creator only (§20.9): others get 404.
+        'api.courses.index' => ['GET', 'courses', self::OK, self::OK],
+        'api.courses.store' => ['POST', 'courses', self::OK, self::OK],
+        'api.courses.show' => ['GET', 'courses/{own_course}', 404, 404],
+        'api.courses.update' => ['PATCH', 'courses/{own_course}', 404, 404],
+        'api.courses.destroy' => ['DELETE', 'courses/{own_course}', 404, 404],
+        'api.courses.classrooms' => ['PUT', 'courses/{own_course}/classrooms', 404, 404],
+        'api.courses.indicators' => ['PUT', 'courses/{own_course}/indicators', 404, 404],
+        'api.courses.units.store' => ['POST', 'courses/{own_course}/units', 404, 404],
+        'api.units.update' => ['PATCH', 'units/{unit}', 404, 404],
+        'api.units.destroy' => ['DELETE', 'units/{unit}', 404, 404],
+        'api.units.indicators' => ['PUT', 'units/{unit}/indicators', 404, 404],
+        'api.courses.lesson-plans.store' => ['POST', 'courses/{own_course}/lesson-plans', 404, 404],
+        'api.lesson-plans.show' => ['GET', 'lesson-plans/{lesson_plan}', 404, 404],
+        'api.lesson-plans.update' => ['PATCH', 'lesson-plans/{lesson_plan}', 404, 404],
+        'api.lesson-plans.destroy' => ['DELETE', 'lesson-plans/{lesson_plan}', 404, 404],
+        'api.lesson-plans.indicators' => ['PUT', 'lesson-plans/{lesson_plan}/indicators', 404, 404],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
         'api.assignments.show' => ['GET', 'assignments/{assignment}', 404, 404],
@@ -351,6 +368,9 @@ class AuthorizationMatrixTest extends TestCase
             '{extraction}' => $this->extractionA->id,
             '{model}' => $this->model->id,
             '{course}' => 'course-a',
+            '{own_course}' => $this->courseA->id,
+            '{unit}' => $this->unitA->id,
+            '{lesson_plan}' => $this->lessonPlanA->id,
         ]);
 
         if ($uri === 'scans') {

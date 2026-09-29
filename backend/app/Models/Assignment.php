@@ -45,6 +45,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $key_approved_at
  * @property int|null $key_approved_by
  * @property int|null $key_extraction_id
+ * @property int|null $course_id required for new assignments (DESIGN §20.1); NULL for older ones and Classroom mirrors until approved
+ * @property int|null $lesson_plan_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -95,6 +97,8 @@ class Assignment extends Model
         'key_approved_at',
         'key_approved_by',
         'key_extraction_id',
+        'course_id',
+        'lesson_plan_id',
     ];
 
     protected $attributes = [
@@ -119,6 +123,8 @@ class Assignment extends Model
             'key_approved_at' => 'datetime',
             'key_approved_by' => 'integer',
             'key_extraction_id' => 'integer',
+            'course_id' => 'integer',
+            'lesson_plan_id' => 'integer',
         ];
     }
 
@@ -138,6 +144,18 @@ class Assignment extends Model
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class);
+    }
+
+    /** @return BelongsTo<Course, $this> */
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
+    }
+
+    /** @return BelongsTo<LessonPlan, $this> */
+    public function lessonPlan(): BelongsTo
+    {
+        return $this->belongsTo(LessonPlan::class);
     }
 
     /** @return BelongsTo<User, $this> */

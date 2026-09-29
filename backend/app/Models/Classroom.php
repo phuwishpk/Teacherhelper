@@ -78,6 +78,12 @@ class Classroom extends Model
         return $this->hasMany(Assignment::class);
     }
 
+    /** Courses (รายวิชา) taught in this classroom (DESIGN §20.1). @return BelongsToMany<Course, $this> */
+    public function courses(): BelongsToMany
+    {
+        return $this->belongsToMany(Course::class, 'course_classroom');
+    }
+
     /** The linked Google Classroom course (DESIGN §18.4). @return HasOne<ClassroomGoogleLink, $this> */
     public function googleLink(): HasOne
     {

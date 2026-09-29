@@ -31,9 +31,11 @@ class AssignmentsTest extends TestCase
     {
         [$teacher, $classroom, $subject] = $this->setUpTeacher();
 
+        $course = $this->makeCourse($teacher, [$classroom], ['subject_id' => $subject->id]);
+
         $response = $this->asUser($teacher)->postJson('/api/v1/assignments', [
             'classroom_id' => $classroom->id,
-            'subject_id' => $subject->id,
+            'course_id' => $course->id,
             'title' => '  เศษส่วน ชุดที่ 3 ',
             'strictness' => 'strict',
             'due_at' => '2026-10-01T09:00:00+07:00',
@@ -76,7 +78,7 @@ class AssignmentsTest extends TestCase
 
         $this->asUser($teacher)->postJson('/api/v1/assignments', ['strictness' => 'loose'])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['classroom_id', 'subject_id', 'title', 'strictness'])
+            ->assertJsonValidationErrors(['classroom_id', 'course_id', 'title', 'strictness'])
             ->assertJsonPath('errors.title.0', 'กรุณากรอกชื่อการบ้าน');
     }
 

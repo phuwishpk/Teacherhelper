@@ -54,14 +54,15 @@ class InputHardeningTest extends TestCase
 
     public function test_an_assignment_cannot_be_created_in_someone_elses_classroom_or_with_a_forged_state(): void
     {
+        $course = $this->makeCourse($this->teacher, [$this->classroom], ['subject_id' => $this->assignment->subject_id]);
         $status = $this->asUser($this->teacher)->postJson('/api/v1/assignments', [
-            'classroom_id' => $this->classroomB->id, 'subject_id' => $this->assignment->subject_id, 'title' => 'x',
+            'classroom_id' => $this->classroomB->id, 'course_id' => $course->id, 'title' => 'x',
         ])->getStatusCode();
         $this->assertContains($status, [403, 404, 422]);
         $this->assertSame(0, Assignment::query()->where('classroom_id', $this->classroomB->id)->count());
 
         $id = $this->asUser($this->teacher)->postJson('/api/v1/assignments', [
-            'classroom_id' => $this->classroom->id, 'subject_id' => $this->assignment->subject_id, 'title' => 'การบ้านใหม่',
+            'classroom_id' => $this->classroom->id, 'course_id' => $course->id, 'title' => 'การบ้านใหม่',
             'school_id' => $this->teacherB->school_id, 'created_by' => $this->teacherB->id, 'status' => 'ready', 'current_layout_version' => 7,
         ])->assertCreated()->json('data.id');
         $created = Assignment::query()->findOrFail($id);

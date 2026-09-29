@@ -88,24 +88,25 @@ class AnswerKeyController extends Controller
     }
 
     /**
-     * POST /api/v1/assignments/{id}/answer-key/approve {subject_id?} ->
+     * POST /api/v1/assignments/{id}/answer-key/approve {course_id?} ->
      * {data: answer key}: key_approved_at is set, a freeform draft becomes
-     * ready, and hand-ins that waited are graded. subject_id is required
-     * (422 course_required) while the assignment has none: a mirror of
-     * courseWork created on the Classroom website (DESIGN §19.9).
-     * 422 assignment_empty / answer_key_incomplete (errors.questions),
-     * 409 assignment_closed.
+     * ready, and hand-ins that waited are graded. course_id (a course bound
+     * to the classroom, DESIGN §20.1) is required while a mirror of
+     * courseWork created on the Classroom website has none (422
+     * course_required, §19.3); an older assignment without a course may
+     * take one here too. 422 assignment_empty / answer_key_incomplete
+     * (errors.questions), 409 assignment_closed.
      */
     public function approve(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
 
-        $subjectId = $request->input('subject_id');
-        if ($subjectId !== null && filter_var($subjectId, FILTER_VALIDATE_INT) === false) {
-            throw new ApiException('รหัสวิชาไม่ถูกต้อง', 'validation_failed', 422, ['subject_id' => ['รหัสวิชาไม่ถูกต้อง']]);
+        $courseId = $request->input('course_id');
+        if ($courseId !== null && filter_var($courseId, FILTER_VALIDATE_INT) === false) {
+            throw new ApiException('รหัสรายวิชาไม่ถูกต้อง', 'validation_failed', 422, ['course_id' => ['รหัสรายวิชาไม่ถูกต้อง']]);
         }
-        $assignment = $this->keys->approve($request->user(), $assignment, $subjectId === null ? null : (int) $subjectId);
+        $assignment = $this->keys->approve($request->user(), $assignment, $courseId === null ? null : (int) $courseId);
 
         return response()->json(['data' => self::payload($assignment->refresh())]);
     }

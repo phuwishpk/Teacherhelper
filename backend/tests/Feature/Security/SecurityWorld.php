@@ -11,11 +11,13 @@ use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
+use App\Models\Course;
 use App\Models\DocumentExtraction;
 use App\Models\GoogleAccount;
 use App\Models\GradeConflict;
 use App\Models\Layout;
 use App\Models\LearningResource;
+use App\Models\LessonPlan;
 use App\Models\LoginCardPrint;
 use App\Models\ModelVersion;
 use App\Models\PracticeItem;
@@ -27,6 +29,7 @@ use App\Models\Skill;
 use App\Models\Subject;
 use App\Models\Submission;
 use App\Models\SubmissionPage;
+use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorksheetPrint;
 use Illuminate\Http\UploadedFile;
@@ -123,6 +126,13 @@ trait SecurityWorld
     /** A whole-page file of student A's (unpublished) submission (DESIGN §19.4). */
     protected SubmissionPage $pageA;
 
+    /** Teacher A's course bound to classroom A, with a unit and a lesson plan (DESIGN §20.1). */
+    protected Course $courseA;
+
+    protected Unit $unitA;
+
+    protected LessonPlan $lessonPlanA;
+
     protected function makeSecurityWorld(): void
     {
         Storage::fake('local');
@@ -196,6 +206,15 @@ trait SecurityWorld
             'status' => DocumentExtraction::STATUS_DONE, 'requested_by' => $this->teacherA->id,
             'result' => ['kind' => 'answer_key_read', 'notes_th' => '', 'questions' => []],
         ]);
+
+        $this->courseA = Course::create([
+            'school_id' => $this->schoolA->id, 'created_by' => $this->teacherA->id, 'subject_id' => $this->subject->id,
+            'code' => 'ค14101', 'name' => 'คณิตศาสตร์ 4', 'grade_level' => 4, 'academic_year' => 2569,
+        ]);
+        $this->courseA->classrooms()->attach($this->classroomA->id);
+        $this->courseA->indicators()->attach($this->curriculumSkill->id);
+        $this->unitA = Unit::create(['course_id' => $this->courseA->id, 'position' => 1, 'title' => 'จำนวนนับ']);
+        $this->lessonPlanA = LessonPlan::create(['course_id' => $this->courseA->id, 'unit_id' => $this->unitA->id, 'position' => 1, 'title' => 'การอ่านจำนวน']);
 
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',
