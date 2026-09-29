@@ -1893,14 +1893,18 @@ ALTER TABLE scans
   - **หลัง Phase 9** (§20.1) งานจากเว็บต้องมีรายวิชาเหมือนการบ้านใหม่ทุกงาน: ตอนนำเข้า ถ้าห้องผูกรายวิชาไว้**ตัวเดียว** ตั้ง `course_id` และ `subject_id` จากรายวิชานั้นอัตโนมัติ ถ้ามีหลายตัวหรือไม่มีเลย ให้เป็น `NULL` แล้วครู**ต้องเลือก `course_id` จากรายวิชาที่ผูกกับห้องนั้น**ตอนอนุมัติเฉลย (ห้องที่ยังไม่มีรายวิชา แอปพาไปสร้างหรือผูกรายวิชาก่อน)
   - **ไม่ตรวจจนกว่าครูอนุมัติเฉลย**
 - **ข้อจำกัดของงานที่สร้างในเว็บ**: แอปอ่าน submission และตรวจในแอปได้ แต่ **ตั้งคะแนนและ return ใน Classroom ไม่ได้** (Google ตอบ `ProjectPermissionDenied` เพราะ project ของเราไม่ได้สร้างงานนั้น) UI ต้องบอกชัดว่า "งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้" และมีปุ่ม **"เปิดใน Classroom"** กับ **"คัดลอกคะแนน"** ส่วนผลรายคนยังส่งทางประกาศส่วนตัวได้ (§19.7)
-- **คะแนนในแอปคือค่าจริง** ตรวจจับการแก้คะแนนใน Classroom: ตอนซิงก์ เทียบ `assignedGrade` ของ submission กับ `classroom_submission_imports.pushed_grade` (งานที่แอปสร้าง) หรือกับคะแนนรวมที่เผยแพร่ (งานที่สร้างในเว็บ) ใช้ `submissionHistory.gradeHistory` ประกอบเพื่อบอกว่าแก้เมื่อไหร่ ถ้าต่างกันสร้างแถว `grade_conflicts` สถานะ `open` (ไม่สร้างซ้ำถ้ามีแถว open อยู่แล้ว) แสดงเป็นรายการ **"คะแนนไม่ตรงกัน"** ครูเลือกได้
+- **คะแนนในแอปคือค่าจริง** ตรวจจับการแก้คะแนนใน Classroom: ตอนซิงก์ บันทึก `assignedGrade` ล่าสุดไว้ใน `classroom_submission_imports.classroom_grade` แล้วเทียบกับ**ค่าฐาน**: `pushed_grade` (งานที่แอปสร้าง) หรือ**คะแนนรวมที่ใช้จริง**ของ submission ที่เผยแพร่แล้ว (งานที่สร้างในเว็บ) ใช้ `submissionHistory.gradeHistory` ประกอบเพื่อบอกว่าแก้เมื่อไหร่ ถ้าต่างกันสร้างแถว `grade_conflicts` สถานะ `open` (ไม่สร้างซ้ำถ้ามีแถว open อยู่แล้ว) แสดงเป็นรายการ **"คะแนนไม่ตรงกัน"** ครูเลือกได้
   - **ค่าว่างไม่ถือเป็นความต่าง**: ถ้า `assignedGrade` ใน Classroom ว่าง (ครูยังไม่ได้กรอกในเว็บ ซึ่งเป็นปกติของงานที่สร้างในเว็บเพราะแอปส่งคะแนนให้ไม่ได้ หรือครูลบคะแนนออก) ให้บันทึก `classroom_grade = NULL` และ**ไม่เทียบ** ฝั่งแอปก็เช่นกัน งานที่แอปสร้างแต่ `pushed_grade` ยังเป็น `NULL` (ยังไม่เผยแพร่หรือยังส่งคะแนนไม่สำเร็จ) และงานจากเว็บที่ submission ยังไม่เผยแพร่ ไม่เทียบ เทียบเฉพาะเมื่อทั้งสองฝั่งมีตัวเลข (ปัดทศนิยม 2 ตำแหน่งก่อนเทียบ)
-  - **ส่งคะแนนจากแอป** (`push_app`): เฉพาะงานที่แอปสร้าง ตั้ง `assignedGrade` ใหม่
-  - **ใช้คะแนนจาก Classroom** (`accept_classroom`): ถือเป็นการ override ของครูเหตุผล **"รับคะแนนจาก Classroom"** บันทึกใน `submissions.total_override` และในแถว conflict (ผู้ทำ, เวลา, คะแนนเดิม/ใหม่) คะแนนรายข้อและ mastery **ไม่เปลี่ยน** เพราะกระจายคะแนนรวมลงรายข้ออย่างมีเหตุผลไม่ได้
+  - **คะแนนรวมที่ใช้จริง** (effective score) = `COALESCE(submissions.total_override, submissions.total_score)` ใช้ทุกที่ที่แสดงหรือส่งคะแนนรวม: หน้าผลของนักเรียน, คะแนนในประกาศส่วนตัว (§19.7), ปุ่ม "คัดลอกคะแนน", `push_app` และ `PushClassroomGradeJob`, ค่าฐานของการเทียบ conflict, กราฟ (4) การกระจายคะแนน (§20.4) และ export คะแนน คะแนนรายข้อ, mastery และกราฟที่มาจาก mastery ใช้คะแนนรายข้อเสมอ เมื่อมี `total_override` หน้าผลแสดงคะแนนรายข้อตามเดิมพร้อมหมายเหตุ "คะแนนรวมปรับตามที่ครูรับจาก Classroom"
+  - **ส่งคะแนนจากแอป** (`push_app`): เฉพาะงานที่แอปสร้าง ตั้ง `assignedGrade` เป็นคะแนนรวมที่ใช้จริง แล้วตั้ง `pushed_grade` และ `classroom_grade` เป็นค่านั้น
+  - **ใช้คะแนนจาก Classroom** (`accept_classroom`): ถือเป็นการ override ของครูเหตุผล **"รับคะแนนจาก Classroom"** บันทึกใน `submissions.total_override` และในแถว conflict (ผู้ทำ, เวลา, คะแนนเดิม/ใหม่, `reason = 'รับคะแนนจาก Classroom'`) แถว `grade_conflicts` เป็นบันทึกของ override ระดับ submission นี้ (ข้อ 17 ใน §17) เพราะ `score_events` เป็นระดับข้อ (`response_id NOT NULL`) และไม่เพิ่ม action ใหม่ให้ `score_events` งานที่แอปสร้างตั้ง `pushed_grade` เป็นคะแนนที่รับมาด้วย เพื่อให้ค่าฐานตรงกับ Classroom ส่วนงานจากเว็บค่าฐานคือคะแนนรวมที่ใช้จริงซึ่งเท่ากับ `total_override` แล้ว คะแนนรายข้อและ mastery **ไม่เปลี่ยน** เพราะกระจายคะแนนรวมลงรายข้ออย่างมีเหตุผลไม่ได้
+  - **ไม่สนใจ** (`dismiss`): ไม่เปลี่ยนคะแนนฝั่งใด แถวเก็บ `app_score` และ `classroom_score` ที่ครูเห็นตอนกด รอบซิงก์ถัดไป**ไม่สร้าง conflict ใหม่**ถ้าแถวล่าสุดของ import นี้เป็น `dismissed` และค่าทั้งสองฝั่ง (ปัด 2 ตำแหน่ง) ยังเท่ากับค่าในแถวนั้น conflict เปิดใหม่เมื่อ `classroom_grade` หรือคะแนนรวมที่ใช้จริงเปลี่ยนไปจากค่าที่ครูกดไม่สนใจ
+  - ผลของทั้งสามทาง: ค่าที่เทียบกันตรงกันหรือถูกจดว่าครูไม่สนใจแล้ว conflict ที่แก้แล้ว**ไม่กลับมา**ในรอบซิงก์ถัดไป
+  - **ล้าง `total_override`**: เมื่อคะแนนรายข้อของ submission เปลี่ยนหลังรับคะแนนจาก Classroom (ครู override ข้อใด, อนุมัติคำขอตรวจใหม่, ตรวจใหม่ผ่าน `SubmissionReopened`) ให้ตั้ง `total_override = NULL` ในการทำงานเดียวกัน (การเปลี่ยนนั้นมี `score_events` ของตัวเองเป็นบันทึกอยู่แล้ว) แอปเตือนครูก่อนยืนยันว่า "คะแนนรวมที่รับจาก Classroom จะถูกแทนด้วยผลรวมรายข้อ" เมื่อเผยแพร่ใหม่ คะแนนรวมใหม่ถูกส่งหรือเทียบตามกติกาเดิม
 - **token หมดอายุ**: OAuth app ยังอยู่ในโหมด Testing refresh token จึงหมดอายุใน 7 วัน เมื่อเจอ `invalid_grant` ให้ตั้ง `google_accounts.last_error = 'invalid_grant'` (สถานะ `needs_reconnect` ตาม §18.6) แสดงแบนเนอร์ และส่ง FCM ถึงครู**ครั้งเดียวต่อการหลุด** (`google_accounts.reconnect_notified_at`) รอบซิงก์ข้ามครูคนนี้จนกว่าจะเชื่อมใหม่ **ทางใช้จริง**: โรงเรียนที่ใช้ Google Workspace ตั้ง OAuth consent screen เป็น **Internal** ใน Cloud project ของโดเมนโรงเรียน (หรือให้ admin ตั้งแอปเป็น trusted ตาม §18.5) token จะไม่หมดอายุทุก 7 วัน
 - **ส่งช้า**: ครูตั้งต่อการบ้าน `accept_late` (ค่าตั้งต้น `TRUE`)
   - `TRUE`: รับและติดป้าย **"ส่งช้า"** (`submissions.late = TRUE`) ใช้ `late` ของ Classroom หรือ `submitted_at > due_at` สำหรับงานที่ส่งในแอป
-  - `FALSE`: หลัง `due_at` ปฏิเสธ (ในแอปตอบ 422 `submission_late`, จาก Classroom แถว import เป็น `rejected_late` ไม่ดาวน์โหลดและไม่ตรวจ ครูกดรับเองได้)
+  - `FALSE`: หลัง `due_at` ปฏิเสธ (ในแอปตอบ 422 `submission_late`, จาก Classroom แถว import เป็น `rejected_late` ไม่ดาวน์โหลดและไม่ตรวจ ครูกดรับเองได้ด้วย `POST /google-submissions/{id}/accept-late` (§19.9) ซึ่งเปลี่ยนแถวเป็น `new` พร้อม `late = TRUE` แล้วดาวน์โหลดและตรวจตามปกติในรอบซิงก์ถัดไป)
 
 ### 19.4 C. ทางตรวจจากรูปทั้งหน้า (whole-page)
 
@@ -2054,7 +2058,7 @@ ALTER TABLE submissions
   ADD COLUMN submitted_at     TIMESTAMP NULL,
   ADD COLUMN late             BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN regrade_pending  BOOLEAN NOT NULL DEFAULT FALSE,     -- ส่งใหม่ รอครูกดตรวจ
-  ADD COLUMN total_override   DECIMAL(6,2) NULL;                  -- รับคะแนนจาก Classroom (§19.3)
+  ADD COLUMN total_override   DECIMAL(6,2) NULL;                  -- รับคะแนนจาก Classroom (§19.3) ใช้ COALESCE(total_override, total_score)
 
 ALTER TABLE responses
   MODIFY COLUMN scan_id BIGINT UNSIGNED NULL,                        -- ทาง whole-page ไม่มี scan
@@ -2078,10 +2082,12 @@ CREATE TABLE grade_conflicts (
   app_score        DECIMAL(6,2) NULL,
   classroom_score  DECIMAL(6,2) NULL,
   status           ENUM('open','pushed_app','accepted_classroom','dismissed') NOT NULL DEFAULT 'open',
+  reason           VARCHAR(255) NULL,                 -- 'รับคะแนนจาก Classroom' เมื่อ accepted_classroom
   detected_at      TIMESTAMP NOT NULL,
   resolved_by      BIGINT UNSIGNED NULL REFERENCES users(id),
   resolved_at      TIMESTAMP NULL,
-  INDEX idx_conflicts (submission_id, status)
+  INDEX idx_conflicts (submission_id, status),
+  INDEX idx_conflicts_import (import_id, id)          -- หาแถวล่าสุดของ import (กติกา dismiss)
 );
 
 -- F. ประกาศส่วนตัวใน Classroom
@@ -2135,7 +2141,8 @@ CREATE TABLE explanation_cache (
 | POST | `/submissions/{id}/grade` | ครู | ตรวจงานที่ส่งใหม่ (`regrade_pending`) ตอบ `202` |
 | GET | `/submission-pages/{id}/image` | ครู / นักเรียนเจ้าของ (หลังเผยแพร่) | stream หลังตรวจสิทธิ์ |
 | GET | `/assignments/{id}/grade-conflicts` | ครู | รายการ "คะแนนไม่ตรงกัน" |
-| POST | `/grade-conflicts/{id}/resolve` | ครู | `{action: push_app\|accept_classroom\|dismiss}` `push_app` กับงานจากเว็บ 409 `coursework_not_owned` |
+| POST | `/grade-conflicts/{id}/resolve` | ครู | `{action: push_app\|accept_classroom\|dismiss}` `push_app` กับงานจากเว็บ 409 `coursework_not_owned` ผลต่อค่าฐานตาม §19.3 แถวที่ไม่ `open` แล้ว 409 `conflict_resolved` |
+| POST | `/google-submissions/{id}/accept-late` | ครู | รับงานที่ส่งช้าซึ่งถูกปฏิเสธ (`rejected_late`) แถวเป็น `new` + `late = TRUE` ตอบ `202` สถานะอื่น 409 `import_not_rejected` |
 | GET | `/assignments/{id}/google-feedback` | ครู | สถานะประกาศรายคน |
 | POST | `/assignments/{id}/google-feedback/retry` | ครู | ส่งประกาศใหม่ให้แถว `failed` |
 | GET | `/student/assignments` | นักเรียน | งานที่ต้องส่ง `[{id, title, due_at, accept_late, submitted_at, late, status}]` |
@@ -2144,7 +2151,7 @@ CREATE TABLE explanation_cache (
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ)
+**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`
 
 ### 19.10 Job, cron และ prompt
 
@@ -2202,6 +2209,9 @@ scope รวมเป็นตาราง §18.5 บวก `classroom.announcem
   - ส่งช้า: รับ + ป้าย / ปฏิเสธ 422 และ `rejected_late`
   - `PdfPageCounterTest`: PDF แบบ xref table (FPDI), แบบ xref stream + object stream (fallback), ไฟล์เข้ารหัส/เสีย → `pdf_unreadable` และตัดช่วงหน้าไฟล์ xref stream → `document_split_unsupported`
   - grade conflict กับค่าว่าง: `assignedGrade` ว่าง หรือ `pushed_grade` ว่าง → ไม่สร้าง conflict
+  - grade conflict ที่แก้แล้วไม่กลับมา: หลัง `push_app`, `accept_classroom` (งานที่แอปสร้างและงานจากเว็บ) และ `dismiss` รอบซิงก์ถัดไปที่ค่าเดิมไม่สร้างแถวใหม่ หลัง `dismiss` ถ้า `assignedGrade` เปลี่ยนเป็นค่าอื่น → สร้างแถวใหม่
+  - `total_override`: หน้าผล ประกาศ และ `push_app` ใช้คะแนนรวมที่ใช้จริง, override ข้อใดหลังรับคะแนน → ล้าง `total_override`
+  - `accept-late`: `rejected_late` → `new` + `late`, สถานะอื่น 409
   - whole-page: หนึ่ง call ต่อหน้า, retry รายข้อ, ข้อหาไม่เจอ → `check` + `manual`, หลายหน้าขัดกัน → `D = 1`, จำกัดหน้า/ขนาด/ชนิดไฟล์, ส่งใหม่หลังตีกลับตรวจอัตโนมัติ กรณีอื่นรอ
   - เฉลย: อ่านครั้งเดียว + แคชข้ามครูในโรงเรียนเดียวกัน (ไม่ข้ามโรงเรียน), เกิน 30 หน้า, ประมาณราคา, AI ร่าง + ป้าย
   - ประกาศ: เนื้อหาใช้ข้อความที่ครูแก้, `INDIVIDUAL_STUDENTS`, scope ขาด → `needs_reconnect`, retry
@@ -2243,6 +2253,7 @@ subject_code,level,code,parent_code,grade_level,name
 ```
 
   - ไฟล์รูปแบบเดิม (ไม่มีคอลัมน์ `level`) ยัง import ได้: ไม่มี `parent_code` = `indicator`, มี `parent_code` = `sub_indicator`
+  - importer ดูรูปแบบจาก**แถวหัว**: คอลัมน์รหัสชื่อ `code` หรือ `skill_code` ก็ได้ (ถือเป็นชื่อเดียวกัน ถ้ามีทั้งสองตอบ error ที่บรรทัด 1) มีคอลัมน์ `level` = รูปแบบใหม่ ไม่มี = รูปแบบเดิม ลำดับคอลัมน์ไม่สำคัญ
   - importer รองรับไฟล์ใหญ่ (หลายหมื่นแถว): อ่านแบบ stream, upsert ทีละ 500 แถวด้วย key `(school_id, code)` **ที่ตรวจในโค้ด** (ไม่มี UNIQUE ใน DB เพราะ `school_id` ของแถวหลักสูตรเป็น `NULL`, §8.2): โหลด map `code → id` ของ scope นั้นครั้งเดียวก่อนเริ่ม แล้วแยกเป็น insert/update และกันการ import ซ้อนกันด้วย `Cache::lock('skills-import', …)`, แก้ `parent_code` หลังใส่ครบทั้งไฟล์ (parent อยู่หลัง child ในไฟล์ได้), รายงาน `{created, updated, unchanged, errors: [{line, message}]}` และไม่ลบแถวที่หายไปจากไฟล์ (ถูกใช้ใน mastery แล้ว)
 - **ครูเพิ่มตัวชี้วัดที่ขาดได้** (เปลี่ยนจาก §2.3 เดิมที่ครูเพิ่มเองไม่ได้) เป็นของโรงเรียน (`school_id` ของครู) `source = teacher` แสดงป้าย **"ครูเพิ่มเอง"** ครูในโรงเรียนเดียวกันเห็นและเลือกใช้ได้ ครูที่สร้างแก้ชื่อได้ตราบที่ยังไม่มี observation admin ของโรงเรียนแก้ได้เสมอ
 
@@ -2276,7 +2287,7 @@ dependency ใหม่ของแอป: **`fl_chart`** ทุกกราฟ�
 | (1) พัฒนาการตามเวลา | ครู, นักเรียน | mastery หลังแต่ละ observation จาก `skill_observations` (คำนวณ EWMA ย้อนหลัง) | เส้นต่อหนึ่งตัวชี้วัด แกน x = วันที่ (Asia/Bangkok) เลือกได้ไม่เกิน 5 ตัวชี้วัดพร้อมกัน |
 | (2) ร้อยละนักเรียนที่ผ่านแต่ละตัวชี้วัด | ครู | นับจาก `mastery` ของนักเรียนในห้อง | แท่งต่อตัวชี้วัด แสดง n ที่ประเมินแล้ว |
 | (3) Heatmap นักเรียน × ตัวชี้วัด | ครู | `mastery` (ของเดิม §14.3) | เพิ่มตัวกรองรายวิชา/หน่วย และจัดกลุ่มคอลัมน์ตามมาตรฐาน |
-| (4) การกระจายคะแนนของการบ้าน | ครู | คะแนนรวมที่เผยแพร่แล้ว | histogram ช่วงละ 10% ของคะแนนเต็ม พร้อม mean และ median |
+| (4) การกระจายคะแนนของการบ้าน | ครู | คะแนนรวมที่ใช้จริง (`COALESCE(total_override, total_score)`, §19.3) ของ submission ที่เผยแพร่แล้ว | histogram ช่วงละ 10% ของคะแนนเต็ม พร้อม mean และ median |
 | (5) ความคืบหน้าตามแผนรายวิชา | ครู | ตัวชี้วัดที่วางแผน / สอนแล้ว (แผนที่ `taught_on` ไม่ว่าง) / ประเมินแล้ว (มีข้อในการบ้านที่เผยแพร่แล้วผูกอยู่) | แท่งซ้อนต่อหน่วย |
 
 - **ครูเห็นทั้งหมด นักเรียนเห็นเฉพาะกราฟของตัวเอง** (spider และพัฒนาการตามเวลา) **ไม่มีค่าเฉลี่ยห้อง ไม่มีอันดับ**ในมุมของนักเรียน
@@ -2570,6 +2581,7 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 ### 21.7 ข้อ 6–7: ใช้คำอธิบายซ้ำ และ "เฉพาะคะแนน"
 
 - **ข้อ 6**: คำตอบผิดที่ normalize แล้ว (§11.4) **เหมือนกันพอดี**ในข้อเดียวกัน (`short` และคำตอบสุดท้ายของ `show_work`) ใช้คำอธิบายที่เก็บไว้ใน `explanation_cache` แทนการเรียก Gemini โดย**ใช้ฉบับที่ครูแก้ก่อน**ฉบับ AI (`explanation_source = reused`) ข้อ `show_work` ที่ขั้นตอนต่างกันยังได้คำอธิบายของตัวเอง key ของ `show_work` จึงเป็น hash ของ (คำตอบสุดท้าย + บรรทัดแรกที่ผิด) ข้อ `open` ไม่ใช้ซ้ำ
+  - **ตีความโดยตั้งใจ** ของ "ขั้นตอนต่างกันได้คำอธิบายของตัวเอง": "ต่างกัน" นับเฉพาะจนถึงบรรทัดแรกที่ผิด เพราะคำอธิบายของ Gemini เขียนถึงจุดผิดแรกเป็นหลัก สองคำตอบที่คำตอบสุดท้ายและบรรทัดแรกที่ผิดเหมือนกันแต่ขั้นหลังจากนั้นต่างกันจึงใช้คำอธิบายเดียวกัน ถ้าทดสอบแล้วพบว่าคำอธิบายไม่ตรงกับงานจริง ให้เปลี่ยน key เป็น hash ของทุกบรรทัดที่ normalize แล้ว (แคชเจอน้อยลง)
 - **ข้อ 7**: การบ้านที่ตั้ง **"เฉพาะคะแนน"** (`assignments.score_only`) ข้ามการเรียก `explanation` ทั้งหมด นักเรียนเห็นคะแนนและข้อความจาก template (§7.2 ข้อ 5)
 
 ### 21.8 ข้อ 8: บันทึก token แยกตามฟีเจอร์
