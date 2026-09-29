@@ -27,7 +27,8 @@ String _levelLabel(Object? v) => switch (v) {
 };
 
 /// "สิ่งที่อ่านได้": what Gemini transcribed (DESIGN §10.3), the CNN's
-/// second reading of numeric boxes (§12.1) and the mcq fill ratios.
+/// second reading of numeric boxes (§12.1), the mcq fill ratios (crop
+/// path) or the options Gemini read (whole-page path, §19.4).
 class ExtractionView extends StatelessWidget {
   const ExtractionView({super.key, required this.detail});
 
@@ -95,6 +96,18 @@ class ExtractionView extends StatelessWidget {
         rows.add(Wrap(spacing: 8, runSpacing: 4, children: flags));
       }
       switch (type) {
+        case 'mcq':
+          // Whole-page path (DESIGN §19.4): Gemini reports the chosen options
+          // and the server grades them; there are no fill ratios.
+          if (e['selected_options'] case final List options) {
+            rows.add(
+              _labelled(
+                context,
+                'ตัวเลือกที่อ่านได้',
+                options.isEmpty ? 'ไม่ได้เลือก' : options.join(', '),
+              ),
+            );
+          }
         case 'short':
           rows.add(_labelled(context, 'คำตอบที่อ่านได้', e['answer_text']));
           rows.add(Text('เทียบกับเฉลย: ${_matchLabel(e['key_match'])}'));

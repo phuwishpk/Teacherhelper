@@ -6,35 +6,38 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
+import '../review/review_models.dart';
+import '../review/review_providers.dart';
+import '../review/review_queue_screen.dart' show reviewActionError;
 import 'assignment_google_section.dart' show copyLink;
-import 'classroom_importer.dart';
-import 'google_auth.dart';
 import 'google_models.dart';
 import 'google_providers.dart';
 import 'google_repository.dart';
 
-/// Classroom submissions of one assignment (DESIGN §18.2, §18.7): states
-/// from the server, "ดาวน์โหลดและสแกน" for all or one (on this phone), the
-/// result of every picture, "ตีกลับให้ถ่ายใหม่" and "ส่งคะแนนกลับอีกครั้ง".
-/// On the web everything but downloading and scanning works; those buttons
-/// stay off with [phoneOnlyScanNote].
+/// Classroom submissions of one assignment (DESIGN §18.7, §19.4). Since
+/// Phase 8 the server downloads each hand-in from Drive and grades it from
+/// the whole page, so nothing is downloaded or scanned on this phone (and
+/// the screen works the same on the web). Each row shows two things: the
+/// sync state of the Classroom hand-in (downloaded, file unusable, late,
+/// waiting for the answer key, grade sent back) and, once the server holds
+/// the files, the grading state of the student's submission from the review
+/// queue, with "ตรวจ" for a new hand-in that waits for the teacher
+/// (`regrade_pending`), "ตีกลับให้ถ่ายใหม่" and "ส่งคะแนนกลับอีกครั้ง".
 class GoogleSubmissionsScreen extends ConsumerWidget {
   const GoogleSubmissionsScreen({super.key, required this.assignmentId});
 
   final int assignmentId;
 
-  Future<void> _refresh(WidgetRef ref) =>
-      ref.read(googleSubmissionsProvider(assignmentId).notifier).refresh();
+  Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(reviewQueueProvider(assignmentId));
+    await ref.read(googleSubmissionsProvider(assignmentId).notifier).refresh();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(googleSubmissionsProvider(assignmentId));
-    // Without scanning (the web) the importer is never built.
-    final running =
-        ref.watch(classroomScanSupportedProvider) &&
-        ref.watch(
-          classroomImportProvider(assignmentId).select((s) => s.running),
-        );
+    // Grading progress per student; the list works without it.
+    final queue = ref.watch(reviewQueueProvider(assignmentId));
     final title = ref
         .watch(assignmentDetailProvider(assignmentId))
         .value
@@ -48,13 +51,13 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: 'ดึงงานที่ส่งอีกครั้ง',
-            onPressed: running || rows.isLoading ? null : () => _refresh(ref),
+            onPressed: rows.isLoading ? null : () => _refresh(ref),
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
-            tooltip: 'คิวอัปโหลด',
-            onPressed: () => context.push(AppRoutes.uploadQueue),
-            icon: const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'ตรวจทาน',
+            onPressed: () => context.push(AppRoutes.review(assignmentId)),
+            icon: const Icon(Icons.rate_review_outlined),
           ),
         ],
       ),
@@ -76,13 +79,122 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
         _ => SubmissionsList(
           assignmentId: assignmentId,
           rows: rows.value!,
-          refreshing: rows.isLoading,
+          submissions: {
+            for (final s in queue.value?.submissions ?? const [])
+              if (s.student case final student?) student.id: s,
+          },
+          refreshing: rows.isLoading || queue.isLoading,
           onRefresh: () => _refresh(ref),
         ),
       },
     );
   }
 }
+
+/// What the teacher reads about one row: where the hand-in stands.
+typedef RowProgress = ({String label, Color color, String? detail});
+
+/// The grading side of a row (DESIGN §19.4): from the Classroom sync state
+/// until the server holds the files, then from the student's submission.
+RowProgress rowProgress(
+  GoogleSubmission row,
+  SubmissionSummary? submission,
+  ColorScheme scheme,
+) {
+  final muted = scheme.outline;
+  switch (row.state) {
+    case SubmissionImportState.newSubmission:
+      if (row.student == null) {
+        return (
+          label: 'ยังไม่ได้จับคู่นักเรียน',
+          color: scheme.tertiary,
+          detail:
+              'บัญชีนี้ยังไม่ได้จับคู่กับนักเรียนในห้อง จับคู่ที่หน้าห้องเรียนก่อน '
+              'แล้วเซิร์ฟเวอร์จะดาวน์โหลดไฟล์มาตรวจให้',
+        );
+      }
+      return (
+        label: 'รอดาวน์โหลด',
+        color: muted,
+        detail: row.lastError == null
+            ? 'เซิร์ฟเวอร์จะดาวน์โหลดไฟล์จาก Google Drive แล้วให้ AI ตรวจ'
+            : 'ยังดาวน์โหลดไม่ได้: ${row.lastError}',
+      );
+    case SubmissionImportState.waitingKey:
+      return (
+        label: 'รออนุมัติเฉลย',
+        color: scheme.primary,
+        detail: 'เก็บไฟล์ไว้แล้ว จะตรวจเมื่อครูอนุมัติเฉลยของการบ้านนี้',
+      );
+    case SubmissionImportState.unsupported:
+      return (
+        label: 'ตรวจไม่ได้',
+        color: scheme.error,
+        detail:
+            'ใช้ไม่ได้: ${row.lastError ?? 'ไฟล์ชนิดนี้ตรวจไม่ได้'} '
+            'ให้นักเรียนส่งเป็นรูปหรือ PDF ใหม่ใน Classroom',
+      );
+    case SubmissionImportState.rejectedLate:
+      return (
+        label: 'ไม่รับงานส่งช้า',
+        color: scheme.tertiary,
+        detail: 'ส่งหลังกำหนด และการบ้านนี้ไม่รับงานส่งช้า จึงไม่ได้ตรวจ',
+      );
+    case SubmissionImportState.returnedForRetake:
+      return (
+        label: 'รอส่งใหม่',
+        color: scheme.tertiary,
+        detail:
+            'รอนักเรียนส่งรูปใหม่ใน Classroom งานที่ส่งใหม่หลังตีกลับจะถูกตรวจอัตโนมัติ',
+      );
+    case SubmissionImportState.needsRetake:
+      return (
+        label: 'ต้องถ่ายใหม่',
+        color: scheme.error,
+        detail: 'รูปนี้ใช้ไม่ได้ ตีกลับให้นักเรียนถ่ายใหม่',
+      );
+    case SubmissionImportState.imported ||
+        SubmissionImportState.graded ||
+        SubmissionImportState.gradeFailed:
+      if (submission == null) {
+        return (label: 'รับไฟล์แล้ว', color: muted, detail: 'กำลังเริ่มตรวจ');
+      }
+      if (submission.regradePending) {
+        return (
+          label: 'ส่งใหม่ รอครูกดตรวจ',
+          color: scheme.tertiary,
+          detail:
+              'นักเรียนส่งงานใหม่ ผลเดิมยังอยู่จนกว่าครูจะกด "ตรวจ" '
+              '(AI อ่านใหม่ทั้งหน้า)',
+        );
+      }
+      return switch (submission.status) {
+        'grading' => (label: 'AI กำลังตรวจ', color: muted, detail: null),
+        'published' => (
+          label: 'เผยแพร่ผลแล้ว',
+          color: Colors.green.shade700,
+          detail: submission.totalScore == null
+              ? null
+              : 'คะแนนรวม ${_score(submission.totalScore!)}',
+        ),
+        'reviewed' => (
+          label: 'ตรวจทานครบ รอเผยแพร่',
+          color: scheme.primary,
+          detail: null,
+        ),
+        'needs_review' => (
+          label: 'รอครูตรวจทาน',
+          color: scheme.primary,
+          detail:
+              'AI ตรวจแล้ว ตรวจทานแล้ว ${submission.reviewedCount}/${submission.responseCount} ข้อ',
+        ),
+        _ => (label: 'รอตรวจ', color: muted, detail: null),
+      };
+  }
+}
+
+String _score(double v) =>
+    v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 
 /// The list itself (separate so tests can pump it with rows).
 class SubmissionsList extends ConsumerWidget {
@@ -91,71 +203,18 @@ class SubmissionsList extends ConsumerWidget {
     required this.assignmentId,
     required this.rows,
     required this.onRefresh,
+    this.submissions = const {},
     this.refreshing = false,
   });
 
   final int assignmentId;
   final List<GoogleSubmission> rows;
+
+  /// The students' submissions (review queue `meta.submissions`) by
+  /// student id.
+  final Map<int, SubmissionSummary> submissions;
   final Future<void> Function() onRefresh;
   final bool refreshing;
-
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    List<GoogleSubmission> targets,
-  ) async {
-    GoogleStatus? status;
-    try {
-      // The Drive token must belong to the account connected on the server.
-      status = await ref.read(googleStatusProvider.future);
-    } catch (_) {
-      status = null; // the server will say if the connection is gone
-    }
-    if (!context.mounted) return;
-    if (status != null && !status.ready) {
-      showMessage(
-        context,
-        status.connected
-            ? 'ต้องเชื่อมบัญชี Google ใหม่ก่อน (ตั้งค่า → Google Classroom)'
-            : 'เชื่อมบัญชี Google ก่อน (ตั้งค่า → Google Classroom)',
-      );
-      return;
-    }
-    try {
-      await ref
-          .read(classroomImportProvider(assignmentId).notifier)
-          .run(targets, expectedEmail: status?.email);
-      if (!context.mounted) return;
-      final state = ref.read(classroomImportProvider(assignmentId));
-      final results = [for (final t in targets) ?state.rows[t.id]?.result];
-      final pages = results.fold<int>(0, (n, r) => n + r.queuedCount);
-      final skipped = results.fold<int>(
-        0,
-        (n, r) => n + r.outcomes.whereType<ImageAlreadyQueued>().length,
-      );
-      final problems = results.where((r) => r.hasProblems).length;
-      final unmatched = results.where((r) => r.needsMatchCount > 0).length;
-      showMessage(
-        context,
-        [
-          'สแกนแล้ว $pages หน้า',
-          if (skipped > 0) 'ข้าม $skipped หน้าที่อยู่ในคิวแล้ว',
-          if (problems > 0) 'มี $problems งานที่ต้องให้นักเรียนถ่ายใหม่',
-          if (unmatched > 0) 'มี $unmatched งานที่ต้องจับคู่นักเรียนก่อน',
-          if (problems == 0 && unmatched == 0) 'กำลังอัปโหลด',
-        ].join(' '),
-      );
-    } on ClassroomImportStopped catch (e) {
-      // Part of the batch ran; the rows show what was done.
-      if (context.mounted) showMessage(context, e.message);
-    } on GoogleAuthCanceled {
-      // The teacher closed the picker before anything ran.
-    } on GoogleAuthException catch (e) {
-      if (context.mounted) showMessage(context, e.message);
-    } catch (e) {
-      if (context.mounted) showMessage(context, googleErrorMessage(e));
-    }
-  }
 
   Future<void> _retryGrades(BuildContext context, WidgetRef ref) async {
     try {
@@ -178,21 +237,26 @@ class SubmissionsList extends ConsumerWidget {
     }
   }
 
+  SubmissionSummary? _submissionOf(GoogleSubmission row) =>
+      row.student == null ? null : submissions[row.student!.id];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final supported = ref.watch(classroomScanSupportedProvider);
-    final import = supported
-        ? ref.watch(classroomImportProvider(assignmentId))
-        : const ClassroomImportState();
-    final waiting = rows.where((r) => r.state.awaitsScan).toList();
     final failedGrades = rows
         .where((r) => r.state == SubmissionImportState.gradeFailed)
+        .length;
+    final waiting = rows
+        .where(
+          (r) =>
+              r.state.hasFiles && (_submissionOf(r)?.regradePending ?? false),
+        )
         .length;
     final counts = <SubmissionImportState, int>{};
     for (final r in rows) {
       counts[r.state] = (counts[r.state] ?? 0) + 1;
     }
+    final late = rows.where((r) => r.late).length;
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -217,41 +281,27 @@ class SubmissionsList extends ConsumerWidget {
                         [
                           for (final s in SubmissionImportState.values)
                             if (counts[s] case final n?) '${s.label} $n',
+                          if (late > 0) 'ส่งช้า $late',
                         ].join(' · '),
                         key: const ValueKey('submission_counts'),
                       ),
                     ],
                     const SizedBox(height: 8),
-                    if (supported)
-                      Text(
-                        'รูปถูกดาวน์โหลดจาก Google Drive มาที่เครื่องนี้ ตัดภาพแล้วอัปโหลดผ่านคิวอัปโหลดตามปกติ '
-                        'รูปที่ใช้ไม่ได้จะแสดงเหตุผลให้ตีกลับให้นักเรียนถ่ายใหม่',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    else
-                      Row(
-                        key: const ValueKey('phone_only_note'),
-                        children: [
-                          Icon(
-                            Icons.phone_android,
-                            size: 18,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '$phoneOnlyScanNote (ตีกลับ ส่งคะแนนกลับ และดูสถานะทำที่นี่ได้)',
-                            ),
-                          ),
-                        ],
+                    Text(
+                      'เซิร์ฟเวอร์ดาวน์โหลดรูปหรือ PDF ที่นักเรียนส่งจาก Google Drive '
+                      'แล้วให้ AI ตรวจจากรูปทั้งหน้าเอง ไม่ต้องสแกนในเครื่องนี้ '
+                      'ไฟล์ Word หรือ Google Docs ตรวจไม่ได้ ผลตรวจรอครูตรวจทานที่หน้า "ตรวจทาน"',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                    if (import.batch case final batch?) ...[
-                      const SizedBox(height: 12),
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 4),
-                      Text('กำลังดาวน์โหลดและสแกน $batch'),
+                    ),
+                    if (waiting > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'มี $waiting คนส่งงานใหม่ รอครูกด "ตรวจ"',
+                        key: const ValueKey('regrade_waiting'),
+                        style: TextStyle(color: theme.colorScheme.tertiary),
+                      ),
                     ],
                     const SizedBox(height: 12),
                     Wrap(
@@ -259,15 +309,11 @@ class SubmissionsList extends ConsumerWidget {
                       runSpacing: 8,
                       children: [
                         FilledButton.icon(
-                          key: const ValueKey('import_all'),
-                          onPressed:
-                              !supported || import.running || waiting.isEmpty
-                              ? null
-                              : () => _run(context, ref, waiting),
-                          icon: const Icon(Icons.document_scanner_outlined),
-                          label: Text(
-                            'ดาวน์โหลดและสแกนทั้งหมด (${waiting.length})',
-                          ),
+                          key: const ValueKey('open_review'),
+                          onPressed: () =>
+                              context.push(AppRoutes.review(assignmentId)),
+                          icon: const Icon(Icons.rate_review_outlined),
+                          label: const Text('ตรวจทาน'),
                         ),
                         if (failedGrades > 0)
                           OutlinedButton.icon(
@@ -294,9 +340,7 @@ class SubmissionsList extends ConsumerWidget {
               _SubmissionCard(
                 assignmentId: assignmentId,
                 row: row,
-                import: import.rows[row.id],
-                canScan: supported && !import.running,
-                onScan: () => _run(context, ref, [row]),
+                submission: _submissionOf(row),
               ),
           ],
         ),
@@ -305,24 +349,28 @@ class SubmissionsList extends ConsumerWidget {
   }
 }
 
-class _SubmissionCard extends ConsumerWidget {
+class _SubmissionCard extends ConsumerStatefulWidget {
   const _SubmissionCard({
     required this.assignmentId,
     required this.row,
-    required this.import,
-    required this.canScan,
-    required this.onScan,
+    required this.submission,
   });
 
   final int assignmentId;
   final GoogleSubmission row;
-  final ImportRow? import;
-  final bool canScan;
-  final VoidCallback onScan;
+  final SubmissionSummary? submission;
 
-  Future<void> _returnForRetake(BuildContext context, WidgetRef ref) async {
-    final suggestion =
-        import?.result?.problems.join(' ') ?? row.retakeReason ?? '';
+  @override
+  ConsumerState<_SubmissionCard> createState() => _SubmissionCardState();
+}
+
+class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
+  bool _busy = false;
+
+  GoogleSubmission get row => widget.row;
+
+  Future<void> _returnForRetake() async {
+    final suggestion = row.retakeReason ?? '';
     final reason = await showDialog<String>(
       context: context,
       builder: (_) => _RetakeDialog(
@@ -332,30 +380,54 @@ class _SubmissionCard extends ConsumerWidget {
             : suggestion,
       ),
     );
-    if (reason == null || !context.mounted) return;
+    if (reason == null || !mounted) return;
+    setState(() => _busy = true);
     try {
       await ref
-          .read(googleSubmissionsProvider(assignmentId).notifier)
+          .read(googleSubmissionsProvider(widget.assignmentId).notifier)
           .returnForRetake(row, reason);
-      if (context.mounted) {
+      if (mounted) {
         showMessage(context, 'ส่งคืนงานใน Classroom และแจ้งนักเรียนแล้ว');
       }
     } catch (e) {
       if (isGoogleReconnectError(e)) {
         ref.read(googleStatusProvider.notifier).markNeedsReconnect();
       }
-      if (context.mounted) showMessage(context, googleErrorMessage(e));
+      if (mounted) showMessage(context, googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _grade(SubmissionSummary submission) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(reviewQueueProvider(widget.assignmentId).notifier)
+          .gradeSubmission(submission.id);
+      if (mounted) {
+        showMessage(
+          context,
+          'กำลังตรวจงานของ ${row.studentLabel} ดึงรายการใหม่อีกครั้งในไม่กี่นาที',
+        );
+      }
+    } catch (e) {
+      if (mounted) showMessage(context, reviewActionError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final result = import?.result;
-    final running = import?.running ?? false;
+    final submission = widget.submission;
+    final progress = rowProgress(row, submission, theme.colorScheme);
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
+    final canGrade =
+        row.state.hasFiles && (submission?.regradePending ?? false);
     return Card(
       key: ValueKey('submission_${row.id}'),
       child: Padding(
@@ -378,10 +450,24 @@ class _SubmissionCard extends ConsumerWidget {
                 const SizedBox(width: 8),
               ],
             ),
-            if (row.student == null)
-              Text(
-                'บัญชีนี้ยังไม่ได้จับคู่กับนักเรียนในห้อง สแกนได้ถ้าใบงานมี QR ของนักเรียน',
-                style: muted,
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                StatusChip(
+                  key: ValueKey('progress_${row.id}'),
+                  label: progress.label,
+                  color: progress.color,
+                ),
+                if (row.late)
+                  StatusChip(label: 'ส่งช้า', color: Colors.orange.shade800),
+              ],
+            ),
+            if (progress.detail case final detail?)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(detail, key: ValueKey('progress_detail_${row.id}')),
               ),
             const SizedBox(height: 4),
             Text(
@@ -398,11 +484,6 @@ class _SubmissionCard extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text('เหตุผลที่ตีกลับ: $reason'),
               ),
-            if (row.state == SubmissionImportState.returnedForRetake)
-              Text(
-                'รอนักเรียนส่งรูปใหม่ใน Classroom แล้วกด "ดึงงานที่ส่ง" อีกครั้ง',
-                style: muted,
-              ),
             if (row.state == SubmissionImportState.gradeFailed &&
                 row.lastError != null)
               Padding(
@@ -412,74 +493,28 @@ class _SubmissionCard extends ConsumerWidget {
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ),
-            if (running) ...[
+            if (_busy) ...[
               const SizedBox(height: 8),
               const LinearProgressIndicator(),
-              const SizedBox(height: 4),
-              Text(import?.status ?? 'กำลังทำงาน…', style: muted),
-            ],
-            if (result?.interruption case final stop?)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'ยังไม่เสร็จ: $stop',
-                  key: ValueKey('interrupted_${row.id}'),
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ),
-            if (result != null) ...[
-              const SizedBox(height: 8),
-              for (final outcome in result.outcomes)
-                _OutcomeTile(
-                  outcome: outcome,
-                  onAccept: outcome is ImageRejected && outcome.canOverride
-                      ? () => ref
-                            .read(
-                              classroomImportProvider(assignmentId).notifier,
-                            )
-                            .acceptDespiteBlur(row, outcome)
-                      : null,
-                ),
-              if (result.outcomes.isEmpty && result.isComplete)
-                const _OutcomeTile(
-                  outcome: AttachmentFailed('งานนี้', reason: 'ไม่มีไฟล์แนบ'),
-                ),
             ],
             Wrap(
               spacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                TextButton.icon(
-                  key: ValueKey('scan_${row.id}'),
-                  onPressed:
-                      canScan && row.state.canScan && row.attachments.isNotEmpty
-                      ? onScan
-                      : null,
-                  icon: const Icon(Icons.document_scanner_outlined),
-                  label: Text(
-                    result == null && row.state.awaitsScan
-                        ? 'ดาวน์โหลดและสแกน'
-                        : 'สแกนอีกครั้ง',
+                if (canGrade)
+                  FilledButton.tonalIcon(
+                    key: ValueKey('grade_${row.id}'),
+                    onPressed: _busy ? null : () => _grade(submission!),
+                    icon: const Icon(Icons.fact_check_outlined),
+                    label: const Text('ตรวจ'),
                   ),
-                ),
                 if (row.state.canReturnForRetake)
-                  (result?.hasProblems ?? false)
-                      ? FilledButton.tonalIcon(
-                          key: ValueKey('return_${row.id}'),
-                          onPressed: running
-                              ? null
-                              : () => _returnForRetake(context, ref),
-                          icon: const Icon(Icons.assignment_return_outlined),
-                          label: const Text('ตีกลับให้ถ่ายใหม่'),
-                        )
-                      : TextButton.icon(
-                          key: ValueKey('return_${row.id}'),
-                          onPressed: running
-                              ? null
-                              : () => _returnForRetake(context, ref),
-                          icon: const Icon(Icons.assignment_return_outlined),
-                          label: const Text('ตีกลับให้ถ่ายใหม่'),
-                        ),
+                  TextButton.icon(
+                    key: ValueKey('return_${row.id}'),
+                    onPressed: _busy ? null : _returnForRetake,
+                    icon: const Icon(Icons.assignment_return_outlined),
+                    label: const Text('ตีกลับให้ถ่ายใหม่'),
+                  ),
                 if (row.alternateLink case final link?)
                   IconButton(
                     tooltip: 'คัดลอกลิงก์ของงานนี้ใน Classroom',
@@ -490,80 +525,6 @@ class _SubmissionCard extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _OutcomeTile extends StatelessWidget {
-  const _OutcomeTile({required this.outcome, this.onAccept});
-
-  final ImageOutcome outcome;
-  final VoidCallback? onAccept;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final ok = Colors.green.shade700;
-    final (icon, color, lines) = switch (outcome) {
-      ImageQueued(:final student, :final page, :final identityNote) => (
-        Icons.check_circle_outline,
-        ok,
-        ['ผ่าน: $student หน้า $page (อยู่ในคิวอัปโหลด)', ?identityNote],
-      ),
-      ImageAlreadyQueued(:final student, :final page) => (
-        Icons.playlist_add_check,
-        theme.colorScheme.tertiary,
-        ['ข้าม: $student หน้า $page รออยู่ในคิวอัปโหลดแล้ว ไม่ได้เพิ่มซ้ำ'],
-      ),
-      ImageNeedsMatch(:final reason) => (
-        Icons.person_search_outlined,
-        theme.colorScheme.tertiary,
-        ['ยังสแกนไม่ได้: $reason'],
-      ),
-      ImageWaitingLayout(:final page) => (
-        Icons.cloud_off_outlined,
-        theme.colorScheme.tertiary,
-        ['หน้า $page เก็บไว้ในคิว จะตัดภาพเมื่อโหลด layout ได้'],
-      ),
-      ImageRejected(:final reasons) => (
-        Icons.error_outline,
-        theme.colorScheme.error,
-        ['ต้องถ่ายใหม่: ${reasons.join(' ')}'],
-      ),
-      AttachmentFailed(:final reason) => (
-        Icons.error_outline,
-        theme.colorScheme.error,
-        ['ใช้ไม่ได้: $reason'],
-      ),
-    };
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6, right: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2, right: 8),
-            child: Icon(icon, size: 18, color: color),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(outcome.label, style: theme.textTheme.labelLarge),
-                for (final line in lines) Text(line),
-                if (onAccept != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: onAccept,
-                      child: const Text('ภาพไม่คมแต่อ่านได้ ใช้ภาพนี้ต่อ'),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

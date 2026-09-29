@@ -212,6 +212,28 @@ class FakeReviewRepository extends Fake implements ReviewRepository {
     confirmed.add(scanId);
   }
 
+  final graded = <int>[];
+
+  /// When set, gradeSubmission() throws it.
+  Object? gradeError;
+
+  @override
+  Future<void> gradeSubmission(int submissionId) async {
+    graded.add(submissionId);
+    if (gradeError case final e?) throw e;
+    if (meta?['submissions'] is! List) return;
+    meta = {
+      ...?meta,
+      'submissions': [
+        for (final s in (meta?['submissions'] as List?) ?? const [])
+          if (s is Map && s['id'] == submissionId)
+            {...s, 'regrade_pending': false, 'status': 'grading'}
+          else
+            s,
+      ],
+    };
+  }
+
   List<Map<String, dynamic>> appealRows = [];
   final resolved = <(int, String, String?, double?)>[];
 

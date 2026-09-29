@@ -1,22 +1,19 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
-import 'package:eduvision/features/google_classroom/classroom_importer.dart';
 import 'package:eduvision/features/google_classroom/google_auth.dart';
-import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
 import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/google_classroom/submissions_screen.dart';
-import 'package:eduvision/features/scan/scan_meta.dart';
-import 'package:eduvision/features/scan/scan_processor.dart';
-import 'package:eduvision/features/scan/scan_quality.dart';
+import 'package:eduvision/features/review/review_models.dart';
+import 'package:eduvision/features/review/review_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../helpers/pump_screen.dart';
-import '../scan/scan_fixtures.dart';
+import '../review/review_fixtures.dart';
 import 'google_fakes.dart';
 
 class _Assignments extends Fake implements AssignmentsRepository {
@@ -25,135 +22,40 @@ class _Assignments extends Fake implements AssignmentsRepository {
       Assignment(id: id, classroomId: 7, subjectId: 1, title: 'เศษส่วน');
 }
 
-class _Session implements DriveSession {
+/// A review repository whose queue cannot be read.
+class _BrokenQueue extends FakeReviewRepository {
   @override
-  Future<File> download(GoogleAttachment attachment, Directory directory) =>
-      throw UnimplementedError();
+  Future<ReviewQueue> queue(int assignmentId) async =>
+      throw apiError(500, {'message': 'ล่ม', 'code': 'server_error'});
 }
 
-final _blurry = ScanRejected(
-  imagePath: '/tmp/blurry.jpg',
-  capturedAt: DateTime.utc(2026, 10, 1),
-  detection: goodDetection(blur: 5),
-  source: const ScanSource.classroom(googleSubmissionId: 'Cg33'),
-  issues: const [TooBlurry(5, 60)],
-);
+const _jpg = [
+  GoogleAttachment(
+    driveFileId: 'a',
+    title: 'IMG_1.jpg',
+    mimeType: 'image/jpeg',
+  ),
+];
 
-/// Scripted importer: no Drive, no pipeline.
-class _FakeImporter extends Fake implements ClassroomImporter {
-  final imported = <int>[];
-  final emails = <String?>[];
-  final discarded = <ImageOutcome>[];
-  GoogleAuthException? authError;
+SubmissionStudent _student(int id, int number) =>
+    SubmissionStudent(id: id, name: 'นักเรียน $number', studentNumber: number);
 
-  /// Scripted per row; an [Error] or [Exception] is thrown.
-  final results = <int, Object>{};
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  Future<DriveSession> openSession({String? expectedEmail}) async {
-    emails.add(expectedEmail);
-    if (authError case final e?) throw e;
-    return _Session();
-  }
-
-  @override
-  Future<SubmissionImport> importSubmission(
-    GoogleSubmission submission, {
-    required int assignmentId,
-    required DriveSession session,
-    void Function(String status)? onProgress,
-  }) async {
-    imported.add(submission.id);
-    onProgress?.call('กำลังดาวน์โหลด…');
-    switch (results[submission.id]) {
-      case final SubmissionImport result:
-        return result;
-      case final Object error?:
-        throw error;
-      case null:
-        break;
-    }
-    return switch (submission.id) {
-      31 => SubmissionImport(
-        submissionId: 31,
-        outcomes: const [
-          ImageQueued(
-            'IMG_1.jpg',
-            clientScanId: 'scan-1',
-            page: 1,
-            student: 'ด.ญ. สมหญิง (เลขที่ 12)',
-          ),
-          ImageRejected(
-            'IMG_2.jpg',
-            reasons: [
-              'มองไม่เห็นสัญลักษณ์ที่มุมล่างขวา ถอยกล้องออกหรือจัดกระดาษให้เห็นครบทั้ง 4 มุม',
-            ],
-          ),
-        ],
-      ),
-      _ => SubmissionImport(
-        submissionId: submission.id,
-        outcomes: [
-          ImageRejected(
-            'IMG_3.jpg',
-            reasons: const ['ภาพไม่คมชัด'],
-            analysis: _blurry,
-          ),
-        ],
-      ),
-    };
-  }
-
-  @override
-  Future<ImageOutcome> acceptDespiteBlur(
-    ImageRejected rejected, {
-    required GoogleSubmission submission,
-    required int assignmentId,
-  }) async => ImageQueued(
-    rejected.label,
-    clientScanId: 'scan-9',
-    page: 2,
-    student: 'ด.ช. สมชาย (เลขที่ 13)',
-  );
-
-  @override
-  Future<void> discardPending(Iterable<ImageOutcome> outcomes) async =>
-      discarded.addAll(outcomes);
-}
-
-const _rows = [
+final _rows = [
   GoogleSubmission(
     id: 31,
     googleSubmissionId: 'Cg31',
-    state: SubmissionImportState.newSubmission,
-    student: SubmissionStudent(
-      id: 4567,
-      name: 'ด.ญ. สมหญิง',
-      studentNumber: 12,
-    ),
-    attachments: [
-      GoogleAttachment(
-        driveFileId: 'a',
-        title: 'IMG_1.jpg',
-        mimeType: 'image/jpeg',
-      ),
-      GoogleAttachment(
-        driveFileId: 'b',
-        title: 'IMG_2.jpg',
-        mimeType: 'image/jpeg',
-      ),
-    ],
+    state: SubmissionImportState.imported,
+    student: _student(4567, 12),
+    attachments: _jpg,
     alternateLink: 'https://classroom.google.com/s/31',
+    late: true,
   ),
   GoogleSubmission(
     id: 32,
     googleSubmissionId: 'Cg32',
     state: SubmissionImportState.gradeFailed,
-    student: SubmissionStudent(id: 4568, name: 'ด.ช. สมชาย', studentNumber: 13),
-    attachments: [
+    student: _student(4568, 13),
+    attachments: const [
       GoogleAttachment(
         driveFileId: 'c',
         title: 'scan.pdf',
@@ -162,30 +64,97 @@ const _rows = [
     ],
     lastError: 'ProjectPermissionDenied',
   ),
-  GoogleSubmission(
+  const GoogleSubmission(
     id: 33,
     googleSubmissionId: 'Cg33',
-    state: SubmissionImportState.needsRetake,
-    attachments: [
+    state: SubmissionImportState.newSubmission,
+    attachments: _jpg,
+  ),
+  GoogleSubmission(
+    id: 34,
+    googleSubmissionId: 'Cg34',
+    state: SubmissionImportState.unsupported,
+    student: _student(4569, 14),
+    attachments: const [
       GoogleAttachment(
         driveFileId: 'd',
-        title: 'IMG_3.jpg',
-        mimeType: 'image/jpeg',
+        title: 'งาน.docx',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ),
     ],
-    retakeReason: 'เงาบัง QR',
+    lastError: 'ไฟล์ Word ตรวจไม่ได้',
+  ),
+  GoogleSubmission(
+    id: 35,
+    googleSubmissionId: 'Cg35',
+    state: SubmissionImportState.waitingKey,
+    student: _student(4570, 15),
+    attachments: _jpg,
+  ),
+  GoogleSubmission(
+    id: 36,
+    googleSubmissionId: 'Cg36',
+    state: SubmissionImportState.imported,
+    student: _student(4571, 16),
+    attachments: _jpg,
+  ),
+  GoogleSubmission(
+    id: 37,
+    googleSubmissionId: 'Cg37',
+    state: SubmissionImportState.rejectedLate,
+    student: _student(4572, 17),
+    attachments: _jpg,
+    late: true,
+  ),
+  GoogleSubmission(
+    id: 38,
+    googleSubmissionId: 'Cg38',
+    state: SubmissionImportState.newSubmission,
+    student: _student(4573, 18),
+    attachments: _jpg,
+    lastError: 'ต้องเชื่อมบัญชี Google ใหม่',
   ),
 ];
 
-Future<(FakeGoogleRepository, _FakeImporter)> _pump(
+Map<String, dynamic> _summary(
+  int id,
+  int studentId,
+  String status, {
+  bool regradePending = false,
+  int responses = 3,
+  int reviewed = 1,
+  double? total,
+}) => {
+  'id': id,
+  'status': status,
+  'student': {'id': studentId, 'name': 'x', 'student_number': null},
+  'channel': 'classroom',
+  'late': false,
+  'regrade_pending': regradePending,
+  'response_count': responses,
+  'reviewed_count': reviewed,
+  'total_score': total,
+};
+
+Map<String, dynamic> _meta() => {
+  'submissions': [
+    _summary(70, 4567, 'needs_review'),
+    _summary(71, 4568, 'published', total: 8, reviewed: 3),
+    _summary(72, 4571, 'published', regradePending: true, total: 5),
+  ],
+};
+
+Future<(FakeGoogleRepository, FakeReviewRepository)> _pump(
   WidgetTester tester, {
   FakeGoogleRepository? google,
+  FakeReviewRepository? review,
 }) async {
-  tester.view.physicalSize = const Size(1000, 3000);
+  tester.view.physicalSize = const Size(1000, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final repo = google ?? FakeGoogleRepository(submissionRows: _rows);
-  final importer = _FakeImporter();
+  final reviews = review ?? FakeReviewRepository(meta: _meta());
   await pumpScreen(
     tester,
     const GoogleSubmissionsScreen(assignmentId: 12),
@@ -194,119 +163,135 @@ Future<(FakeGoogleRepository, _FakeImporter)> _pump(
       googleClassroomRepositoryProvider.overrideWithValue(repo),
       googleAuthProvider.overrideWithValue(FakeGoogleAuth()),
       assignmentsRepositoryProvider.overrideWithValue(_Assignments()),
-      classroomImporterProvider.overrideWithValue(importer),
+      reviewRepositoryProvider.overrideWithValue(reviews),
+    ],
+    extraRoutes: [
+      GoRoute(
+        path: '/assignments/:id/review',
+        builder: (_, state) =>
+            Scaffold(body: Text('review-${state.pathParameters['id']}')),
+      ),
     ],
   );
-  return (repo, importer);
+  return (repo, reviews);
 }
 
-ButtonStyleButton _button(WidgetTester tester, String key) =>
-    tester.widget<ButtonStyleButton>(find.byKey(ValueKey(key)));
+String _progress(WidgetTester tester, int row) {
+  final chip = find.byKey(ValueKey('progress_$row'));
+  return tester
+      .widgetList<Text>(find.descendant(of: chip, matching: find.byType(Text)))
+      .map((t) => t.data)
+      .join();
+}
 
-GoogleSubmission _row(int id, SubmissionImportState state) => GoogleSubmission(
-  id: id,
-  googleSubmissionId: 'Cg$id',
-  state: state,
-  student: SubmissionStudent(id: 4500 + id, name: 'นักเรียน $id'),
-  attachments: const [
-    GoogleAttachment(
-      driveFileId: 'x',
-      title: 'IMG.jpg',
-      mimeType: 'image/jpeg',
-    ),
-  ],
-);
-
-/// DESIGN §18.7: the submissions list with states, download-and-scan (all
-/// or one), the result of every picture and "ตีกลับให้ถ่ายใหม่".
+/// DESIGN §19.4: the server downloads and grades Classroom hand-ins; the
+/// screen shows the sync state and the grading state of every row.
 void main() {
-  testWidgets('lists every submission with its state', (tester) async {
+  testWidgets('shows the sync and grading state of every hand-in', (
+    tester,
+  ) async {
     await _pump(tester);
 
     expect(find.text('งานที่ส่ง: เศษส่วน'), findsOneWidget);
-    expect(find.text('ส่งใน Classroom 3 คน'), findsOneWidget);
+    expect(find.text('ส่งใน Classroom 8 คน'), findsOneWidget);
     expect(
-      find.text('ส่งแล้ว รอสแกน 1 · ต้องถ่ายใหม่ 1 · ส่งคะแนนกลับไม่สำเร็จ 1'),
+      find.text(
+        'รอดาวน์โหลด 2 · รับไฟล์แล้ว 2 · รออนุมัติเฉลย 1 · ไฟล์ใช้ไม่ได้ 1 · '
+        'ส่งช้า ไม่รับ 1 · ส่งคะแนนกลับไม่สำเร็จ 1 · ส่งช้า 2',
+      ),
       findsOneWidget,
     );
-    expect(find.text('ด.ญ. สมหญิง (เลขที่ 12)'), findsOneWidget);
-    expect(find.text('ยังไม่ได้จับคู่นักเรียน'), findsOneWidget);
-    expect(find.text('เหตุผลที่ตีกลับ: เงาบัง QR'), findsOneWidget);
+    // Nothing is downloaded or scanned on the phone any more.
+    expect(find.textContaining('สแกนทั้งหมด'), findsNothing);
+    expect(find.textContaining('ไม่ต้องสแกนในเครื่องนี้'), findsOneWidget);
+
+    expect(_progress(tester, 31), 'รอครูตรวจทาน');
+    expect(find.text('AI ตรวจแล้ว ตรวจทานแล้ว 1/3 ข้อ'), findsOneWidget);
+    expect(_progress(tester, 32), 'เผยแพร่ผลแล้ว');
+    expect(find.text('คะแนนรวม 8'), findsOneWidget);
+    expect(_progress(tester, 33), 'ยังไม่ได้จับคู่นักเรียน');
+    expect(_progress(tester, 34), 'ตรวจไม่ได้');
+    expect(
+      find.textContaining('ใช้ไม่ได้: ไฟล์ Word ตรวจไม่ได้'),
+      findsOneWidget,
+    );
+    expect(_progress(tester, 35), 'รออนุมัติเฉลย');
+    expect(_progress(tester, 36), 'ส่งใหม่ รอครูกดตรวจ');
+    expect(_progress(tester, 37), 'ไม่รับงานส่งช้า');
+    expect(_progress(tester, 38), 'รอดาวน์โหลด');
+    expect(
+      find.text('ยังดาวน์โหลดไม่ได้: ต้องเชื่อมบัญชี Google ใหม่'),
+      findsOneWidget,
+    );
     expect(find.textContaining('ProjectPermissionDenied'), findsOneWidget);
-    expect(find.text('ดาวน์โหลดและสแกนทั้งหมด (2)'), findsOneWidget);
     expect(find.text('ส่งคะแนนกลับอีกครั้ง (1)'), findsOneWidget);
-    expect(_button(tester, 'scan_31').onPressed, isNotNull);
-    expect(
-      _button(tester, 'scan_32').onPressed,
-      isNull,
-      reason: 'grade_failed work was already graded and published',
-    );
+    expect(find.text('มี 1 คนส่งงานใหม่ รอครูกด "ตรวจ"'), findsOneWidget);
+
+    // "ตรวจ" only for the new hand-in that waits for the teacher.
+    expect(find.byKey(const ValueKey('grade_36')), findsOneWidget);
+    expect(find.byKey(const ValueKey('grade_31')), findsNothing);
+    // Returnable states follow the server (new, imported, needs_retake).
+    expect(find.byKey(const ValueKey('return_31')), findsOneWidget);
+    expect(find.byKey(const ValueKey('return_33')), findsOneWidget);
+    expect(find.byKey(const ValueKey('return_32')), findsNothing);
+    expect(find.byKey(const ValueKey('return_34')), findsNothing);
   });
 
-  testWidgets('download-and-scan all shows the result of each picture', (
+  testWidgets('"ตรวจ" grades the new hand-in and shows it grading', (
     tester,
   ) async {
-    final (_, importer) = await _pump(tester);
+    final (_, reviews) = await _pump(tester);
+    final calls = reviews.queueCalls;
 
-    await tester.tap(find.byKey(const ValueKey('import_all')));
+    await tester.tap(find.byKey(const ValueKey('grade_36')));
     await tester.pumpAndSettle();
 
-    expect(importer.imported, [
-      31,
-      33,
-    ], reason: 'only rows waiting to be scanned');
-    expect(importer.emails, ['kru@school.ac.th']);
+    expect(reviews.graded, [72]);
+    expect(reviews.queueCalls, greaterThan(calls), reason: 'queue reloads');
+    expect(_progress(tester, 36), 'AI กำลังตรวจ');
+    expect(find.byKey(const ValueKey('grade_36')), findsNothing);
     expect(
-      find.text('ผ่าน: ด.ญ. สมหญิง (เลขที่ 12) หน้า 1 (อยู่ในคิวอัปโหลด)'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('ต้องถ่ายใหม่: มองไม่เห็นสัญลักษณ์'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('สแกนแล้ว 1 หน้า มี 2 งานที่ต้องให้นักเรียนถ่ายใหม่'),
+      find.text(
+        'กำลังตรวจงานของ นักเรียน 16 (เลขที่ 16) ดึงรายการใหม่อีกครั้งในไม่กี่นาที',
+      ),
       findsOneWidget,
     );
   });
 
-  testWidgets('a blurry picture can be kept with one tap', (tester) async {
-    final (_, importer) = await _pump(tester);
-    await tester.tap(find.byKey(const ValueKey('scan_33')));
+  testWidgets('nothing to grade any more is explained', (tester) async {
+    final reviews = FakeReviewRepository(meta: _meta())
+      ..gradeError = apiError(409, {
+        'message': 'ไม่มีงาน',
+        'errors': null,
+        'code': 'nothing_to_grade',
+      });
+    await _pump(tester, review: reviews);
+    await tester.tap(find.byKey(const ValueKey('grade_36')));
     await tester.pumpAndSettle();
-    expect(importer.imported, [33]);
-
-    await tester.tap(find.text('ภาพไม่คมแต่อ่านได้ ใช้ภาพนี้ต่อ'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('ผ่าน: ด.ช. สมชาย (เลขที่ 13) หน้า 2 (อยู่ในคิวอัปโหลด)'),
-      findsOneWidget,
-    );
+    expect(find.text('ไม่มีงานที่ส่งใหม่รอตรวจแล้ว'), findsOneWidget);
   });
 
-  testWidgets('return for retake pre-fills the reasons and posts them', (
-    tester,
-  ) async {
+  testWidgets('without the review queue the rows still show', (tester) async {
+    await _pump(tester, review: _BrokenQueue());
+    expect(_progress(tester, 31), 'รับไฟล์แล้ว');
+    expect(find.text('กำลังเริ่มตรวจ'), findsWidgets);
+    expect(find.byKey(const ValueKey('grade_36')), findsNothing);
+  });
+
+  testWidgets('return for retake posts the reason', (tester) async {
     final (repo, _) = await _pump(tester);
-    await tester.tap(find.byKey(const ValueKey('scan_31')));
-    await tester.pumpAndSettle();
-
     await tester.tap(find.byKey(const ValueKey('return_31')));
     await tester.pumpAndSettle();
-    final field = tester.widget<TextField>(
-      find.byKey(const ValueKey('retake_reason')),
-    );
-    expect(field.controller!.text, contains('มุมล่างขวา'));
-
     await tester.enterText(
       find.byKey(const ValueKey('retake_reason')),
-      'ถ่ายให้เห็นมุมล่างขวาด้วย',
+      'ถ่ายให้เห็นทั้งหน้า',
     );
     await tester.tap(find.byKey(const ValueKey('retake_confirm')));
     await tester.pumpAndSettle();
 
-    expect(repo.returns.single, (31, 'ถ่ายให้เห็นมุมล่างขวาด้วย'));
+    expect(repo.returns.single, (31, 'ถ่ายให้เห็นทั้งหน้า'));
     expect(find.text('ตีกลับให้ถ่ายใหม่แล้ว'), findsOneWidget);
+    expect(_progress(tester, 31), 'รอส่งใหม่');
     expect(
       find.text('ส่งคืนงานใน Classroom และแจ้งนักเรียนแล้ว'),
       findsOneWidget,
@@ -334,54 +319,23 @@ void main() {
     expect(find.text('กำลังส่งคะแนนกลับอีกครั้ง 1 คน'), findsOneWidget);
   });
 
-  testWidgets('on the web: no scanning, everything else works', (tester) async {
-    tester.view.physicalSize = const Size(1000, 3000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final repo = FakeGoogleRepository(submissionRows: _rows);
-    await pumpScreen(
-      tester,
-      const GoogleSubmissionsScreen(assignmentId: 12),
-      overrides: [
-        googleClassroomEnabledProvider.overrideWithValue(true),
-        googleClassroomRepositoryProvider.overrideWithValue(repo),
-        googleAuthProvider.overrideWithValue(const DisabledGoogleAuth()),
-        assignmentsRepositoryProvider.overrideWithValue(_Assignments()),
-        // What kIsWeb gives: the importer (drift, dart:io, the native
-        // pipeline) is never built.
-        classroomScanSupportedProvider.overrideWithValue(false),
-        classroomImporterProvider.overrideWith(
-          (ref) => throw StateError('the importer was built on the web'),
-        ),
-      ],
-    );
-
-    expect(find.byKey(const ValueKey('phone_only_note')), findsOneWidget);
-    expect(
-      find.textContaining('ดาวน์โหลดและสแกนงานที่ส่งต้องทำบนแอป Android'),
-      findsOneWidget,
-    );
-    expect(_button(tester, 'import_all').onPressed, isNull);
-    expect(_button(tester, 'scan_31').onPressed, isNull);
-    expect(find.text('ส่งใน Classroom 3 คน'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('return_33')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('retake_reason')),
-      'ถ่ายใหม่ให้เห็น QR',
-    );
-    await tester.tap(find.byKey(const ValueKey('retake_confirm')));
-    await tester.pumpAndSettle();
-    expect(repo.returns.single, (33, 'ถ่ายใหม่ให้เห็น QR'));
-
-    await tester.tap(find.byKey(const ValueKey('retry_grades')));
-    await tester.pumpAndSettle();
-    expect(repo.retries, 1);
-
+  testWidgets('refresh syncs again and reloads the grading state', (
+    tester,
+  ) async {
+    final (repo, reviews) = await _pump(tester);
+    final loads = repo.submissionLoads;
+    final queues = reviews.queueCalls;
     await tester.tap(find.byTooltip('ดึงงานที่ส่งอีกครั้ง'));
     await tester.pumpAndSettle();
-    expect(repo.submissionLoads, greaterThanOrEqualTo(3));
+    expect(repo.submissionLoads, loads + 1);
+    expect(reviews.queueCalls, greaterThan(queues));
+  });
+
+  testWidgets('"ตรวจทาน" opens the review queue', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('open_review')));
+    await tester.pumpAndSettle();
+    expect(find.text('review-12'), findsOneWidget);
   });
 
   testWidgets('an expired connection says to reconnect', (tester) async {
@@ -404,135 +358,85 @@ void main() {
     expect(find.textContaining('กด "เชื่อมใหม่"'), findsOneWidget);
   });
 
-  testWidgets('leaving the screen deletes pictures kept for a decision', (
-    tester,
-  ) async {
-    final (_, importer) = await _pump(tester);
-    await tester.tap(find.byKey(const ValueKey('scan_33')));
-    await tester.pumpAndSettle();
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(importer.discarded.whereType<ImageRejected>(), hasLength(1));
-  });
-
-  testWidgets('returned and graded rows cannot be scanned again', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      google: FakeGoogleRepository(
-        submissionRows: [
-          _row(41, SubmissionImportState.returnedForRetake),
-          _row(42, SubmissionImportState.graded),
-          _row(43, SubmissionImportState.imported),
-          _row(44, SubmissionImportState.needsRetake),
-        ],
-      ),
-    );
-    expect(_button(tester, 'scan_41').onPressed, isNull);
-    expect(_button(tester, 'scan_42').onPressed, isNull);
-    expect(_button(tester, 'scan_43').onPressed, isNotNull);
-    expect(_button(tester, 'scan_44').onPressed, isNotNull);
+  testWidgets('no hand-ins yet', (tester) async {
+    await _pump(tester, google: FakeGoogleRepository());
     expect(
-      find.textContaining('รอนักเรียนส่งรูปใหม่ใน Classroom'),
+      find.text('ยังไม่มีนักเรียนส่งงานใน Classroom ที่มีไฟล์แนบ'),
       findsOneWidget,
     );
   });
 
-  testWidgets('a sign-in refused part way stops the batch and frees the '
-      'buttons', (tester) async {
-    final (_, importer) = await _pump(tester);
-    importer.results[31] = SubmissionImport(
-      submissionId: 31,
-      outcomes: const [
-        ImageQueued(
-          'IMG_1.jpg',
-          clientScanId: 'scan-1',
-          page: 1,
-          student: 'ด.ญ. สมหญิง (เลขที่ 12)',
-        ),
-      ],
-      interruption: const GoogleAuthCanceled().message,
-      authFailure: const GoogleAuthCanceled(),
+  group('rowProgress', () {
+    final scheme = ColorScheme.fromSeed(seedColor: Colors.teal);
+    GoogleSubmission row(SubmissionImportState state) => GoogleSubmission(
+      id: 1,
+      googleSubmissionId: 'x',
+      state: state,
+      student: _student(1, 1),
+    );
+    SubmissionSummary summary(String status) => SubmissionSummary.fromJson(
+      _summary(9, 1, status, responses: 4, reviewed: 4),
     );
 
-    await tester.tap(find.byKey(const ValueKey('import_all')));
-    await tester.pumpAndSettle();
+    test('follows the submission once the server holds the files', () {
+      final graded = row(SubmissionImportState.graded);
+      expect(
+        rowProgress(graded, summary('grading'), scheme).label,
+        'AI กำลังตรวจ',
+      );
+      expect(
+        rowProgress(graded, summary('reviewed'), scheme).label,
+        'ตรวจทานครบ รอเผยแพร่',
+      );
+      expect(
+        rowProgress(graded, summary('awaiting_scan'), scheme).label,
+        'รอตรวจ',
+      );
+      expect(
+        rowProgress(graded, summary('published'), scheme).detail,
+        isNull,
+        reason: 'no total yet',
+      );
+    });
 
-    expect(importer.imported, [31], reason: 'row 33 is not started');
-    expect(
-      find.text(
-        'หยุดดาวน์โหลดและสแกนแล้ว เพราะปิดหน้าลงชื่อเข้าใช้ Google '
-        '(เสร็จ 0 จาก 2 งาน กดดาวน์โหลดอีกครั้งเพื่อทำต่อ)',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.text('ยังไม่เสร็จ: ${const GoogleAuthCanceled().message}'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('ผ่าน: ด.ญ. สมหญิง (เลขที่ 12) หน้า 1 (อยู่ในคิวอัปโหลด)'),
-      findsOneWidget,
-    );
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(_button(tester, 'import_all').onPressed, isNotNull);
-    expect(_button(tester, 'scan_31').onPressed, isNotNull);
+    test('legacy needs_retake rows ask for a new photo', () {
+      final p = rowProgress(
+        row(SubmissionImportState.needsRetake),
+        null,
+        scheme,
+      );
+      expect(p.label, 'ต้องถ่ายใหม่');
+    });
   });
 
-  testWidgets('an unexpected error does not leave the row spinning', (
-    tester,
-  ) async {
-    final (_, importer) = await _pump(tester);
-    importer.results[33] = StateError('plugin gone');
-
-    await tester.tap(find.byKey(const ValueKey('scan_33')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('ยังไม่เสร็จ: ดาวน์โหลดหรือสแกนไม่สำเร็จ ลองอีกครั้ง'),
-      findsOneWidget,
-    );
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(_button(tester, 'scan_33').onPressed, isNotNull);
-  });
-
-  testWidgets('unmatched spare sheets and pages already queued are explained', (
-    tester,
-  ) async {
-    final (_, importer) = await _pump(tester);
-    importer.results[33] = const SubmissionImport(
-      submissionId: 33,
-      outcomes: [
-        ImageNeedsMatch('IMG_3.jpg'),
-        ImageAlreadyQueued(
-          'IMG_4.jpg',
-          page: 2,
-          student: 'ด.ช. สมชาย (เลขที่ 13)',
-        ),
-      ],
-    );
-
-    await tester.tap(find.byKey(const ValueKey('scan_33')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.textContaining('ยังสแกนไม่ได้: ใบงานสำรองไม่มีชื่อนักเรียน'),
-      findsOneWidget,
-    );
-    expect(
-      find.text(
-        'ข้าม: ด.ช. สมชาย (เลขที่ 13) หน้า 2 รออยู่ในคิวอัปโหลดแล้ว ไม่ได้เพิ่มซ้ำ',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.text(
-        'สแกนแล้ว 0 หน้า ข้าม 1 หน้าที่อยู่ในคิวแล้ว '
-        'มี 1 งานที่ต้องจับคู่นักเรียนก่อน',
-      ),
-      findsOneWidget,
-    );
+  group('GoogleSubmission.fromJson', () {
+    test('reads the Phase 8 states and the late flag', () {
+      final s = GoogleSubmission.fromJson({
+        'id': 5,
+        'google_submission_id': 'Cg5',
+        'state': 'unsupported',
+        'student': null,
+        'late': true,
+        'attachments': <Object>[],
+        'last_error': 'ไฟล์ใหญ่เกิน 10 MB',
+        'updated_at': '2026-09-30T01:00:00Z',
+      });
+      expect(s.state, SubmissionImportState.unsupported);
+      expect(s.late, isTrue);
+      expect(s.lastError, 'ไฟล์ใหญ่เกิน 10 MB');
+      expect(s.updatedAt, DateTime.utc(2026, 9, 30, 1));
+      expect(
+        SubmissionImportState.fromApi('waiting_key'),
+        SubmissionImportState.waitingKey,
+      );
+      expect(
+        SubmissionImportState.fromApi('rejected_late'),
+        SubmissionImportState.rejectedLate,
+      );
+      expect(
+        SubmissionImportState.fromApi('???'),
+        SubmissionImportState.newSubmission,
+      );
+    });
   });
 }

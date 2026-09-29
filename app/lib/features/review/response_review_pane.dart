@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
+import '../../core/widgets/submission_page_image.dart';
 import 'extraction_view.dart';
 import 'fuzzy_trace.dart';
 import 'review_labels.dart';
@@ -245,6 +246,20 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
               StatusChip(label: 'ตรวจเอง', color: theme.colorScheme.error)
             else if (d.band != null)
               StatusChip(label: d.band!.label),
+            if (d.late)
+              StatusChip(label: 'ส่งช้า', color: Colors.orange.shade800),
+            if (d.isWholePage)
+              StatusChip(
+                label: 'ตรวจจากรูปทั้งหน้า',
+                color: theme.colorScheme.secondary,
+              ),
+            if (d.cnnText case final text? when text.isNotEmpty)
+              StatusChip(
+                label: 'อ่านด้วย CNN',
+                color: theme.colorScheme.secondary,
+              ),
+            if (d.extraction?['blank'] == true)
+              const StatusChip(label: 'ไม่ได้ตอบ', color: Colors.grey),
             if (d.isReviewed)
               StatusChip(label: 'ตรวจทานแล้ว', color: Colors.green.shade700),
             if (d.isPublished)
@@ -262,7 +277,16 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 'ลายมือในข้อนี้มีข้อความที่พยายามสั่งผู้ตรวจหรือขอคะแนน '
                 'ตรวจด้วยตัวเองก่อนยืนยัน ข้อนี้อนุมัติแบบกลุ่มไม่ได้',
           ),
-        if (d.isManual)
+        if (d.answerNotFound)
+          const _Notice(
+            key: ValueKey('answer_not_found_notice'),
+            icon: Icons.search_off,
+            error: true,
+            text:
+                'หาคำตอบข้อนี้ในภาพไม่เจอ AI จับคู่คำตอบกับข้อนี้ไม่ได้ในทุกหน้าที่ส่ง '
+                'ดูภาพทั้งหน้าแล้วให้คะแนนเอง ข้อนี้อนุมัติแบบกลุ่มไม่ได้',
+          )
+        else if (d.isManual)
           _Notice(
             icon: Icons.back_hand_outlined,
             error: d.manualReason == 'ai_key_missing',
@@ -300,9 +324,25 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
           ],
         ),
         _Section(
-          title: 'ภาพคำตอบ',
+          title: d.isWholePage ? 'ภาพงานทั้งหน้า' : 'ภาพคำตอบ',
           children: [
-            if (d.hasCrop)
+            if (d.submissionPageId case final pageId?) ...[
+              SubmissionPageImage(
+                key: ValueKey('page_$pageId'),
+                pageId: pageId,
+                mimeType: d.pageMimeType,
+                answerBox: d.answerBox,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                d.answerBox != null
+                    ? 'กรอบสีแดงคือตำแหน่งคำตอบที่ AI พบ แตะภาพเพื่อขยาย'
+                    : d.answerNotFound
+                    ? 'AI ไม่พบตำแหน่งคำตอบของข้อนี้ในภาพ แตะภาพเพื่อขยาย'
+                    : 'แตะภาพเพื่อขยาย',
+                style: muted,
+              ),
+            ] else if (d.hasCrop)
               ResponseCropImage(responseId: d.id)
             else
               Text('ไม่มีภาพของข้อนี้', style: muted),
@@ -341,10 +381,24 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 helperText: d.explanationEdited
-                    ? 'แก้โดยครูแล้ว · นักเรียนเห็นหลังเผยแพร่'
-                    : 'นักเรียนเห็นข้อความนี้หลังเผยแพร่',
+                    ? 'แก้โดยครูแล้ว · ใช้แทนข้อความของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom'
+                    : 'แก้ได้ก่อนเผยแพร่ · ข้อความที่แก้ใช้แทนของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom',
+                helperMaxLines: 3,
               ),
             ),
+            if (d.hasAiOriginal)
+              _AiOriginal(
+                text: d.aiExplanation!,
+                onUse: _busy
+                    ? null
+                    : () {
+                        _explanation.text = d.aiExplanation!;
+                        showMessage(
+                          context,
+                          'ใส่ข้อความเดิมของ AI แล้ว กดบันทึกเพื่อใช้ข้อความนี้',
+                        );
+                      },
+              ),
             if (d.nextStep case final next? when next.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -520,8 +574,52 @@ class _Section extends StatelessWidget {
   }
 }
 
+/// Gemini's original explanation, kept once the teacher edited it
+/// (`responses.ai_explanation`, DESIGN §19.4).
+class _AiOriginal extends StatelessWidget {
+  const _AiOriginal({required this.text, required this.onUse});
+
+  final String text;
+  final VoidCallback? onUse;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ExpansionTile(
+      key: const ValueKey('ai_original'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+      leading: const Icon(Icons.history),
+      title: const Text('ดูข้อความเดิมของ AI'),
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(text, key: const ValueKey('ai_original_text')),
+        ),
+        TextButton.icon(
+          key: const ValueKey('use_ai_original'),
+          onPressed: onUse,
+          icon: const Icon(Icons.restore),
+          label: const Text('ใช้ข้อความของ AI'),
+        ),
+      ],
+    );
+  }
+}
+
 class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text, this.error = false});
+  const _Notice({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.error = false,
+  });
 
   final IconData icon;
   final String text;

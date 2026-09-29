@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -144,19 +143,15 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
               const SizedBox(height: 8),
             ],
             const Text(
-              'โพสต์การบ้านลง Classroom ดึงรูปที่นักเรียนส่งมาสแกนในเครื่องนี้ '
+              'โพสต์การบ้านลง Classroom ตรวจรูปหรือ PDF ที่นักเรียนส่งจากทั้งหน้า '
               'และส่งคะแนนกลับเมื่อเผยแพร่ผล นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
             ),
             const SizedBox(height: 4),
             Text(
-              'รูปของนักเรียนดาวน์โหลดตรงจาก Google Drive มาที่เครื่องนี้ ไม่ผ่านเซิร์ฟเวอร์ '
-              'เซิร์ฟเวอร์เก็บเฉพาะสิทธิ์ที่ใช้สร้างงานและส่งคะแนน (เข้ารหัสไว้)',
+              'เซิร์ฟเวอร์ดาวน์โหลดไฟล์ที่นักเรียนส่งจาก Google Drive ด้วยสิทธิ์ของบัญชีนี้ (เก็บสิทธิ์แบบเข้ารหัส) '
+              'ไฟล์งานเก็บตามนโยบายเดียวกับภาพใบงาน และส่งให้ AI ตรวจโดยไม่ส่งชื่อนักเรียนไปด้วย',
               style: muted,
             ),
-            if (kIsWeb) ...[
-              const SizedBox(height: 4),
-              Text(phoneOnlyScanNote, style: muted),
-            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,

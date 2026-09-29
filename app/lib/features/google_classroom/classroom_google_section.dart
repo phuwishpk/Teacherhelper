@@ -14,7 +14,7 @@ import 'google_repository.dart';
 /// shown when linking a course and when posting.
 const gradeReturnNote =
     'ส่งคะแนนกลับ Classroom ได้เฉพาะงานที่สั่งผ่านปุ่ม "โพสต์ลง Classroom" ในแอป '
-    'งานที่สร้างในเว็บ Classroom เองดึงรูปมาสแกนได้ แต่ส่งคะแนนกลับไม่ได้';
+    'งานที่สร้างในเว็บ Classroom เองดึงงานที่ส่งมาตรวจได้ แต่ส่งคะแนนกลับไม่ได้';
 
 /// "Google Classroom" card on the classroom detail (DESIGN §18.7): link a
 /// course, match students, unlink. Hidden unless the server has Google
@@ -160,7 +160,7 @@ class _ClassroomGoogleSectionState
             ] else ...[
               const Text(
                 'ผูกห้องนี้กับคอร์สใน Google Classroom เพื่อโพสต์การบ้าน '
-                'ดึงรูปที่นักเรียนส่งมาสแกน และส่งคะแนนกลับ',
+                'ตรวจงานที่นักเรียนส่ง และส่งคะแนนกลับ',
               ),
               const SizedBox(height: 4),
               Text(gradeReturnNote, style: muted),

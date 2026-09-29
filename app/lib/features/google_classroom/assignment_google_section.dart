@@ -126,8 +126,8 @@ class _AssignmentGoogleSectionState
         ],
         const SizedBox(height: 4),
         Text(
-          'นักเรียนถ่ายรูปใบงานส่งใน Classroom ครูกด "ดึงงานที่ส่ง" เพื่อดาวน์โหลดมาสแกน '
-          'เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom ให้เอง',
+          'นักเรียนถ่ายรูปหรือแนบ PDF ส่งใน Classroom เซิร์ฟเวอร์ดาวน์โหลดไฟล์และให้ AI ตรวจจากรูปทั้งหน้าเอง '
+          'กด "ดึงงานที่ส่ง" เพื่อดูสถานะ เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom ให้เอง',
           style: muted,
         ),
         const SizedBox(height: 12),

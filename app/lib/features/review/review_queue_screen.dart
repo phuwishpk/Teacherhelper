@@ -48,11 +48,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     }
   }
 
-  static String _actionError(Object e) => switch (apiErrorCode(e)) {
-    'ai_key_missing' =>
-      'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง',
-    _ => apiErrorMessage(e),
-  };
+  static String _actionError(Object e) => reviewActionError(e);
 
   Future<void> _publishAll(ReviewQueue q) async {
     final ready = q.publishableCount;
@@ -108,6 +104,24 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     await _run(() async {
       await _queue.publishSubmission(s.id);
       return 'เผยแพร่ผลของ $name แล้ว';
+    });
+  }
+
+  Future<void> _grade(SubmissionSummary s) async {
+    final name = s.student?.label ?? 'นักเรียนคนนี้';
+    final ok = await confirm(
+      context,
+      title: 'ตรวจงานที่ $name ส่งใหม่?',
+      message: s.isPublished
+          ? 'ผลเดิมเผยแพร่แล้ว ถ้าตรวจใหม่ นักเรียนจะเห็นผลใหม่หลังคุณเผยแพร่อีกครั้ง '
+                'AI จะอ่านงานที่ส่งใหม่ทั้งหน้า (ใช้ Gemini หนึ่งครั้งต่อหน้า)'
+          : 'AI จะอ่านงานที่ส่งใหม่ทั้งหน้าแทนผลเดิม (ใช้ Gemini หนึ่งครั้งต่อหน้า)',
+      confirmLabel: 'ตรวจ',
+    );
+    if (!ok) return;
+    await _run(() async {
+      await _queue.gradeSubmission(s.id);
+      return 'กำลังตรวจงานของ $name ดึงรายการใหม่อีกครั้งในไม่กี่นาที';
     });
   }
 
@@ -212,6 +226,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                       submissions: q.submissions,
                       busy: _busy,
                       onPublish: _publishSubmission,
+                      onGrade: _grade,
                     ),
                   ],
                 ),
@@ -371,7 +386,9 @@ class ReviewItemTile extends StatelessWidget {
     final theme = Theme.of(context);
     final error = theme.colorScheme.error;
     final chips = <Widget>[
-      if (item.isManual)
+      if (item.answerNotFound)
+        StatusChip(label: 'หาคำตอบในภาพไม่เจอ', color: error)
+      else if (item.isManual)
         StatusChip(
           label: item.missingAiKey ? 'ตรวจเอง · ไม่มี key' : 'ตรวจเอง',
           color: error,
@@ -485,40 +502,83 @@ class _SubmissionsTab extends StatelessWidget {
     required this.submissions,
     required this.busy,
     required this.onPublish,
+    required this.onGrade,
   });
 
   final List<SubmissionSummary> submissions;
   final bool busy;
   final ValueChanged<SubmissionSummary> onPublish;
+  final ValueChanged<SubmissionSummary> onGrade;
 
   @override
   Widget build(BuildContext context) {
     if (submissions.isEmpty) {
       return const EmptyView(
         icon: Icons.people_outline,
-        title: 'ยังไม่มีใบงานที่สแกน',
-        message: 'สแกนใบงานของนักเรียนก่อน แล้วผลจะมาอยู่ที่นี่',
+        title: 'ยังไม่มีงานที่ส่ง',
+        message:
+            'สแกนใบงานของนักเรียน หรือรองานที่ส่งใน Google Classroom แล้วผลจะมาอยู่ที่นี่',
       );
     }
+    final theme = Theme.of(context);
     return ContentColumn(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
       child: ListView(
         children: [
           for (final s in submissions)
             Card(
+              key: ValueKey('submission_summary_${s.id}'),
               child: ListTile(
                 leading: CircleAvatar(
                   child: Text('${s.student?.studentNumber ?? '?'}'),
                 ),
                 title: Text(s.student?.name ?? 'submission #${s.id}'),
-                subtitle: Text(
-                  'ตรวจทานแล้ว ${s.reviewedCount}/${s.responseCount} ข้อ'
-                  '${s.totalScore == null ? '' : ' · รวม ${formatScore(s.totalScore)} คะแนน'}',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s.isGrading && s.responseCount == 0
+                          ? 'AI กำลังตรวจ'
+                          : 'ตรวจทานแล้ว ${s.reviewedCount}/${s.responseCount} ข้อ'
+                                '${s.totalScore == null ? '' : ' · รวม ${formatScore(s.totalScore)} คะแนน'}',
+                    ),
+                    if (s.late || s.regradePending || s.isGrading)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (s.late)
+                              StatusChip(
+                                label: 'ส่งช้า',
+                                color: Colors.orange.shade800,
+                              ),
+                            if (s.regradePending)
+                              StatusChip(
+                                label: 'ส่งใหม่ รอครูกดตรวจ',
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            if (s.isGrading)
+                              StatusChip(
+                                label: 'AI กำลังตรวจ',
+                                color: theme.colorScheme.outline,
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-                trailing: s.isPublished
+                trailing: s.regradePending
+                    ? FilledButton.tonal(
+                        key: ValueKey('grade_${s.id}'),
+                        onPressed: busy ? null : () => onGrade(s),
+                        child: const Text('ตรวจ'),
+                      )
+                    : s.isPublished
                     ? StatusChip(
                         label: 'เผยแพร่แล้ว',
-                        color: Theme.of(context).colorScheme.outline,
+                        color: theme.colorScheme.outline,
                       )
                     : FilledButton.tonal(
                         onPressed: busy || !s.canPublish
@@ -533,3 +593,11 @@ class _SubmissionsTab extends StatelessWidget {
     );
   }
 }
+
+/// Thai message for a failed review action.
+String reviewActionError(Object e) => switch (apiErrorCode(e)) {
+  'ai_key_missing' =>
+    'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง',
+  'nothing_to_grade' => 'ไม่มีงานที่ส่งใหม่รอตรวจแล้ว',
+  _ => apiErrorMessage(e),
+};

@@ -304,12 +304,18 @@ class GoogleRosterEntry {
       );
 }
 
-/// `classroom_submission_imports.state` (DESIGN §18.4).
+/// `classroom_submission_imports.state` (DESIGN §18.4, §19.8). Since
+/// Phase 8 the server downloads the files and grades them from the whole
+/// page (§19.4); these are the sync side of a row, the grading side comes
+/// from the submission (review queue).
 enum SubmissionImportState {
-  newSubmission('new', 'ส่งแล้ว รอสแกน'),
-  imported('imported', 'สแกนแล้ว'),
+  newSubmission('new', 'รอดาวน์โหลด'),
+  imported('imported', 'รับไฟล์แล้ว'),
+  waitingKey('waiting_key', 'รออนุมัติเฉลย'),
   needsRetake('needs_retake', 'ต้องถ่ายใหม่'),
   returnedForRetake('returned_for_retake', 'ตีกลับให้ถ่ายใหม่แล้ว'),
+  unsupported('unsupported', 'ไฟล์ใช้ไม่ได้'),
+  rejectedLate('rejected_late', 'ส่งช้า ไม่รับ'),
   graded('graded', 'ส่งคะแนนกลับแล้ว'),
   gradeFailed('grade_failed', 'ส่งคะแนนกลับไม่สำเร็จ');
 
@@ -323,27 +329,20 @@ enum SubmissionImportState {
     orElse: () => SubmissionImportState.newSubmission,
   );
 
-  /// Waiting to be downloaded and scanned (what "ดาวน์โหลดและสแกนทั้งหมด"
-  /// picks up).
-  bool get awaitsScan => this == newSubmission || this == needsRetake;
+  /// The server holds the files (grading follows the submission).
+  bool get hasFiles =>
+      this == imported || this == graded || this == gradeFailed;
 
-  /// The phone may download and scan it (again). Not once it was returned
-  /// for a retake (Classroom still holds the photos the teacher rejected,
-  /// until the student hands in new ones) nor once graded (a rescan of
-  /// published work waits for the teacher's confirmation, §9.4).
-  bool get canScan =>
-      this == newSubmission || this == imported || this == needsRetake;
-
-  /// The teacher may still send it back for a new photo.
+  /// The teacher may still send it back for a new photo (the server's
+  /// RETURNABLE_STATES).
   bool get canReturnForRetake =>
       this == newSubmission || this == imported || this == needsRetake;
 
   Color color(ColorScheme scheme) => switch (this) {
-    newSubmission => scheme.primary,
-    imported => Colors.green.shade700,
-    graded => Colors.green.shade700,
-    needsRetake || gradeFailed => scheme.error,
-    returnedForRetake => scheme.tertiary,
+    newSubmission || waitingKey => scheme.primary,
+    imported || graded => Colors.green.shade700,
+    needsRetake || gradeFailed || unsupported => scheme.error,
+    returnedForRetake || rejectedLate => scheme.tertiary,
   };
 }
 
@@ -361,7 +360,8 @@ class GoogleAttachment {
 
   String get _mime => mimeType.toLowerCase();
 
-  /// Pictures and PDFs; Google Docs/Sheets and other files cannot be scanned.
+  /// Pictures and PDFs; Google Docs/Sheets and other files cannot be graded
+  /// (the server marks such a row `unsupported`).
   bool get isSupported =>
       _mime.startsWith('image/') ||
       _mime == 'application/pdf' ||
@@ -370,11 +370,6 @@ class GoogleAttachment {
       _mime.isEmpty;
 
   bool get isPdf => _mime == 'application/pdf';
-
-  /// JPEG and PNG go straight to the scan pipeline (OpenCV reads them and
-  /// applies the EXIF orientation); anything else is converted first.
-  bool get needsRasterize =>
-      !(_mime == 'image/jpeg' || _mime == 'image/jpg' || _mime == 'image/png');
 
   factory GoogleAttachment.fromJson(Map<String, dynamic> json) =>
       GoogleAttachment(
@@ -412,6 +407,8 @@ class GoogleSubmission {
     this.alternateLink,
     this.retakeReason,
     this.lastError,
+    this.late = false,
+    this.updatedAt,
   });
 
   /// `classroom_submission_imports.id` (used by `/google-submissions/{id}`).
@@ -425,8 +422,14 @@ class GoogleSubmission {
   final String? alternateLink;
   final String? retakeReason;
 
-  /// Why sending the grade back failed (`grade_failed`).
+  /// Why sending the grade back failed (`grade_failed`), why the files
+  /// cannot be graded (`unsupported`), or a note on a `new` row that waits
+  /// (account to reconnect, file deleted).
   final String? lastError;
+
+  /// Classroom marked the hand-in late.
+  final bool late;
+  final DateTime? updatedAt;
 
   String get studentLabel => student?.label ?? 'ยังไม่ได้จับคู่นักเรียน';
 
@@ -452,6 +455,10 @@ class GoogleSubmission {
       alternateLink: json['alternate_link'] as String?,
       retakeReason: _nonEmpty(json['retake_reason']),
       lastError: _nonEmpty(json['last_error']),
+      late: json['late'] == true,
+      updatedAt: json['updated_at'] is String
+          ? DateTime.tryParse(json['updated_at'] as String)
+          : null,
     );
   }
 }

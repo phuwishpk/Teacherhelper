@@ -40,6 +40,11 @@ class ReviewQueueNotifier extends AsyncNotifier<ReviewQueue> {
     await refresh();
   }
 
+  Future<void> gradeSubmission(int submissionId) async {
+    await _repo.gradeSubmission(submissionId);
+    await refresh();
+  }
+
   Future<int> requeueMissingKey() async {
     final n = await _repo.requeueMissingKey(assignmentId);
     await refresh();
