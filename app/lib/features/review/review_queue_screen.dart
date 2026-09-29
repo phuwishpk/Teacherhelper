@@ -109,13 +109,14 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
 
   Future<void> _grade(SubmissionSummary s) async {
     final name = s.student?.label ?? 'นักเรียนคนนี้';
+    final base = s.isPublished
+        ? 'ผลเดิมเผยแพร่แล้ว ถ้าตรวจใหม่ นักเรียนจะเห็นผลใหม่หลังคุณเผยแพร่อีกครั้ง '
+              'AI จะอ่านงานที่ส่งใหม่ทั้งหน้า (ใช้ Gemini หนึ่งครั้งต่อหน้า)'
+        : 'AI จะอ่านงานที่ส่งใหม่ทั้งหน้าแทนผลเดิม (ใช้ Gemini หนึ่งครั้งต่อหน้า)';
     final ok = await confirm(
       context,
       title: 'ตรวจงานที่ $name ส่งใหม่?',
-      message: s.isPublished
-          ? 'ผลเดิมเผยแพร่แล้ว ถ้าตรวจใหม่ นักเรียนจะเห็นผลใหม่หลังคุณเผยแพร่อีกครั้ง '
-                'AI จะอ่านงานที่ส่งใหม่ทั้งหน้า (ใช้ Gemini หนึ่งครั้งต่อหน้า)'
-          : 'AI จะอ่านงานที่ส่งใหม่ทั้งหน้าแทนผลเดิม (ใช้ Gemini หนึ่งครั้งต่อหน้า)',
+      message: s.totalOverridden ? '$base\n\n$totalOverrideClearWarning' : base,
       confirmLabel: 'ตรวจ',
     );
     if (!ok) return;
@@ -127,12 +128,18 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
 
   Future<void> _confirmReplace(PendingScan scan) async {
     final name = scan.student?.label ?? 'นักเรียนคนนี้';
+    final submissions =
+        ref.read(reviewQueueProvider(_aid)).value?.submissions ?? const [];
+    final overridden = submissions.any(
+      (s) => s.id == scan.submissionId && s.totalOverridden,
+    );
     final ok = await confirm(
       context,
       title: 'ใช้สแกนใหม่แทนผลเดิม?',
       message:
           'ผลของ $name เผยแพร่ไปแล้ว ถ้ายืนยัน ระบบจะตรวจหน้านี้ใหม่ '
-          'และนักเรียนจะเห็นผลใหม่หลังคุณเผยแพร่อีกครั้ง',
+          'และนักเรียนจะเห็นผลใหม่หลังคุณเผยแพร่อีกครั้ง'
+          '${overridden ? '\n\n$totalOverrideClearWarning' : ''}',
       confirmLabel: 'ใช้สแกนใหม่',
     );
     if (!ok) return;

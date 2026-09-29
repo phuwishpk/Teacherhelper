@@ -146,6 +146,17 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
       setState(() => _formError = error);
       return;
     }
+    if (d.totalOverridden &&
+        d.startScore != null &&
+        (_score! - d.startScore!).abs() > 1e-9) {
+      final ok = await confirm(
+        context,
+        title: 'เปลี่ยนคะแนนข้อนี้?',
+        message: totalOverrideClearWarning,
+        confirmLabel: 'บันทึก',
+      );
+      if (!ok || !mounted) return;
+    }
     final text = _explanation.text.trim();
     final decision = ReviewDecision(
       finalScore: _score!,

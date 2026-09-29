@@ -9,6 +9,7 @@ import '../../core/widgets/content_column.dart';
 import '../review/review_labels.dart';
 import 'results_repository.dart';
 import 'retake_notice.dart';
+import 'student_result.dart' show totalOverriddenNote;
 
 /// "ผลการบ้าน" tab: published results only (DESIGN §13), plus a notice for
 /// each Classroom submission the teacher sent back for a new photo (§18.2).
@@ -71,6 +72,7 @@ class ResultsPage extends ConsumerWidget {
                         if (r.subjectName != null) r.subjectName!,
                         if (r.publishedAt != null)
                           'เผยแพร่ ${formatThaiDate(r.publishedAt!)}',
+                        if (r.totalOverridden) totalOverriddenNote,
                       ].join(' · '),
                     ),
                     trailing: score == null

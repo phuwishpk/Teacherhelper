@@ -240,6 +240,12 @@ class PendingScan {
   );
 }
 
+/// Shown before a change that clears `total_override` (DESIGN §19.3
+/// "ล้าง total_override"): a question's score changes or the work is
+/// graded again.
+const totalOverrideClearWarning =
+    'คะแนนรวมที่รับจาก Classroom จะถูกแทนด้วยผลรวมรายข้อ';
+
 /// Per-student progress for publishing one submission at a time.
 class SubmissionSummary {
   const SubmissionSummary({
@@ -505,6 +511,7 @@ class ResponseDetail {
     this.answerBox,
     this.aiExplanation,
     this.explanationSource,
+    this.totalOverridden = false,
   });
 
   final int id;
@@ -561,6 +568,10 @@ class ResponseDetail {
 
   /// `ai` / `template` / `reused` / `teacher`.
   final String? explanationSource;
+
+  /// The submission's total was taken from Google Classroom
+  /// (`total_overridden`, §19.3): changing this score clears it.
+  final bool totalOverridden;
 
   bool get isManual => gradingState == 'manual';
   bool get isWholePage => submissionPageId != null;
@@ -631,6 +642,9 @@ class ResponseDetail {
       answerBox: _box(json['answer_box']),
       aiExplanation: json['ai_explanation'] as String?,
       explanationSource: json['explanation_source'] as String?,
+      totalOverridden: _bool(
+        json['total_overridden'] ?? submission?['total_overridden'],
+      ),
     );
   }
 }
@@ -691,6 +705,7 @@ class Appeal {
     this.questionPosition,
     this.maxPoints,
     this.currentScore,
+    this.totalOverridden = false,
   });
 
   final int id;
@@ -709,6 +724,10 @@ class Appeal {
   final int? questionPosition;
   final double? maxPoints;
   final double? currentScore;
+
+  /// The submission's total was taken from Google Classroom (§19.3):
+  /// accepting with a new score clears it.
+  final bool totalOverridden;
 
   bool get isOpen => status == 'open';
 
@@ -745,6 +764,7 @@ class Appeal {
             response?['final_score'] ??
             json['current_score'],
       ),
+      totalOverridden: _bool(json['total_overridden']),
     );
   }
 }

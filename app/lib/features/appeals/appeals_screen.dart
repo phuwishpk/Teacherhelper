@@ -213,6 +213,19 @@ class _ResolveAppealDialogState extends State<_ResolveAppealDialog> {
                 max: max ?? 100,
                 onChanged: (v) => setState(() => _score = v),
               ),
+            if (_accept &&
+                widget.appeal.totalOverridden &&
+                _score != widget.appeal.currentScore)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  totalOverrideClearWarning,
+                  key: const ValueKey('total_override_warning'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
             TextField(
               controller: _note,

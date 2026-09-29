@@ -3,6 +3,7 @@ import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/review/review_detail_screen.dart';
 import 'package:eduvision/features/review/review_labels.dart';
+import 'package:eduvision/features/review/review_models.dart';
 import 'package:eduvision/features/review/review_queue_screen.dart';
 import 'package:eduvision/features/review/review_repository.dart';
 import 'package:eduvision/features/settings/ai_key.dart';
@@ -122,6 +123,49 @@ void main() {
       });
       // Moved on to the next response of the tab.
       expect(find.text('ต้องตรวจ 2/2'), findsOneWidget);
+    });
+
+    testWidgets('changing a score of a total taken from Classroom warns '
+        'first (§19.3)', (tester) async {
+      _phone(tester);
+      final repo = FakeReviewRepository(
+        rows: [queueRow(id: 11)],
+        responses: {
+          11: {
+            ...responseJson(id: 11, reviewedAt: '2026-10-01T01:00:00Z'),
+            'submission_status': 'published',
+            'total_overridden': true,
+          },
+        },
+      );
+      await pumpScreen(
+        tester,
+        const ReviewDetailScreen(assignmentId: 5, responseId: 11),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(repo),
+          cropLoaderProvider.overrideWithValue(NoCropLoader()),
+        ],
+      );
+      await tester.tap(find.byTooltip('ลดคะแนน'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reason_picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('AI อ่านลายมือผิด').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('บันทึกการแก้ไข'));
+      await tester.pumpAndSettle();
+      expect(find.text('เปลี่ยนคะแนนข้อนี้?'), findsOneWidget);
+      expect(find.text(totalOverrideClearWarning), findsOneWidget);
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(repo.saved, isEmpty);
+
+      await tester.tap(find.text('บันทึกการแก้ไข'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'บันทึก'));
+      await tester.pumpAndSettle();
+      expect(repo.saved.single.$2['final_score'], 1.5);
     });
 
     testWidgets('accepting the AI score needs no reason; an edited '
@@ -444,6 +488,46 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'ใช้สแกนใหม่'));
       await tester.pumpAndSettle();
       expect(repo.confirmed, [90]);
+    });
+
+    testWidgets('a rescan of a total taken from Classroom warns (§19.3)', (
+      tester,
+    ) async {
+      _phone(tester);
+      final repo = FakeReviewRepository(
+        rows: [queueRow(id: 11)],
+        meta: {
+          'pending_confirm_scans': [
+            {'scan_id': 90, 'submission_id': 70, 'page_no': 1},
+          ],
+          'submissions': [
+            {
+              'id': 70,
+              'status': 'published',
+              'response_count': 1,
+              'reviewed_count': 1,
+              'total_score': 2,
+              'total_override': 1.5,
+            },
+          ],
+        },
+      );
+      await pumpScreen(
+        tester,
+        const ReviewQueueScreen(assignmentId: 5),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(repo),
+          assignmentsRepositoryProvider.overrideWithValue(_OneAssignment()),
+          aiKeyRepositoryProvider.overrideWithValue(
+            FakeAiKeyRepository(const AiKeyStatus(configured: true)),
+          ),
+        ],
+      );
+      await tester.tap(find.text('สแกนใหม่ของผลที่เผยแพร่แล้ว (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ใช้สแกนใหม่'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(totalOverrideClearWarning), findsOneWidget);
     });
 
     testWidgets('tablets show list and detail side by side', (tester) async {
