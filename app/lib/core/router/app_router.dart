@@ -25,6 +25,9 @@ import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/grade_conflicts_screen.dart';
 import '../../features/google_classroom/roster_matching_screen.dart';
 import '../../features/google_classroom/submissions_screen.dart';
+import '../../features/hand_in/hand_in_models.dart';
+import '../../features/hand_in/student_hand_in_screen.dart';
+import '../../features/hand_in/teacher_upload_screen.dart';
 import '../../features/home/teacher_shell.dart';
 import '../../features/mastery/classroom_mastery_screen.dart';
 import '../../features/mastery/student_mastery_screen.dart';
@@ -94,6 +97,12 @@ abstract final class AppRoutes {
       '/assignments/$assignmentId/questions/$questionId/rubric';
 
   static const scan = '/scan';
+
+  /// "อัปโหลดรูปเพื่อตรวจ": the teacher hands in a student's work from
+  /// files (DESIGN §19.6). `extra` may carry [TeacherUploadArgs].
+  static const teacherUpload = '/hand-ins/upload';
+  static String teacherUploadFor(int assignmentId) =>
+      '$teacherUpload?assignment=$assignmentId';
   static const uploadQueue = '/upload-queue';
 
   /// Teacher settings: Gemini API key (DESIGN §10.1), later Google (§18.7).
@@ -136,10 +145,15 @@ abstract final class AppRoutes {
   static String studentResult(int submissionId) =>
       '/student/results/$submissionId';
 
+  /// Student: hand in one assignment from the app (§19.6).
+  static String studentHandIn(int assignmentId) =>
+      '/student/assignments/$assignmentId/hand-in';
+
   /// Routes a signed-in student may open (everything else sends them home).
   static bool isStudentArea(String location) =>
       location == student ||
       location.startsWith('$student/results/') ||
+      location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/');
 
   static bool isPublic(String location) =>
@@ -207,6 +221,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/student/results/:sid',
         builder: (context, state) =>
             ResultDetailScreen(submissionId: _id(state, 'sid')),
+      ),
+      GoRoute(
+        path: '/student/assignments/:aid/hand-in',
+        builder: (context, state) => StudentHandInScreen(
+          assignmentId: _id(state, 'aid'),
+          initial: state.extra is StudentAssignment
+              ? state.extra as StudentAssignment
+              : null,
+        ),
       ),
       GoRoute(
         path: '/student/practice/:itemId',
@@ -380,6 +403,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.scan,
         builder: (context, state) => const ScanScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teacherUpload,
+        builder: (context, state) {
+          final extra = state.extra is TeacherUploadArgs
+              ? state.extra as TeacherUploadArgs
+              : null;
+          return TeacherUploadScreen(
+            args: TeacherUploadArgs(
+              assignmentId:
+                  extra?.assignmentId ??
+                  int.tryParse(state.uri.queryParameters['assignment'] ?? ''),
+              files: extra?.files ?? const [],
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.uploadQueue,

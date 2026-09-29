@@ -13,6 +13,8 @@ import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
+import 'package:eduvision/features/hand_in/hand_in_models.dart';
+import 'package:eduvision/features/hand_in/hand_in_repository.dart';
 import 'package:eduvision/features/results/results_repository.dart';
 import 'package:eduvision/features/results/student_result.dart';
 import 'package:eduvision/features/review/review_repository.dart';
@@ -22,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../hand_in/hand_in_fakes.dart';
 import '../helpers/pump_screen.dart';
 import '../review/review_fixtures.dart';
 
@@ -89,6 +92,11 @@ void main() {
         assignmentsRepositoryProvider.overrideWithValue(_FakeAssignments()),
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         resultsRepositoryProvider.overrideWithValue(_FakeResults()),
+        handInRepositoryProvider.overrideWithValue(
+          FakeHandIn(
+            assignments: const [StudentAssignment(id: 7, title: 'ส่งรูป')],
+          ),
+        ),
         reviewRepositoryProvider.overrideWithValue(
           FakeReviewRepository(rows: [queueRow(id: 11)]),
         ),
@@ -129,6 +137,27 @@ void main() {
   testWidgets('a student is kept out of teacher routes', (tester) async {
     expect(await openAt(tester, student, '/assignments/5/review'), '/student');
     expect(await openAt(tester, student, '/settings'), '/student');
+    expect(await openAt(tester, student, '/hand-ins/upload'), '/student');
+  });
+
+  testWidgets('a student opens the hand-in of an assignment', (tester) async {
+    expect(
+      await openAt(tester, student, '/student/assignments/7/hand-in'),
+      '/student/assignments/7/hand-in',
+    );
+  });
+
+  testWidgets('a teacher opens "อัปโหลดรูปเพื่อตรวจ" but not a hand-in', (
+    tester,
+  ) async {
+    expect(
+      await openAt(tester, teacher, '/hand-ins/upload?assignment=5'),
+      '/hand-ins/upload',
+    );
+    expect(
+      await openAt(tester, teacher, '/student/assignments/7/hand-in'),
+      '/',
+    );
   });
 
   testWidgets('a teacher opens review, settings and appeals but not the '

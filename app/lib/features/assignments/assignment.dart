@@ -65,6 +65,7 @@ class Assignment {
     this.classroomName,
     this.subjectName,
     this.needsReviewCount,
+    this.submissionsCount,
     this.googleLink,
     this.mode = AssignmentMode.worksheet,
     this.source = 'app',
@@ -94,6 +95,10 @@ class Assignment {
   /// Responses still waiting for the teacher's review, when the list
   /// endpoint includes it (optional `needs_review_count`).
   final int? needsReviewCount;
+
+  /// Students who handed in anything (`submissions_count`, list only,
+  /// DESIGN §19.9): "ส่งแล้ว N คน" on "อัปโหลดรูปเพื่อตรวจ".
+  final int? submissionsCount;
 
   /// Set once the assignment was posted to Google Classroom (DESIGN §18.4
   /// `assignment_google_links`), when the server includes `google_link`.
@@ -143,6 +148,7 @@ class Assignment {
     classroomName: classroomName,
     subjectName: subjectName,
     needsReviewCount: needsReviewCount,
+    submissionsCount: submissionsCount,
     googleLink: link,
     mode: mode,
     source: source,
@@ -181,6 +187,7 @@ class Assignment {
       classroomName: classroom?['name'] as String?,
       subjectName: subject?['name'] as String?,
       needsReviewCount: (json['needs_review_count'] as num?)?.toInt(),
+      submissionsCount: (json['submissions_count'] as num?)?.toInt(),
       googleLink: json['google_link'] is Map
           ? AssignmentGoogleLink.fromJson(
               (json['google_link'] as Map).cast<String, dynamic>(),

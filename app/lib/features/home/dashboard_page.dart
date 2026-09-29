@@ -84,6 +84,19 @@ class DashboardPage extends ConsumerWidget {
                 AttentionTarget.review => 3,
               }),
             ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                key: const ValueKey('dashboard_teacher_upload'),
+                leading: const Icon(Icons.upload_file),
+                title: const Text('อัปโหลดรูปเพื่อตรวจ'),
+                subtitle: const Text(
+                  'เลือกวิชา การบ้าน และนักเรียน แล้วแนบรูปหรือ PDF ของงาน',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.teacherUpload),
+              ),
+            ),
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),

@@ -9,6 +9,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../google_classroom/assignment_google_section.dart';
+import '../hand_in/teacher_upload_screen.dart';
 import '../worksheets/print_flow.dart';
 import 'assignment.dart';
 import 'assignments_page.dart';
@@ -234,6 +235,22 @@ class AssignmentDetailScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                  ],
+                  if (canUploadFor(a)) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        key: const ValueKey('assignment_teacher_upload'),
+                        leading: const Icon(Icons.upload_file),
+                        title: const Text('อัปโหลดรูปเพื่อตรวจ'),
+                        subtitle: const Text(
+                          'แนบรูปหรือ PDF งานของนักเรียนทีละคน ตรวจจากรูปทั้งหน้า',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(AppRoutes.teacherUploadFor(a.id)),
                       ),
                     ),
                   ],

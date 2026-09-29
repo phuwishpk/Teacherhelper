@@ -164,7 +164,10 @@ class FakeDocumentPicker implements DocumentFilePicker {
   final calls = <bool>[];
 
   @override
-  Future<List<PickedDocument>> pick({bool imagesOnly = false}) async {
+  Future<List<PickedDocument>> pick({
+    bool imagesOnly = false,
+    String? dialogTitle,
+  }) async {
     calls.add(imagesOnly);
     return files;
   }

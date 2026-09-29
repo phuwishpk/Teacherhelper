@@ -177,6 +177,11 @@ void main() {
           builder: (_, state) =>
               Text('answer key ${state.pathParameters['id']}'),
         ),
+        GoRoute(
+          path: '/hand-ins/upload',
+          builder: (_, state) =>
+              Text('upload ${state.uri.queryParameters['assignment']}'),
+        ),
       ],
     );
 
@@ -192,6 +197,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('answer_key_card')));
     await tester.pumpAndSettle();
     expect(find.text('answer key 12'), findsOneWidget);
+
+    // A freeform draft already takes uploads (kept until the key is approved).
+    Navigator.of(tester.element(find.text('answer key 12'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('assignment_teacher_upload')));
+    await tester.pumpAndSettle();
+    expect(find.text('upload 12'), findsOneWidget);
   });
 
   testWidgets('a worksheet assignment keeps its worksheet card and key card', (
@@ -224,5 +236,9 @@ void main() {
     expect(find.text('ใบงาน'), findsOneWidget);
     expect(find.text('ใบงานของแอป'), findsOneWidget);
     expect(find.textContaining('อนุมัติเฉลยแล้ว'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('assignment_teacher_upload')),
+      findsOneWidget,
+    );
   });
 }

@@ -9,8 +9,12 @@ import 'answer_key_models.dart';
 /// behind an interface so widget tests run without the plugin.
 abstract class DocumentFilePicker {
   /// PDFs and photos; [imagesOnly] for "เลือกรูปจากเครื่อง". Empty when the
-  /// teacher cancels.
-  Future<List<PickedDocument>> pick({bool imagesOnly = false});
+  /// user cancels. [dialogTitle] replaces the key's picker title (student
+  /// hand-ins and teacher uploads, DESIGN §19.6).
+  Future<List<PickedDocument>> pick({
+    bool imagesOnly = false,
+    String? dialogTitle,
+  });
 }
 
 /// `package:file_picker`: the system picker (Storage Access Framework on
@@ -18,9 +22,13 @@ abstract class DocumentFilePicker {
 /// Docs are refused by the server with "บันทึกเป็น PDF แล้วแนบใหม่".
 class PluginDocumentFilePicker implements DocumentFilePicker {
   @override
-  Future<List<PickedDocument>> pick({bool imagesOnly = false}) async {
+  Future<List<PickedDocument>> pick({
+    bool imagesOnly = false,
+    String? dialogTitle,
+  }) async {
     final files = await FilePicker.pickFiles(
-      dialogTitle: imagesOnly ? 'เลือกรูปเฉลย' : 'เลือกไฟล์เฉลย',
+      dialogTitle:
+          dialogTitle ?? (imagesOnly ? 'เลือกรูปเฉลย' : 'เลือกไฟล์เฉลย'),
       type: imagesOnly ? FileType.image : FileType.custom,
       allowedExtensions: imagesOnly ? null : kDocumentExtensions,
     );
@@ -28,8 +36,13 @@ class PluginDocumentFilePicker implements DocumentFilePicker {
       for (final f in files)
         // Bytes rather than a path: a picked Android file may be a
         // content:// URI, and the web runner has no path at all. Each file
-        // is at most 10 MB (server limit).
-        PickedDocument(name: f.name, bytes: await f.readAsBytes()),
+        // is at most 10 MB (server limit). The local path, when the picker
+        // has one, lets the scan screen run the marker pipeline on it.
+        PickedDocument(
+          name: f.name,
+          bytes: await f.readAsBytes(),
+          path: f.path,
+        ),
     ];
   }
 }
@@ -44,8 +57,23 @@ const kMaxDocumentFiles = 10;
 /// "ถ่ายรูปเฉลย": several photos in a row with the key-photo camera, popped
 /// as [PickedDocument]s. When the camera cannot open (no permission, the
 /// Chrome preview) the teacher can pick photos from the device instead.
+/// A student's hand-in (DESIGN §19.6) uses the same screen with its own
+/// [title], [hint], [maxPhotos] and [namePrefix].
 class KeyPhotoScreen extends ConsumerStatefulWidget {
-  const KeyPhotoScreen({super.key});
+  const KeyPhotoScreen({
+    super.key,
+    this.title = 'ถ่ายรูปเฉลย',
+    this.hint = 'ถ่ายเฉลยทีละหน้า ให้เห็นทั้งหน้าและอ่านชัด',
+    this.maxPhotos = kMaxDocumentFiles,
+    this.namePrefix = 'key-photo',
+  });
+
+  final String title;
+  final String hint;
+  final int maxPhotos;
+
+  /// Photos are named `<namePrefix>-<n>.jpg`.
+  final String namePrefix;
 
   @override
   ConsumerState<KeyPhotoScreen> createState() => _KeyPhotoScreenState();
@@ -85,7 +113,7 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
 
   Future<void> _shoot() async {
     final camera = _camera;
-    if (camera == null || _busy || _photos.length >= kMaxDocumentFiles) return;
+    if (camera == null || _busy || _photos.length >= widget.maxPhotos) return;
     setState(() => _busy = true);
     try {
       final path = await camera.takePicture();
@@ -102,13 +130,16 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
         .read(documentFilePickerProvider)
         .pick(imagesOnly: true);
     if (!mounted || picked.isEmpty) return;
-    Navigator.of(context).pop(picked.take(kMaxDocumentFiles).toList());
+    Navigator.of(context).pop(picked.take(widget.maxPhotos).toList());
   }
 
   void _done() {
     Navigator.of(context).pop([
       for (var i = 0; i < _photos.length; i++)
-        PickedDocument(name: 'key-photo-${i + 1}.jpg', path: _photos[i]),
+        PickedDocument(
+          name: '${widget.namePrefix}-${i + 1}.jpg',
+          path: _photos[i],
+        ),
     ]);
   }
 
@@ -116,10 +147,10 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final camera = _camera;
-    final full = _photos.length >= kMaxDocumentFiles;
+    final full = _photos.length >= widget.maxPhotos;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ถ่ายรูปเฉลย'),
+        title: Text(widget.title),
         actions: [
           TextButton(
             onPressed: _photos.isEmpty ? null : _done,
@@ -172,8 +203,8 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
                 children: [
                   Text(
                     full
-                        ? 'ถ่ายครบ $kMaxDocumentFiles รูปแล้ว (สูงสุดต่อครั้ง)'
-                        : 'ถ่ายเฉลยทีละหน้า ให้เห็นทั้งหน้าและอ่านชัด',
+                        ? 'ถ่ายครบ ${widget.maxPhotos} รูปแล้ว (สูงสุดต่อครั้ง)'
+                        : widget.hint,
                     style: theme.textTheme.bodySmall,
                     textAlign: TextAlign.center,
                   ),

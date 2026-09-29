@@ -184,6 +184,7 @@ void main() {
     expect(valueOf('stat_appeals'), '2');
     expect(valueOf('stat_practice_drafts'), '2');
     expect(find.byKey(const ValueKey('ai_key_card')), findsOneWidget);
+    expect(find.text('อัปโหลดรูปเพื่อตรวจ'), findsOneWidget);
     expect(find.text('คลังแบบฝึกและลิงก์ทบทวน'), findsOneWidget);
     expect(find.text('ทักษะของห้อง ป.4/1'), findsOneWidget);
     expect(find.text('ทักษะของห้อง ป.4/2'), findsOneWidget);
