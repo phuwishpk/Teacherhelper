@@ -2704,6 +2704,8 @@ ALTER TABLE ai_calls
 
 มือถือย่อ crop (ด้านยาวไม่เกิน 768 px) และภาพทั้งหน้า (ไม่เกิน 2,000 px) ก่อนอัปโหลด ลดเวลาอัปโหลดและพื้นที่เก็บเท่านั้น **token เท่าเดิม**เพราะคิดตามระดับ media resolution
 
+- implement (build ข้อ 7 แอป): `ScanPipelineImpl` ย่อ crop ทุกไฟล์ (รวมกรอบคำตอบสุดท้าย) ให้ด้านยาวไม่เกิน 768 px (`RegionMath.CROP_UPLOAD_LONG_SIDE`, `INTER_AREA`) ก่อนเขียน WebP ส่วน `ink_ratio`, การฝนวงกลม และภาพเข้า CNN ยังวัดบนกรอบ 200 DPI เต็มก่อนย่อ ค่าที่ส่งจึงไม่เปลี่ยน ภาพหน้าที่ warp แล้วมีด้านยาว 1,600 px อยู่แล้ว กล้องในแอปถ่ายที่ 1080p และรูปที่เลือกจากเครื่องยังส่งตามไฟล์เดิม (§19.6) แอปส่ง `ink_ratio` และ `cnn` (`text`, `confidence`) ใน `meta` ของ `POST /scans` อยู่แล้ว (§9.4) ซึ่ง `AutoRules` ใช้
+
 ### 21.10 Calibration harness
 
 - artisan command `eduvision:calibrate-gemini {--kind=short|work|page|document} {--level=low|medium|high}` เรียก **Gemini จริง** (นักพัฒนารันเองด้วย key ของตัวเอง **ไม่รันใน test หรือ CI**) กับชุด golden fixture ที่ติด label แล้ว

@@ -278,7 +278,10 @@ data class RegionCrop (
    * region comes back as its own crop with the id `<region_id>_final`.
    */
   val regionId: String,
-  /** WebP (quality 80) in the app cache directory. */
+  /**
+   * WebP (quality 80), at most 768 px on the long side (DESIGN §21.9), in
+   * the app cache directory.
+   */
   val imagePath: String,
   /**
    * `ink_ratio` (DESIGN §9.4, §11.8): share of the rect (without its printed

@@ -36,6 +36,14 @@ object RegionMath {
     /** Long side of the uploaded page image (DESIGN §6.2 `warpedPagePath`). */
     const val WARPED_PAGE_LONG_SIDE = 1600
 
+    /**
+     * Long side of an uploaded crop (DESIGN §21.9). Only the bytes shrink:
+     * Gemini bills an image by its media resolution level, not its size,
+     * and `ink_ratio`, bubble fill and the CNN input are measured on the
+     * full 200 DPI frame before the crop is scaled down.
+     */
+    const val CROP_UPLOAD_LONG_SIDE = 768
+
     /** Bubble fill is measured inside this share of the radius (§6.2 step 6). */
     const val INNER_BUBBLE = 0.7
 
@@ -143,6 +151,10 @@ object RegionMath {
         val s = longSide.toDouble() / long
         return PixelSize(max(1, round(width * s).toInt()), max(1, round(height * s).toInt()))
     }
+
+    /** Size of a [width] x [height] crop as it is written for upload. */
+    fun uploadCropSize(width: Int, height: Int): PixelSize =
+        scaleToLongSide(width, height, CROP_UPLOAD_LONG_SIDE)
 
     /**
      * Width of a [width] x [height] ink strip resized to [CNN_HEIGHT] rows,
