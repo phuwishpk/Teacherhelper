@@ -196,8 +196,10 @@ final class GoogleApi
     }
 
     /**
-     * studentSubmissions.patch with updateMask=assignedGrade. Only courseWork
-     * this project created can be graded (else project_permission_denied).
+     * studentSubmissions.patch with updateMask=assignedGrade,draftGrade
+     * (DESIGN §19.7: both, so the teacher's grading view in Classroom shows the
+     * same number). Only courseWork this project created can be graded (else
+     * project_permission_denied).
      *
      * @return array<string, mixed> the updated StudentSubmission
      */
@@ -206,10 +208,37 @@ final class GoogleApi
         return (array) $this->send(
             'studentSubmissions.patch',
             fn (PendingRequest $http) => $http->patch(
-                self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).'?updateMask=assignedGrade',
-                ['assignedGrade' => $grade],
+                self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).'?updateMask=assignedGrade,draftGrade',
+                ['assignedGrade' => $grade, 'draftGrade' => $grade],
             ),
         )->json();
+    }
+
+    /**
+     * courses.announcements.create of a PUBLISHED announcement that only the
+     * listed students (and the course's teachers) see: assigneeMode
+     * INDIVIDUAL_STUDENTS with individualStudentsOptions.studentIds
+     * (DESIGN §19.7). Needs the classroom.announcements scope.
+     *
+     * @param  list<string>  $studentIds  Classroom user ids
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createPrivateAnnouncement(string $courseId, string $text, array $studentIds): array
+    {
+        $body = $this->send(
+            'announcements.create',
+            fn (PendingRequest $http) => $http->post(self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/announcements', [
+                'text' => $text,
+                'state' => 'PUBLISHED',
+                'assigneeMode' => 'INDIVIDUAL_STUDENTS',
+                'individualStudentsOptions' => ['studentIds' => array_values($studentIds)],
+            ]),
+        )->json();
+
+        return [
+            'id' => (string) ($body['id'] ?? ''),
+            'alternate_link' => (string) ($body['alternateLink'] ?? ''),
+        ];
     }
 
     /** studentSubmissions.return: the student sees the work returned (and may hand in again). */

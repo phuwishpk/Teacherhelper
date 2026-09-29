@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
  * Sends a published total to Google Classroom (DESIGN §18.2 "ส่งคะแนนกลับ",
  * §18.6): finds the student's studentSubmission in the assignment's
  * courseWork, sets assignedGrade = the effective total
- * (COALESCE(total_override, total_score), §19.3; updateMask=assignedGrade) and returns the work, so the student sees the
+ * (COALESCE(total_override, total_score), §19.3; with draftGrade, §19.7) and returns the work, so the student sees the
  * score in Classroom; the per-question explanations stay in our app.
  *
  * Runs from PushClassroomGradeJob with the Google account of the teacher who

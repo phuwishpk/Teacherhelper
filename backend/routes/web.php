@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GoogleOAuthCallbackController;
+use App\Http\Controllers\ResultLinkController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
@@ -19,3 +20,10 @@ Route::get('google/oauth/callback', GoogleOAuthCallbackController::class)
     ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
     ->middleware('throttle:google-oauth-callback')
     ->name('google.oauth.callback');
+
+// The link in a private Classroom announcement (DESIGN §19.7): a Thai page
+// that opens the result in the app. No login and no student data.
+Route::get('r/{submission_id}', ResultLinkController::class)
+    ->where('submission_id', '[0-9]{1,18}')
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
+    ->name('results.open-in-app');

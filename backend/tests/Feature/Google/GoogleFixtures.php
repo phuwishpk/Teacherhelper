@@ -97,6 +97,8 @@ trait GoogleFixtures
         Http::fake($routes + [
             'oauth2.googleapis.com/token' => Http::response(self::tokenBody()),
             'oauth2.googleapis.com/revoke' => Http::response([]),
+            // The private announcement every publish sends (§19.7).
+            'classroom.googleapis.com/v1/courses/*/announcements' => Http::response(['id' => 'announcement-1', 'alternateLink' => 'https://classroom.google.com/a/1']),
         ]);
     }
 

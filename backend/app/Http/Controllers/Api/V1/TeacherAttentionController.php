@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
+use App\Models\ClassroomFeedbackPost;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
 use App\Models\GradeConflict;
@@ -25,7 +26,7 @@ class TeacherAttentionController extends Controller
      *                    included)
      *   grade_conflicts  open "คะแนนไม่ตรงกัน" rows
      *   grade_failed     Classroom submissions whose grade push gave up
-     *   feedback_failed  private announcements that failed (build step 6; 0 until then)
+     *   feedback_failed  private announcements (§19.7) whose latest publish failed
      *   regrade_pending  submissions whose new hand-in waits for "ตรวจ"
      *   needs_reconnect  the teacher's Google account must be connected again
      */
@@ -48,7 +49,9 @@ class TeacherAttentionController extends Controller
                 ->whereIn('assignment_id', $ids)
                 ->where('state', ClassroomSubmissionImport::STATE_GRADE_FAILED)
                 ->count(),
-            'feedback_failed' => 0,
+            'feedback_failed' => ClassroomFeedbackPost::latestOf($ids)
+                ->where('state', ClassroomFeedbackPost::STATE_FAILED)
+                ->count(),
             'regrade_pending' => Submission::query()
                 ->whereIn('assignment_id', $ids)
                 ->where('regrade_pending', true)

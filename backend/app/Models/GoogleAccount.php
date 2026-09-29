@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Google\GoogleScopes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -12,7 +13,10 @@ use Illuminate\Support\Carbon;
  * serialised; no API response, log line or job payload carries it.
  *
  * last_error holds why the account must be connected again (invalid_grant,
- * scope_missing); null while it works.
+ * scope_missing); null while it works. An account whose stored scopes lack
+ * one GoogleScopes::REQUIRED added later (classroom.announcements, DESIGN
+ * §19.7) needs a reconnect too; the migration that added the scope marked
+ * such rows scope_missing, so queries on last_error agree.
  *
  * @property int $user_id
  * @property string $google_sub
@@ -33,6 +37,9 @@ class GoogleAccount extends Model
 
     /** Google answered "insufficient authentication scopes": a scope was taken back. */
     public const ERROR_SCOPE_MISSING = 'scope_missing';
+
+    /** DESIGN §19.7: an account connected before the announcements scope was added. */
+    public const ANNOUNCEMENTS_RECONNECT_MESSAGE = 'ต้องเชื่อมบัญชี Google ใหม่ เพื่อให้แอปส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนได้';
 
     protected $primaryKey = 'user_id';
 
@@ -81,6 +88,32 @@ class GoogleAccount extends Model
 
     public function needsReconnect(): bool
     {
-        return $this->last_error !== null;
+        return $this->last_error !== null || GoogleScopes::missing($this->scopeList()) !== [];
+    }
+
+    /** Only the announcements scope (DESIGN §19.7) is missing: the "เชื่อมใหม่เพื่อส่งประกาศ" case. */
+    public function lacksAnnouncementsScope(): bool
+    {
+        return ! in_array(GoogleScopes::ANNOUNCEMENTS, $this->scopeList(), true);
+    }
+
+    /**
+     * Why the teacher must connect again, in Thai (GET /google/status
+     * `reconnect_message`, the 409 google_reconnect_required message); null
+     * while the account works.
+     */
+    public function reconnectMessage(): ?string
+    {
+        if (! $this->needsReconnect()) {
+            return null;
+        }
+        if ($this->last_error === self::ERROR_INVALID_GRANT) {
+            return 'สิทธิ์ที่ให้ Google ไว้หมดอายุหรือถูกยกเลิกแล้ว ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"';
+        }
+        if ($this->lacksAnnouncementsScope()) {
+            return self::ANNOUNCEMENTS_RECONNECT_MESSAGE;
+        }
+
+        return 'บัญชี Google ไม่ได้ให้สิทธิ์ครบตามที่แอปต้องใช้ ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่" และติ๊กอนุญาตทุกข้อ';
     }
 }

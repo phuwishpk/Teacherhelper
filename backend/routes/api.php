@@ -184,6 +184,9 @@ Route::prefix('v1')->group(function () {
                     Route::get('assignments/{id}/grade-conflicts', [GradeConflictController::class, 'index'])->name('api.assignments.grade-conflicts');
                     Route::post('grade-conflicts/{id}/resolve', [GradeConflictController::class, 'resolve'])->name('api.grade-conflicts.resolve');
                     Route::post('google-submissions/{id}/accept-late', [GoogleSubmissionController::class, 'acceptLate'])->name('api.google-submissions.accept-late');
+                    // Private announcements of published results (§19.7): the job calls Google.
+                    Route::get('assignments/{id}/google-feedback', [AssignmentGoogleController::class, 'feedback'])->name('api.assignments.google-feedback');
+                    Route::post('assignments/{id}/google-feedback/retry', [AssignmentGoogleController::class, 'retryFeedback'])->name('api.assignments.google-feedback.retry');
                     Route::middleware('throttle:google')->group(function () {
                         Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
                         Route::post('google/oauth/url', [GoogleAccountController::class, 'oauthUrl'])->name('api.google.oauth-url');

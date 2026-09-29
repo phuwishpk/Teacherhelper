@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Google\ClassroomFeedback;
 use App\Domain\Google\CourseWorkPoster;
 use App\Domain\Google\GoogleSubmissionSync;
 use App\Domain\Google\GradeConflicts;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GooglePostRequest;
 use App\Http\Resources\GoogleSubmissionResource;
+use App\Jobs\PostClassroomFeedbackJob;
 use App\Jobs\PushClassroomGradeJob;
 use App\Models\Assignment;
+use App\Models\ClassroomFeedbackPost;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\Submission;
@@ -96,6 +99,63 @@ class AssignmentGoogleController extends Controller
             $neverSent = $rows === null && isset($matched[$submission->student_id]);
             if ($failed || $neverSent) {
                 PushClassroomGradeJob::dispatch($submission->id);
+                $queued++;
+            }
+        }
+
+        return response()->json(['data' => ['queued' => $queued]], 202);
+    }
+
+    /**
+     * GET /api/v1/assignments/{id}/google-feedback -> {data: [{id,
+     * submission_id, student: {id, name, student_number}, published_at,
+     * state: queued|posted|failed, last_error, posted_at, announcement_id}]}:
+     * the private announcement of each student's latest publish (DESIGN
+     * §19.7), by student number. No Google call.
+     */
+    public function feedback(Request $request, int $id): JsonResponse
+    {
+        $assignment = $this->find($request, $id);
+        $numbers = ClassroomStudent::query()->where('classroom_id', $assignment->classroom_id)->pluck('student_number', 'student_id');
+        $rows = ClassroomFeedbackPost::latestOf([$assignment->id])
+            ->with('submission.student:id,name')
+            ->get()
+            ->sortBy(function (ClassroomFeedbackPost $post) use ($numbers) {
+                $number = $numbers[$post->submission?->student_id] ?? null;
+
+                return [$number === null ? 1 : 0, (int) $number, $post->id];
+            })
+            ->values();
+
+        return response()->json(['data' => $rows->map(fn (ClassroomFeedbackPost $post) => [
+            'id' => $post->id,
+            'submission_id' => $post->submission_id,
+            'student' => [
+                'id' => $post->submission?->student_id,
+                'name' => $post->submission?->student?->name,
+                'student_number' => $numbers[$post->submission?->student_id] ?? null,
+            ],
+            'published_at' => $post->published_at->toIso8601String(),
+            'state' => $post->state,
+            'last_error' => $post->last_error,
+            'posted_at' => $post->posted_at?->toIso8601String(),
+            'announcement_id' => $post->announcement_id,
+        ])->all()]);
+    }
+
+    /**
+     * POST /api/v1/assignments/{id}/google-feedback/retry -> 202 {data:
+     * {queued}}: the failed announcements (latest publish of each student)
+     * go back to the queue with the student's current Classroom match. A
+     * row still without a match stays failed with the reason. No Google call.
+     */
+    public function retryFeedback(Request $request, int $id): JsonResponse
+    {
+        $assignment = $this->find($request, $id);
+        $queued = 0;
+        foreach (ClassroomFeedbackPost::latestOf([$assignment->id])->where('state', ClassroomFeedbackPost::STATE_FAILED)->get() as $post) {
+            if (ClassroomFeedback::requeue($post)) {
+                PostClassroomFeedbackJob::dispatch($post->id);
                 $queued++;
             }
         }
