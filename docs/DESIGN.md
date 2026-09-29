@@ -1617,7 +1617,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | pilot กับนักเรียนจริง | ต้องมีใบยินยอมจากผู้ปกครองตาม PDPA และกำหนดค่า `allow_training_data` ของโรงเรียน ใบยินยอมต้องครอบคลุมการส่งภาพทั้งหน้าให้ Gemini (§19.4) |
 | พฤติกรรมของ API ที่ Phase 8–9 พึ่ง | ตรวจกับเอกสารตอน implement: ประกาศ `INDIVIDUAL_STUDENTS` (ใครเห็น, ความยาว, email), `mediaResolution` ระดับ part, ชื่อ field/สถานะของ Gemini Batch API และ `gradeHistory` ของ submission (§19.7, §20.8, §21.5) |
 | ราคา Gemini 3.x Flash | ขึ้นเป็นสองเท่าตั้งแต่ 1 ม.ค. 2570 ตั้งราคาใน `.env` และสรุปค่าใช้จ่ายจาก `ai_calls` ก่อนและหลังวันนั้น (§21.1) |
-| ความแม่นของ media resolution ต่ำและ CNN skip กับลายมือจริง | รอ fixture ลายมือของทีม แล้วรัน calibration harness (§21.10) ก่อนเปิดใช้ |
+| ความแม่นของ media resolution ต่ำและ CNN skip กับลายมือจริง | harness พร้อมแล้วและชุดสังเคราะห์ผ่านทุกระดับ (§21.10) รอ fixture ลายมือของทีม (ใส่ค่า `cnn` ด้วย) แล้วรันใหม่ก่อนลดระดับหรือเปิด CNN skip |
 
 ---
 
@@ -2713,6 +2713,16 @@ ALTER TABLE ai_calls
 - ผลเก็บเป็น JSON ใน `storage/app/calibration/{date}-{kind}-{level}.json` และสรุปในรายงาน command พิมพ์ค่า `.env` ที่แนะนำ นักพัฒนาเปลี่ยนค่าเองหลังตรวจผล (ไม่มีการเปลี่ยนค่าอัตโนมัติ)
 - test ของ harness ใช้ `FakeGeminiClient` ตรวจการคำนวณเกณฑ์เท่านั้น
 - ใช้ harness เดียวกันวัดเกณฑ์ CNN skip (§21.3) บนลายมือจริง
+- implement (build ข้อ 7): `CalibrationRunner` ส่งภาพผ่านตัวสร้าง request ของจริง (`short`/`work` เป็น `extract_batch` ละไม่เกิน `GEMINI_PAGE_MAX_QUESTIONS` ข้อ, `page` เป็น `extract_page`, `document` เป็น `answer_key_read`) ทุก part อยู่ระดับที่วัด ไม่มี fallback รายข้อ (ข้อที่ขาดนับว่าผิด) บันทึก `ai_calls.feature = calibration` ตัวเลือกเพิ่ม: `--kind`/`--level` ใส่ได้หลายค่า (ไม่ใส่ = ทุกประเภท, `low` และ `medium` เทียบ `high`), `--max-calls` (ค่าตั้งต้น 60 นับรวมการส่งซ้ำ เกินแล้ว request ที่เหลือ fail ในเครื่องไม่เสียเงิน และแผนที่เกินถูกปฏิเสธก่อนส่ง), `--dry-run`, `--teacher`, `--manifest`, `--out` ความแม่นของคำตอบเทียบ label หลัง normalize §11.4 และไม่สนช่องว่าง หมวดของ `show_work` ต้องตรงทั้ง `final_answer_match` และ `valid` ทุกบรรทัด เกณฑ์ CNN skip ใช้ค่า `cnn` (ถ้ามี) ของรายการ `short` ใน manifest ไม่เรียก Gemini ชุดข้อมูลเริ่มต้นคือภาพสังเคราะห์ 100 รายการจาก `tools/calibration/make-synthetic-fixtures.php` (ดู `docs/fixtures/calibration/README.md`)
+- **ผลรันกับ Gemini จริงครั้งแรก** (30 ก.ย. 2569, `gemini-3.8-flash`, ชุดสังเคราะห์, `GEMINI_MEDIA_PER_PART=false`): ทุกประเภทอ่านถูก 100% ทุกระดับ ไม่มีคะแนนเปลี่ยน จึงผ่านทั้ง `low` และ `medium` แต่**ยังไม่เปลี่ยนค่าใน `.env`** เพราะภาพสังเคราะห์อ่านง่ายกว่าลายมือจริงมาก รอลายมือของทีม (§16.2) แล้วรันใหม่ input token ต่อข้อ (รวมข้อความ):
+
+| kind | `high` | `medium` | `low` |
+|---|---|---|---|
+| `short` (48 ข้อ, 4 call) | 1,204 | 664 | 391 |
+| `work` (42 ข้อ, 2 ภาพต่อข้อ, 3 call) | 2,365 | 1,258 | 712 |
+| `page` (ต่อหน้า 5 ข้อ, 8 call) | 2,458 | 1,898 | 1,632 |
+| `document` (ต่อหน้า 20 ข้อ, 2 call) | 2,401 | 1,841 | 1,575 |
+
 
 ### 21.11 สิ่งที่ไม่ใช้
 

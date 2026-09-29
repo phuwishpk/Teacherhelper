@@ -66,6 +66,15 @@ return [
         // generationConfig.mediaResolution per call at the highest level of
         // the call's parts (the fallback of §21.5, works on v1beta).
         'media_per_part' => (bool) env('GEMINI_MEDIA_PER_PART', false),
+        // Pass thresholds of eduvision:calibrate-gemini (DESIGN §21.10): a lower
+        // media resolution passes with at least min_samples per kind, answer and
+        // category accuracy at most max_drop below `high` (0.02 = 2 points) and
+        // at most max_score_flips answers moving between full and not full marks.
+        'calibration' => [
+            'min_samples' => (int) env('GEMINI_CALIBRATION_MIN_SAMPLES', 40),
+            'max_drop' => (float) env('GEMINI_CALIBRATION_MAX_DROP', 0.02),
+            'max_score_flips' => (int) env('GEMINI_CALIBRATION_MAX_SCORE_FLIPS', 0),
+        ],
         // At most this many questions per extract_batch / extract_page call (§21.4).
         'page_max_questions' => (int) env('GEMINI_PAGE_MAX_QUESTIONS', 15),
         // USD per million tokens, for the cost estimate shown before a
