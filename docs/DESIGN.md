@@ -1889,10 +1889,12 @@ ALTER TABLE scans
   - Gemini ร่างข้อ เฉลย และ rubric ทันทีจากชื่องาน คำอธิบาย และ material ที่แนบ (ไฟล์ Drive ที่เป็น PDF หรือรูป) งานนี้ใช้ thinking `medium` (§21)
   - **Google Docs/Sheets/Slides ไม่รองรับ** (mime `application/vnd.google-apps.*`) แอปแสดง "อ่านไฟล์ Google Docs ไม่ได้ บันทึกเป็น PDF แล้วแนบในแอป หรือพิมพ์เฉลยเอง"
   - แจ้งครูทาง FCM (ถ้าตั้งค่า) ว่า **"มีงานใหม่จาก Classroom รออนุมัติเฉลย"** และแสดงในการ์ด "รอดำเนินการ" ของหน้าหลักครู (`GET /teacher/attention`)
-  - `subject_id` ของงานที่นำเข้าเป็น `NULL` ได้จนกว่าครูเลือกวิชาตอนอนุมัติเฉลย (§19.10)
+  - `subject_id` ของงานที่นำเข้าเป็น `NULL` ได้จนกว่าครูเลือกวิชาตอนอนุมัติเฉลย (§19.9)
+  - **หลัง Phase 9** (§20.1) งานจากเว็บต้องมีรายวิชาเหมือนการบ้านใหม่ทุกงาน: ตอนนำเข้า ถ้าห้องผูกรายวิชาไว้**ตัวเดียว** ตั้ง `course_id` และ `subject_id` จากรายวิชานั้นอัตโนมัติ ถ้ามีหลายตัวหรือไม่มีเลย ให้เป็น `NULL` แล้วครู**ต้องเลือก `course_id` จากรายวิชาที่ผูกกับห้องนั้น**ตอนอนุมัติเฉลย (ห้องที่ยังไม่มีรายวิชา แอปพาไปสร้างหรือผูกรายวิชาก่อน)
   - **ไม่ตรวจจนกว่าครูอนุมัติเฉลย**
 - **ข้อจำกัดของงานที่สร้างในเว็บ**: แอปอ่าน submission และตรวจในแอปได้ แต่ **ตั้งคะแนนและ return ใน Classroom ไม่ได้** (Google ตอบ `ProjectPermissionDenied` เพราะ project ของเราไม่ได้สร้างงานนั้น) UI ต้องบอกชัดว่า "งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้" และมีปุ่ม **"เปิดใน Classroom"** กับ **"คัดลอกคะแนน"** ส่วนผลรายคนยังส่งทางประกาศส่วนตัวได้ (§19.7)
 - **คะแนนในแอปคือค่าจริง** ตรวจจับการแก้คะแนนใน Classroom: ตอนซิงก์ เทียบ `assignedGrade` ของ submission กับ `classroom_submission_imports.pushed_grade` (งานที่แอปสร้าง) หรือกับคะแนนรวมที่เผยแพร่ (งานที่สร้างในเว็บ) ใช้ `submissionHistory.gradeHistory` ประกอบเพื่อบอกว่าแก้เมื่อไหร่ ถ้าต่างกันสร้างแถว `grade_conflicts` สถานะ `open` (ไม่สร้างซ้ำถ้ามีแถว open อยู่แล้ว) แสดงเป็นรายการ **"คะแนนไม่ตรงกัน"** ครูเลือกได้
+  - **ค่าว่างไม่ถือเป็นความต่าง**: ถ้า `assignedGrade` ใน Classroom ว่าง (ครูยังไม่ได้กรอกในเว็บ ซึ่งเป็นปกติของงานที่สร้างในเว็บเพราะแอปส่งคะแนนให้ไม่ได้ หรือครูลบคะแนนออก) ให้บันทึก `classroom_grade = NULL` และ**ไม่เทียบ** ฝั่งแอปก็เช่นกัน งานที่แอปสร้างแต่ `pushed_grade` ยังเป็น `NULL` (ยังไม่เผยแพร่หรือยังส่งคะแนนไม่สำเร็จ) และงานจากเว็บที่ submission ยังไม่เผยแพร่ ไม่เทียบ เทียบเฉพาะเมื่อทั้งสองฝั่งมีตัวเลข (ปัดทศนิยม 2 ตำแหน่งก่อนเทียบ)
   - **ส่งคะแนนจากแอป** (`push_app`): เฉพาะงานที่แอปสร้าง ตั้ง `assignedGrade` ใหม่
   - **ใช้คะแนนจาก Classroom** (`accept_classroom`): ถือเป็นการ override ของครูเหตุผล **"รับคะแนนจาก Classroom"** บันทึกใน `submissions.total_override` และในแถว conflict (ผู้ทำ, เวลา, คะแนนเดิม/ใหม่) คะแนนรายข้อและ mastery **ไม่เปลี่ยน** เพราะกระจายคะแนนรวมลงรายข้ออย่างมีเหตุผลไม่ได้
 - **token หมดอายุ**: OAuth app ยังอยู่ในโหมด Testing refresh token จึงหมดอายุใน 7 วัน เมื่อเจอ `invalid_grant` ให้ตั้ง `google_accounts.last_error = 'invalid_grant'` (สถานะ `needs_reconnect` ตาม §18.6) แสดงแบนเนอร์ และส่ง FCM ถึงครู**ครั้งเดียวต่อการหลุด** (`google_accounts.reconnect_notified_at`) รอบซิงก์ข้ามครูคนนี้จนกว่าจะเชื่อมใหม่ **ทางใช้จริง**: โรงเรียนที่ใช้ Google Workspace ตั้ง OAuth consent screen เป็น **Internal** ใน Cloud project ของโดเมนโรงเรียน (หรือให้ admin ตั้งแอปเป็น trusted ตาม §18.5) token จะไม่หมดอายุทุก 7 วัน
@@ -1908,13 +1910,19 @@ ALTER TABLE scans
   - ไฟล์ PDF ของนักเรียนส่งเป็น part เดียวต่อไฟล์ (Gemini เห็นทุกหน้าในไฟล์) นับจำนวนหน้ารวมกับข้อจำกัดด้านล่าง
   - ถ้าผลขาดบางข้อหรือไม่ผ่าน schema ให้ **retry รายข้อ** (หน้าเดิม ถามเฉพาะข้อนั้น) หนึ่งครั้ง
   - หลายหน้า: รวมผลทุกหน้า ข้อที่เจอในหลายหน้าให้ใช้หน้าที่ไม่ว่าง ถ้าไม่ว่างทั้งสองหน้าและต่างกัน ให้ `D = 1` (§11.8)
-  - ข้อที่ Gemini **จับคู่คำตอบกับข้อไม่ได้** (ไม่เจอในทุกหน้าหลัง retry) ได้ `priority_band = check` ("ต้องตรวจ") พร้อมป้าย "หาคำตอบข้อนี้ในภาพไม่เจอ" และ `grading_state = manual`
+  - ข้อที่ Gemini **จับคู่คำตอบกับข้อไม่ได้** (ไม่เจอในทุกหน้าหลัง retry) ได้ `priority_band = check` ("ต้องตรวจ" ซึ่งเป็นความหมายของ "ต้องดู" ที่ตกลงไว้ เลือก band ที่เข้มที่สุดเพื่อไม่ให้หลุดไปกับการอนุมัติแบบกลุ่ม ไม่ใช่ `look` "ควรดู") พร้อมป้าย "หาคำตอบข้อนี้ในภาพไม่เจอ" และ `grading_state = manual`
   - ขอพิกัดกรอบคำตอบ `answer_box` (0–1000 แบบ `box_2d` ของ Gemini, ไม่บังคับ) ไว้ให้หน้าตรวจทานไฮไลต์บนภาพ
 - **Fuzzy เหมือนเดิม** (§11) ทางนี้ไม่มี CNN และ `ink_ratio` ค่า `D` จึงมาจากความขัดกันระหว่างหน้าเท่านั้น
 - ครูเปิดดูทุกข้อได้ อนุมัติแบบกลุ่มใช้กติกาเดิมตาม band
-- **ข้อจำกัด (ตั้งใน `.env`)**: `SUBMISSION_MAX_PAGES=5` หน้าต่อ submission (นับหน้าของ PDF ด้วย FPDI ที่มากับ mPDF), `SUBMISSION_MAX_FILE_MB=10` ต่อไฟล์ ต้องตั้ง PHP `upload_max_filesize ≥ 10M` และ `post_max_size ≥ 55M` บน hosting (บันทึกใน HOSTING.md)
+- **ข้อจำกัด (ตั้งใน `.env`)**: `SUBMISSION_MAX_PAGES=5` หน้าต่อ submission (นับหน้าของ PDF ด้วย `PdfPageCounter` ด้านล่าง), `SUBMISSION_MAX_FILE_MB=10` ต่อไฟล์ ต้องตั้ง PHP `upload_max_filesize ≥ 10M` และ `post_max_size ≥ 55M` บน hosting (บันทึกใน HOSTING.md)
+- **นับหน้า PDF (`PdfPageCounter`)**: FPDI ฟรีที่มากับ mPDF อ่าน PDF ที่ใช้ cross-reference stream (PDF 1.5 ขึ้นไป เช่นไฟล์จาก Word "บันทึกเป็น PDF") ไม่ได้ (`CrossReferenceException::COMPRESSED_XREF`) จึงนับเป็นลำดับ
+  1. FPDI `setSourceFile()` ถ้าอ่านได้
+  2. ถ้า FPDI ล้ม: นับ `/Type /Page` (ไม่รวม `/Pages`) ในไบต์ของไฟล์ บวกในเนื้อของทุก `/Type /ObjStm` ที่คลายด้วย `gzuncompress` (extension `zlib` ของ PHP, ไฟล์ไม่เกิน 10 MB จึงเบา)
+  3. ถ้ายังได้ 0 (ไฟล์เข้ารหัสหรือเสีย) ถือว่า**อ่านไม่ได้**: ในแอปตอบ 422 `pdf_unreadable` ข้อความ "อ่านไฟล์ PDF นี้ไม่ได้ ส่งเป็นรูป หรือบันทึกเป็น PDF ใหม่" จาก Classroom แถว import เป็น `unsupported` พร้อมเหตุผลเดียวกัน
+  - `page_count` ใน `submission_pages` และ `source_documents` จึงมีค่าเสมอ
 - **ส่งใหม่**: ตรวจใหม่อัตโนมัติ**เฉพาะ**เมื่อครูตีกลับให้ทำใหม่ (`returned_for_retake`) การส่งใหม่กรณีอื่นให้รอครูกด "ตรวจ" (`submissions.regrade_pending = TRUE`) ถ้า submission เผยแพร่แล้ว การตรวจใหม่ใช้ `SubmissionReopened` ตาม §14.2
 - **ครูแก้ข้อความอธิบายรายข้อก่อนเผยแพร่ได้** ข้อความที่แก้ใช้แทนของ Gemini ทั้งในหน้าผลของนักเรียนและในประกาศ Classroom ส่วนต้นฉบับของ Gemini เก็บไว้ที่ `responses.ai_explanation` (ใช้ได้กับทั้งสองทางตรวจ)
+- **แสดงภาพที่ server ไม่แปลง**: server เก็บไฟล์ต้นฉบับและไม่แปลงชนิด (ไม่มีงาน CPU หนัก) ไฟล์ HEIC/HEIF (เช่นจาก iPhone ผ่าน Classroom) แสดงใน Chrome ไม่ได้และถอดบน Android บางรุ่นไม่ได้ ส่วน PDF แสดงเป็นภาพในหน้าตรวจทานไม่ได้ แอปจึงลองแสดงภาพก่อน ถ้าถอดไม่ได้หรือเป็น PDF ให้แสดงกล่อง **"แสดงภาพนี้บนเครื่องนี้ไม่ได้"** พร้อมปุ่ม **"ดาวน์โหลดไฟล์"** (เปิดด้วยแอปอื่นในเครื่อง) และไม่ไฮไลต์ `answer_box` การตรวจไม่กระทบเพราะ Gemini อ่าน HEIC และ PDF ได้เอง
 - **ครูสแกนกระดาษด้วยกล้อง**ยังใช้ทาง marker/crop บนมือถือเหมือนเดิม (§6.2)
 - **ไฟล์ภาพ**: `pages/{school}/{assignment}/{page}.{ext}` ใน private disk ภาพทั้งหน้าคือหลักฐานเดียวของทางนี้ (ไม่มี crop) จึง**เก็บตามนโยบายของภาพ crop** (ลบหลัง `schools.crop_retention_until`) ไม่ใช่ลบทันทีหลังเผยแพร่ ภาพที่ถูกแทนที่ (`superseded`) ลบในรอบ `eduvision:purge-images` ถัดไป
 - **ความเป็นส่วนตัว**: ภาพทั้งหน้าอาจมีชื่อที่นักเรียนเขียนหรือหัวกระดาษที่พิมพ์ชื่อไว้ จึงถึง Gemini ด้วย ยอมรับได้เพราะใช้ paid tier (ข้อมูลไม่ถูกนำไปเทรน) แต่ prompt สั่งห้ามคัดลอกชื่อลงใน output และ server ไม่ส่งชื่อจาก DB ไปใน prompt
@@ -1930,7 +1938,7 @@ ALTER TABLE scans
 - **ไม่มีเฉลยของครู**: Gemini ร่างเฉลยเองจากโจทย์ (prompt `answer_key_draft`) และติดป้าย **"AI ร่าง ไม่มีคำตอบของครู"** (`assignments.key_origin = 'ai_draft'`)
 - **ไม่เริ่มตรวจก่อนครูอนุมัติเฉลย** (`assignments.key_approved_at`) งานที่ส่งเข้ามาก่อนหน้านั้นเก็บไว้ในสถานะรอ แล้วเข้าคิวตรวจเมื่ออนุมัติ การบ้านแบบใบงานของแอปใช้กติกาเดิม: การเปลี่ยนเป็น `ready` (rubric ครบ, §2.2) ถือเป็นการอนุมัติเฉลยและตั้ง `key_approved_at` ไปด้วย migration ตั้งค่านี้ให้การบ้านเดิมที่ไม่ใช่ `draft` เพื่อไม่ให้การตรวจเดิมหยุด
 - ข้อ `open` มี **คำตอบตัวอย่างของครู** (`questions.model_answer`) ได้ แต่คะแนนยังตัดสินด้วยเกณฑ์ของ rubric คำตอบตัวอย่างเป็นข้อมูลตั้งต้นให้ร่าง rubric (§10.4) และส่งให้ extract ในฐานะ reference
-- **เอกสารเกิน 30 หน้า**: ครูต้องเลือกช่วงหน้า (422 `document_too_long` ถ้าไม่ระบุ) และแอป**แสดงค่าใช้จ่ายโดยประมาณก่อนส่งทุกครั้ง** = `หน้า × 560 token (PDF medium) + ~1,500 token ของ prompt` ขาเข้า และ output ประมาณจากจำนวนข้อ คูณราคาใน `.env` (`GEMINI_PRICE_INPUT_PER_M`, `GEMINI_PRICE_OUTPUT_PER_M`, `USD_THB_RATE`) แสดงเป็นบาท
+- **เอกสารเกิน 30 หน้า**: ครูต้องเลือกช่วงหน้า (422 `document_too_long` ถ้าไม่ระบุ) server ตัดเฉพาะช่วงนั้นเป็น PDF ใหม่ด้วย mPDF + FPDI (`importPage`, งานเบา) ก่อนส่ง Gemini ถ้า FPDI อ่านไฟล์นั้นไม่ได้ (cross-reference stream, §19.4) ตัดไม่ได้ ตอบ 422 `document_split_unsupported` ข้อความ "ไฟล์นี้ตัดช่วงหน้าไม่ได้ บันทึกเฉพาะหน้าที่ต้องใช้เป็น PDF ใหม่ (ไม่เกิน 30 หน้า) แล้วแนบใหม่" และแอป**แสดงค่าใช้จ่ายโดยประมาณก่อนส่งทุกครั้ง** = `หน้า × 560 token (PDF medium) + ~1,500 token ของ prompt` ขาเข้า และ output ประมาณจากจำนวนข้อ คูณราคาใน `.env` (`GEMINI_PRICE_INPUT_PER_M`, `GEMINI_PRICE_OUTPUT_PER_M`, `USD_THB_RATE`) แสดงเป็นบาท
 - **แคชอ่านครั้งเดียว**: ผลการอ่านเก็บใน `document_extractions` ใช้ key = SHA-256 ของไฟล์ (หลายไฟล์ใช้ SHA-256 ของรายการ hash ที่เรียงแล้วรวมช่วงหน้า) + `school_id` + ชนิดงาน ครูคนอื่นในโรงเรียนเดียวกันอัปโหลดไฟล์เดิม**ได้ผลเดิมโดยไม่เรียก Gemini** (แอปแสดง "เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย") แต่ละครูได้**สำเนาของตัวเอง**ใน `questions` ไปแก้ ผลแคชไม่เปลี่ยน
 
 ### 19.6 E. นักเรียนส่งงานในแอป และอัปโหลดจากไฟล์
@@ -2121,7 +2129,7 @@ CREATE TABLE explanation_cache (
 | POST | `/assignments/{id}/answer-key/extract` | ครู | `{document_ids[], page_from?, page_to?}` แคชเจอตอบ `200` พร้อมข้อที่เติมแล้ว ไม่เจอตอบ `202` (queue `ExtractDocumentJob`) เกิน 30 หน้าไม่มีช่วง 422 `document_too_long` |
 | POST | `/assignments/{id}/answer-key/draft` | ครู | ให้ AI ร่างเฉลยเอง `202` (`key_origin = ai_draft`) |
 | GET | `/assignments/{id}/answer-key` | ครู | `{key_origin, key_approved_at, extraction_status, questions: [...]}` |
-| POST | `/assignments/{id}/answer-key/approve` | ครู | ทุกข้อต้องมีเฉลยหรือ rubric ครบ (และ `subject_id` สำหรับงานจากเว็บ) งานที่รออยู่เข้าคิวตรวจ |
+| POST | `/assignments/{id}/answer-key/approve` | ครู | `{subject_id?, course_id?}` ทุกข้อต้องมีเฉลยหรือ rubric ครบ งานจากเว็บที่ยังไม่มีวิชาต้องส่ง `subject_id` (ก่อน Phase 9) หรือ `course_id` ของรายวิชาที่ผูกกับห้อง (หลัง Phase 9, ตั้ง `subject_id` ตามรายวิชา) ไม่ครบ 422 `course_required` งานที่รออยู่เข้าคิวตรวจ |
 | GET | `/document-extractions/{id}` | ครู | สถานะและผล (เฉพาะโรงเรียนของตัวเอง) |
 | POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` ทาง whole-page ตอบ `201 {submission_id, pages: [...]}` เกินหน้า 422 `too_many_pages` |
 | POST | `/submissions/{id}/grade` | ครู | ตรวจงานที่ส่งใหม่ (`regrade_pending`) ตอบ `202` |
@@ -2136,7 +2144,7 @@ CREATE TABLE explanation_cache (
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ)
+**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ)
 
 ### 19.10 Job, cron และ prompt
 
@@ -2192,6 +2200,8 @@ scope รวมเป็นตาราง §18.5 บวก `classroom.announcem
   - grade conflict: ตรวจจับ, `push_app`, `accept_classroom` (override + ไม่แตะ mastery), 409 กับงานจากเว็บ
   - `invalid_grant` → `needs_reconnect` + FCM ครั้งเดียว
   - ส่งช้า: รับ + ป้าย / ปฏิเสธ 422 และ `rejected_late`
+  - `PdfPageCounterTest`: PDF แบบ xref table (FPDI), แบบ xref stream + object stream (fallback), ไฟล์เข้ารหัส/เสีย → `pdf_unreadable` และตัดช่วงหน้าไฟล์ xref stream → `document_split_unsupported`
+  - grade conflict กับค่าว่าง: `assignedGrade` ว่าง หรือ `pushed_grade` ว่าง → ไม่สร้าง conflict
   - whole-page: หนึ่ง call ต่อหน้า, retry รายข้อ, ข้อหาไม่เจอ → `check` + `manual`, หลายหน้าขัดกัน → `D = 1`, จำกัดหน้า/ขนาด/ชนิดไฟล์, ส่งใหม่หลังตีกลับตรวจอัตโนมัติ กรณีอื่นรอ
   - เฉลย: อ่านครั้งเดียว + แคชข้ามครูในโรงเรียนเดียวกัน (ไม่ข้ามโรงเรียน), เกิน 30 หน้า, ประมาณราคา, AI ร่าง + ป้าย
   - ประกาศ: เนื้อหาใช้ข้อความที่ครูแก้, `INDIVIDUAL_STUDENTS`, scope ขาด → `needs_reconnect`, retry
@@ -2216,7 +2226,7 @@ scope รวมเป็นตาราง §18.5 บวก `classroom.announcem
 
 - ครูสร้างรายวิชา**ครั้งเดียว**แล้วผูกกับหลายห้องได้ ห้องหนึ่งมีหลายรายวิชาได้
 - หน่วยและแผนไม่บังคับ การบ้านที่ไม่อยู่ในแผนยังใช้ได้ตามเดิม
-- **การบ้านใหม่ทุกงานต้องเลือกรายวิชา** (`course_id` ต้องเป็นรายวิชาที่ผูกกับห้องของการบ้านนั้น, `subject_id` ตั้งจาก `courses.subject_id`) การบ้านเดิมและงานที่นำเข้าจากเว็บ Classroom ก่อนมีรายวิชาเป็น `NULL` ได้
+- **การบ้านใหม่ทุกงานต้องเลือกรายวิชา** (`course_id` ต้องเป็นรายวิชาที่ผูกกับห้องของการบ้านนั้น, `subject_id` ตั้งจาก `courses.subject_id`) การบ้านเดิมเป็น `NULL` ได้ งานที่นำเข้าจากเว็บ Classroom เป็น `NULL` ได้ระหว่างรออนุมัติเฉลย และต้องได้รายวิชาก่อนอนุมัติ (§19.3)
 - **วิธีกรอก**: ฟอร์มในแอป หรือแนบไฟล์ (คำอธิบายรายวิชา, โครงสร้างรายวิชา, แผนการสอน) ให้ Gemini อ่าน ใช้กติกาเดียวกับ §19.5 (อ่านครั้งเดียว, แคช SHA-256 ในโรงเรียน, เกิน 30 หน้าเลือกช่วง, แสดงราคาก่อน) แล้วครู**ยืนยัน**ในฟอร์มก่อนบันทึก ผลอ่านจับคู่ตัวชี้วัดกับรายการใน `skills` ด้วยรหัส (normalize ช่องว่างและจุด) ตัวที่ไม่เจอแสดงให้ครูเลือกหรือเพิ่มเอง
 
 ### 20.2 ตัวชี้วัด (แก้ §2.3)
@@ -2233,7 +2243,7 @@ subject_code,level,code,parent_code,grade_level,name
 ```
 
   - ไฟล์รูปแบบเดิม (ไม่มีคอลัมน์ `level`) ยัง import ได้: ไม่มี `parent_code` = `indicator`, มี `parent_code` = `sub_indicator`
-  - importer รองรับไฟล์ใหญ่ (หลายหมื่นแถว): อ่านแบบ stream, upsert ทีละ 500 แถวด้วย key `(school_id, code)`, แก้ `parent_code` หลังใส่ครบทั้งไฟล์ (parent อยู่หลัง child ในไฟล์ได้), รายงาน `{created, updated, unchanged, errors: [{line, message}]}` และไม่ลบแถวที่หายไปจากไฟล์ (ถูกใช้ใน mastery แล้ว)
+  - importer รองรับไฟล์ใหญ่ (หลายหมื่นแถว): อ่านแบบ stream, upsert ทีละ 500 แถวด้วย key `(school_id, code)` **ที่ตรวจในโค้ด** (ไม่มี UNIQUE ใน DB เพราะ `school_id` ของแถวหลักสูตรเป็น `NULL`, §8.2): โหลด map `code → id` ของ scope นั้นครั้งเดียวก่อนเริ่ม แล้วแยกเป็น insert/update และกันการ import ซ้อนกันด้วย `Cache::lock('skills-import', …)`, แก้ `parent_code` หลังใส่ครบทั้งไฟล์ (parent อยู่หลัง child ในไฟล์ได้), รายงาน `{created, updated, unchanged, errors: [{line, message}]}` และไม่ลบแถวที่หายไปจากไฟล์ (ถูกใช้ใน mastery แล้ว)
 - **ครูเพิ่มตัวชี้วัดที่ขาดได้** (เปลี่ยนจาก §2.3 เดิมที่ครูเพิ่มเองไม่ได้) เป็นของโรงเรียน (`school_id` ของครู) `source = teacher` แสดงป้าย **"ครูเพิ่มเอง"** ครูในโรงเรียนเดียวกันเห็นและเลือกใช้ได้ ครูที่สร้างแก้ชื่อได้ตราบที่ยังไม่มี observation admin ของโรงเรียนแก้ได้เสมอ
 
 ### 20.3 H. จับคู่ข้อกับตัวชี้วัด และคะแนนรวมตามลำดับชั้น
@@ -2279,8 +2289,8 @@ dependency ใหม่ของแอป: **`fl_chart`** ทุกกราฟ�
   - **ฉบับครู**: ตรงไปตรงมา จุดเด่น จุดที่ควรพัฒนา และขั้นต่อไป
   - **ฉบับนักเรียน**: ให้กำลังใจ **ห้ามมีคำว่า "อ่อน"** (server ตรวจซ้ำ ถ้าเจอถือเป็น `invalid_output` และ retry หนึ่งครั้ง)
   - ขั้นต่อไปอ้างถึงตัวชี้วัดที่มีแบบฝึกซ่อมที่อนุมัติแล้ว (`next_step_skill_codes`) แอปทำลิงก์ไปหน้าแบบฝึกของตัวชี้วัดนั้น
-  - **input มีแค่** ระดับชั้น ชื่อวิชา รหัสและชื่อตัวชี้วัด ค่า mastery `n_obs` และจำนวนแบบฝึกที่มี **ไม่มีชื่อ เลขที่ หรือ id ของนักเรียน**
-- **รอบกลางคืนผ่าน Gemini Batch API** (ราคาครึ่งหนึ่ง) เฉพาะนักเรียนที่ mastery เปลี่ยน (`input_hash` ของ input ไม่ตรงกับครั้งก่อน) ครูกด **"วิเคราะห์ตอนนี้"** ได้ (เรียกแบบ synchronous ใน request, timeout 30 วินาที)
+  - **input มีแค่** ระดับชั้น ชื่อวิชา รหัสและชื่อตัวชี้วัด ค่า mastery `n_obs` และจำนวนแบบฝึกที่มี (ทุกค่าไม่ระบุตัวนักเรียน) **ไม่มีชื่อ เลขที่ หรือ id ของนักเรียน**
+- **รอบกลางคืนผ่าน Gemini Batch API** (ราคาครึ่งหนึ่ง) เฉพาะนักเรียนที่ mastery เปลี่ยน ใช้ hash สองค่า: ตอนเผยแพร่เขียน `computed_input_hash` (hash ของ input ล่าสุด) พร้อม strengths/areas ส่วน `generated_input_hash` เขียน**เฉพาะเมื่อ Gemini เขียนข้อความสำเร็จ** (= hash ของ input ที่ใช้เขียนข้อความนั้น) แถวที่สองค่านี้ต่างกันหรือ `generated_input_hash` ว่างคือแถวที่ต้องเขียนใหม่ ครูกด **"วิเคราะห์ตอนนี้"** ได้ (เรียกแบบ synchronous ใน request, timeout 30 วินาที)
 - **ครูเห็นทันที นักเรียนเห็นหลังครูอนุมัติหรือแก้** ครูเปิด **"แชร์ให้นักเรียนอัตโนมัติ"** ต่อห้องได้ (`classrooms.auto_share_analysis`) ข้อความที่อนุมัติแล้วยังแสดงต่อจนกว่าฉบับใหม่จะได้รับอนุมัติ
 - ขอบเขต: หนึ่งการวิเคราะห์ต่อ (นักเรียน, ห้อง) ใช้ตัวชี้วัดของรายวิชาที่ผูกกับห้องนั้น (ห้องที่ยังไม่มีรายวิชาใช้ตัวชี้วัดที่มีข้อในการบ้านของห้องนั้น) key ที่ใช้คือ key ของครูเจ้าของห้องตาม `GeminiKeyResolver` เดิม
 
@@ -2290,9 +2300,10 @@ dependency ใหม่ของแอป: **`fl_chart`** ทุกกราฟ�
 ALTER TABLE skills
   ADD COLUMN level       ENUM('strand','standard','indicator','sub_indicator') NOT NULL DEFAULT 'indicator',
   ADD COLUMN source      ENUM('curriculum','school_admin','teacher') NOT NULL DEFAULT 'curriculum',
-  ADD COLUMN created_by  BIGINT UNSIGNED NULL REFERENCES users(id),   -- source = teacher
-  ADD INDEX idx_skills_parent (parent_id);
+  ADD COLUMN created_by  BIGINT UNSIGNED NULL REFERENCES users(id);   -- source = teacher
 -- แถวเดิม: parent_id NULL → indicator, มี parent_id → sub_indicator / school_admin
+-- parent_id มี index จาก foreign key อยู่แล้ว ไม่ต้องเพิ่ม
+-- ไม่มี UNIQUE (school_id, code) เพราะ MariaDB ถือว่า NULL ไม่ซ้ำกัน (แถวหลักสูตร school_id = NULL) ตรวจความไม่ซ้ำในโค้ดตาม §8.2
 
 CREATE TABLE courses (
   id             BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
@@ -2302,7 +2313,7 @@ CREATE TABLE courses (
   code           VARCHAR(20)  NOT NULL,              -- ค15101
   name           VARCHAR(255) NOT NULL,              -- คณิตศาสตร์ 5
   grade_level    TINYINT UNSIGNED NOT NULL,
-  semester       TINYINT UNSIGNED NULL,              -- 1, 2 หรือ NULL = ทั้งปี
+  semester       TINYINT UNSIGNED NOT NULL DEFAULT 0, -- 1, 2 หรือ 0 = ทั้งปี (ไม่ใช้ NULL เพราะ UNIQUE ใน MariaDB ไม่กัน NULL ซ้ำ)
   academic_year  SMALLINT UNSIGNED NOT NULL,         -- พ.ศ.
   hours          SMALLINT UNSIGNED NULL,             -- ชั่วโมงต่อปี/ภาค
   description    TEXT NULL,
@@ -2392,7 +2403,9 @@ CREATE TABLE student_analyses (
   id                     BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   student_id             BIGINT UNSIGNED NOT NULL REFERENCES users(id),
   classroom_id           BIGINT UNSIGNED NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
-  input_hash             CHAR(64) NOT NULL,          -- SHA-256 ของ input (mastery, n_obs) ครั้งล่าสุด
+  computed_input_hash    CHAR(64) NOT NULL,          -- SHA-256 ของ input (mastery, n_obs) ล่าสุด เขียนตอนเผยแพร่
+  queued_input_hash      CHAR(64) NULL,              -- hash ของ input ที่ส่งไปใน batch ที่รออยู่
+  generated_input_hash   CHAR(64) NULL,              -- hash ของ input ที่ใช้เขียนข้อความปัจจุบัน (NULL = ยังไม่เคยเขียน)
   strengths              JSON NOT NULL,              -- ผลจากโค้ด [{skill_id, value, n_obs}]
   areas                  JSON NOT NULL,
   status                 ENUM('computed','queued','drafted','failed') NOT NULL DEFAULT 'computed',
@@ -2422,7 +2435,7 @@ CREATE TABLE student_analyses (
 | POST | `/courses/extract` | ครู | `{document_ids[], purpose: course\|lesson_plan, page_from?, page_to?}` ใช้ `POST /documents` ของ §19.9 แคชเจอ `200` ไม่เจอ `202` |
 | POST | `/courses/import` | ครู | `{extraction_id?, course, units[], lesson_plans[]}` ที่ครูยืนยันแล้ว สร้างทั้งหมดใน transaction เดียว |
 | GET | `/skills?subject=&grade=&level=&q=&tree=1` | ครู | เพิ่มตัวกรองระดับและโหมดต้นไม้ |
-| POST | `/skills` | ครู | `{subject_id, parent_id, code?, name, grade_level}` → `source = teacher` ของโรงเรียน |
+| POST | `/skills` | ครู | `{subject_id, parent_id, code?, name, grade_level}` → `source = teacher` ของโรงเรียน `level` ตาม parent (มาตรฐาน → `indicator`, ตัวชี้วัด → `sub_indicator`) ไม่ส่ง `code` server สร้างเป็น `<code ของ parent>/ค<n>` (n = ลำดับถัดไปของตัวที่ครูเพิ่มใต้ parent นั้นในโรงเรียน) รหัสซ้ำกับหลักสูตรหรือของโรงเรียน 422 `skill_code_taken` |
 | PATCH | `/skills/{id}` | ครู (ผู้สร้าง, ยังไม่มี observation) | |
 | POST | `/assignments/{id}/indicator-suggestions` | ครู | ต้องผูกแผนแล้ว (422 `lesson_plan_required`) ตอบ `202` |
 | GET | `/assignments/{id}/indicator-suggestions` | ครู | ข้อเสนอรายข้อ + `unmapped_question_count` |
@@ -2449,9 +2462,10 @@ CREATE TABLE student_analyses (
 hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 
 1. **ทุกนาที** ถ้าเวลา `Asia/Bangkok` ≥ 01:00 และ `Cache::add('analysis-nightly:' . วันที่ไทย, true, 36 ชั่วโมง)` สำเร็จ (ครั้งแรกของวัน) → dispatch `BuildAnalysisBatchesJob`
-2. `BuildAnalysisBatchesJob` หา (นักเรียน, ห้อง) ที่ `input_hash` ปัจจุบันไม่ตรงกับที่เก็บ คำนวณ strengths/areas ใหม่ แล้วรวมคำขอเป็น **batch ละ key หนึ่งตัว** (key ของครูเจ้าของห้อง หรือ key กลาง) ส่งด้วย `POST models/{model}:batchGenerateContent` (inline requests, ไม่เกิน `ANALYSIS_BATCH_MAX` = 200 คำขอต่อ batch) บันทึก `batch_name` สถานะ `submitted`
-3. **ทุกนาที** ถ้ามี batch `submitted`/`running` ที่ `last_polled_at` เก่ากว่า 1 นาที → `PollAnalysisBatchJob` เรียก `GET batches/{name}` เมื่อสำเร็จ อ่านผล inline ตรวจ schema และคำต้องห้าม เขียน `student_analyses` (`drafted`) บันทึก `ai_calls` ต่อคำขอ (`batch = TRUE`) แล้วเปลี่ยนเป็น `collected` ถ้า `auto_share_analysis` ของห้องเปิดอยู่ คัดลอกเป็น `shared_student_text` ทันที
-4. batch ที่ `failed`/`expired` ตั้งแถวที่เกี่ยวข้องเป็น `failed` รอบคืนถัดไปลองใหม่เพราะ `input_hash` ยังไม่ถูกบันทึก
+2. `BuildAnalysisBatchesJob` คำนวณ strengths/areas และ `computed_input_hash` ใหม่จาก mastery ปัจจุบัน (ครอบคลุมข้อมูลเก่าก่อน Phase 9 ด้วย) แล้วเลือก (นักเรียน, ห้อง) ที่ `generated_input_hash` เป็น `NULL` หรือไม่ตรงกับ `computed_input_hash` และไม่อยู่ใน batch ที่ยังรอ ตั้ง `queued_input_hash = computed_input_hash`, `status = queued` แล้วรวมคำขอเป็น **batch ละ key หนึ่งตัว** (key ของครูเจ้าของห้อง หรือ key กลาง) ส่งด้วย `POST models/{model}:batchGenerateContent` (inline requests, ไม่เกิน `ANALYSIS_BATCH_MAX` = 200 คำขอต่อ batch) บันทึก `batch_name` สถานะ `submitted`
+3. **ทุกนาที** ถ้ามี batch `submitted`/`running` ที่ `last_polled_at` เก่ากว่า 1 นาที → `PollAnalysisBatchJob` เรียก `GET batches/{name}` เมื่อสำเร็จ อ่านผล inline ตรวจ schema และคำต้องห้าม เขียน `student_analyses` (`drafted`, `generated_input_hash = queued_input_hash` ของคำขอนั้น ไม่ใช่ค่าล่าสุด ถ้า mastery เปลี่ยนระหว่างรอ คืนถัดไปจึงเขียนใหม่) บันทึก `ai_calls` ต่อคำขอ (`batch = TRUE`) แล้วเปลี่ยนเป็น `collected` ถ้า `auto_share_analysis` ของห้องเปิดอยู่ คัดลอกเป็น `shared_student_text` ทันที
+4. batch ที่ `failed`/`expired` (หรือคำขอเดี่ยวที่ล้มใน batch ที่สำเร็จ) ตั้งแถวที่เกี่ยวข้องเป็น `failed` และล้าง `queued_input_hash` รอบคืนถัดไปลองใหม่เพราะ `generated_input_hash` ยังไม่เปลี่ยน
+- "วิเคราะห์ตอนนี้" ใช้ `computed_input_hash` ล่าสุดและเขียน `generated_input_hash` เมื่อสำเร็จเช่นกัน
 - ⚠️ ตรวจชื่อ field และสถานะของ Batch API (`BATCH_STATE_*` / `JOB_STATE_*`, `inlinedResponses`) กับเอกสารตอน implement และมี test ด้วย `Http::fake`
 - ไม่ใช้ Batch API กับการตรวจการบ้าน เพราะอาจใช้เวลาถึง 24 ชั่วโมง (§21)
 
@@ -2471,7 +2485,7 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
   - เสนอตัวชี้วัด: เลือกได้เฉพาะจากแผน (ตัดตัวนอกแผนที่ Gemini ตอบทิ้ง), ข้อที่ไม่ผูกนับเป็นคำเตือน
   - roll-up: golden test ของสูตร §20.3 (ค่าเฉลี่ยธรรมดา, ไม่นับตัวที่ยังไม่ประเมิน, coverage, node ว่าง = null) และกราฟทุก endpoint
   - analysis: input ไม่มีชื่อ/id (ตรวจ payload), คำว่า "อ่อน" ในฉบับนักเรียน → retry, วิเคราะห์ตอนนี้, อนุมัติ/auto-share, นักเรียนเห็นเฉพาะของตัวเองที่อนุมัติแล้ว
-  - รอบกลางคืน: dispatch ครั้งเดียวต่อวันหลัง 01:00, เฉพาะคนที่ `input_hash` เปลี่ยน, แยก batch ตาม key, poll จนเก็บผล, batch ล้ม
+  - รอบกลางคืน: dispatch ครั้งเดียวต่อวันหลัง 01:00, เฉพาะคนที่ `generated_input_hash` ว่างหรือไม่ตรงกับ `computed_input_hash` (เผยแพร่แล้ว batch ยังเห็นว่าต้องเขียน), mastery เปลี่ยนระหว่างรอ batch → คืนถัดไปเขียนใหม่, แยก batch ตาม key, poll จนเก็บผล, batch ล้ม
 - app: widget test ของฟอร์มรายวิชา/หน่วย/แผน, หน้ายืนยันผลอ่านเอกสาร, หน้าจับคู่ตัวชี้วัด, กราฟทุกแบบ (รวมเงื่อนไขเรดาร์ 3–12 แกน → กราฟแท่ง และ drill-down), หน้าอนุมัติการวิเคราะห์ และหน้าของนักเรียนที่ไม่มีค่าเฉลี่ยห้อง
 
 ---
