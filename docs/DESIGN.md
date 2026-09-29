@@ -1054,6 +1054,7 @@ CREATE TABLE training_samples (
 - ใช้ Laravel HTTP client เรียกตรง ไม่ต้องใช้ SDK
 - `GEMINI_MODEL` เลือกรุ่น Flash ล่าสุดตอนเริ่ม implement และตั้งเป็นค่าใน `.env` เปลี่ยนได้โดยไม่ต้องแก้โค้ด
 - ใช้ **structured output** โดยตั้ง response MIME type เป็น `application/json` แล้วแนบ schema ตาม §10.3 ชื่อ field ที่ใช้ส่ง schema ให้ตรวจกับเอกสาร API เวอร์ชันที่ใช้ตอน implement
+  - พบตอนรัน calibration กับ API จริง (30 ก.ย. 2569): schema ที่มี array ซ้อนกันพร้อม `maxItems` และตัวเลขที่มี `minimum`/`maximum` (`extract_batch`, `extract_page`, `answer_key_read`) ถูกตอบ `400 Request contains an invalid argument.` ทุกครั้ง จึงส่ง schema ให้ Gemini **โดยตัด `maxItems`, `minItems`, `minimum`, `maximum` ออก** (`HttpGeminiClient::servingSchema`) ส่วน server ยังตรวจคำตอบกับ schema เต็มเหมือนเดิม คำตอบที่เกินขอบเขตจึงยังเป็น `invalid_output` ข้อความ error ของ 400 ต่อท้ายด้วย field ที่ผิดเมื่อ Google ส่ง `fieldViolations` มา
 - `temperature`: `extract` = 0, `rubric_draft` = 0.2, `explanation` = 0.5, `practice_gen` = 0.8
 - timeout 30 วินาที ต่อคำขอ
 - **ใช้ paid tier** (ทีมมี API key แบบ paid อยู่แล้ว) เพราะ free tier อนุญาตให้ Google นำข้อมูลไปใช้ปรับปรุงผลิตภัณฑ์ กติกา: ห้ามสลับไปใช้ key แบบ free tier กับข้อมูลของนักเรียนจริงไม่ว่ากรณีใด และตั้ง **budget alert** ใน Google Cloud Billing ตั้งแต่วันแรก (เช่น 300 บาท/เดือน) พร้อมจำกัด key ให้ใช้ได้เฉพาะ Generative Language API

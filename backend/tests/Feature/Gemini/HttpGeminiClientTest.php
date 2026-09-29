@@ -240,6 +240,37 @@ class HttpGeminiClientTest extends TestCase
         $this->assertArrayNotHasKey('thinkingConfig', $this->client(thinking: null)->payload($request)['generationConfig'], 'a model without thinking levels');
     }
 
+    public function test_gemini_gets_the_schema_without_bounds_and_the_gateway_still_checks_them(): void
+    {
+        $schema = ['type' => 'object', 'properties' => [
+            'answers' => ['type' => 'array', 'maxItems' => 2, 'minItems' => 1, 'items' => ['type' => 'object',
+                'properties' => ['question_no' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 5], 'maximum' => ['type' => 'string']],
+                'required' => ['question_no']]],
+        ], 'required' => ['answers']];
+        $sent = $this->client()->payload(new GeminiRequest('extract_page', 'general', 'v2', 'S', 'U', responseSchema: $schema))['generationConfig']['responseJsonSchema'];
+
+        $this->assertSame(['type' => 'object', 'properties' => [
+            'answers' => ['type' => 'array', 'items' => ['type' => 'object',
+                'properties' => ['question_no' => ['type' => 'integer'], 'maximum' => ['type' => 'string']],
+                'required' => ['question_no']]],
+        ], 'required' => ['answers']], $sent, 'a property that happens to be called "maximum" stays');
+
+        Http::fake([self::URL => Http::response(self::answer('{"answers":[{"question_no":9}]}'))]);
+        $this->app->instance(GeminiClient::class, $this->client());
+        $request = new GeminiRequest('extract_page', 'general', 'v2', 'S', 'U', responseSchema: $schema);
+        $outcome = app(GeminiGateway::class)->run(['a' => new GeminiCall($request)], new GeminiKey(self::KEY, 'server'))['a'];
+        $this->assertSame(CallOutcome::INVALID_OUTPUT, $outcome->status, 'question_no 9 > maximum 5');
+    }
+
+    public function test_a_bad_request_names_the_offending_field(): void
+    {
+        Http::fake([self::URL => Http::response(['error' => ['code' => 400, 'message' => 'Request contains an invalid argument.', 'status' => 'INVALID_ARGUMENT',
+            'details' => [['@type' => 'type.googleapis.com/google.rpc.BadRequest', 'fieldViolations' => [['field' => 'generation_config.media_resolution', 'description' => 'not supported']]]]]], 400)]);
+
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame('HTTP 400: Request contains an invalid argument. (generation_config.media_resolution: not supported)', $reply->error);
+    }
+
     public function test_a_timeout_is_an_error_not_an_exception(): void
     {
         Http::fake([self::URL => fn () => throw new ConnectionException('cURL error 28: Operation timed out after 30001 milliseconds')]);

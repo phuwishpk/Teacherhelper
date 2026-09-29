@@ -19,6 +19,9 @@ use Throwable;
  *                       thinkingConfig?, temperature?, mediaResolution?,
  *                       maxOutputTokens?}}
  *
+ * responseJsonSchema is the response schema without its size and range
+ * bounds (servingSchema()); the gateway enforces those on the reply.
+ *
  * Thinking level: the request's own (prompt front matter, DESIGN §21.6),
  * else GEMINI_THINKING_LEVEL; none at all when that setting is empty.
  *
@@ -148,7 +151,7 @@ final class HttpGeminiClient implements GeminiClient
         $config = [];
         if ($request->responseSchema !== null) {
             $config['responseMimeType'] = 'application/json';
-            $config['responseJsonSchema'] = $request->responseSchema;
+            $config['responseJsonSchema'] = self::servingSchema($request->responseSchema);
         }
         if ($this->sendTemperature && $request->temperature !== null) {
             $config['temperature'] = $request->temperature;
@@ -170,6 +173,31 @@ final class HttpGeminiClient implements GeminiClient
         }
 
         return $body;
+    }
+
+    /**
+     * The schema Gemini is asked to follow: the response schema without its
+     * size and range bounds (maxItems, minItems, minimum, maximum). Nested
+     * array bounds and integer ranges make the constrained decoder too large
+     * and Gemini answers 400 "Request contains an invalid argument" (seen on
+     * extract_batch, extract_page and answer_key_read, 30 Sep 2026). The
+     * gateway still checks every bound against the full schema, so an answer
+     * outside them stays invalid output.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    public static function servingSchema(array $schema): array
+    {
+        $out = [];
+        foreach ($schema as $key => $value) {
+            if (in_array($key, ['maxItems', 'minItems', 'minimum', 'maximum'], true) && ! is_array($value)) {
+                continue;
+            }
+            $out[$key] = is_array($value) ? self::servingSchema($value) : $value;
+        }
+
+        return $out;
     }
 
     private function reply(mixed $result, int $elapsedMs): GeminiReply
@@ -241,10 +269,23 @@ final class HttpGeminiClient implements GeminiClient
         return str_contains($body, 'API_KEY_INVALID') || str_contains($body, 'API key not valid') || str_contains($body, 'API key expired');
     }
 
+    /**
+     * error.message, plus the field and reason of a 400's BadRequest details
+     * (the bare "Request contains an invalid argument." names no field).
+     */
     private static function errorMessage(Response $response): string
     {
         $message = $response->json('error.message');
+        if (! is_string($message)) {
+            return Str::limit($response->body(), self::ERROR_LIMIT);
+        }
+        $fields = [];
+        foreach ((array) $response->json('error.details', []) as $detail) {
+            foreach ((array) ($detail['fieldViolations'] ?? []) as $violation) {
+                $fields[] = trim(($violation['field'] ?? '').': '.($violation['description'] ?? ''), ': ');
+            }
+        }
 
-        return Str::limit(is_string($message) ? $message : $response->body(), self::ERROR_LIMIT);
+        return Str::limit($fields === [] ? $message : $message.' ('.implode('; ', $fields).')', self::ERROR_LIMIT);
     }
 }
