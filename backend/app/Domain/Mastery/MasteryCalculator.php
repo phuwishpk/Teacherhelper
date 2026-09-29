@@ -59,6 +59,28 @@ final class MasteryCalculator
     }
 
     /**
+     * The mastery after each observation (DESIGN §20.4 chart 1): the same
+     * formula as ewma(), keeping every intermediate value. The last one
+     * equals ewma()['value'].
+     *
+     * @param  list<array{score_ratio: float|int|string, source: string}>  $observations
+     * @return list<float>
+     */
+    public static function ewmaSeries(array $observations): array
+    {
+        $m = null;
+        $out = [];
+        foreach ($observations as $observation) {
+            $s = max(0.0, min(1.0, (float) $observation['score_ratio']));
+            $alpha = $observation['source'] === SkillObservation::SOURCE_PRACTICE ? self::ALPHA_PRACTICE : self::ALPHA_HOMEWORK;
+            $m = $m === null ? $s : $alpha * $s + (1.0 - $alpha) * $m;
+            $out[] = self::round3($m);
+        }
+
+        return $out;
+    }
+
+    /**
      * Half-up to 3 decimals, the same on every PHP version: round() pre-rounds
      * differently before 8.4, so 0.7025 could come out as 0.702 on one server
      * and 0.703 on another (see ScoreRounding).

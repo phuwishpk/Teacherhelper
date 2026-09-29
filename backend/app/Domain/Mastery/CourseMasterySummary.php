@@ -202,12 +202,14 @@ final class CourseMasterySummary
     }
 
     /**
-     * The standard above each indicator (walking parent_id), keyed by the indicator's id.
+     * The standard above each indicator (walking parent_id), keyed by the
+     * indicator's id. Indicators with no standard above them are absent.
+     * Also groups the heatmap columns (§20.4 chart 3).
      *
      * @param  list<Skill>  $indicators
      * @return array<int, Skill>
      */
-    private function standardsOf(array $indicators): array
+    public function standardsOf(array $indicators): array
     {
         /** @var array<int, Skill> $known */
         $known = [];

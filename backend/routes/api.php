@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\AnswerKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
+use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
@@ -142,6 +143,11 @@ Route::prefix('v1')->group(function () {
                 Route::post('courses/import', [CourseDocumentController::class, 'import'])->name('api.courses.import');
                 // The roll-up by standard or unit with coverage, per student or per classroom (§20.3).
                 Route::get('courses/{id}/mastery-summary', MasterySummaryController::class)->name('api.courses.mastery-summary');
+                // Chart data of §20.4: (1) progress, (2) % passing, (4) score distribution, (5) plan progress.
+                Route::get('courses/{id}/plan-progress', [ChartController::class, 'planProgress'])->name('api.courses.plan-progress');
+                Route::get('classrooms/{id}/indicator-pass-rate', [ChartController::class, 'passRate'])->name('api.classrooms.indicator-pass-rate');
+                Route::get('students/{id}/indicator-progress', [ChartController::class, 'studentProgress'])->name('api.students.indicator-progress');
+                Route::get('assignments/{id}/score-distribution', [ChartController::class, 'scoreDistribution'])->name('api.assignments.score-distribution');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');
@@ -257,6 +263,7 @@ Route::prefix('v1')->group(function () {
                 // Their own courses and roll-up only (§20.4, §20.9).
                 Route::get('courses', [StudentCourseController::class, 'index'])->name('api.student.courses.index');
                 Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
+                Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Hand in from the app (§19.6): open assignments and a whole-page submission.
                 Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');

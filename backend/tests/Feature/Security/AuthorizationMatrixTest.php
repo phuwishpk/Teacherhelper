@@ -85,6 +85,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.courses.extract.estimate' => ['POST', 'courses/extract/estimate', self::OK, self::OK],
         'api.courses.import' => ['POST', 'courses/import', self::OK, self::OK],
         'api.courses.mastery-summary' => ['GET', 'courses/{own_course}/mastery-summary', 404, 404],
+        'api.courses.plan-progress' => ['GET', 'courses/{own_course}/plan-progress', 404, 404],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
         'api.assignments.show' => ['GET', 'assignments/{assignment}', 404, 404],
@@ -137,6 +138,10 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.analytics' => ['GET', 'assignments/{assignment}/analytics', 404, 404],
         'api.classrooms.mastery' => ['GET', 'classrooms/{classroom}/mastery', 404, 404],
         'api.students.mastery' => ['GET', 'students/{student}/mastery', 404, 404],
+        // Chart data of §20.4: the teacher's own classrooms, students and assignments only.
+        'api.classrooms.indicator-pass-rate' => ['GET', 'classrooms/{classroom}/indicator-pass-rate', 404, 404],
+        'api.students.indicator-progress' => ['GET', 'students/{student}/indicator-progress', 404, 404],
+        'api.assignments.score-distribution' => ['GET', 'assignments/{assignment}/score-distribution', 404, 404],
         'api.google.status' => ['GET', 'google/status', self::OK, self::OK],
         'api.google.disconnect' => ['DELETE', 'google/disconnect', self::OK, self::OK],
         'api.google.connect' => ['POST', 'google/connect', self::OK, self::OK],
@@ -174,6 +179,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.courses.index' => ['GET', 'student/courses', self::OK, self::OK],
         // A classmate reads the same course (their own values only); another school's student does not see it.
         'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
+        // Always the signed-in student's own lines (§20.9).
+        'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
         'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
         // A classmate hands in to the same assignment as themself (their own work).
