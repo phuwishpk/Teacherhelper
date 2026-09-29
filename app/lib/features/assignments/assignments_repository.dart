@@ -17,6 +17,9 @@ abstract class AssignmentsRepository {
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
+    AssignmentMode mode = AssignmentMode.worksheet,
+    bool acceptLate = true,
+    bool scoreOnly = false,
   });
   Future<Assignment> update(
     int id, {
@@ -25,6 +28,9 @@ abstract class AssignmentsRepository {
     DateTime? dueAt,
     bool clearDueAt = false,
     String? status,
+    AssignmentMode? mode,
+    bool? acceptLate,
+    bool? scoreOnly,
   });
   Future<void> delete(int id);
 
@@ -77,6 +83,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
+    AssignmentMode mode = AssignmentMode.worksheet,
+    bool acceptLate = true,
+    bool scoreOnly = false,
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments',
@@ -86,6 +95,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'title': title,
         'strictness': strictness.apiValue,
         'due_at': dueAt?.toUtc().toIso8601String(),
+        'mode': mode.apiValue,
+        'accept_late': acceptLate,
+        'score_only': scoreOnly,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -99,6 +111,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     DateTime? dueAt,
     bool clearDueAt = false,
     String? status,
+    AssignmentMode? mode,
+    bool? acceptLate,
+    bool? scoreOnly,
   }) async {
     final res = await _dio.patch<Object?>(
       '/assignments/$id',
@@ -108,6 +123,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         if (dueAt != null) 'due_at': dueAt.toUtc().toIso8601String(),
         if (clearDueAt) 'due_at': null,
         'status': ?status,
+        'mode': ?mode?.apiValue,
+        'accept_late': ?acceptLate,
+        'score_only': ?scoreOnly,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));

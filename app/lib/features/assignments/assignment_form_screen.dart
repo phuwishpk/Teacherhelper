@@ -50,7 +50,9 @@ class AssignmentEditScreen extends ConsumerWidget {
 }
 
 /// Create an assignment (classroom + subject fixed afterwards) or edit its
-/// title, strictness and due date.
+/// title, strictness and due date; the mode (worksheet or not, DESIGN
+/// §19.5) while it is a draft without a layout, "รับงานส่งช้า" and
+/// "เฉพาะคะแนน" (§21.7).
 class AssignmentFormScreen extends ConsumerStatefulWidget {
   const AssignmentFormScreen({
     super.key,
@@ -75,7 +77,18 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   late Strictness _strictness =
       widget.existing?.strictness ?? Strictness.normal;
   late DateTime? _dueAt = widget.existing?.dueAt;
+  late AssignmentMode _mode = widget.existing?.mode ?? AssignmentMode.worksheet;
+  late bool _acceptLate = widget.existing?.acceptLate ?? true;
+  late bool _scoreOnly = widget.existing?.scoreOnly ?? false;
   bool _busy = false;
+
+  /// The server refuses a mode change once a layout was built or work was
+  /// handed in (422 errors.mode); the app only offers it on a fresh draft.
+  bool get _modeEditable {
+    final a = widget.existing;
+    return a == null || (a.isDraft && a.currentLayoutVersion == null);
+  }
+
   String? _error;
 
   @override
@@ -120,6 +133,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               strictness: _strictness,
               dueAt: _dueAt,
               clearDueAt: _dueAt == null && a.dueAt != null,
+              mode: _mode != a.mode ? _mode : null,
+              acceptLate: _acceptLate != a.acceptLate ? _acceptLate : null,
+              scoreOnly: _scoreOnly != a.scoreOnly ? _scoreOnly : null,
             );
         if (!mounted) return;
         showMessage(context, 'บันทึกแล้ว');
@@ -133,9 +149,17 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               title: _title.text.trim(),
               strictness: _strictness,
               dueAt: _dueAt,
+              mode: _mode,
+              acceptLate: _acceptLate,
+              scoreOnly: _scoreOnly,
             );
         if (!mounted) return;
-        showMessage(context, 'สร้างการบ้านแล้ว เพิ่มคำถามได้เลย');
+        showMessage(
+          context,
+          _mode == AssignmentMode.freeform
+              ? 'สร้างการบ้านแล้ว เพิ่มเฉลยได้เลย'
+              : 'สร้างการบ้านแล้ว เพิ่มคำถามได้เลย',
+        );
         context.pushReplacement(AppRoutes.assignment(created.id));
       }
     } catch (e) {
@@ -213,6 +237,33 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 ),
               const SizedBox(height: 16),
             ],
+            Text('รูปแบบการบ้าน', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            SegmentedButton<AssignmentMode>(
+              showSelectedIcon: false,
+              segments: [
+                for (final m in AssignmentMode.values)
+                  ButtonSegment(value: m, label: Text(m.label)),
+              ],
+              selected: {_mode},
+              onSelectionChanged: _modeEditable
+                  ? (s) => setState(() => _mode = s.first)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _mode == AssignmentMode.freeform
+                  ? 'นักเรียนทำในสมุดหรือใบงานของครูเอง ตรวจจากรูปทั้งหน้า '
+                        'ไม่ต้องพิมพ์ใบงาน ต้องอนุมัติเฉลยก่อนเริ่มตรวจ'
+                  : 'พิมพ์ใบงานของแอปที่มี QR และกรอบคำตอบ แล้วสแกนตรวจ',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (!_modeEditable)
+              Text(
+                'เปลี่ยนรูปแบบไม่ได้หลังสร้าง layout หรือมีงานส่งแล้ว',
+                style: theme.textTheme.bodySmall,
+              ),
+            const SizedBox(height: 16),
             Text('ความเข้มงวดในการตรวจ', style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             SegmentedButton<Strictness>(
@@ -240,6 +291,25 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       onPressed: () => setState(() => _dueAt = null),
                     ),
               onTap: _pickDue,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('รับงานส่งช้า'),
+              subtitle: const Text(
+                'งานที่ส่งหลังกำหนดยังตรวจได้ และมีป้าย "ส่งช้า"',
+              ),
+              value: _acceptLate,
+              onChanged: (v) => setState(() => _acceptLate = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('เฉพาะคะแนน'),
+              subtitle: const Text(
+                'นักเรียนเห็นคะแนนและข้อความสำเร็จรูป '
+                'ไม่ให้ AI เขียนคำอธิบาย ประหยัดค่าใช้จ่าย',
+              ),
+              value: _scoreOnly,
+              onChanged: (v) => setState(() => _scoreOnly = v),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

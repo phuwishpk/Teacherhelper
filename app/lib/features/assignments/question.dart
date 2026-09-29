@@ -146,6 +146,8 @@ class Question {
     this.rubricStatus = RubricStatus.notNeeded,
     this.skills = const [],
     this.rubricCriteria = const [],
+    this.modelAnswer,
+    this.keyComplete = true,
   });
 
   final int id;
@@ -162,6 +164,18 @@ class Question {
   final RubricStatus rubricStatus;
   final List<Skill> skills;
   final List<RubricCriterion> rubricCriteria;
+
+  /// The teacher's model answer of an open question (§19.5): a reference
+  /// for the rubric draft and extraction; the rubric still decides scores.
+  final String? modelAnswer;
+
+  /// The question counts as done for approving the key (server's
+  /// KeyCompleteness: an answer, or an approved rubric for show_work/open).
+  final bool keyComplete;
+
+  /// A freeform question whose answer is not set yet (typed, read from a
+  /// document or drafted by AI later). Open questions use a rubric instead.
+  bool get missingAnswer => type != QuestionType.open && answerKey == null;
 
   /// Reference solution steps stored in the show_work answer key.
   List<String> get referenceSteps =>
@@ -188,6 +202,8 @@ class Question {
         .cast<Map<String, dynamic>>()
         .map(RubricCriterion.fromJson)
         .toList(),
+    modelAnswer: json['model_answer'] as String?,
+    keyComplete: json['key_complete'] != false,
   );
 }
 
@@ -204,6 +220,7 @@ class QuestionDraft {
     this.answerKey,
     this.skillIds = const [],
     this.position,
+    this.modelAnswer,
   });
 
   final QuestionType type;
@@ -216,6 +233,9 @@ class QuestionDraft {
   final List<int> skillIds;
   final int? position;
 
+  /// Open questions only; the server drops it for other types.
+  final String? modelAnswer;
+
   Map<String, dynamic> toJson() => {
     if (position != null) 'position': position,
     'type': type.apiValue,
@@ -226,5 +246,6 @@ class QuestionDraft {
     'match_mode': matchMode,
     'answer_key': answerKey,
     'skill_ids': skillIds,
+    if (type == QuestionType.open) 'model_answer': modelAnswer,
   };
 }

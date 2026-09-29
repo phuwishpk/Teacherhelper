@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assignments/answer_key_screen.dart';
 import '../../features/assignments/assignment.dart';
 import '../../features/assignments/assignment_detail_screen.dart';
 import '../../features/assignments/assignment_form_screen.dart';
@@ -79,6 +80,11 @@ abstract final class AppRoutes {
       '/assignments/$assignmentId/questions/new';
   static String questionEdit(int assignmentId, int questionId) =>
       '/assignments/$assignmentId/questions/$questionId/edit';
+
+  /// The teacher's answer key: type, photo, file or AI draft, then approve
+  /// (DESIGN §19.5).
+  static String answerKey(int assignmentId) =>
+      '/assignments/$assignmentId/answer-key';
   static String rubric(int assignmentId, int questionId) =>
       '/assignments/$assignmentId/questions/$questionId/rubric';
 
@@ -302,6 +308,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 assignmentId: _id(state, 'id'),
                 subjectId: args?.subjectId,
                 gradeLevel: args?.gradeLevel,
+                freeform: args?.freeform,
               );
             },
           ),
@@ -317,8 +324,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                 initial: args?.question,
                 subjectId: args?.subjectId,
                 gradeLevel: args?.gradeLevel,
+                freeform: args?.freeform,
               );
             },
+          ),
+          GoRoute(
+            path: 'answer-key',
+            builder: (context, state) =>
+                AnswerKeyScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'questions/:qid/rubric',

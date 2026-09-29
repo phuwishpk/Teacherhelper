@@ -16,7 +16,41 @@ enum Strictness {
   );
 }
 
-/// DESIGN §8.3 assignments (+ questions when fetched by id).
+/// How the students' work is checked (DESIGN §19.5 `assignments.mode`).
+enum AssignmentMode {
+  /// The app's printed worksheet with QR and answer boxes, scanned per box.
+  worksheet('worksheet', 'ใบงานของแอป'),
+
+  /// No worksheet of the app: graded from whole-page photos or files.
+  freeform('freeform', 'ไม่ใช้ใบงานของแอป');
+
+  const AssignmentMode(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static AssignmentMode fromApi(String? value) => values.firstWhere(
+    (m) => m.apiValue == value,
+    orElse: () => AssignmentMode.worksheet,
+  );
+}
+
+/// Where the answer key came from (`assignments.key_origin`, §19.5).
+enum KeyOrigin {
+  teacher('teacher'),
+  document('document'),
+  aiDraft('ai_draft');
+
+  const KeyOrigin(this.apiValue);
+
+  final String apiValue;
+
+  static KeyOrigin? fromApi(String? value) =>
+      values.where((o) => o.apiValue == value).firstOrNull;
+}
+
+/// DESIGN §8.3 assignments (+ questions when fetched by id), with the
+/// Phase 8 fields of §19.5.
 class Assignment {
   const Assignment({
     required this.id,
@@ -32,6 +66,12 @@ class Assignment {
     this.subjectName,
     this.needsReviewCount,
     this.googleLink,
+    this.mode = AssignmentMode.worksheet,
+    this.source = 'app',
+    this.acceptLate = true,
+    this.scoreOnly = false,
+    this.keyOrigin,
+    this.keyApprovedAt,
   });
 
   final int id;
@@ -56,7 +96,26 @@ class Assignment {
   /// `assignment_google_links`), when the server includes `google_link`.
   final AssignmentGoogleLink? googleLink;
 
+  final AssignmentMode mode;
+
+  /// `app`, or `classroom_web` for work created on the Classroom website.
+  final String source;
+
+  /// Hand-ins after the due date are still graded (labelled late).
+  final bool acceptLate;
+
+  /// No Gemini explanation: students see the score and a template (§21.7).
+  final bool scoreOnly;
+  final KeyOrigin? keyOrigin;
+
+  /// Null until the teacher approves the key; nothing is graded before.
+  final DateTime? keyApprovedAt;
+
   bool get isDraft => status == 'draft';
+
+  bool get isFreeform => mode == AssignmentMode.freeform;
+
+  bool get keyApproved => keyApprovedAt != null;
 
   Assignment withGoogleLink(AssignmentGoogleLink? link) => Assignment(
     id: id,
@@ -72,6 +131,12 @@ class Assignment {
     subjectName: subjectName,
     needsReviewCount: needsReviewCount,
     googleLink: link,
+    mode: mode,
+    source: source,
+    acceptLate: acceptLate,
+    scoreOnly: scoreOnly,
+    keyOrigin: keyOrigin,
+    keyApprovedAt: keyApprovedAt,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -84,6 +149,7 @@ class Assignment {
     final classroom = json['classroom'] as Map<String, dynamic>?;
     final subject = json['subject'] as Map<String, dynamic>?;
     final due = json['due_at'] as String?;
+    final approved = json['key_approved_at'];
     return Assignment(
       id: (json['id'] as num).toInt(),
       classroomId: ((json['classroom_id'] ?? classroom?['id']) as num).toInt(),
@@ -107,6 +173,12 @@ class Assignment {
               (json['google_link'] as Map).cast<String, dynamic>(),
             )
           : null,
+      mode: AssignmentMode.fromApi(json['mode'] as String?),
+      source: json['source'] as String? ?? 'app',
+      acceptLate: json['accept_late'] != false,
+      scoreOnly: json['score_only'] == true,
+      keyOrigin: KeyOrigin.fromApi(json['key_origin'] as String?),
+      keyApprovedAt: approved is String ? DateTime.tryParse(approved) : null,
     );
   }
 }

@@ -251,6 +251,9 @@ Future<int> createAssignment(
     'title': title,
     'strictness': 'normal',
     'due_at': null,
+    'mode': 'worksheet',
+    'accept_late': true,
+    'score_only': false,
   });
   return id;
 }

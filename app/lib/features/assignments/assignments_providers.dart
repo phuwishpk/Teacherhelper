@@ -23,6 +23,9 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
+    AssignmentMode mode = AssignmentMode.worksheet,
+    bool acceptLate = true,
+    bool scoreOnly = false,
   }) async {
     final created = await ref
         .read(assignmentsRepositoryProvider)
@@ -32,6 +35,9 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
           title: title,
           strictness: strictness,
           dueAt: dueAt,
+          mode: mode,
+          acceptLate: acceptLate,
+          scoreOnly: scoreOnly,
         );
     state = AsyncData([created, ...state.value ?? const []]);
     return created;
@@ -74,6 +80,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     DateTime? dueAt,
     bool clearDueAt = false,
     String? status,
+    AssignmentMode? mode,
+    bool? acceptLate,
+    bool? scoreOnly,
   }) async {
     await ref
         .read(assignmentsRepositoryProvider)
@@ -84,6 +93,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
           dueAt: dueAt,
           clearDueAt: clearDueAt,
           status: status,
+          mode: mode,
+          acceptLate: acceptLate,
+          scoreOnly: scoreOnly,
         );
     await refresh();
     ref.invalidate(assignmentsProvider);

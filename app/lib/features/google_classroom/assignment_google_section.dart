@@ -152,7 +152,8 @@ class _AssignmentGoogleSectionState
         ),
       ];
     } else {
-      // §18.6: only a `ready` assignment (printable from its layout).
+      // §18.6: only a `ready` assignment (printable from its layout, or a
+      // freeform one whose key is approved, §19.5).
       final ready = a.status == 'ready';
       content = [
         Text('โพสต์เป็นงานในคอร์ส ${course.courseName}'),
@@ -161,8 +162,10 @@ class _AssignmentGoogleSectionState
         if (!ready) ...[
           const SizedBox(height: 8),
           Text(
-            'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" '
-            '(อนุมัติ rubric ครบและสร้าง layout แล้ว)',
+            a.isFreeform
+                ? 'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" (อนุมัติเฉลยแล้ว)'
+                : 'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" '
+                      '(อนุมัติ rubric ครบและสร้าง layout แล้ว)',
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ],
