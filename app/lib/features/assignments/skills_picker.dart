@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../courses/indicator_widgets.dart';
 import 'assignments_repository.dart';
 import 'question.dart';
 
-/// Search dialog over `GET /skills?subject=&grade=&q=`; returns the chosen
-/// skills or null when cancelled.
+/// Search dialog over `GET /skills?subject=&grade=&q=&level=` limited to
+/// indicators and sub-indicators (the only levels questions, courses, units
+/// and plans take, DESIGN §20.2); returns the chosen skills or null when
+/// cancelled. "เพิ่มตัวชี้วัดของโรงเรียน" adds a missing one and ticks it.
 Future<List<Skill>?> showSkillsPicker(
   BuildContext context, {
   required int? subjectId,
@@ -81,6 +84,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
             subjectId: widget.subjectId,
             grade: widget.grade,
             q: _query.text.trim(),
+            level: kAssessableLevels,
           );
       if (mounted) setState(() => _results = results);
     } catch (e) {
@@ -88,6 +92,19 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _addIndicator() async {
+    final added = await showAddIndicatorDialog(
+      context,
+      subjectId: widget.subjectId,
+      grade: widget.grade,
+    );
+    if (added == null || !mounted) return;
+    setState(() {
+      _selected[added.id] = added;
+      _results = [added, ..._results.where((s) => s.id != added.id)];
+    });
   }
 
   @override
@@ -139,7 +156,15 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
                         return CheckboxListTile(
                           value: checked,
                           dense: true,
-                          title: Text(s.code),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(s.code)),
+                              if (s.sourceLabel case final label?) ...[
+                                const SizedBox(width: 6),
+                                TeacherAddedLabel(label: label),
+                              ],
+                            ],
+                          ),
                           subtitle: Text(
                             s.name,
                             maxLines: 2,
@@ -160,6 +185,12 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          key: const ValueKey('skills_picker_add_indicator'),
+          onPressed: _addIndicator,
+          icon: const Icon(Icons.add),
+          label: const Text('เพิ่มตัวชี้วัดของโรงเรียน'),
+        ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('ยกเลิก'),

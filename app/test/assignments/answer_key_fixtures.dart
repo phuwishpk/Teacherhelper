@@ -146,13 +146,13 @@ class FakeAnswerKeys implements AnswerKeyRepository {
     return requestResult!;
   }
 
-  /// `subject_id` sent with each approval (null when none was sent).
-  final approvedSubjects = <int?>[];
+  /// `course_id` sent with each approval (null when none was sent).
+  final approvedCourses = <int?>[];
 
   @override
-  Future<AnswerKeyState> approve(int assignmentId, {int? subjectId}) async {
+  Future<AnswerKeyState> approve(int assignmentId, {int? courseId}) async {
     approvals++;
-    approvedSubjects.add(subjectId);
+    approvedCourses.add(courseId);
     return state;
   }
 }

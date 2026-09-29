@@ -9,22 +9,109 @@ import '../../core/widgets/content_column.dart';
 import 'answer_key_models.dart';
 import 'answer_key_repository.dart';
 
-/// Before a read or an AI draft is sent (DESIGN §19.5): the files, a page
-/// range for a single PDF (required above [kMaxDocumentPages] pages) and the
-/// estimated cost of exactly that selection, asked from the server every
-/// time the range changes. "ส่ง" calls extract/draft and pops the
-/// [KeyRequestResult].
+/// Asks the server for the cost of reading [documentIds] (and a page range).
+typedef DocumentEstimator =
+    Future<KeyEstimate> Function(
+      WidgetRef ref,
+      List<int> documentIds,
+      int? pageFrom,
+      int? pageTo,
+    );
+
+/// Sends the read; what it returns is popped as the screen's result.
+typedef DocumentSender =
+    Future<Object?> Function(
+      WidgetRef ref,
+      List<int> documentIds,
+      int? pageFrom,
+      int? pageTo,
+    );
+
+/// Before a read or an AI draft is sent (DESIGN §19.5, §20.1): the files, a
+/// page range for a single PDF (required above [kMaxDocumentPages] pages)
+/// and the estimated cost of exactly that selection, asked from the server
+/// every time the range changes. "ส่ง" sends the read and pops its result.
+///
+/// The default constructor reads or drafts an assignment's answer key (pops
+/// the [KeyRequestResult]); [DocumentReadScreen.custom] serves other
+/// documents, e.g. a course description or lesson plans.
 class DocumentReadScreen extends ConsumerStatefulWidget {
-  const DocumentReadScreen({
+  DocumentReadScreen({
     super.key,
-    required this.assignmentId,
-    required this.kind,
+    required int assignmentId,
+    required KeyRequestKind kind,
+    this.documents = const [],
+    this.debounce = const Duration(milliseconds: 400),
+  }) : title = kind == KeyRequestKind.read
+           ? 'ส่งให้ AI อ่านเฉลย'
+           : 'ให้ AI ร่างเฉลย',
+       filesLabel = kind == KeyRequestKind.read ? 'ไฟล์เฉลย' : 'ใบโจทย์',
+       rangeHint = 'เลือกช่วงหน้าที่มีเฉลย',
+       note = kind == KeyRequestKind.read
+           ? null
+           : documents.isEmpty
+           ? 'AI จะร่างเฉลยจากโจทย์ที่พิมพ์ไว้ในการบ้านนี้ '
+                 'เฉลยจะมีป้าย "AI ร่าง ไม่มีคำตอบของครู" ตรวจทุกข้อก่อนอนุมัติ'
+           : 'AI จะร่างเฉลยจากใบโจทย์ที่แนบ '
+                 'เฉลยจะมีป้าย "AI ร่าง ไม่มีคำตอบของครู" ตรวจทุกข้อก่อนอนุมัติ',
+       cachedMessage = kind == KeyRequestKind.read
+           ? 'เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย'
+           : 'เคยร่างเฉลยจากโจทย์นี้แล้ว ไม่เสียค่าใช้จ่าย',
+       readBefore = kind == KeyRequestKind.read
+           ? ((d) => d.keyReadBefore)
+           : ((_) => false),
+       estimator = ((ref, ids, from, to) => ref
+           .read(answerKeyRepositoryProvider)
+           .estimate(
+             assignmentId,
+             kind: kind,
+             documentIds: ids,
+             pageFrom: from,
+             pageTo: to,
+           )),
+       sender = ((ref, ids, from, to) => ref
+           .read(answerKeyRepositoryProvider)
+           .request(
+             assignmentId,
+             kind: kind,
+             documentIds: ids,
+             pageFrom: from,
+             pageTo: to,
+           ));
+
+  const DocumentReadScreen.custom({
+    super.key,
+    required this.title,
+    required this.filesLabel,
+    required this.rangeHint,
+    required this.cachedMessage,
+    required this.readBefore,
+    required this.estimator,
+    required this.sender,
+    this.note,
     this.documents = const [],
     this.debounce = const Duration(milliseconds: 400),
   });
 
-  final int assignmentId;
-  final KeyRequestKind kind;
+  /// App bar title and the send button's label.
+  final String title;
+
+  /// Heading above the files.
+  final String filesLabel;
+
+  /// Shown when a PDF is too long, e.g. "เลือกช่วงหน้าที่มีเฉลย".
+  final String rangeHint;
+
+  /// A highlighted note above the files (AI draft, privacy warning).
+  final String? note;
+
+  /// Shown instead of the cost when the school read the selection before.
+  final String cachedMessage;
+
+  /// "เคยอ่านไฟล์นี้แล้ว" under a file.
+  final bool Function(SourceDocument document) readBefore;
+  final DocumentEstimator estimator;
+  final DocumentSender sender;
 
   /// Uploaded files; empty for an AI draft from the typed questions only.
   final List<SourceDocument> documents;
@@ -54,8 +141,6 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
   String? _estimateError;
   bool _sending = false;
   String? _sendError;
-
-  bool get _read => widget.kind == KeyRequestKind.read;
 
   @override
   void initState() {
@@ -120,15 +205,12 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
     final (from, to) = _range;
     setState(() => _estimating = true);
     try {
-      final estimate = await ref
-          .read(answerKeyRepositoryProvider)
-          .estimate(
-            widget.assignmentId,
-            kind: widget.kind,
-            documentIds: [for (final d in widget.documents) d.id],
-            pageFrom: from,
-            pageTo: to,
-          );
+      final estimate = await widget.estimator(
+        ref,
+        [for (final d in widget.documents) d.id],
+        from,
+        to,
+      );
       if (!mounted || serial != _serial) return;
       setState(() {
         _estimate = estimate;
@@ -150,15 +232,12 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
       _sendError = null;
     });
     try {
-      final result = await ref
-          .read(answerKeyRepositoryProvider)
-          .request(
-            widget.assignmentId,
-            kind: widget.kind,
-            documentIds: [for (final d in widget.documents) d.id],
-            pageFrom: from,
-            pageTo: to,
-          );
+      final result = await widget.sender(
+        ref,
+        [for (final d in widget.documents) d.id],
+        from,
+        to,
+      );
       if (mounted) Navigator.of(context).pop(result);
     } catch (e) {
       if (mounted) setState(() => _sendError = apiErrorMessage(e));
@@ -181,22 +260,16 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
         lengthError == null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_read ? 'ส่งให้ AI อ่านเฉลย' : 'ให้ AI ร่างเฉลย'),
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: FormColumn(
         children: [
-          if (!_read)
+          if (widget.note case final note?)
             Card(
               color: theme.colorScheme.tertiaryContainer,
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  widget.documents.isEmpty
-                      ? 'AI จะร่างเฉลยจากโจทย์ที่พิมพ์ไว้ในการบ้านนี้ '
-                            'เฉลยจะมีป้าย "AI ร่าง ไม่มีคำตอบของครู" ตรวจทุกข้อก่อนอนุมัติ'
-                      : 'AI จะร่างเฉลยจากใบโจทย์ที่แนบ '
-                            'เฉลยจะมีป้าย "AI ร่าง ไม่มีคำตอบของครู" ตรวจทุกข้อก่อนอนุมัติ',
+                  note,
                   style: TextStyle(
                     color: theme.colorScheme.onTertiaryContainer,
                   ),
@@ -204,10 +277,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
               ),
             ),
           if (widget.documents.isNotEmpty) ...[
-            Text(
-              _read ? 'ไฟล์เฉลย' : 'ใบโจทย์',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text(widget.filesLabel, style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             for (final d in widget.documents)
               ListTile(
@@ -226,7 +296,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
                   [
                     '${d.pageCount} หน้า',
                     if (d.sizeBytes > 0) _size(d.sizeBytes),
-                    if (_read && d.keyReadBefore) 'เคยอ่านไฟล์นี้แล้ว',
+                    if (widget.readBefore(d)) 'เคยอ่านไฟล์นี้แล้ว',
                   ].join(' · '),
                 ),
               ),
@@ -236,7 +306,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
             if (pdf.needsPageRange)
               Text(
                 'ไฟล์นี้ยาว ${pdf.pageCount} หน้า เกิน $kMaxDocumentPages หน้า '
-                'เลือกช่วงหน้าที่มีเฉลย (ไม่เกิน $kMaxDocumentPages หน้า)',
+                '${widget.rangeHint} (ไม่เกิน $kMaxDocumentPages หน้า)',
                 style: TextStyle(color: theme.colorScheme.error),
               )
             else
@@ -300,7 +370,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
             loading: _estimating,
             estimate: _estimate,
             error: _estimateError,
-            read: _read,
+            cachedMessage: widget.cachedMessage,
             hidden: rangeError != null || lengthError != null,
           ),
           if (_sendError != null) ...[
@@ -317,7 +387,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.auto_awesome),
-            label: Text(_read ? 'ส่งให้ AI อ่านเฉลย' : 'ให้ AI ร่างเฉลย'),
+            label: Text(widget.title),
           ),
         ],
       ),
@@ -334,14 +404,14 @@ class _EstimateCard extends StatelessWidget {
     required this.loading,
     required this.estimate,
     required this.error,
-    required this.read,
+    required this.cachedMessage,
     required this.hidden,
   });
 
   final bool loading;
   final KeyEstimate? estimate;
   final String? error;
-  final bool read;
+  final String cachedMessage;
   final bool hidden;
 
   @override
@@ -367,13 +437,7 @@ class _EstimateCard extends StatelessWidget {
         children: [
           Icon(Icons.check_circle_outline, color: Colors.green.shade700),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              read
-                  ? 'เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย'
-                  : 'เคยร่างเฉลยจากโจทย์นี้แล้ว ไม่เสียค่าใช้จ่าย',
-            ),
-          ),
+          Expanded(child: Text(cachedMessage)),
         ],
       );
     } else {

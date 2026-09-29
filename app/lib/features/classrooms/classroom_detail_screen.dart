@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../courses/classroom_courses_section.dart';
 import '../google_classroom/classroom_google_section.dart';
 import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
 import '../scan/offline_cache_repository.dart';
@@ -57,6 +58,8 @@ class ClassroomDetailScreen extends ConsumerWidget {
                 _HeaderCard(classroom: c),
                 const SizedBox(height: 12),
                 _ActionsRow(classroom: c),
+                const SizedBox(height: 12),
+                ClassroomCoursesSection(classroomId: c.id),
                 const SizedBox(height: 12),
                 ClassroomGoogleSection(classroom: c),
                 const SizedBox(height: 4),

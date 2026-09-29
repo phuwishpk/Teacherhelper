@@ -32,10 +32,11 @@ abstract class AnswerKeyRepository {
     int? pageTo,
   });
 
-  /// `POST /assignments/{id}/answer-key/approve`. [subjectId] is required
-  /// (422 `course_required`) for a mirror of Classroom website courseWork
-  /// that has no subject yet (DESIGN §19.9).
-  Future<AnswerKeyState> approve(int assignmentId, {int? subjectId});
+  /// `POST /assignments/{id}/answer-key/approve`. [courseId] (a course of
+  /// the classroom) is required (422 `course_required`) for a mirror of
+  /// Classroom website courseWork that has no course yet (DESIGN §19.9,
+  /// §20.1).
+  Future<AnswerKeyState> approve(int assignmentId, {int? courseId});
 }
 
 class ApiAnswerKeyRepository implements AnswerKeyRepository {
@@ -120,10 +121,10 @@ class ApiAnswerKeyRepository implements AnswerKeyRepository {
   }
 
   @override
-  Future<AnswerKeyState> approve(int assignmentId, {int? subjectId}) async {
+  Future<AnswerKeyState> approve(int assignmentId, {int? courseId}) async {
     final res = await _dio.post<Object?>(
       '/assignments/$assignmentId/answer-key/approve',
-      data: {'subject_id': ?subjectId},
+      data: {'course_id': ?courseId},
     );
     return AnswerKeyState.fromJson(unwrapJson(res.data));
   }

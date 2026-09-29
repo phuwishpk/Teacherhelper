@@ -1,9 +1,11 @@
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classroom_detail_screen.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
+import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../courses/course_fakes.dart';
 import '../helpers/pump_screen.dart';
 
 class _FakeClassrooms extends Fake implements ClassroomsRepository {
@@ -37,13 +39,27 @@ void main() {
   testWidgets('reset PIN asks first, then shows the new PIN exactly once', (
     tester,
   ) async {
+    // Tall enough for the courses card above the roster.
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final fake = _FakeClassrooms();
     await pumpScreen(
       tester,
       const ClassroomDetailScreen(classroomId: 7),
-      overrides: [classroomsRepositoryProvider.overrideWithValue(fake)],
+      overrides: [
+        classroomsRepositoryProvider.overrideWithValue(fake),
+        coursesRepositoryProvider.overrideWithValue(
+          FakeCoursesRepository([course(id: 4)]),
+        ),
+      ],
     );
     expect(find.text('K7Q3M2'), findsOneWidget, reason: 'class code shown');
+    expect(
+      find.byKey(const ValueKey('classroom_course_4')),
+      findsOneWidget,
+      reason: 'the courses bound to the classroom are listed',
+    );
     expect(find.text('ด.ญ. สมหญิง'), findsOneWidget);
 
     await tester.tap(find.byTooltip('ตัวเลือก'));

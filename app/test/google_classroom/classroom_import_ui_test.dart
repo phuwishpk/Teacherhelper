@@ -3,6 +3,7 @@ import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classroom_detail_screen.dart';
 import 'package:eduvision/features/classrooms/classrooms_page.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
+import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/google_classroom/classroom_import_screen.dart';
 import 'package:eduvision/features/google_classroom/course_picker_screen.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../courses/course_fakes.dart';
 import '../helpers/pump_screen.dart';
 import 'google_fakes.dart';
 
@@ -427,6 +429,7 @@ void main() {
           googleClassroomEnabledProvider.overrideWithValue(true),
           googleClassroomRepositoryProvider.overrideWithValue(google),
           classroomsRepositoryProvider.overrideWithValue(classrooms),
+          coursesRepositoryProvider.overrideWithValue(FakeCoursesRepository()),
         ],
       );
       return (google, classrooms);

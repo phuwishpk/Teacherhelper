@@ -19,7 +19,8 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
 
   Future<Assignment> create({
     required int classroomId,
-    required int subjectId,
+    required int courseId,
+    int? lessonPlanId,
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
@@ -31,7 +32,8 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
         .read(assignmentsRepositoryProvider)
         .create(
           classroomId: classroomId,
-          subjectId: subjectId,
+          courseId: courseId,
+          lessonPlanId: lessonPlanId,
           title: title,
           strictness: strictness,
           dueAt: dueAt,
@@ -83,6 +85,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     AssignmentMode? mode,
     bool? acceptLate,
     bool? scoreOnly,
+    int? courseId,
+    int? lessonPlanId,
+    bool clearLessonPlan = false,
   }) async {
     await ref
         .read(assignmentsRepositoryProvider)
@@ -96,6 +101,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
           mode: mode,
           acceptLate: acceptLate,
           scoreOnly: scoreOnly,
+          courseId: courseId,
+          lessonPlanId: lessonPlanId,
+          clearLessonPlan: clearLessonPlan,
         );
     await refresh();
     ref.invalidate(assignmentsProvider);

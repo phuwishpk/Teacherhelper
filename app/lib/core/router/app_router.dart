@@ -19,6 +19,10 @@ import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/courses/course_detail_screen.dart';
+import '../../features/courses/course_form_screen.dart';
+import '../../features/courses/course_models.dart';
+import '../../features/courses/courses_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
 import '../../features/google_classroom/classroom_feedback_screen.dart';
 import '../../features/google_classroom/classroom_import_screen.dart';
@@ -85,6 +89,25 @@ abstract final class AppRoutes {
   /// "ประกาศผลรายคน": the private result announcements in Classroom (§19.7).
   static String googleFeedback(int assignmentId) =>
       '/assignments/$assignmentId/google-feedback';
+
+  /// Courses, units and lesson plans (DESIGN §20.1).
+  static const courses = '/courses';
+  static const courseNew = '/courses/new';
+
+  /// The course form with [classroomId] ticked. With [pick] (the
+  /// assignment form) it pops the new course instead of opening it.
+  static String courseNewFor(int? classroomId, {bool pick = false}) {
+    final query = {
+      'classroom': ?classroomId?.toString(),
+      if (pick) 'pick': '1',
+    };
+    return query.isEmpty
+        ? courseNew
+        : Uri(path: courseNew, queryParameters: query).toString();
+  }
+
+  static String course(int id) => '/courses/$id';
+  static String courseEdit(int id) => '/courses/$id/edit';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -348,6 +371,34 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => StudentMasteryScreen(
               classroomId: _id(state, 'id'),
               studentId: _id(state, 'sid'),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.courses,
+        builder: (context, state) => const CoursesScreen(),
+      ),
+      // Before '/courses/:id', which would take "new" as an id.
+      GoRoute(
+        path: AppRoutes.courseNew,
+        builder: (context, state) => CourseFormScreen(
+          initialClassroomId: int.tryParse(
+            state.uri.queryParameters['classroom'] ?? '',
+          ),
+          popOnCreate: state.uri.queryParameters['pick'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/courses/:id',
+        builder: (context, state) =>
+            CourseDetailScreen(courseId: _id(state, 'id')),
+        routes: [
+          GoRoute(
+            path: 'edit',
+            builder: (context, state) => CourseEditScreen(
+              courseId: _id(state, 'id'),
+              initial: state.extra is Course ? state.extra as Course : null,
             ),
           ),
         ],

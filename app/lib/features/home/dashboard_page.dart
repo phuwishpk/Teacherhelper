@@ -97,6 +97,19 @@ class DashboardPage extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.teacherUpload),
               ),
             ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                key: const ValueKey('dashboard_courses'),
+                leading: const Icon(Icons.menu_book_outlined),
+                title: const Text('รายวิชาและแผนการสอน'),
+                subtitle: const Text(
+                  'สร้างรายวิชาจากฟอร์มหรือเอกสาร ผูกกับห้อง แล้วเพิ่มหน่วย แผน และตัวชี้วัด',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.courses),
+              ),
+            ),
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),

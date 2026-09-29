@@ -1,10 +1,12 @@
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/assignments/question.dart';
 import 'package:eduvision/features/assignments/skills_picker.dart';
+import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../courses/course_fakes.dart' show FakeCoursesRepository;
 import '../review/review_fixtures.dart';
 
 const _fraction = Skill(id: 1, code: 'ค 1.1 ป.5/1', name: 'เศษส่วน');
@@ -16,14 +18,17 @@ class _Repo extends Fake implements AssignmentsRepository {
 
   final Object? error;
   final searches = <(int?, int?, String?)>[];
+  final levels = <String?>[];
 
   @override
   Future<List<Skill>> searchSkills({
     int? subjectId,
     int? grade,
     String? q,
+    String? level,
   }) async {
     searches.add((subjectId, grade, q));
+    levels.add(level);
     if (error != null) throw error!;
     const all = [_fraction, _decimal, _ratio];
     if (q == null || q.isEmpty) return all;
@@ -35,9 +40,15 @@ Widget _host(
   _Repo repo,
   void Function(List<Skill>?) onResult, {
   List<Skill> selected = const [],
+  FakeCoursesRepository? courses,
 }) {
   return ProviderScope(
-    overrides: [assignmentsRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      assignmentsRepositoryProvider.overrideWithValue(repo),
+      coursesRepositoryProvider.overrideWithValue(
+        courses ?? FakeCoursesRepository(),
+      ),
+    ],
     child: MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -72,6 +83,11 @@ void main() {
 
     expect(find.text('เลือกตัวชี้วัด / ทักษะ'), findsOneWidget);
     expect(repo.searches.single, (1, 5, ''));
+    expect(
+      repo.levels.single,
+      'indicator,sub_indicator',
+      reason: 'questions take only indicators and sub-indicators (§20.2)',
+    );
     expect(find.byType(CheckboxListTile), findsNWidgets(3));
     expect(find.byType(InputChip), findsOneWidget);
     expect(find.text('ใช้ 1 รายการ'), findsOneWidget);
@@ -142,5 +158,41 @@ void main() {
 
     expect(find.text('ค้นหาไม่ได้ชั่วคราว'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNothing);
+  });
+
+  testWidgets('"เพิ่มตัวชี้วัดของโรงเรียน" adds a missing one and ticks it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _Repo();
+    final courses = FakeCoursesRepository();
+    List<Skill>? result;
+    await tester.pumpWidget(_host(repo, (r) => result = r, courses: courses));
+    await tester.tap(find.text('เลือกทักษะ'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('skills_picker_add_indicator')));
+    await tester.pumpAndSettle();
+    expect(find.text('เพิ่มตัวชี้วัดของโรงเรียน'), findsWidgets);
+    expect(repo.levels.last, 'standard,indicator');
+    await tester.tap(find.widgetWithText(RadioListTile<int>, 'ค 1.1 ป.5/1'));
+    await tester.enterText(
+      find.byKey(const ValueKey('add_indicator_name')),
+      'เศษส่วนในชีวิตประจำวัน',
+    );
+    await tester.tap(find.byKey(const ValueKey('add_indicator_save')));
+    await tester.pumpAndSettle();
+
+    expect(courses.addedIndicators.single, {
+      'parent_id': 1,
+      'name': 'เศษส่วนในชีวิตประจำวัน',
+      'code': null,
+    });
+    expect(find.text('ครูเพิ่มเอง'), findsOneWidget);
+    await tester.tap(find.text('ใช้ 1 รายการ'));
+    await tester.pumpAndSettle();
+    expect(result?.single.sourceLabel, 'ครูเพิ่มเอง');
   });
 }

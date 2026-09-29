@@ -188,7 +188,7 @@ void main() {
     expect(const TeacherAttention().isEmpty, isTrue);
   });
 
-  test('approve sends subject_id only when given', () async {
+  test('approve sends course_id only when given', () async {
     final bodies = <Map<String, dynamic>>[];
     final adapter = FakeHttpAdapter((o) async {
       bodies.add(FakeApiServer.bodyOf(o));
@@ -196,10 +196,10 @@ void main() {
     });
     final repo = ApiAnswerKeyRepository(fakeDio(adapter));
     await repo.approve(12);
-    await repo.approve(12, subjectId: 3);
+    await repo.approve(12, courseId: 3);
     expect(bodies, [
       <String, dynamic>{},
-      {'subject_id': 3},
+      {'course_id': 3},
     ]);
     expect(adapter.requests.map((r) => r.uri.path).toSet(), {
       '/api/v1/assignments/12/answer-key/approve',
@@ -243,7 +243,7 @@ void main() {
         },
       });
       expect(a.subjectId, isNull);
-      expect(a.needsSubject, isTrue);
+      expect(a.needsCourse, isTrue);
       expect(a.fromClassroomWeb, isTrue);
       final link = a.googleLink!;
       expect(link.fromClassroomWeb, isTrue);

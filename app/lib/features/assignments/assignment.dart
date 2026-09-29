@@ -73,13 +73,18 @@ class Assignment {
     this.scoreOnly = false,
     this.keyOrigin,
     this.keyApprovedAt,
+    this.courseId,
+    this.courseLabel,
+    this.lessonPlanId,
+    this.lessonPlanTitle,
   });
 
   final int id;
   final int classroomId;
 
   /// Null only for a mirror of courseWork created on the Classroom website
-  /// until the teacher picks the subject when approving its key (§19.3).
+  /// until the teacher picks its course when approving the key (§19.3); the
+  /// subject follows the course (§20.1).
   final int? subjectId;
   final String title;
   final Strictness strictness;
@@ -116,8 +121,22 @@ class Assignment {
       source == 'classroom_web' ||
       googleLink?.origin == AssignmentGoogleLink.originClassroomWeb;
 
-  /// The teacher still has to pick a subject (when approving the key).
-  bool get needsSubject => subjectId == null;
+  /// The course (รายวิชา, DESIGN §20.1). Every new assignment has one;
+  /// older ones and Classroom website mirrors may not.
+  final int? courseId;
+
+  /// "ค15101 คณิตศาสตร์ 5" when the server includes `course`.
+  final String? courseLabel;
+
+  /// The lesson plan of the course it belongs to, if any.
+  final int? lessonPlanId;
+  final String? lessonPlanTitle;
+
+  /// The teacher still has to pick a course when approving the key: a
+  /// Classroom website mirror (or an assignment without a subject) that has
+  /// none (422 `course_required`, DESIGN §19.3, §20.1).
+  bool get needsCourse =>
+      courseId == null && (fromClassroomWeb || subjectId == null);
 
   /// Hand-ins after the due date are still graded (labelled late).
   final bool acceptLate;
@@ -156,6 +175,10 @@ class Assignment {
     scoreOnly: scoreOnly,
     keyOrigin: keyOrigin,
     keyApprovedAt: keyApprovedAt,
+    courseId: courseId,
+    courseLabel: courseLabel,
+    lessonPlanId: lessonPlanId,
+    lessonPlanTitle: lessonPlanTitle,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -169,6 +192,8 @@ class Assignment {
     final subject = json['subject'] as Map<String, dynamic>?;
     final due = json['due_at'] as String?;
     final approved = json['key_approved_at'];
+    final course = json['course'];
+    final plan = json['lesson_plan'];
     return Assignment(
       id: (json['id'] as num).toInt(),
       classroomId: ((json['classroom_id'] ?? classroom?['id']) as num).toInt(),
@@ -199,6 +224,16 @@ class Assignment {
       scoreOnly: json['score_only'] == true,
       keyOrigin: KeyOrigin.fromApi(json['key_origin'] as String?),
       keyApprovedAt: approved is String ? DateTime.tryParse(approved) : null,
+      courseId:
+          (json['course_id'] as num?)?.toInt() ??
+          (course is Map ? (course['id'] as num?)?.toInt() : null),
+      courseLabel: course is Map
+          ? [course['code'], course['name']].whereType<String>().join(' ')
+          : null,
+      lessonPlanId:
+          (json['lesson_plan_id'] as num?)?.toInt() ??
+          (plan is Map ? (plan['id'] as num?)?.toInt() : null),
+      lessonPlanTitle: plan is Map ? plan['title'] as String? : null,
     );
   }
 }

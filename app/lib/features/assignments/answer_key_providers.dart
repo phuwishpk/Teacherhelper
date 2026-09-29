@@ -45,8 +45,8 @@ class AnswerKeyNotifier extends AsyncNotifier<AnswerKeyState> {
   /// as filled now, polled on while Gemini is still reading.
   void accept(KeyRequestResult result) => _set(result.answerKey);
 
-  Future<AnswerKeyState> approve({int? subjectId}) async {
-    final key = await _repo.approve(assignmentId, subjectId: subjectId);
+  Future<AnswerKeyState> approve({int? courseId}) async {
+    final key = await _repo.approve(assignmentId, courseId: courseId);
     _set(key);
     ref.invalidate(assignmentsProvider);
     ref.invalidate(teacherAttentionProvider);

@@ -36,6 +36,7 @@ enum RubricStatus {
   );
 }
 
+/// A skill (DESIGN §8.2) with its Phase 9 level and source (§20.2).
 class Skill {
   const Skill({
     required this.id,
@@ -43,6 +44,8 @@ class Skill {
     required this.name,
     this.subjectId,
     this.gradeLevel,
+    this.level,
+    this.sourceLabel,
   });
 
   final int id;
@@ -51,12 +54,22 @@ class Skill {
   final int? subjectId;
   final int? gradeLevel;
 
+  /// `strand`, `standard`, `indicator` or `sub_indicator` (null from
+  /// payloads that do not carry it). Questions, courses, units and lesson
+  /// plans take only indicators and sub-indicators.
+  final String? level;
+
+  /// "ครูเพิ่มเอง" for an indicator a teacher of the school added, else null.
+  final String? sourceLabel;
+
   factory Skill.fromJson(Map<String, dynamic> json) => Skill(
     id: (json['id'] as num).toInt(),
     code: json['code'] as String,
     name: json['name'] as String,
     subjectId: (json['subject_id'] as num?)?.toInt(),
     gradeLevel: (json['grade_level'] as num?)?.toInt(),
+    level: json['level'] as String?,
+    sourceLabel: json['source_label'] as String?,
   );
 
   @override

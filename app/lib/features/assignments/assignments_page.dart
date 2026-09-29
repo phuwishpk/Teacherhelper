@@ -130,7 +130,7 @@ class _AssignmentCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final parts = [
       ?classroomName,
-      ?a.subjectName,
+      ?(a.courseLabel ?? a.subjectName),
       if (a.dueAt != null) 'ส่ง ${formatThaiDate(a.dueAt!)}',
       if (a.currentLayoutVersion != null) 'layout v${a.currentLayoutVersion}',
     ];

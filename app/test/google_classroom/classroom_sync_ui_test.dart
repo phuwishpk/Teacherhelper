@@ -8,6 +8,7 @@ import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/assignments/question.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
+import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/google_classroom/assignment_google_section.dart';
 import 'package:eduvision/features/google_classroom/classroom_google_section.dart';
 import 'package:eduvision/features/google_classroom/google_browser_connect.dart';
@@ -27,6 +28,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+
+import '../courses/course_fakes.dart' as courses;
 
 import '../assignments/answer_key_fixtures.dart';
 import '../helpers/home_fakes.dart';
@@ -791,7 +794,7 @@ void main() {
     );
   });
 
-  testWidgets('approving a mirror asks for its subject first', (tester) async {
+  testWidgets('approving a mirror asks for its course first', (tester) async {
     _tall(tester);
     final keys = FakeAnswerKeys(
       answerKeyState(
@@ -817,6 +820,19 @@ void main() {
           _Assignments([_mirror]),
         ),
         classroomsRepositoryProvider.overrideWithValue(_Classrooms()),
+        coursesRepositoryProvider.overrideWithValue(
+          courses.FakeCoursesRepository([
+            courses.course(id: 4),
+            courses.course(id: 5, code: 'ค15102'),
+            courses.course(
+              id: 6,
+              code: 'ว15101',
+              classrooms: const [
+                {'id': 8, 'name': 'ป.5/2'},
+              ],
+            ),
+          ]),
+        ),
         answerKeyPollIntervalProvider.overrideWithValue(
           const Duration(seconds: 3),
         ),
@@ -833,21 +849,26 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('approve_key')));
     await tester.pumpAndSettle();
-    expect(find.text('เลือกวิชาแล้วอนุมัติเฉลย'), findsOneWidget);
+    expect(find.text('เลือกรายวิชาแล้วอนุมัติเฉลย'), findsOneWidget);
     final confirm = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('approve_subject_confirm')),
+      find.byKey(const ValueKey('approve_course_confirm')),
     );
-    expect(confirm.onPressed, isNull, reason: 'a subject is required');
+    expect(confirm.onPressed, isNull, reason: 'a course is required');
 
-    await tester.tap(find.byKey(const ValueKey('approve_subject')));
+    await tester.tap(find.byKey(const ValueKey('approve_course')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('วิทยาศาสตร์').last);
+    expect(
+      find.text('ว15101 คณิตศาสตร์ 5'),
+      findsNothing,
+      reason: 'only courses of the assignment\'s classroom',
+    );
+    await tester.tap(find.text('ค15102 คณิตศาสตร์ 5').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('approve_subject_confirm')));
+    await tester.tap(find.byKey(const ValueKey('approve_course_confirm')));
     await tester.pumpAndSettle();
 
     expect(keys.approvals, 1);
-    expect(keys.approvedSubjects, [2]);
+    expect(keys.approvedCourses, [5]);
     expect(find.text('อนุมัติเฉลยแล้ว'), findsWidgets);
   });
 
@@ -897,6 +918,6 @@ void main() {
     expect(find.text('อนุมัติเฉลย?'), findsOneWidget);
     await tester.tap(find.text('อนุมัติ'));
     await tester.pumpAndSettle();
-    expect(keys.approvedSubjects, [null]);
+    expect(keys.approvedCourses, [null]);
   });
 }

@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../courses/course_picker.dart';
 import 'answer_key_models.dart';
 import 'answer_key_providers.dart';
 import 'answer_key_repository.dart';
@@ -165,15 +166,15 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
   }
 
   Future<void> _approve(AnswerKeyState key, Assignment? a) async {
-    int? subjectId;
-    if (a != null && a.needsSubject) {
-      // A mirror of Classroom website courseWork has no subject until the
-      // teacher picks one here (DESIGN §19.3, 422 course_required).
-      subjectId = await showDialog<int>(
+    int? courseId;
+    if (a != null && a.needsCourse) {
+      // A mirror of Classroom website courseWork has no course until the
+      // teacher picks one here (DESIGN §19.3, §20.1, 422 course_required).
+      courseId = await showDialog<int>(
         context: context,
-        builder: (_) => const SubjectPickerDialog(),
+        builder: (_) => CoursePickerDialog(classroomId: a.classroomId),
       );
-      if (subjectId == null || !mounted) return;
+      if (courseId == null || !mounted) return;
     } else {
       final ok = await confirm(
         context,
@@ -186,7 +187,7 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
       if (!ok || !mounted) return;
     }
     await _run(() async {
-      await _notifier.approve(subjectId: subjectId);
+      await _notifier.approve(courseId: courseId);
       if (mounted) showMessage(context, 'อนุมัติเฉลยแล้ว');
     });
   }
@@ -324,68 +325,6 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
           );
         },
       ),
-    );
-  }
-}
-
-/// Asks for the subject of a Classroom website mirror before its key is
-/// approved; pops the subject id.
-class SubjectPickerDialog extends ConsumerStatefulWidget {
-  const SubjectPickerDialog({super.key});
-
-  @override
-  ConsumerState<SubjectPickerDialog> createState() =>
-      _SubjectPickerDialogState();
-}
-
-class _SubjectPickerDialogState extends ConsumerState<SubjectPickerDialog> {
-  int? _subjectId;
-
-  @override
-  Widget build(BuildContext context) {
-    final subjects = ref.watch(subjectsProvider);
-    return AlertDialog(
-      title: const Text('เลือกวิชาแล้วอนุมัติเฉลย'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'งานนี้นำเข้าจากเว็บ Classroom จึงยังไม่มีวิชา เลือกวิชาก่อน '
-            'หลังอนุมัติ ระบบเริ่มตรวจงานที่นักเรียนส่งใน Classroom ด้วยเฉลยนี้',
-          ),
-          const SizedBox(height: 12),
-          if (subjects.hasError)
-            Text(
-              'โหลดรายวิชาไม่ได้: ${apiErrorMessage(subjects.error!)}',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            )
-          else
-            DropdownButtonFormField<int>(
-              key: const ValueKey('approve_subject'),
-              initialValue: _subjectId,
-              decoration: const InputDecoration(labelText: 'วิชา'),
-              items: [
-                for (final s in subjects.value ?? const [])
-                  DropdownMenuItem(value: s.id, child: Text(s.name)),
-              ],
-              onChanged: (v) => setState(() => _subjectId = v),
-            ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ยกเลิก'),
-        ),
-        FilledButton(
-          key: const ValueKey('approve_subject_confirm'),
-          onPressed: _subjectId == null
-              ? null
-              : () => Navigator.of(context).pop(_subjectId),
-          child: const Text('อนุมัติ'),
-        ),
-      ],
     );
   }
 }

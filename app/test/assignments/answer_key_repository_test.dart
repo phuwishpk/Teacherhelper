@@ -257,7 +257,7 @@ void main() {
 
     final created = await repo.create(
       classroomId: 7,
-      subjectId: 1,
+      courseId: 4,
       title: 'เรียงความ',
       mode: AssignmentMode.freeform,
       acceptLate: false,
@@ -266,6 +266,9 @@ void main() {
     await repo.update(12, scoreOnly: false);
 
     final body = adapter.requests.first.data as Map;
+    expect(body['course_id'], 4);
+    expect(body.containsKey('subject_id'), isFalse);
+    expect(body.containsKey('lesson_plan_id'), isFalse);
     expect(body['mode'], 'freeform');
     expect(body['accept_late'], false);
     expect(body['score_only'], true);

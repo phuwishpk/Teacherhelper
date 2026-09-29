@@ -156,13 +156,17 @@ class AssignmentDetailScreen extends ConsumerWidget {
                               label: 'สร้างในเว็บ Classroom',
                               color: theme.colorScheme.tertiary,
                             ),
-                          if (a.subjectName != null)
-                            Text(a.subjectName!)
-                          else if (a.needsSubject)
+                          if (a.courseLabel != null)
+                            Text(a.courseLabel!)
+                          else if (a.subjectName != null)
+                            Text(a.subjectName!),
+                          if (a.needsCourse)
                             Text(
-                              'ยังไม่เลือกวิชา (เลือกตอนอนุมัติเฉลย)',
+                              'ยังไม่เลือกรายวิชา (เลือกตอนอนุมัติเฉลย)',
                               style: TextStyle(color: theme.colorScheme.error),
                             ),
+                          if (a.lessonPlanTitle != null)
+                            Text('แผน: ${a.lessonPlanTitle}'),
                           Text('ตรวจแบบ${a.strictness.label}'),
                           if (a.dueAt != null)
                             Text('ส่ง ${formatThaiDate(a.dueAt!)}'),
