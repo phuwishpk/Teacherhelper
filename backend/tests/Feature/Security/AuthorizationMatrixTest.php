@@ -84,6 +84,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.courses.extract' => ['POST', 'courses/extract', self::OK, self::OK],
         'api.courses.extract.estimate' => ['POST', 'courses/extract/estimate', self::OK, self::OK],
         'api.courses.import' => ['POST', 'courses/import', self::OK, self::OK],
+        'api.courses.mastery-summary' => ['GET', 'courses/{own_course}/mastery-summary', 404, 404],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
         'api.assignments.show' => ['GET', 'assignments/{assignment}', 404, 404],
@@ -94,6 +95,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.layouts.index' => ['GET', 'assignments/{assignment}/layouts', 404, 404],
         'api.assignments.worksheets.store' => ['POST', 'assignments/{assignment}/worksheets', 404, 404],
         'api.assignments.requeue-missing-key' => ['POST', 'assignments/{assignment}/requeue-missing-key', 404, 404],
+        'api.assignments.indicator-suggestions.store' => ['POST', 'assignments/{assignment}/indicator-suggestions', 404, 404],
+        'api.assignments.indicator-suggestions.index' => ['GET', 'assignments/{assignment}/indicator-suggestions', 404, 404],
+        'api.assignments.indicator-mapping' => ['PUT', 'assignments/{assignment}/indicator-mapping', 404, 404],
         'api.documents.store' => ['POST', 'documents', self::OK, self::OK],
         // The read-once cache is shared by the school (§19.5): a colleague may read it.
         'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', self::OK, 404],
@@ -167,6 +171,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.results.show' => ['GET', 'student/results/{submission_a2}', 404, 404],
         'api.student.responses.appeal' => ['POST', 'student/responses/{response_a2}/appeal', 404, 404],
         'api.student.mastery' => ['GET', 'student/mastery', self::OK, self::OK],
+        'api.student.courses.index' => ['GET', 'student/courses', self::OK, self::OK],
+        // A classmate reads the same course (their own values only); another school's student does not see it.
+        'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
         'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
         // A classmate hands in to the same assignment as themself (their own work).

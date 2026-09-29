@@ -123,6 +123,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('answer-key', fn (Request $request) => self::perUser($request, 10));
         // Reading a course document or lesson plans (§20.1): one Gemini call each unless cached.
         RateLimiter::for('course-extract', fn (Request $request) => self::perUser($request, 10));
+        // Indicator suggestions of an assignment (§20.3): one Gemini job per request.
+        RateLimiter::for('indicator-suggest', fn (Request $request) => self::perUser($request, 10));
         RateLimiter::for('documents', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));

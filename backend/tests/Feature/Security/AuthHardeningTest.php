@@ -170,7 +170,7 @@ class AuthHardeningTest extends TestCase
         }
 
         $this->assertSame(
-            ['ai-key', 'answer-key', 'appeal', 'course-extract', 'documents', 'explanation', 'google', 'page-upload', 'practice-attempt', 'practice-generate', 'student-auth', 'student-submission', 'teacher-auth'],
+            ['ai-key', 'answer-key', 'appeal', 'course-extract', 'documents', 'explanation', 'google', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'student-auth', 'student-submission', 'teacher-auth'],
             collect($throttled)->keys()->sort()->values()->all(),
         );
     }
@@ -193,6 +193,7 @@ class AuthHardeningTest extends TestCase
             'page-upload' => ['teacher', 'POST', '/api/v1/assignments/999999/students/999999/pages', 60],
             'student-submission' => ['student', 'POST', '/api/v1/student/assignments/999999/submission', 10],
             'course-extract' => ['teacher', 'POST', '/api/v1/courses/extract', 10],
+            'indicator-suggest' => ['teacher', 'POST', '/api/v1/assignments/999999/indicator-suggestions', 10],
         ];
     }
 

@@ -134,4 +134,14 @@ class Question extends Model
     {
         return $this->belongsToMany(Skill::class, 'question_skill')->withTimestamps()->orderBy('skills.code');
     }
+
+    /**
+     * Gemini's proposals from the linked lesson plan (DESIGN §20.3); question_skill holds the confirmed ones.
+     *
+     * @return HasMany<IndicatorSuggestion, $this>
+     */
+    public function indicatorSuggestions(): HasMany
+    {
+        return $this->hasMany(IndicatorSuggestion::class);
+    }
 }

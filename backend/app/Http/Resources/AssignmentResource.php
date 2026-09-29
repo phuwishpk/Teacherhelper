@@ -15,8 +15,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  subject?: {id, code, name}, course?: {id, code, name}|null,
  *  lesson_plan?: {id, title, unit_id}|null, google_link?: {course_work_id, alternate_link,
  *  drive_file_id, has_blank_worksheet, posted_at, origin, can_push_grades,
- *  materials, last_synced_at}|null, questions?: [...],
+ *  materials, last_synced_at}|null, questions?: [...], unmapped_question_count?,
  *  created_by, created_at, updated_at}
+ *
+ * unmapped_question_count (detail only): questions without an indicator,
+ * whose scores do not count in the charts (DESIGN §20.3 warning).
  *
  * missing_ai_key_count (detail only): answers waiting as `manual` because no
  * Gemini key was usable (DESIGN §13 banner; POST .../requeue-missing-key).
@@ -80,6 +83,11 @@ class AssignmentResource extends JsonResource
             // DESIGN §18.4, §19.8 assignment_google_links (AssignmentGoogleLink::toApi) | null
             'google_link' => $this->whenLoaded('googleLink', fn () => $this->googleLink?->toApi()),
             'questions' => QuestionResource::collection($this->whenLoaded('questions')),
+            // DESIGN §20.3: questions without an indicator do not count in the charts (a warning, never a block).
+            'unmapped_question_count' => $this->when(
+                $this->relationLoaded('questions') && $this->questions->every(fn ($q) => $q->relationLoaded('skills')),
+                fn () => $this->questions->filter(fn ($q) => $q->skills->isEmpty())->count(),
+            ),
             'created_by' => $this->created_by,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

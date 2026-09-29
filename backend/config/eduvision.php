@@ -93,6 +93,12 @@ return [
         'cnn_skip_sample_rate' => (float) env('GRADING_CNN_SKIP_SAMPLE_RATE', 0.10),
     ],
 
+    // "ผ่าน" of an indicator (DESIGN §20.3): mastery >= pass_threshold. 0.5 is
+    // the 50% pass mark Thai schools use.
+    'mastery' => [
+        'pass_threshold' => min(1.0, max(0.0, (float) env('MASTERY_PASS_THRESHOLD', 0.5))),
+    ],
+
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 

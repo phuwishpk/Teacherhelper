@@ -4,6 +4,7 @@ namespace App\Domain\AnswerKeys;
 
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Courses\AssignmentCourses;
+use App\Domain\Courses\IndicatorSuggestions;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
 use App\Domain\Gemini\GeminiException;
@@ -57,6 +58,7 @@ final class AnswerKeyService
         private readonly AnswerKeyReader $reader,
         private readonly GeminiGateway $gateway,
         private readonly PromptRepository $prompts,
+        private readonly IndicatorSuggestions $indicatorSuggestions,
     ) {}
 
     /**
@@ -279,6 +281,8 @@ final class AnswerKeyService
 
         ReleaseWaitingSubmissionsJob::dispatch($assignment->id);
         Log::info('answer_key.approved', ['assignment_id' => $assignment->id, 'mode' => $assignment->mode]);
+        // Linked to a lesson plan with questions still without an indicator: suggest them now (§20.3).
+        $this->indicatorSuggestions->autoOnApproval($assignment->loadMissing('classroom'));
 
         return $assignment;
     }

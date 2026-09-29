@@ -19,11 +19,13 @@ use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradeConflictController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\IndicatorSuggestionController;
 use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\LearningResourceController;
 use App\Http\Controllers\Api\V1\LessonPlanController;
 use App\Http\Controllers\Api\V1\LoginCardController;
 use App\Http\Controllers\Api\V1\MasteryController;
+use App\Http\Controllers\Api\V1\MasterySummaryController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ModelController;
 use App\Http\Controllers\Api\V1\PracticeItemController;
@@ -35,6 +37,7 @@ use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
+use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
@@ -137,6 +140,8 @@ Route::prefix('v1')->group(function () {
                 Route::post('courses/extract', [CourseDocumentController::class, 'extract'])->middleware('throttle:course-extract')->name('api.courses.extract');
                 Route::post('courses/extract/estimate', [CourseDocumentController::class, 'estimate'])->name('api.courses.extract.estimate');
                 Route::post('courses/import', [CourseDocumentController::class, 'import'])->name('api.courses.import');
+                // The roll-up by standard or unit with coverage, per student or per classroom (§20.3).
+                Route::get('courses/{id}/mastery-summary', MasterySummaryController::class)->name('api.courses.mastery-summary');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');
@@ -149,6 +154,11 @@ Route::prefix('v1')->group(function () {
                 Route::get('assignments/{id}/layouts', [LayoutController::class, 'index'])->name('api.assignments.layouts.index');
                 Route::post('assignments/{id}/worksheets', [WorksheetPrintController::class, 'store'])->name('api.assignments.worksheets.store');
                 Route::post('assignments/{id}/requeue-missing-key', [GradingController::class, 'requeueMissingKey'])->name('api.assignments.requeue-missing-key');
+                // Indicators of the questions (§20.3): Gemini suggests from the linked lesson plan
+                // (queues a job that costs money, so it is throttled), the teacher confirms.
+                Route::post('assignments/{id}/indicator-suggestions', [IndicatorSuggestionController::class, 'store'])->middleware('throttle:indicator-suggest')->name('api.assignments.indicator-suggestions.store');
+                Route::get('assignments/{id}/indicator-suggestions', [IndicatorSuggestionController::class, 'index'])->name('api.assignments.indicator-suggestions.index');
+                Route::put('assignments/{id}/indicator-mapping', [IndicatorSuggestionController::class, 'mapping'])->name('api.assignments.indicator-mapping');
 
                 // The teacher's answer key: typed, read from documents or drafted by AI, then approved (§19.5).
                 Route::post('documents', [DocumentController::class, 'store'])->middleware('throttle:documents')->name('api.documents.store');
@@ -244,6 +254,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->name('api.student.results.show');
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:appeal')->name('api.student.responses.appeal');
                 Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
+                // Their own courses and roll-up only (§20.4, §20.9).
+                Route::get('courses', [StudentCourseController::class, 'index'])->name('api.student.courses.index');
+                Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Hand in from the app (§19.6): open assignments and a whole-page submission.
                 Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');

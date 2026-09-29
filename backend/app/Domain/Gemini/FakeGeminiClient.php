@@ -37,6 +37,10 @@ use App\Models\Question;
  * `document_read` (DESIGN §20.1) answers a fixed course of two units and
  * three lesson plans; see courseDocument() for its markers.
  *
+ * `indicator_suggest` (DESIGN §20.3) picks, per question, the plan's
+ * indicators whose code the question text mentions, else the first one;
+ * see indicatorSuggestions() for its markers.
+ *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
@@ -128,6 +132,11 @@ class FakeGeminiClient implements GeminiClient
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
             'answer_key_read', 'answer_key_draft' => self::answerKey($request),
             'document_read' => self::courseDocument($request),
+            'indicator_suggest' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('invalid') => 'not json at all {',
+                default => self::indicatorSuggestions($request),
+            },
             'practice_gen' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
@@ -550,6 +559,37 @@ class FakeGeminiClient implements GeminiClient
      *
      * @return array<string, mixed>
      */
+    /**
+     * hints.questions (question_no => text) and hints.indicator_codes (the
+     * plan's). Per question, in its text: [fake:no-indicator] = none fits,
+     * [fake:outside-plan] = also a code that is not in the plan (the server
+     * drops it). A code of the plan written in the text is picked; else
+     * the first code of the plan.
+     *
+     * @return array<string, mixed>
+     */
+    private static function indicatorSuggestions(GeminiRequest $request): array
+    {
+        $codes = array_values(array_map('strval', (array) ($request->hints['indicator_codes'] ?? [])));
+        $out = [];
+        foreach ((array) ($request->hints['questions'] ?? []) as $no => $text) {
+            $text = mb_strtolower((string) $text);
+            if (str_contains($text, '[fake:no-indicator]') || $codes === []) {
+                $out[] = ['question_no' => (int) $no, 'indicator_codes' => [], 'reason_th' => 'ไม่มีตัวชี้วัดในแผนที่ตรงกับข้อนี้'];
+
+                continue;
+            }
+            $picked = array_values(array_filter($codes, fn (string $c) => str_contains($text, mb_strtolower($c))));
+            $picked = $picked === [] ? [$codes[0]] : $picked;
+            if (str_contains($text, '[fake:outside-plan]')) {
+                array_unshift($picked, 'ค 9.9 ป.9/9');
+            }
+            $out[] = ['question_no' => (int) $no, 'indicator_codes' => $picked, 'reason_th' => 'ข้อนี้วัด '.$picked[count($picked) - 1]];
+        }
+
+        return ['questions' => $out];
+    }
+
     private function rubric(GeminiRequest $request, bool $invalid): array
     {
         if ($request->type === Question::TYPE_SHOW_WORK) {
