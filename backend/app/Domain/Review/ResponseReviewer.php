@@ -47,6 +47,9 @@ use Illuminate\Validation\ValidationException;
  */
 final class ResponseReviewer
 {
+    /** ai_calls.feature of "ให้ AI เขียนคำอธิบายใหม่" (DESIGN §21.8). */
+    public const FEATURE_REGENERATE = 'review_regenerate';
+
     public function __construct(
         private readonly GeminiGateway $gateway,
         private readonly GeminiKeyResolver $keys,
@@ -259,6 +262,8 @@ final class ResponseReviewer
             $response->question->rubricCriteria->all(),
             RubricDraftRequest::gradeLabel((int) $assignment?->classroom?->grade_level),
             $extraction,
+            self::FEATURE_REGENERATE,
+            $assignment?->id,
         );
         $outcome = $this->gateway->run(['explanation' => $call], $key)['explanation'];
 

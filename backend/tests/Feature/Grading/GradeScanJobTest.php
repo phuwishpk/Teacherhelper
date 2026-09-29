@@ -141,15 +141,17 @@ class GradeScanJobTest extends TestCase
         $this->assertSame(['extract_batch', 'explanation'], $calls->pluck('purpose')->all());
         $this->assertSame([null, $work->id], $calls->pluck('response_id')->all());
         $this->assertSame([null, $this->work->id], $calls->pluck('question_id')->all());
-        // The version of each prompt file in use: extract_batch.general.v1, explanation.general.v2.
-        $this->assertSame(['v1', 'v2'], $calls->pluck('prompt_version')->all());
+        // The version of each prompt file in use: extract_batch.general.v2, explanation.general.v3.
+        $this->assertSame(['v2', 'v3'], $calls->pluck('prompt_version')->all());
         // §21.8 labels: the batch carries 2 questions in 3 images (working area,
         // final box, open answer), all at the default `high` until calibrated.
-        $this->assertSame(['grading_crop', null], $calls->pluck('feature')->all());
+        $this->assertSame(['grading_crop', 'grading_crop'], $calls->pluck('feature')->all());
         $this->assertSame([2, null], $calls->pluck('question_count')->all());
         $this->assertSame([3, null], $calls->pluck('image_count')->all());
         $this->assertSame(['high', null], $calls->pluck('media_resolution')->all());
-        $this->assertSame([$this->assignment->id, null], $calls->pluck('assignment_id')->all());
+        $this->assertSame([$this->assignment->id, $this->assignment->id], $calls->pluck('assignment_id')->all());
+        // §21.6: thinking low for both, output capped per task.
+        $this->assertSame([['low', 4096], ['low', 512]], array_map(fn ($r) => [$r->thinkingLevel, $r->maxOutputTokens], array_slice($this->gemini->requests, 0, 2)));
         foreach ($calls as $call) {
             $this->assertSame(['ok', 'server', 'fake:gemini-3.8-flash'], [$call->status, $call->key_source, $call->model]);
             $this->assertGreaterThan(0, $call->input_tokens);
@@ -205,6 +207,19 @@ class GradeScanJobTest extends TestCase
 
         $this->runJob($scanId); // nothing left to do
         $this->assertSame(6, AiCall::query()->count());
+    }
+
+    public function test_an_answer_cut_off_at_its_output_cap_counts_as_invalid_output(): void
+    {
+        $this->mark('short', '[fake:max-tokens]');
+        $this->runJob($this->scan(1));
+
+        $short = $this->response('short');
+        $this->assertSame(['failed', 1, 'invalid_output'], [$short->grading_state, $short->attempts, $short->fuzzy_trace['last_error']]);
+        $calls = AiCall::query()->where('purpose', 'extract')->get();
+        $this->assertCount(2, $calls, 'retried once by the gateway');
+        $this->assertStringContainsString('MAX_TOKENS', (string) $calls[0]->error);
+        $this->assertSame(1024, $this->gemini->requests[0]->maxOutputTokens);
     }
 
     public function test_output_that_is_invalid_once_succeeds_on_the_retry(): void

@@ -99,7 +99,7 @@ class PracticeBankTest extends TestCase
         $this->assertNotSame('', $items[2]->explanation);
 
         $call = AiCall::query()->sole();
-        $this->assertSame(['practice_gen', 'ok', 'server', $this->fractions->id], [$call->purpose, $call->status, $call->key_source, $call->skill_id]);
+        $this->assertSame(['practice_gen', 'ok', 'server', $this->fractions->id, 'practice_bank', 'v2'], [$call->purpose, $call->status, $call->key_source, $call->skill_id, $call->feature, $call->prompt_version]);
 
         // Only teachers of the school see them.
         $this->asUser($this->teacher)->getJson('/api/v1/practice-items?status=draft')->assertOk()->assertJsonCount(4, 'data')->assertJsonPath('data.0.skill.code', 'ค 1.1 ป.4/2');

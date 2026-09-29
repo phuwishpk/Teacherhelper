@@ -42,7 +42,7 @@ final class GradeApplier
      * @param  array<int, array<string, mixed>>  $extractions  by response id
      * @return array{0: array<int, array{text: string, source: string}>, 1: array<int, string>} explanations, failed explanation statuses
      */
-    public function explain(array $graded, array $responses, array $extractions, GeminiKey $key, string $gradeLabel, bool $scoreOnly = false): array
+    public function explain(array $graded, array $responses, array $extractions, GeminiKey $key, string $gradeLabel, bool $scoreOnly = false, ?string $feature = null, ?int $assignmentId = null): array
     {
         $explanations = [];
         $wanted = [];
@@ -100,6 +100,8 @@ final class GradeApplier
                 $response->question->rubricCriteria->all(),
                 $gradeLabel,
                 $extractions[$id],
+                $feature,
+                $assignmentId,
             );
         }
 

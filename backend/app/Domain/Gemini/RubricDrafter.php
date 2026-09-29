@@ -11,6 +11,9 @@ final class RubricDrafter
 {
     public const PURPOSE = 'rubric_draft';
 
+    /** ai_calls.feature (DESIGN §21.8). */
+    public const FEATURE = 'rubric_ai_draft';
+
     public function __construct(
         private readonly GeminiGateway $gateway,
         private readonly PromptRepository $prompts,
@@ -36,6 +39,8 @@ final class RubricDrafter
                 responseSchema: ResponseSchemas::get(self::PURPOSE, $request->type),
                 temperature: $prompt->temperature,
                 hints: ['type' => $request->type, 'max_points' => $request->maxPoints, 'question_text' => $request->promptText],
+                thinkingLevel: $prompt->thinking,
+                maxOutputTokens: $prompt->maxOutputTokens,
             ),
             questionId: $request->questionId,
             check: function (array $data) use ($request) {
@@ -43,6 +48,7 @@ final class RubricDrafter
 
                 return $data;
             },
+            feature: self::FEATURE,
         );
 
         return RubricDraft::fromArray((array) $this->gateway->runOne($call, $key)->data);

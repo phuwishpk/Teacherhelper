@@ -62,6 +62,8 @@ final class BatchExtractionRequests
             responseSchema: ResponseSchemas::get(self::PURPOSE, 'general'),
             temperature: $prompt->temperature,
             hints: ['questions' => $hints],
+            thinkingLevel: $prompt->thinking,
+            maxOutputTokens: $prompt->maxOutputTokens,
         );
 
         return new GeminiCall(

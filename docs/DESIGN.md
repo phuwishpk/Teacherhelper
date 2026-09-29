@@ -2664,7 +2664,8 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 
 ค่าอยู่ในไฟล์ prompt (front matter) ปรับได้โดยเพิ่มเวอร์ชัน prompt ถ้าตอบถูกตัด (`finishReason = MAX_TOKENS`) ถือเป็น `invalid_output` และบันทึกไว้ให้เห็นใน `ai_calls`
 
-- implement (build ข้อ 3): front matter รับ `thinking:` และ `max_output_tokens:` แล้ว (`GeminiRequest.thinkingLevel`, `maxOutputTokens` → `generationConfig.thinkingConfig`, `maxOutputTokens`) ใช้กับ `answer_key_read` (medium, 16,384) และ `answer_key_draft` (medium, 4,096) prompt อื่นยังใช้ `GEMINI_THINKING_LEVEL` จนถึง build ข้อ 7 ถ้า `GEMINI_THINKING_LEVEL` ว่าง (โมเดลไม่มี thinking level) ไม่ส่ง thinking เลย
+- implement (build ข้อ 3): front matter รับ `thinking:` และ `max_output_tokens:` แล้ว (`GeminiRequest.thinkingLevel`, `maxOutputTokens` → `generationConfig.thinkingConfig`, `maxOutputTokens`) ใช้กับ `answer_key_read` (medium, 16,384) และ `answer_key_draft` (medium, 4,096) ถ้า `GEMINI_THINKING_LEVEL` ว่าง (โมเดลไม่มี thinking level) ไม่ส่ง thinking เลย
+- implement (build ข้อ 7): ทุก prompt มีค่าตามตารางแล้วโดยเพิ่มเวอร์ชัน (`extract.short.v2`, `extract.show_work.v3`, `extract.open.v2`, `extract_batch.general.v2`, `extract_page.general.v2`, `explanation.general.v3`, `practice_gen.general.v2`, `rubric_draft.*.v2` เนื้อหาเท่าเดิม) `GEMINI_THINKING_LEVEL` เหลือเป็นค่าตั้งต้นของ prompt ที่ไม่ระบุ (`check` ของ `eduvision:gemini-check`) คำตอบที่ `finishReason = MAX_TOKENS` ถูกนับเป็น `invalid_output` ส่งซ้ำหนึ่งครั้งตามกติกาเดิม และ `ai_calls.error` เขียนว่า "output cut off at maxOutputTokens (finishReason MAX_TOKENS)"
 
 ### 21.7 ข้อ 6–7: ใช้คำอธิบายซ้ำ และ "เฉพาะคะแนน"
 
@@ -2695,6 +2696,7 @@ ALTER TABLE ai_calls
 
 - ใช้ใน DB และรายงานวิชาเท่านั้น **ไม่มีหน้าจอของครู** (admin ดูได้ใน Filament เดิม)
 - migration ของ build ข้อ 2 เพิ่มทุกคอลัมน์ข้างบนแล้ว ตอนนี้ grading กรอก `feature` (`grading_crop`, `grading_page`; เฉลยของครูใน build ข้อ 3: `key_from_document`, `key_ai_draft`), `media_resolution`, `image_count`, `question_count`, `assignment_id`, `cached_tokens`, `thinking_tokens` ส่วน `batch` เป็น `FALSE` จนถึง §20.8 call แบบหลายข้อ (`extract_batch`, `extract_page`) มี `response_id = NULL` (ข้อเดียวที่ส่งซ้ำรายข้อมี `question_id`)
+- implement (build ข้อ 7): ทุก call มี `feature` แล้ว คำอธิบายใช้ `feature` ของทางตรวจที่ขอ (`grading_crop`/`grading_page` พร้อม `assignment_id`) "ให้ AI เขียนใหม่" = `review_regenerate`, ร่าง rubric = `rubric_ai_draft`, คลังแบบฝึก = `practice_bank`, calibration harness = `calibration` (แยกออกจากค่าใช้จ่ายจริงได้)
 - ส่วนที่ประหยัดของแต่ละข้อคำนวณจาก: ข้อ 2 = จำนวน `responses.auto_rule` คูณค่าเฉลี่ย token ของ `extract` รายข้อ, ข้อ 3 = token ต่อข้อของ `extract_batch` เทียบ `extract`, ข้อ 4 = token ต่อภาพแยกตาม `media_resolution`, ข้อ 6 = จำนวน `explanation_source = reused`, ข้อ 7 = จำนวนข้อใน `score_only`
 
 ### 21.9 ข้อ 9: ย่อภาพบนมือถือ

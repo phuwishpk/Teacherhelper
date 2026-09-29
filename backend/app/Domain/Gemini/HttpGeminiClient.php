@@ -215,7 +215,9 @@ final class HttpGeminiClient implements GeminiClient
             }
         }
 
-        return GeminiReply::ok($text, $input, $output, $latency, $cached, $thinking);
+        $finish = $json['candidates'][0]['finishReason'] ?? null;
+
+        return GeminiReply::ok($text, $input, $output, $latency, $cached, $thinking, is_string($finish) ? $finish : null);
     }
 
     private static function latency(Response $response): ?int

@@ -173,6 +173,8 @@ final class ScanGrader
             $key,
             $gradeLabel,
             (bool) $assignment->score_only,
+            ExtractionRequests::FEATURE,
+            $assignment->id,
         );
 
         return $this->write($scan, $assignment, $responses, $outcomes + $autoOutcomes, $graded + $autoGraded, $explanations + $autoExplanations, $manual, $explanationErrors);

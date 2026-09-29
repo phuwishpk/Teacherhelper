@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Gemini;
 
+use App\Domain\Gemini\CallOutcome;
+use App\Domain\Gemini\GeminiCall;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiException;
+use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiImage;
+use App\Domain\Gemini\GeminiKey;
 use App\Domain\Gemini\GeminiReply;
 use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\HttpGeminiClient;
@@ -208,6 +212,32 @@ class HttpGeminiClientTest extends TestCase
         foreach ($replies as $reply) {
             $this->assertStringNotContainsString(self::KEY, (string) $reply->error);
         }
+    }
+
+    public function test_an_answer_cut_off_at_the_output_cap_is_invalid_output(): void
+    {
+        $cut = self::answer('{"ok":');
+        $cut['candidates'][0]['finishReason'] = 'MAX_TOKENS';
+        Http::fake([self::URL => Http::response($cut)]);
+        $this->app->instance(GeminiClient::class, $this->client());
+
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame([GeminiReply::OK, 'MAX_TOKENS'], [$reply->status, $reply->finishReason]);
+
+        $outcome = app(GeminiGateway::class)->run(['a' => new GeminiCall($this->request())], new GeminiKey(self::KEY, 'server'))['a'];
+        $this->assertSame(CallOutcome::INVALID_OUTPUT, $outcome->status);
+        // Retried once like any invalid output, both logged with the reason (DESIGN §21.6).
+        $calls = AiCall::query()->get();
+        $this->assertSame(['invalid_output', 'invalid_output'], $calls->pluck('status')->all());
+        $this->assertStringContainsString('MAX_TOKENS', (string) $calls[0]->error);
+    }
+
+    public function test_the_task_s_thinking_level_and_output_cap_go_in_the_generation_config(): void
+    {
+        $request = new GeminiRequest('explanation', 'general', 'v3', 'S', 'U', thinkingLevel: 'medium', maxOutputTokens: 512);
+        $config = $this->client()->payload($request)['generationConfig'];
+        $this->assertSame([['thinkingLevel' => 'medium'], 512], [$config['thinkingConfig'], $config['maxOutputTokens']]);
+        $this->assertArrayNotHasKey('thinkingConfig', $this->client(thinking: null)->payload($request)['generationConfig'], 'a model without thinking levels');
     }
 
     public function test_a_timeout_is_an_error_not_an_exception(): void

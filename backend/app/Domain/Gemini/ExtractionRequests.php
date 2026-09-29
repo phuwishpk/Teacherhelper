@@ -143,6 +143,8 @@ final class ExtractionRequests
             responseSchema: ResponseSchemas::get(self::PURPOSE, $type),
             temperature: $prompt->temperature,
             hints: $hints,
+            thinkingLevel: $prompt->thinking,
+            maxOutputTokens: $prompt->maxOutputTokens,
         );
     }
 

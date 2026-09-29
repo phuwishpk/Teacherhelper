@@ -23,6 +23,7 @@ use App\Models\Question;
  *   [fake:schema]        JSON that misses required fields
  *   [fake:error]         HTTP 503, every time
  *   [fake:explanation-error] / [fake:explanation-invalid]   for `explanation`
+ *   [fake:max-tokens]    any purpose: a cut-off answer, finishReason MAX_TOKENS
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
@@ -97,6 +98,10 @@ class FakeGeminiClient implements GeminiClient
         $signature = md5($request->purpose."\0".$request->userText."\0".($request->images[0]->data ?? ''));
         $this->seen[$signature] = ($this->seen[$signature] ?? 0) + 1;
 
+        if ($has('max-tokens')) {
+            return GeminiReply::ok('{"answers": [', 10, $request->maxOutputTokens ?? 8192, 0, finishReason: 'MAX_TOKENS');
+        }
+
         $data = match ($request->purpose) {
             'extract' => (function () use ($request, $has, $signature) {
                 if ($has('error')) {
@@ -139,6 +144,7 @@ class FakeGeminiClient implements GeminiClient
             inputTokens: intdiv(strlen($request->systemInstruction.$request->userText), 4) + 258 * count($request->images),
             outputTokens: max(1, intdiv(strlen($text), 4)),
             latencyMs: 0,
+            finishReason: 'STOP',
         );
     }
 

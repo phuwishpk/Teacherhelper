@@ -62,6 +62,8 @@ final class PageExtractionRequests
             temperature: $prompt->temperature,
             hints: ['questions' => $hints],
             timeout: self::TIMEOUT,
+            thinkingLevel: $prompt->thinking,
+            maxOutputTokens: $prompt->maxOutputTokens,
         );
 
         return new GeminiCall(

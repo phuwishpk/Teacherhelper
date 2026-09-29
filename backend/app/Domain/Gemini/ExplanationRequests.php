@@ -9,7 +9,9 @@ use App\Models\RubricCriterion;
 /**
  * Builds the `explanation` request (DESIGN §10.5) for an answer that did not
  * get full marks. Text only: the transcription Gemini already made, the error
- * types and the key. The image is never sent twice.
+ * types and the key. The image is never sent twice. feature labels the
+ * ai_calls row with the path that asked (grading_crop, grading_page,
+ * review_regenerate; DESIGN §21.8).
  */
 final class ExplanationRequests
 {
@@ -37,7 +39,7 @@ final class ExplanationRequests
      * @param  array<string, mixed>  $extraction  validated output of `extract`
      * @param  list<RubricCriterion>  $criteria
      */
-    public function forResponse(Response $response, Question $question, array $criteria, string $gradeLabel, array $extraction): GeminiCall
+    public function forResponse(Response $response, Question $question, array $criteria, string $gradeLabel, array $extraction, ?string $feature = null, ?int $assignmentId = null): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, 'general');
         $vars = [
@@ -59,6 +61,8 @@ final class ExplanationRequests
             responseSchema: ResponseSchemas::get(self::PURPOSE, 'general'),
             temperature: $prompt->temperature,
             hints: ['type' => $question->type, 'question_text' => $question->prompt_text, 'error_types' => $extraction['error_types'] ?? []],
+            thinkingLevel: $prompt->thinking,
+            maxOutputTokens: $prompt->maxOutputTokens,
         );
 
         return new GeminiCall(
@@ -66,6 +70,8 @@ final class ExplanationRequests
             responseId: $response->id,
             questionId: $question->id,
             check: fn (array $data) => self::normalize($data),
+            feature: $feature,
+            assignmentId: $assignmentId,
         );
     }
 

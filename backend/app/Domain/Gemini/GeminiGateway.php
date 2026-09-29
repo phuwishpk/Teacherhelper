@@ -12,7 +12,8 @@ use JsonException;
  * 1. sends the batch through GeminiClient (Http::pool, up to 8 at a time);
  * 2. decodes the JSON and checks it against the request's schema, then the
  *    call's semantic check;
- * 3. invalid output is retried once; still invalid -> invalid_output;
+ * 3. invalid output (an answer cut off at maxOutputTokens included) is
+ *    retried once; still invalid -> invalid_output;
  * 4. logs every request, retries included, to `ai_calls` (purpose, model,
  *    prompt_version, tokens, latency, status, key_source, and the §21.8
  *    labels: feature, media resolution, image and question counts) and
@@ -24,6 +25,8 @@ use JsonException;
 final class GeminiGateway
 {
     private const ERROR_LIMIT = 500;
+
+    private const MAX_TOKENS = 'MAX_TOKENS';
 
     public function __construct(private readonly GeminiClient $client) {}
 
@@ -87,6 +90,10 @@ final class GeminiGateway
         }
         if (! $reply->isOk()) {
             return new CallOutcome(CallOutcome::ERROR, null, $reply->error);
+        }
+        if ($reply->finishReason === self::MAX_TOKENS) {
+            // Cut off at maxOutputTokens (DESIGN §21.6): never use half an answer.
+            return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'output cut off at maxOutputTokens (finishReason MAX_TOKENS)');
         }
 
         try {

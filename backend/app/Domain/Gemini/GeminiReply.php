@@ -8,6 +8,8 @@ namespace App\Domain\Gemini;
  * Google refused the API key, so retrying with it is pointless.
  * outputTokens counts the answer and the thinking; thinkingTokens and
  * cachedTokens (implicit cache) are reported apart for ai_calls (§21.8).
+ * finishReason is the first candidate's (STOP, MAX_TOKENS, ...): an answer
+ * cut off at maxOutputTokens is invalid output (DESIGN §21.6).
  */
 final readonly class GeminiReply
 {
@@ -27,6 +29,7 @@ final readonly class GeminiReply
         public ?int $httpStatus = null,
         public ?int $cachedTokens = null,
         public ?int $thinkingTokens = null,
+        public ?string $finishReason = null,
     ) {}
 
     public static function ok(
@@ -36,8 +39,9 @@ final readonly class GeminiReply
         ?int $latencyMs = null,
         ?int $cachedTokens = null,
         ?int $thinkingTokens = null,
+        ?string $finishReason = null,
     ): self {
-        return new self(self::OK, $text, $inputTokens, $outputTokens, $latencyMs, null, 200, $cachedTokens, $thinkingTokens);
+        return new self(self::OK, $text, $inputTokens, $outputTokens, $latencyMs, null, 200, $cachedTokens, $thinkingTokens, $finishReason);
     }
 
     public static function error(string $error, ?int $latencyMs = null, ?int $httpStatus = null): self
