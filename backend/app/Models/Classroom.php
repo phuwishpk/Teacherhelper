@@ -67,7 +67,7 @@ class Classroom extends Model
     {
         return $this->belongsToMany(User::class, 'classroom_students', 'classroom_id', 'student_id')
             ->using(ClassroomStudent::class)
-            ->withPivot('student_number')
+            ->withPivot('student_number', 'left_course_at')
             ->withTimestamps()
             ->orderByPivot('student_number');
     }

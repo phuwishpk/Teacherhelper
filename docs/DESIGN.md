@@ -1864,7 +1864,7 @@ ALTER TABLE scans
 - หน้ารายการห้องเรียนมีปุ่ม **"นำเข้าจาก Google Classroom"** ข้างปุ่ม "สร้างห้องเรียน" เดิม ส่วนการผูกห้องที่มีอยู่แล้ว (§18.7) ยังใช้ได้เหมือนเดิม
 - **รายการคอร์ส** มาจาก `GET /google/courses` (คอร์ส `ACTIVE` ที่ครูเป็นผู้สอน) คอร์สที่ผูกกับห้องใดแล้ว**แสดงเป็นสีจาง**พร้อมชื่อห้องที่ผูกไว้ ไม่ซ่อน และเลือกนำเข้าไม่ได้ (409 `course_already_linked`)
 - **หน้าตัวอย่างก่อนสร้าง** (`GET /google/courses/{course_id}/import-preview`)
-  - ชื่อห้องตั้งต้น = `"<ชื่อคอร์ส> <section>"` แก้ได้ และเปลี่ยนชื่อภายหลังได้ด้วย `PATCH /classrooms/{id}` เดิม
+  - ชื่อห้องตั้งต้น = `"<ชื่อคอร์ส> <section>"` (ถ้าชื่อคอร์สมี section อยู่แล้วไม่ต่อซ้ำ ตัดไม่เกิน 100 ตัวอักษร) แก้ได้ และเปลี่ยนชื่อภายหลังได้ด้วย `PATCH /classrooms/{id}` เดิม
   - `grade_level` เดาจากชื่อคอร์สและ section: `ป.1`–`ป.6` (หรือ "ประถมศึกษาปีที่ n") → 1–6, `ม.1`–`ม.6` (หรือ "มัธยมศึกษาปีที่ n") → 7–12 ถ้าไม่เจอให้เว้นว่างและครู**ต้องเลือก**ก่อนสร้าง
   - `academic_year` = ปี พ.ศ. ปัจจุบันตามเวลา `Asia/Bangkok` แก้ได้
   - รายชื่อนักเรียนพร้อมเลขที่ที่เสนอ ครูแก้เลขที่ได้ และเอาบัญชีออกได้ (เช่น บัญชีทดสอบ บัญชีผู้ปกครอง) ก่อนกด "สร้างห้อง" ตอนสร้าง server ดึงรายชื่อจาก Classroom ซ้ำ ใช้ชื่อและ email จาก Google ไม่ใช้ชื่อที่ client ส่งมา
@@ -1873,12 +1873,13 @@ ALTER TABLE scans
   2. ชื่อภาษาไทยมาก่อน เรียงตามลำดับพจนานุกรม: สระหน้า `เ แ โ ใ ไ` ที่ขึ้นต้นคำไม่นับเป็นตัวแรก (ย้ายไปไว้หลังพยัญชนะตัวถัดไปใน sort key) แล้วเทียบตาม code point ของอักษรไทยซึ่งเรียงตามพจนานุกรมอยู่แล้ว ชื่อเท่ากันให้เทียบนามสกุลด้วยกติกาเดียวกัน
   3. ตามด้วยชื่อภาษาอังกฤษ A–Z ไม่สนตัวพิมพ์เล็กใหญ่ ชื่อที่ขึ้นต้นด้วยอย่างอื่นอยู่ท้ายสุด
   4. เลขที่ 1..N ตามลำดับนี้
-- **ตอนสร้าง** (`POST /classrooms/import-google`) ทำใน transaction เดียว: สร้างห้อง → เพิ่มนักเรียนด้วย `StudentEnroller` เดิม (ออก PIN และ credential ตามปกติ แบ่งทีละ 100 คนเมื่อเกิน 100) → แถว `classroom_google_links` → จับคู่ `google_user_id` / `google_email` ของทุกคน ถ้าส่วนใดล้มให้ rollback ทั้งหมด บัญชีที่ครูเอาออกบันทึกลง `classroom_google_ignored_users` เพื่อไม่ให้ถูกเพิ่มกลับตอนซิงก์
+- **ตอนสร้าง** (`POST /classrooms/import-google`) ทำใน transaction เดียว: สร้างห้อง → เพิ่มนักเรียนด้วย `StudentEnroller` เดิม (ออก PIN และ credential ตามปกติ แบ่งทีละ 100 คนเมื่อเกิน 100) → แถว `classroom_google_links` → จับคู่ `google_user_id` / `google_email` ของทุกคน ถ้าส่วนใดล้มให้ rollback ทั้งหมด บัญชีที่ครูเอาออกบันทึกลง `classroom_google_ignored_users` เพื่อไม่ให้ถูกเพิ่มกลับตอนซิงก์ (implement 30 ก.ย. 2569) บัญชีที่เข้าคอร์สหลังเปิดหน้าตัวอย่าง (ไม่อยู่ทั้งใน `students` และ `removed`) ต่อท้ายด้วยเลขที่ถัดจากเลขที่มากที่สุดตามลำดับ `ThaiNameSorter` ส่วนบัญชีที่ออกจากคอร์สไปแล้วข้ามไปเงียบๆ
 - **ปุ่ม "ซิงก์รายชื่อ"** บนห้องที่ผูกแล้ว (`POST /classrooms/{id}/google-roster/sync`)
-  - นักเรียนใหม่ในคอร์ส (ไม่อยู่ใน ignore list) ต่อท้ายด้วยเลขที่ถัดจากเลขที่มากที่สุด แล้วจับคู่อัตโนมัติ
+  - นักเรียนใหม่ในคอร์ส (ไม่อยู่ใน ignore list) ต่อท้ายด้วยเลขที่ถัดจากเลขที่มากที่สุด (เรียงด้วย `ThaiNameSorter`) แล้วจับคู่อัตโนมัติ PIN ของคนใหม่อยู่ในคำตอบ (แสดงครั้งเดียว)
+  - **ก่อนถือว่าเป็นคนใหม่** (เพิ่ม 30 ก.ย. 2569 เพื่อไม่ให้ห้องที่ผูกเองตาม §18.7 แต่ยังไม่ได้จับคู่ มีนักเรียนซ้ำเมื่อซิงก์): บัญชีที่ยังไม่จับคู่จะจับคู่กับนักเรียนที่มีอยู่ถ้า (1) email ตรงกับ `google_email` ของนักเรียนที่ไม่มีบัญชีจับคู่ (ไม่สนตัวพิมพ์) หรือ (2) ชื่อเต็มตรงกันหลัง normalize (รอบที่ 1–2 ของ `RosterMatcher` คือชื่อตรงกันหรือคำเดียวกันสลับลำดับ ต้องไม่ซ้ำทั้งสองฝั่ง) **ไม่ใช้**รอบชื่อต้นอย่างเดียวเพราะจับคู่โดยไม่ถามครู ทั้งสองกรณีรายงานใน `rematched`
   - คนที่ไม่อยู่ในคอร์สแล้ว: ตั้ง `classroom_students.left_course_at` แสดงป้าย **"ไม่อยู่ใน Classroom แล้ว"** และ**ยกเลิกการจับคู่** (`google_user_id = NULL`, เก็บ `google_email` ไว้ให้ครูดู) **ไม่ลบนักเรียน**และคะแนนเดิมยังอยู่ ถ้ากลับเข้าคอร์สด้วยบัญชีเดิม ระบบจับคู่คืนด้วย email แล้วล้างป้าย
   - **ไม่เขียนทับชื่อ**ในแอป
-  - ซิงก์รายชื่ออัตโนมัติด้วยเมื่อการซิงก์งานที่ส่งเจอ `userId` ที่ยังไม่ได้จับคู่ (ไม่เกินหนึ่งครั้งต่อห้องต่อรอบซิงก์)
+  - ซิงก์รายชื่ออัตโนมัติด้วยเมื่อการซิงก์งานที่ส่งเจอ `userId` ที่ยังไม่ได้จับคู่ (ไม่เกินหนึ่งครั้งต่อห้องต่อรอบซิงก์) implement เป็น `SyncClassroomRosterJob` ที่ dispatch เมื่อ `Cache::add('classroom-roster-sync:{classroom_id}', …, 300)` สำเร็จ ใช้บัญชี Google ของครูที่ผูกคอร์ส (`owner_user_id`) error ของ Google บันทึก log แล้วจบ ไม่ retry (รอบถัดไปลองใหม่)
 
 ### 19.3 B. ซิงก์สองทางด้วย cron (shared hosting)
 
@@ -2145,10 +2146,10 @@ CREATE TABLE explanation_cache (
 
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
-| GET | `/google/courses` | ครู | เพิ่ม `linked_classroom: {id, name}\|null` ต่อคอร์ส |
-| GET | `/google/courses/{course_id}/import-preview` | ครู | `{course_id, name, section, suggested_name, grade_level_guess\|null, academic_year, students: [{google_user_id, name, email, proposed_number}]}` |
-| POST | `/classrooms/import-google` | ครู | `{course_id, name, grade_level, academic_year, students: [{google_user_id, student_number}], removed: [google_user_id]}` ตอบ `201 {classroom, students: [{student_id, student_number, name, pin}]}` (PIN แสดงครั้งเดียว) คอร์สผูกแล้ว 409 `course_already_linked` เลขที่ซ้ำ 422 |
-| POST | `/classrooms/{id}/google-roster/sync` | ครู | `{added: [...], left: [...], rematched: [...]}` |
+| GET | `/google/courses` | ครู | เพิ่ม `linked_classroom: {id, name}\|null` ต่อคอร์ส (ผูกกับห้องของครูคนอื่น เช่นคอร์สที่สอนร่วม: `id = null`, `name` = "ห้องเรียนของครูท่านอื่น" ไม่เปิดเผยชื่อห้อง) ยังคง `linked_classroom_id` เดิมไว้ให้ client เก่า |
+| GET | `/google/courses/{course_id}/import-preview` | ครู | `{data: {course_id, name, section, suggested_name, grade_level_guess\|null, academic_year, students: [{google_user_id, name, email, proposed_number}]}}` คอร์สผูกแล้ว 409 `course_already_linked` ไม่ใช่คอร์ส `ACTIVE` ที่ครูสอน 422 (`errors.course_id`) |
+| POST | `/classrooms/import-google` | ครู | `{course_id, name, grade_level, academic_year, students: [{google_user_id, student_number}], removed: [google_user_id]}` ตอบ `201 {data: {classroom, students: [{student_id, student_number, name, pin}]}}` (PIN แสดงครั้งเดียว) คอร์สผูกแล้ว 409 `course_already_linked` (ตรวจก่อนเรียก Google) เลขที่ซ้ำ 422 บัญชีเดียวกันอยู่ทั้งใน `students` และ `removed` 422 แถวใน `students` มีได้แค่ `google_user_id` กับ `student_number` (ส่งชื่อมา 422) |
+| POST | `/classrooms/{id}/google-roster/sync` | ครู | `{data: {added: [{student_id, student_number, name, pin}], left: [{student_id, student_number, name}], rematched: [{student_id, student_number, name}]}}` ห้องไม่ได้ผูก 422 `classroom_not_linked` `GET /classrooms/{id}/roster` เพิ่ม `left_course_at` ต่อคน |
 | POST | `/classrooms/{id}/google-sync` | ครู | ซิงก์งานและงานที่ส่งของห้องนี้ทันที ตอบ `202` |
 | GET | `/teacher/attention` | ครู | จำนวนที่รอครู `{keys_pending, grade_conflicts, grade_failed, feedback_failed, regrade_pending, needs_reconnect}` |
 | POST / PATCH | `/assignments`, `/assignments/{id}` | ครู | รับ field ใหม่ `mode`, `accept_late`, `score_only` (และ `course_id`, `lesson_plan_id` ใน §20) |

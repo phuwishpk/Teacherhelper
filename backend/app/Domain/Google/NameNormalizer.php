@@ -40,6 +40,17 @@ final class NameNormalizer
         return $tokens;
     }
 
+    /**
+     * The name in NFC, lower case and trimmed, without its title, spacing
+     * and punctuation kept (ThaiNameSorter sorts on this).
+     */
+    public static function withoutTitle(string $name): string
+    {
+        $name = class_exists(Normalizer::class) ? (Normalizer::normalize($name, Normalizer::FORM_C) ?: $name) : $name;
+
+        return trim(self::stripTitle(mb_strtolower(trim($name))));
+    }
+
     /** The whole name as one comparable string ('' when nothing is left). */
     public static function key(string $name): string
     {

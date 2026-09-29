@@ -105,6 +105,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.google.connect' => ['POST', 'google/connect', self::OK, self::OK],
         'api.google.oauth-url' => ['POST', 'google/oauth/url', self::OK, self::OK],
         'api.google.courses' => ['GET', 'google/courses', self::OK, self::OK],
+        'api.google.courses.import-preview' => ['GET', 'google/courses/{course}/import-preview', self::OK, self::OK],
+        'api.classrooms.import-google' => ['POST', 'classrooms/import-google', self::OK, self::OK],
+        'api.classrooms.google-roster.sync' => ['POST', 'classrooms/{classroom}/google-roster/sync', 404, 404],
         'api.classrooms.google-link.store' => ['POST', 'classrooms/{classroom}/google-link', 404, 404],
         'api.classrooms.google-link.destroy' => ['DELETE', 'classrooms/{classroom}/google-link', 404, 404],
         'api.classrooms.google-roster.show' => ['GET', 'classrooms/{classroom}/google-roster', 404, 404],
@@ -319,6 +322,7 @@ class AuthorizationMatrixTest extends TestCase
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
             '{model}' => $this->model->id,
+            '{course}' => 'course-a',
         ]);
 
         if ($uri === 'scans') {

@@ -29,6 +29,7 @@ class SchemaTest extends TestCase
             'google_accounts.connected_at' => ['google_accounts', 'connected_at'],
             'google_accounts.updated_at' => ['google_accounts', 'updated_at'],
             'classroom_google_links.linked_at' => ['classroom_google_links', 'linked_at'],
+            'classroom_google_ignored_users.created_at' => ['classroom_google_ignored_users', 'created_at'],
             'assignment_google_links.posted_at' => ['assignment_google_links', 'posted_at'],
             'classroom_submission_imports.created_at' => ['classroom_submission_imports', 'created_at'],
             'classroom_submission_imports.updated_at' => ['classroom_submission_imports', 'updated_at'],

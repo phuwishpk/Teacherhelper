@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
+use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -159,6 +160,10 @@ Route::prefix('v1')->group(function () {
                         Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
                         Route::post('google/oauth/url', [GoogleAccountController::class, 'oauthUrl'])->name('api.google.oauth-url');
                         Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
+                        // Import a classroom from a course and sync its roster (§19.2).
+                        Route::get('google/courses/{course_id}/import-preview', [GoogleImportController::class, 'preview'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.import-preview');
+                        Route::post('classrooms/import-google', [GoogleImportController::class, 'import'])->name('api.classrooms.import-google');
+                        Route::post('classrooms/{id}/google-roster/sync', [GoogleImportController::class, 'syncRoster'])->name('api.classrooms.google-roster.sync');
                         Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->name('api.classrooms.google-link.store');
                         Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');
                         Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->name('api.classrooms.google-roster.update');

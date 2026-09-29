@@ -3,8 +3,10 @@
 namespace App\Domain\Google;
 
 use App\Exceptions\ApiException;
+use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\ClassroomGoogleIgnoredUser;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
@@ -156,12 +158,38 @@ final class GoogleSubmissionSync
             $row->save();
         }
 
+        $this->syncRosterIfUnknown($assignment, $submissions, $matched->keys()->map(fn ($id) => (string) $id)->all());
+
         Log::info('google.submissions_synced', [
             'assignment_id' => $assignment->id,
             'turned_in' => count($submissions),
             'created' => $created,
             'renewed' => $renewed,
         ]);
+    }
+
+    /**
+     * A Google user who handed in but is matched to no student may be new in
+     * the course: queue a roster sync (DESIGN §19.2), at most once per
+     * classroom per sync round. Accounts the teacher removed at import stay out.
+     *
+     * @param  list<array<string, mixed>>  $submissions
+     * @param  list<string>  $matchedIds
+     */
+    private function syncRosterIfUnknown(Assignment $assignment, array $submissions, array $matchedIds): void
+    {
+        $known = array_flip([
+            ...$matchedIds,
+            ...array_map('strval', ClassroomGoogleIgnoredUser::query()->where('classroom_id', $assignment->classroom_id)->pluck('google_user_id')->all()),
+        ]);
+        foreach ($submissions as $submission) {
+            $userId = (string) ($submission['userId'] ?? '');
+            if ($userId !== '' && ! isset($known[$userId])) {
+                SyncClassroomRosterJob::dispatchOncePerRound($assignment->classroom_id);
+
+                return;
+            }
+        }
     }
 
     /**

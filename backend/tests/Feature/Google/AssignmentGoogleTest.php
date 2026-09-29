@@ -6,6 +6,7 @@ use App\Domain\Google\CourseWorkPoster;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Notifications\PushMessage;
 use App\Jobs\PushClassroomGradeJob;
+use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
@@ -211,6 +212,7 @@ class AssignmentGoogleTest extends TestCase
 
     public function test_sync_keeps_one_row_per_turned_in_submission_with_attachments(): void
     {
+        Queue::fake([SyncClassroomRosterJob::class]);
         $this->posted();
         $this->fakeGoogle([
             $this->submissionsUrl().'*' => Http::response(['studentSubmissions' => [
@@ -242,6 +244,11 @@ class AssignmentGoogleTest extends TestCase
         $this->assertSame(['sub-1', 'sub-2', 'sub-3'], array_column($res->json('data'), 'google_submission_id'), 'by student number, unmatched last');
         $this->assertCount(1, $this->sentTo('/drive/v3/files/'), 'only the file without a known extension');
         $this->assertNoSecretIn($res->getContent(), 'the submissions answer');
+        // g-9 and g-3 are matched to no student: one roster sync for the room (§19.2).
+        Queue::assertPushed(SyncClassroomRosterJob::class, 1);
+        Queue::assertPushed(SyncClassroomRosterJob::class, fn (SyncClassroomRosterJob $job) => $job->classroomId === $this->classroom->id);
+        $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/google-submissions")->assertOk();
+        Queue::assertPushed(SyncClassroomRosterJob::class, 1);
     }
 
     public function test_resync_renews_only_new_hand_ins(): void

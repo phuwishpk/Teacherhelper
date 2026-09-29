@@ -79,20 +79,48 @@ final class GoogleRoster
                     ->update(['google_user_id' => $match['google_user_id'], 'google_email' => $emails[$match['google_user_id']] ?? null]);
             }
 
-            // Submissions not scanned or graded yet follow the new pairs; a
-            // scanned one keeps the student it was filed under at scan time
-            // (ClassroomGradePusher checks the account again before grading).
-            $assignmentIds = $classroom->assignments()->pluck('id');
-            foreach ($matches as $match) {
-                ClassroomSubmissionImport::query()
-                    ->whereIn('assignment_id', $assignmentIds)
-                    ->where('google_user_id', $match['google_user_id'])
-                    ->whereIn('state', GoogleSubmissionSync::FOLLOWS_ROSTER_STATES)
-                    ->update(['student_id' => $match['student_id']]);
-            }
+            self::followRoster($classroom, array_column($matches, 'student_id', 'google_user_id'));
         });
 
         return $this->build($classroom, $accounts);
+    }
+
+    /**
+     * Submissions not scanned or graded yet follow new pairs; a scanned one
+     * keeps the student it was filed under at scan time (ClassroomGradePusher
+     * checks the account again before grading).
+     *
+     * @param  array<string, int|null>  $pairs  google_user_id => student id (null = unmatched)
+     */
+    public static function followRoster(Classroom $classroom, array $pairs): void
+    {
+        if ($pairs === []) {
+            return;
+        }
+        $assignmentIds = $classroom->assignments()->pluck('id');
+        foreach ($pairs as $googleUserId => $studentId) {
+            ClassroomSubmissionImport::query()
+                ->whereIn('assignment_id', $assignmentIds)
+                ->where('google_user_id', (string) $googleUserId)
+                ->whereIn('state', GoogleSubmissionSync::FOLLOWS_ROSTER_STATES)
+                ->update(['student_id' => $studentId]);
+        }
+    }
+
+    /**
+     * The name a Google account gets as a student: Google's full name, else
+     * the e-mail's local part, else the account id.
+     *
+     * @param  array{google_user_id: string, name: string, email: string|null}  $account
+     */
+    public static function studentName(array $account): string
+    {
+        $name = trim(preg_replace('/\s+/u', ' ', $account['name']) ?? '');
+        if ($name === '' && $account['email'] !== null) {
+            $name = strstr($account['email'], '@', true) ?: $account['email'];
+        }
+
+        return mb_substr($name !== '' ? $name : $account['google_user_id'], 0, 255);
     }
 
     /**

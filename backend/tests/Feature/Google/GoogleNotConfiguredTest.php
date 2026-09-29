@@ -62,25 +62,29 @@ class GoogleNotConfiguredTest extends TestCase
             'api.classrooms.google-link.destroy',
             'api.classrooms.google-link.store',
             'api.classrooms.google-roster.show',
+            'api.classrooms.google-roster.sync',
             'api.classrooms.google-roster.update',
+            'api.classrooms.import-google',
             'api.google-submissions.return',
             'api.google.connect',
             'api.google.courses',
+            'api.google.courses.import-preview',
             'api.google.disconnect',
             'api.google.oauth-url',
         ], array_keys($routes));
 
         $student = $this->enrollStudent($classroom)['student'];
         foreach ($routes as $name => [$method, $uri]) {
-            $path = '/'.str_replace('{id}', (string) match (true) {
+            $path = '/'.str_replace(['{id}', '{course_id}'], [(string) match (true) {
                 str_contains($uri, 'classrooms/') => $classroom->id,
                 str_contains($uri, 'assignments/') => $assignment->id,
                 default => 999999,
-            }, $uri);
+            }, self::COURSE_ID], $uri);
             $body = match ($name) {
                 'api.google.connect' => ['server_auth_code' => '4/0AQlEd8x-one-time-code'],
                 'api.classrooms.google-link.store' => ['course_id' => self::COURSE_ID],
                 'api.classrooms.google-roster.update' => ['matches' => []],
+                'api.classrooms.import-google' => ['course_id' => self::COURSE_ID, 'name' => 'ม.1/1', 'grade_level' => 7, 'academic_year' => 2569, 'students' => []],
                 'api.google-submissions.return' => ['reason' => 'ถ่ายใหม่'],
                 default => [],
             };
