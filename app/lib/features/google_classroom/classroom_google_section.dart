@@ -57,9 +57,7 @@ class _ClassroomGoogleSectionState
           .setGoogleLink(widget.classroom.id, null);
       if (mounted) showMessage(context, 'เลิกผูกกับ Google Classroom แล้ว');
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -79,9 +77,7 @@ class _ClassroomGoogleSectionState
       if (result.added.isNotEmpty) ref.invalidate(classroomsProvider);
       if (mounted) await showRosterSyncResult(context, result);
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -103,9 +99,7 @@ class _ClassroomGoogleSectionState
         );
       }
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);

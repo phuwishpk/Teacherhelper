@@ -13,6 +13,7 @@ import 'package:eduvision/features/google_classroom/classroom_google_section.dar
 import 'package:eduvision/features/google_classroom/google_browser_connect.dart';
 import 'package:eduvision/features/google_classroom/google_models.dart';
 import 'package:eduvision/features/google_classroom/google_providers.dart';
+import 'package:eduvision/features/google_classroom/google_reconnect_banner.dart';
 import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/google_classroom/grade_conflicts_screen.dart';
 import 'package:eduvision/features/google_classroom/submissions_screen.dart';
@@ -251,16 +252,29 @@ void main() {
         link: const ClassroomGoogleLink(courseId: 'c1', courseName: 'คณิต'),
         google: google,
       );
+      // The server says why (here: the announcements scope, §19.7).
       google.error = apiError(409, {
-        'message': 'ต้องเชื่อมใหม่',
+        'message': announcementsReconnectMessage,
         'code': 'google_reconnect_required',
       });
       await tester.tap(find.byKey(const ValueKey('google_sync_now')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('หมดอายุแล้ว'), findsOneWidget);
+      expect(
+        find.text(
+          '$announcementsReconnectMessage ไปที่ ตั้งค่า → Google Classroom '
+          'แล้วกด "เชื่อมใหม่"',
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('google_reconnect_banner')),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('google_reconnect_reason')))
+            .data,
+        announcementsReconnectMessage,
       );
     });
   });

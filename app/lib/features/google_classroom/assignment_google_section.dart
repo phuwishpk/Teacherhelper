@@ -91,9 +91,7 @@ class _AssignmentGoogleSectionState
       ref.read(assignmentDetailProvider(a.id).notifier).setGoogleLink(link);
       if (mounted) showMessage(context, 'โพสต์ลง Google Classroom แล้ว');
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (apiErrorCode(e) == 'already_posted') {
         ref.invalidate(assignmentDetailProvider(a.id));
       }
@@ -130,7 +128,8 @@ class _AssignmentGoogleSectionState
           const SizedBox(height: 4),
           Text(
             'ครูสร้างงานนี้ในเว็บ Classroom แอปนำเข้ามาให้ AI ตรวจงานที่ส่งได้ตามปกติ '
-            'เมื่อเผยแพร่ผลแล้ว ใช้ "คัดลอกคะแนน" ที่หน้างานที่ส่ง แล้วกรอกใน Classroom เอง',
+            'เมื่อเผยแพร่ผล นักเรียนได้ประกาศส่วนตัวที่มีคะแนนและคำอธิบายใน Classroom '
+            'ส่วนคะแนนใน Classroom ใช้ "คัดลอกคะแนน" (หน้างานที่ส่ง หรือประกาศผลรายคน) แล้วกรอกเอง',
             style: muted,
           ),
           if (!a.keyApproved) ...[
@@ -207,7 +206,8 @@ class _AssignmentGoogleSectionState
           const SizedBox(height: 4),
           Text(
             'นักเรียนถ่ายรูปหรือแนบ PDF ส่งใน Classroom เซิร์ฟเวอร์ดาวน์โหลดไฟล์และให้ AI ตรวจจากรูปทั้งหน้าเอง '
-            'กด "ดึงงานที่ส่ง" เพื่อดูสถานะ เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom ให้เอง',
+            'กด "ดึงงานที่ส่ง" เพื่อดูสถานะ เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom '
+            'และส่งประกาศส่วนตัวที่มีคำอธิบายรายข้อถึงนักเรียนให้เอง',
             style: muted,
           ),
         ],
@@ -235,6 +235,12 @@ class _AssignmentGoogleSectionState
               onPressed: () => context.push(AppRoutes.gradeConflicts(a.id)),
               icon: const Icon(Icons.compare_arrows),
               label: const Text('คะแนนไม่ตรงกัน'),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('open_google_feedback'),
+              onPressed: () => context.push(AppRoutes.googleFeedback(a.id)),
+              icon: const Icon(Icons.campaign_outlined),
+              label: const Text('ประกาศผลรายคน'),
             ),
           ],
         ),

@@ -30,6 +30,7 @@ import 'google_repository.dart';
 /// "รับงานส่งช้า" for a hand-in the late policy refused (§19.3). For
 /// courseWork created on the Classroom website the app cannot set grades,
 /// so the screen offers "เปิดใน Classroom" and "คัดลอกคะแนน" instead.
+/// "ประกาศผลรายคน" opens the private announcements (§19.7).
 class GoogleSubmissionsScreen extends ConsumerWidget {
   const GoogleSubmissionsScreen({super.key, required this.assignmentId});
 
@@ -209,24 +210,70 @@ double? publishedScore(SubmissionSummary? submission) =>
 
 /// "คัดลอกคะแนน" of the whole list: one line per published student,
 /// `เลขที่<TAB>ชื่อ<TAB>คะแนน` in student-number order, ready to read off
-/// while typing grades on the Classroom website.
+/// while typing grades on the Classroom website. Students come from the
+/// Classroom hand-ins ([rows]) and from every other submission of the
+/// review queue that names its student (work handed in through the app or
+/// uploaded by the teacher, DESIGN §19.6), each once.
 String scoresForClipboard(
   List<GoogleSubmission> rows,
   Map<int, SubmissionSummary> submissions,
 ) {
-  final lines = <(int, String)>[];
+  final lines = <int, (int, String)>{};
+  void add(int studentId, String name, int? number, double? score) {
+    if (score == null || lines.containsKey(studentId)) return;
+    lines[studentId] = (
+      number ?? 1 << 30,
+      '${number ?? '-'}\t$name\t${formatScore(score)}',
+    );
+  }
+
   for (final r in rows) {
     final student = r.student;
     if (student == null) continue;
-    final score = publishedScore(submissions[student.id]);
-    if (score == null) continue;
-    lines.add((
-      student.studentNumber ?? 1 << 30,
-      '${student.studentNumber ?? '-'}\t${student.name}\t${formatScore(score)}',
-    ));
+    add(
+      student.id,
+      student.name,
+      student.studentNumber,
+      publishedScore(submissions[student.id]),
+    );
   }
-  lines.sort((a, b) => a.$1.compareTo(b.$1));
-  return lines.map((l) => l.$2).join('\n');
+  for (final s in submissions.values) {
+    final student = s.student;
+    if (student == null) continue;
+    add(student.id, student.name, student.studentNumber, publishedScore(s));
+  }
+  final sorted = lines.values.toList()..sort((a, b) => a.$1.compareTo(b.$1));
+  return sorted.map((l) => l.$2).join('\n');
+}
+
+/// Copies [text] from [scoresForClipboard] and says how many students.
+Future<void> copyScores(BuildContext context, String text) async {
+  if (text.isEmpty) {
+    showMessage(context, 'ยังไม่มีคะแนนที่เผยแพร่แล้วให้คัดลอก');
+    return;
+  }
+  await Clipboard.setData(ClipboardData(text: text));
+  if (context.mounted) {
+    showMessage(
+      context,
+      'คัดลอกคะแนน ${text.split('\n').length} คนแล้ว (เลขที่ ชื่อ คะแนน)',
+    );
+  }
+}
+
+/// "คัดลอกคะแนน" of one student.
+Future<void> copyOneScore(
+  BuildContext context,
+  String studentLabel,
+  double score,
+) async {
+  await Clipboard.setData(ClipboardData(text: formatScore(score)));
+  if (context.mounted) {
+    showMessage(
+      context,
+      'คัดลอกคะแนน ${formatScore(score)} ของ $studentLabel แล้ว',
+    );
+  }
 }
 
 /// The list itself (separate so tests can pump it with rows).
@@ -272,30 +319,13 @@ class SubmissionsList extends ConsumerWidget {
         );
       }
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (context.mounted) showMessage(context, googleErrorMessage(e));
     }
   }
 
   SubmissionSummary? _submissionOf(GoogleSubmission row) =>
       row.student == null ? null : submissions[row.student!.id];
-
-  Future<void> _copyScores(BuildContext context) async {
-    final text = scoresForClipboard(rows, submissions);
-    if (text.isEmpty) {
-      showMessage(context, 'ยังไม่มีคะแนนที่เผยแพร่แล้วให้คัดลอก');
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: text));
-    if (context.mounted) {
-      showMessage(
-        context,
-        'คัดลอกคะแนน ${text.split('\n').length} คนแล้ว (เลขที่ ชื่อ คะแนน)',
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -392,7 +422,10 @@ class SubmissionsList extends ConsumerWidget {
                         if (fromClassroomWeb)
                           OutlinedButton.icon(
                             key: const ValueKey('copy_scores'),
-                            onPressed: () => _copyScores(context),
+                            onPressed: () => copyScores(
+                              context,
+                              scoresForClipboard(rows, submissions),
+                            ),
                             icon: const Icon(Icons.content_copy),
                             label: const Text('คัดลอกคะแนน'),
                           ),
@@ -412,6 +445,14 @@ class SubmissionsList extends ConsumerWidget {
                           ),
                           icon: const Icon(Icons.compare_arrows),
                           label: const Text('คะแนนไม่ตรงกัน'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('open_google_feedback'),
+                          onPressed: () => context.push(
+                            AppRoutes.googleFeedback(assignmentId),
+                          ),
+                          icon: const Icon(Icons.campaign_outlined),
+                          label: const Text('ประกาศผลรายคน'),
                         ),
                       ],
                     ),
@@ -484,9 +525,7 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
         showMessage(context, 'ส่งคืนงานใน Classroom และแจ้งนักเรียนแล้ว');
       }
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -516,22 +555,10 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
         );
       }
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _copyScore(double score) async {
-    await Clipboard.setData(ClipboardData(text: formatScore(score)));
-    if (mounted) {
-      showMessage(
-        context,
-        'คัดลอกคะแนน ${formatScore(score)} ของ ${row.studentLabel} แล้ว',
-      );
     }
   }
 
@@ -668,7 +695,8 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
                 if (score != null)
                   TextButton.icon(
                     key: ValueKey('copy_score_${row.id}'),
-                    onPressed: () => _copyScore(score),
+                    onPressed: () =>
+                        copyOneScore(context, row.studentLabel, score),
                     icon: const Icon(Icons.content_copy),
                     label: Text('คัดลอกคะแนน ${formatScore(score)}'),
                   ),

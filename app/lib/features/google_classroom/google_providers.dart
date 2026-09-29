@@ -64,21 +64,22 @@ class GoogleStatusNotifier extends AsyncNotifier<GoogleStatus> {
   }
 
   /// A request failed with an expired-connection code: show "เชื่อมใหม่".
-  void markNeedsReconnect() {
+  /// [message] is the server's reason when it sent one (e.g. the
+  /// announcements scope is missing, DESIGN §19.7).
+  void markNeedsReconnect({String? message}) {
     final current = state.value;
     if (current == null || !current.connected) {
       ref.invalidateSelf();
       return;
     }
-    state = AsyncData(
-      GoogleStatus(
-        connected: true,
-        email: current.email,
-        scopes: current.scopes,
-        needsReconnect: true,
-        configured: current.configured,
-      ),
-    );
+    state = AsyncData(current.needingReconnect(message));
+  }
+
+  /// [markNeedsReconnect] for [error] when it is a reconnect error.
+  void noteError(Object error) {
+    if (isGoogleReconnectError(error)) {
+      markNeedsReconnect(message: serverReconnectMessage(error));
+    }
   }
 }
 
@@ -236,4 +237,41 @@ class GradeConflictsNotifier extends AsyncNotifier<List<GradeConflict>> {
 final gradeConflictsProvider = AsyncNotifierProvider.autoDispose
     .family<GradeConflictsNotifier, List<GradeConflict>, int>(
       GradeConflictsNotifier.new,
+    );
+
+/// "ประกาศผลใน Classroom" of one assignment (DESIGN §19.7): the private
+/// announcement of each student's latest publish. Reading it does not call
+/// Google, so it reloads freely.
+class ClassroomFeedbackNotifier
+    extends AsyncNotifier<List<ClassroomFeedbackPost>> {
+  ClassroomFeedbackNotifier(this.assignmentId);
+
+  final int assignmentId;
+
+  @override
+  Future<List<ClassroomFeedbackPost>> build() {
+    watchSignedInUser(ref, keepAlive: false);
+    return ref.watch(googleClassroomRepositoryProvider).feedback(assignmentId);
+  }
+
+  Future<void> refresh() async {
+    ref.invalidateSelf();
+    await future;
+  }
+
+  /// "ส่งประกาศอีกครั้ง" for every failed row; the list and the home
+  /// count follow.
+  Future<int?> retryFailed() async {
+    final queued = await ref
+        .read(googleClassroomRepositoryProvider)
+        .retryFeedback(assignmentId);
+    ref.invalidate(teacherAttentionProvider);
+    await refresh();
+    return queued;
+  }
+}
+
+final classroomFeedbackProvider = AsyncNotifierProvider.autoDispose
+    .family<ClassroomFeedbackNotifier, List<ClassroomFeedbackPost>, int>(
+      ClassroomFeedbackNotifier.new,
     );

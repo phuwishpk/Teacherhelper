@@ -349,6 +349,47 @@ void main() {
       expect(text, '1\tเอ\t9.5\n2\tบี\t6');
     });
 
+    test('scoresForClipboard adds app hand-ins once (DESIGN §19.6)', () {
+      final rows = [
+        const GoogleSubmission(
+          id: 1,
+          googleSubmissionId: 'a',
+          state: SubmissionImportState.imported,
+          student: SubmissionStudent(id: 2, name: 'บี', studentNumber: 2),
+        ),
+      ];
+      const b = StudentRef(id: 2, name: 'บี', studentNumber: 2);
+      const a = StudentRef(id: 1, name: 'เอ', studentNumber: 1);
+      const c = StudentRef(id: 3, name: 'ซี');
+      final text = scoresForClipboard(rows, {
+        2: const SubmissionSummary(
+          id: 12,
+          status: 'published',
+          responseCount: 1,
+          reviewedCount: 1,
+          student: b,
+          totalScore: 6,
+        ),
+        1: const SubmissionSummary(
+          id: 11,
+          status: 'published',
+          responseCount: 1,
+          reviewedCount: 1,
+          student: a,
+          totalScore: 4.5,
+        ),
+        3: const SubmissionSummary(
+          id: 13,
+          status: 'published',
+          responseCount: 1,
+          reviewedCount: 1,
+          student: c,
+          totalScore: 3,
+        ),
+      });
+      expect(text, '1\tเอ\t4.5\n2\tบี\t6\n-\tซี\t3');
+    });
+
     test('review queue summaries know an accepted Classroom total', () {
       final s = SubmissionSummary.fromJson({
         'id': 1,

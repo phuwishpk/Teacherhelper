@@ -31,6 +31,16 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- eduvision://r/{submission_id}: the "open in the app" button of the
+                 server page linked from a Classroom announcement (DESIGN §19.7).
+                 go_router maps it to /student/results/{id}. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="true"/>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="eduvision" android:host="r"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

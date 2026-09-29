@@ -191,9 +191,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
       }
       setState(() => _result = result);
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (apiErrorCode(e) == 'course_already_linked') {
         ref.invalidate(googleCoursesProvider);
       }

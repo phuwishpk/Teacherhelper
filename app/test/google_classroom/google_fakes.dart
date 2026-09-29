@@ -274,6 +274,46 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
       late: true,
     );
   }
+
+  /// Rows of `GET /assignments/{id}/google-feedback`.
+  List<ClassroomFeedbackPost> feedbackRows = [];
+  int feedbackLoads = 0;
+  final feedbackRetries = <int>[];
+
+  /// Answer of `POST .../google-feedback/retry`; also turns the failed rows
+  /// into queued ones.
+  int? feedbackQueued;
+
+  /// Thrown by [retryFeedback] only (the list still loads).
+  Object? retryFeedbackError;
+
+  @override
+  Future<List<ClassroomFeedbackPost>> feedback(int assignmentId) async {
+    await _maybeFail();
+    feedbackLoads++;
+    return feedbackRows;
+  }
+
+  @override
+  Future<int?> retryFeedback(int assignmentId) async {
+    await _maybeFail();
+    if (retryFeedbackError case final e?) throw e;
+    feedbackRetries.add(assignmentId);
+    final failed = feedbackRows.where((r) => r.failed).length;
+    feedbackRows = [
+      for (final r in feedbackRows)
+        r.failed
+            ? ClassroomFeedbackPost(
+                id: r.id,
+                submissionId: r.submissionId,
+                state: FeedbackPostState.queued,
+                student: r.student,
+                publishedAt: r.publishedAt,
+              )
+            : r,
+    ];
+    return feedbackQueued ?? failed;
+  }
 }
 
 /// Gateway that "signs in" without the plugin.

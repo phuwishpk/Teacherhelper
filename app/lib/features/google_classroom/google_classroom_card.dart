@@ -6,6 +6,7 @@ import 'google_auth.dart';
 import 'google_browser_connect.dart';
 import 'google_models.dart';
 import 'google_providers.dart';
+import 'google_reconnect_banner.dart' show reconnectReason;
 import 'google_repository.dart';
 
 /// "Google Classroom" card of the teacher settings page, next to the Gemini
@@ -135,8 +136,8 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
               if (s.needsReconnect) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'สิทธิ์ที่ให้ไว้หมดอายุหรือถูกยกเลิก กด "เชื่อมใหม่" '
-                  '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)',
+                  _reconnectText(s),
+                  key: const ValueKey('google_card_reconnect_reason'),
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ],
@@ -144,7 +145,8 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
             ],
             const Text(
               'โพสต์การบ้านลง Classroom ตรวจรูปหรือ PDF ที่นักเรียนส่งจากทั้งหน้า '
-              'และส่งคะแนนกลับเมื่อเผยแพร่ผล นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
+              'ส่งคะแนนกลับ และส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนแต่ละคนเมื่อเผยแพร่ผล '
+              'นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
             ),
             const SizedBox(height: 4),
             Text(
@@ -188,4 +190,16 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
       ),
     );
   }
+}
+
+/// What the settings card says about a connection to renew.
+String _reconnectText(GoogleStatus s) {
+  if (s.reconnectMessage == null && !s.lacksAnnouncementsScope) {
+    return 'สิทธิ์ที่ให้ไว้หมดอายุหรือถูกยกเลิก กด "เชื่อมใหม่" '
+        '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)';
+  }
+  final reason = reconnectReason(s);
+  return reason.contains('เชื่อมใหม่')
+      ? reason
+      : '$reason กด "เชื่อมใหม่" แล้วอนุญาตให้ครบทุกข้อ';
 }

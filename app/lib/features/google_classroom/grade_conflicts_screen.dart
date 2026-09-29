@@ -177,9 +177,7 @@ class _ConflictCardState extends ConsumerState<_ConflictCard> {
         });
       }
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (apiErrorCode(e) == 'conflict_resolved') {
         ref.invalidate(gradeConflictsProvider(widget.assignmentId));
       }

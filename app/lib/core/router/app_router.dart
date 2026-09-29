@@ -20,6 +20,7 @@ import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
+import '../../features/google_classroom/classroom_feedback_screen.dart';
 import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/grade_conflicts_screen.dart';
@@ -80,6 +81,10 @@ abstract final class AppRoutes {
   /// "คะแนนไม่ตรงกัน": grades changed on the Classroom website (§19.3).
   static String gradeConflicts(int assignmentId) =>
       '/assignments/$assignmentId/grade-conflicts';
+
+  /// "ประกาศผลรายคน": the private result announcements in Classroom (§19.7).
+  static String googleFeedback(int assignmentId) =>
+      '/assignments/$assignmentId/google-feedback';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -156,6 +161,27 @@ abstract final class AppRoutes {
       location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/');
 
+  /// The app location of a result link from a Classroom announcement
+  /// (DESIGN §19.7): `eduvision://r/{submission_id}` (what the server's
+  /// `/r/{id}` page opens) or a bare `/r/{id}`; null for anything else.
+  static String? fromResultLink(Uri uri) {
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    final List<String> rest;
+    if (uri.scheme == 'eduvision' && uri.host == 'r') {
+      rest = segments;
+    } else if ((uri.scheme.isEmpty || uri.scheme == 'eduvision') &&
+        uri.host.isEmpty &&
+        segments.length == 2 &&
+        segments.first == 'r') {
+      rest = segments.sublist(1);
+    } else {
+      return null;
+    }
+    if (rest.length != 1) return null;
+    final id = int.tryParse(rest.single);
+    return id == null || id <= 0 ? null : studentResult(id);
+  }
+
   static bool isPublic(String location) =>
       location == login ||
       location == register ||
@@ -172,25 +198,47 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
   ref.listen(sessionProvider, (_, _) => refresh.value++);
 
+  // A result link that waits for the student to sign in.
+  String? pendingResult;
+
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: refresh,
     redirect: (context, state) {
       final session = ref.read(sessionProvider);
-      final location = state.matchedLocation;
+      // A result link from Classroom (§19.7) opens the student's result,
+      // after the student signs in when needed.
+      final link = AppRoutes.fromResultLink(state.uri);
+      if (link != null) pendingResult = link;
+      final location = link ?? state.matchedLocation;
       final public = AppRoutes.isPublic(location);
       final inStudentArea = AppRoutes.isStudentArea(location);
-      return switch (session) {
+      final String? target = switch (session) {
         SessionRestoring() =>
           location == AppRoutes.splash ? null : AppRoutes.splash,
-        SignedOut() => public ? null : AppRoutes.login,
-        SignedIn(:final user) when user.isStudent =>
-          inStudentArea ? null : AppRoutes.student,
-        SignedIn() =>
-          (public || location == AppRoutes.splash || inStudentArea)
+        SignedOut() =>
+          public
+              ? null
+              : pendingResult != null
+              ? AppRoutes.studentLogin
+              : AppRoutes.login,
+        SignedIn(:final user) when user.isStudent => () {
+          final pending = pendingResult;
+          if (pending != null) {
+            if (pending != location) return pending;
+            pendingResult = null;
+          }
+          return inStudentArea ? null : AppRoutes.student;
+        }(),
+        SignedIn() => () {
+          pendingResult = null;
+          return (public || location == AppRoutes.splash || inStudentArea)
               ? AppRoutes.home
-              : null,
+              : null;
+        }(),
       };
+      // The link itself matches no route: always leave it.
+      return target ?? link;
     },
     routes: [
       GoRoute(
@@ -382,6 +430,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'grade-conflicts',
             builder: (context, state) =>
                 GradeConflictsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'google-feedback',
+            builder: (context, state) =>
+                ClassroomFeedbackScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'review',

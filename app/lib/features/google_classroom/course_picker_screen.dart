@@ -68,9 +68,7 @@ class _GoogleCoursePickerScreenState
       );
       context.pushReplacement(AppRoutes.classroomGoogleRoster(classroomId));
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _linking = null);

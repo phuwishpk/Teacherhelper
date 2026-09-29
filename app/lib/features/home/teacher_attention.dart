@@ -28,7 +28,8 @@ class TeacherAttention {
   /// Classroom hand-ins whose grade could not be sent back.
   final int gradeFailed;
 
-  /// Private result announcements that failed (Phase 8 build step 6).
+  /// Private result announcements that failed, latest publish of each
+  /// submission (DESIGN §19.7).
   final int feedbackFailed;
 
   /// New hand-ins waiting for the teacher's "ตรวจ".
@@ -146,6 +147,8 @@ class TeacherAttentionCard extends ConsumerWidget {
                 icon: Icons.campaign_outlined,
                 text:
                     'ส่งประกาศผลใน Classroom ไม่สำเร็จ ${a.feedbackFailed} คน',
+                detail:
+                    'เปิดการบ้าน กด "ประกาศผลรายคน" แล้วกด "ส่งประกาศอีกครั้ง"',
                 target: AttentionTarget.assignments,
               ),
             if (a.regradePending > 0)

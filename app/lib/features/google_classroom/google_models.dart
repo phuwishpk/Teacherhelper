@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../classrooms/classroom.dart';
+import 'google_config.dart';
 
 /// `GET /google/status` (DESIGN §18.6).
 class GoogleStatus {
@@ -9,6 +10,7 @@ class GoogleStatus {
     this.email,
     this.scopes = const [],
     this.needsReconnect = false,
+    this.reconnectMessage,
     this.configured = true,
   });
 
@@ -22,6 +24,11 @@ class GoogleStatus {
   /// 7-day limit of an OAuth app in Testing mode, §18.5).
   final bool needsReconnect;
 
+  /// Why [needsReconnect] is true, in Thai (`reconnect_message`, DESIGN
+  /// §19.7), e.g. the account lacks the announcements scope; null from a
+  /// server without the field.
+  final String? reconnectMessage;
+
   /// The server has its Google OAuth client (GOOGLE_OAUTH_CLIENT_ID /
   /// SECRET). The app shows its Google Classroom UI only when true. An
   /// answer without the field (`POST /google/connect`) counts as true.
@@ -29,6 +36,22 @@ class GoogleStatus {
 
   /// Connected and usable right now.
   bool get ready => connected && !needsReconnect;
+
+  /// Connected before the app asked for [announcementsScope]: results cannot
+  /// reach the students in Classroom until the teacher connects again
+  /// (Phase 8 build step 6). False when the server did not list the scopes.
+  bool get lacksAnnouncementsScope =>
+      connected && scopes.isNotEmpty && !scopes.contains(announcementsScope);
+
+  /// The same status, marked as needing a new connection.
+  GoogleStatus needingReconnect([String? message]) => GoogleStatus(
+    connected: connected,
+    email: email,
+    scopes: scopes,
+    needsReconnect: true,
+    reconnectMessage: message ?? reconnectMessage,
+    configured: configured,
+  );
 
   factory GoogleStatus.fromJson(Map<String, dynamic> json) => GoogleStatus(
     // `POST /google/connect` answers only {email, scopes}.
@@ -38,6 +61,7 @@ class GoogleStatus {
     email: json['email'] as String?,
     scopes: _scopes(json['scopes']),
     needsReconnect: json['needs_reconnect'] == true,
+    reconnectMessage: _nonEmpty(json['reconnect_message']),
     configured: switch (json['configured'] ?? json['server_configured']) {
       bool b => b,
       _ => true,
@@ -580,6 +604,84 @@ class GradeConflict {
       resolvedAt: time('resolved_at'),
       canPushApp: json['can_push_app'] != false,
       alternateLink: _nonEmpty(json['alternate_link']),
+    );
+  }
+}
+
+/// `classroom_feedback_posts.state` (DESIGN §19.7, §19.8): the private
+/// announcement with a student's result.
+enum FeedbackPostState {
+  queued('queued', 'รอส่ง'),
+  posted('posted', 'ส่งแล้ว'),
+  failed('failed', 'ส่งไม่สำเร็จ');
+
+  const FeedbackPostState(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static FeedbackPostState fromApi(Object? value) => values.firstWhere(
+    (s) => s.apiValue == value,
+    orElse: () => FeedbackPostState.queued,
+  );
+
+  Color color(ColorScheme scheme) => switch (this) {
+    queued => scheme.primary,
+    posted => Colors.green.shade700,
+    failed => scheme.error,
+  };
+}
+
+/// One row of `GET /assignments/{id}/google-feedback`: the announcement of
+/// a student's latest publish (DESIGN §19.9).
+class ClassroomFeedbackPost {
+  const ClassroomFeedbackPost({
+    required this.id,
+    required this.submissionId,
+    required this.state,
+    this.student,
+    this.publishedAt,
+    this.lastError,
+    this.postedAt,
+    this.announcementId,
+  });
+
+  final int id;
+  final int submissionId;
+  final FeedbackPostState state;
+  final SubmissionStudent? student;
+  final DateTime? publishedAt;
+
+  /// Why it failed, in Thai (student not matched, account to reconnect).
+  final String? lastError;
+  final DateTime? postedAt;
+  final String? announcementId;
+
+  bool get failed => state == FeedbackPostState.failed;
+
+  String get studentLabel => student?.label ?? 'นักเรียน';
+
+  factory ClassroomFeedbackPost.fromJson(Map<String, dynamic> json) {
+    final student = json['student'];
+    DateTime? time(String key) => switch (json[key]) {
+      String s => DateTime.tryParse(s),
+      _ => null,
+    };
+    return ClassroomFeedbackPost(
+      id: (json['id'] as num).toInt(),
+      submissionId: (json['submission_id'] as num).toInt(),
+      state: FeedbackPostState.fromApi(json['state']),
+      student: student is Map && student['id'] is num
+          ? SubmissionStudent(
+              id: (student['id'] as num).toInt(),
+              name: (student['name'] ?? '') as String,
+              studentNumber: (student['student_number'] as num?)?.toInt(),
+            )
+          : null,
+      publishedAt: time('published_at'),
+      lastError: _nonEmpty(json['last_error']),
+      postedAt: time('posted_at'),
+      announcementId: _nonEmpty(json['announcement_id']?.toString()),
     );
   }
 }

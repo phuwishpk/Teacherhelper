@@ -23,6 +23,7 @@ import 'package:eduvision/features/upload_queue/upload_worker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../hand_in/hand_in_fakes.dart';
 import '../helpers/pump_screen.dart';
@@ -79,7 +80,14 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<String> openAt(WidgetTester tester, User user, String location) async {
+  /// Pumps the app router for [user] (signed out when [storage] holds no
+  /// token) and goes to [location].
+  Future<(ProviderContainer, GoRouter)> pumpAt(
+    WidgetTester tester,
+    User user,
+    String location, {
+    InMemoryTokenStorage? storage,
+  }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -87,7 +95,7 @@ void main() {
       overrides: [
         authRepositoryProvider.overrideWithValue(_FakeAuth(user)),
         tokenStorageProvider.overrideWithValue(
-          InMemoryTokenStorage(token: 'tok'),
+          storage ?? InMemoryTokenStorage(token: 'tok'),
         ),
         assignmentsRepositoryProvider.overrideWithValue(_FakeAssignments()),
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
@@ -119,6 +127,11 @@ void main() {
     );
     router.go(location);
     await tester.pumpAndSettle();
+    return (container, router);
+  }
+
+  Future<String> openAt(WidgetTester tester, User user, String location) async {
+    final (_, router) = await pumpAt(tester, user, location);
     final at = router.routerDelegate.currentConfiguration.uri.path;
     await unmountScreen(tester);
     return at;
@@ -172,5 +185,56 @@ void main() {
     );
     expect(await openAt(tester, teacher, '/settings'), '/settings');
     expect(await openAt(tester, teacher, '/student/results/70'), '/');
+  });
+
+  group('result link from a Classroom announcement (DESIGN §19.7)', () {
+    test('only eduvision://r/{id} and /r/{id} are result links', () {
+      String? of(String link) => AppRoutes.fromResultLink(Uri.parse(link));
+      expect(of('eduvision://r/70'), '/student/results/70');
+      expect(of('eduvision://r/70/'), '/student/results/70');
+      expect(of('/r/70'), '/student/results/70');
+      expect(of('eduvision://r/abc'), isNull);
+      expect(of('eduvision://r/0'), isNull);
+      expect(of('eduvision://r/70/extra'), isNull);
+      expect(of('eduvision://x/70'), isNull);
+      expect(of('https://example.com/r/70'), isNull);
+      expect(of('/student/results/70'), isNull);
+    });
+
+    testWidgets('a signed-in student lands on the result', (tester) async {
+      expect(
+        await openAt(tester, student, 'eduvision://r/70'),
+        '/student/results/70',
+      );
+    });
+
+    testWidgets('a teacher goes home', (tester) async {
+      expect(await openAt(tester, teacher, 'eduvision://r/70'), '/');
+    });
+
+    testWidgets('a signed-out student signs in first, then sees the result', (
+      tester,
+    ) async {
+      final storage = InMemoryTokenStorage();
+      final (container, router) = await pumpAt(
+        tester,
+        student,
+        'eduvision://r/70',
+        storage: storage,
+      );
+      String at() => router.routerDelegate.currentConfiguration.uri.path;
+      expect(at(), AppRoutes.studentLogin);
+
+      storage.token = 'tok';
+      await container.read(sessionProvider.notifier).restore();
+      await tester.pumpAndSettle();
+      expect(at(), '/student/results/70');
+
+      // The link is used once: home goes home afterwards.
+      router.go(AppRoutes.student);
+      await tester.pumpAndSettle();
+      expect(at(), AppRoutes.student);
+      await unmountScreen(tester);
+    });
   });
 }

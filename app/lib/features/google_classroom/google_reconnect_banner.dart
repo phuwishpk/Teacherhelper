@@ -3,12 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import 'google_models.dart';
 import 'google_providers.dart';
 
+/// Why the teacher must connect again, in Thai: the server's own reason
+/// (`reconnect_message`) first, then what the scopes show (DESIGN §19.7),
+/// else the expired-grant text.
+String reconnectReason(GoogleStatus? status) {
+  if (status?.reconnectMessage case final message?) return message;
+  if (status != null && status.lacksAnnouncementsScope) {
+    return announcementsReconnectMessage;
+  }
+  return 'สิทธิ์ที่ให้ Google ไว้หมดอายุหรือถูกยกเลิก แอปจึงหยุดซิงก์งาน '
+      'งานที่ส่ง และคะแนนกับ Google Classroom จนกว่าจะเชื่อมใหม่ '
+      '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)';
+}
+
+/// The account was connected before the app asked for the announcements
+/// scope (Phase 8 build step 6); the server sends the same text.
+const announcementsReconnectMessage =
+    'ต้องเชื่อมบัญชี Google ใหม่ เพื่อให้แอปส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนได้';
+
 /// "ต้องเชื่อมบัญชี Google ใหม่" (DESIGN §19.3): the refresh token stopped
-/// working (`invalid_grant`, or a scope was taken back), so the sync skips
-/// this teacher until they connect again. With the OAuth app in Testing
-/// mode this happens every 7 days. Shown on the home page and the Google
+/// working (`invalid_grant`, or a scope was taken back), or the account
+/// lacks a scope added later (the announcements of §19.7), so the sync
+/// skips this teacher until they connect again. With the OAuth app in
+/// Testing mode this happens every 7 days. The text says which
+/// ([reconnectReason]). Shown on the home page and the Google
 /// Classroom screens; renders nothing while the connection works.
 ///
 /// [needsReconnect] lets a caller that already knows (the home card's
@@ -57,9 +78,8 @@ class GoogleReconnectBanner extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'สิทธิ์ที่ให้ Google ไว้หมดอายุหรือถูกยกเลิก แอปจึงหยุดซิงก์งาน '
-                        'งานที่ส่ง และคะแนนกับ Google Classroom จนกว่าจะเชื่อมใหม่ '
-                        '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)',
+                        reconnectReason(status),
+                        key: const ValueKey('google_reconnect_reason'),
                         style: TextStyle(color: scheme.onErrorContainer),
                       ),
                     ],
