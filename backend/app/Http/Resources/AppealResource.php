@@ -13,7 +13,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  resolved_at, resolved_by, response_id, submission_id, assignment_id,
  *  assignment_title, question: {id, position, type, max_points},
  *  question_position, max_points, final_score, final_understanding,
- *  student: {id, name, student_number}}
+ *  total_overridden, student: {id, name, student_number}}
+ *
+ * total_overridden: the submission's total was taken from Classroom
+ * (§19.3), so accepting with a new score clears it.
  *
  * final_score is the score that counts now (the teacher's). Needs
  * response.question and response.submission.{assignment, student} loaded;
@@ -54,6 +57,7 @@ class AppealResource extends JsonResource
             'max_points' => $question === null ? null : (float) $question->max_points,
             'final_score' => $response?->effectiveScore(),
             'final_understanding' => $response?->effectiveUnderstanding(),
+            'total_overridden' => $submission?->total_override !== null,
             'student' => [
                 'id' => $appeal->student_id,
                 'name' => (string) $submission?->student?->name,

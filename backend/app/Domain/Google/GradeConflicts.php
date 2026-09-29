@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Log;
  * compared (rounded to 2 places): an empty assignedGrade, a grade never
  * pushed or a submission not published is no conflict. At most one open row
  * per import (kept up to date with the latest values, and dropped when the
- * two sides agree again); a dismissed row stops a new one while both sides
+ * two sides agree again or one side becomes empty); a dismissed row stops a new one while both sides
  * still have the values the teacher dismissed.
  *
  * resolve() is POST /grade-conflicts/{id}/resolve:
@@ -34,6 +34,8 @@ use Illuminate\Support\Facades\Log;
  *   accept_classroom  submissions.total_override = Classroom's grade, reason
  *                     "รับคะแนนจาก Classroom"; pushed_grade follows for app
  *                     courseWork. Per-question scores and mastery stay.
+ *                     409 conflict_resolved when Classroom's grade is empty
+ *                     or the submission is not published now.
  *   dismiss           nothing changes; the row keeps the values seen
  * A row that is not open any more answers 409 conflict_resolved.
  */
@@ -60,8 +62,10 @@ final class GradeConflicts
             ->first();
 
         if ($submission === null || $app === null || $classroom === null || self::same($app, $classroom)) {
-            if ($open !== null && $app !== null && $classroom !== null) {
-                // The two sides agree again (fixed on either side): nothing is left to resolve.
+            if ($open !== null) {
+                // The two sides agree again (fixed on either side), or one side is gone
+                // (grade cleared in Classroom, work not published any more): nothing is
+                // left to resolve. A later difference opens a new row.
                 $open->delete();
             }
 
@@ -127,6 +131,11 @@ final class GradeConflicts
                     $push = true;
                     break;
                 case 'accept_classroom':
+                    if ($import->classroom_grade === null || ! $submission->isPublished()) {
+                        // Stale row (the next sync drops it): no grade to take, or
+                        // the work is being graded again.
+                        throw new ApiException('รายการนี้ไม่มีคะแนนให้รับแล้ว ดึงรายการใหม่อีกครั้ง', 'conflict_resolved', 409);
+                    }
                     $locked->app_score = $submission->effectiveTotal();
                     $locked->classroom_score = $classroom;
                     $locked->status = GradeConflict::STATUS_ACCEPTED_CLASSROOM;

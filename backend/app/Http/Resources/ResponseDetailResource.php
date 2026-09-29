@@ -29,7 +29,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  explanation, explanation_edited, explanation_error,
  *  cnn_text, cnn_confidence, ink_ratio, mcq_fill,
  *  has_crop, has_final_crop, crop_url, final_crop_url,
- *  channel, late, submission_page_id, page_image_url, page_mime_type,
+ *  channel, late, total_overridden, submission_page_id, page_image_url, page_mime_type,
  *  answer_box ([ymin, xmin, ymax, xmax] 0–1000 on that page, or null),
  *  ai_explanation (Gemini's text once the teacher edited it), explanation_source,
  *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...]}
@@ -114,6 +114,8 @@ class ResponseDetailResource extends JsonResource
             // Whole-page answers (§19.4): the file it was read from and where on it.
             'channel' => $submission->channel,
             'late' => (bool) $submission->late,
+            // The total was taken from Classroom (§19.3): the app warns that changing this score clears it.
+            'total_overridden' => $submission->total_override !== null,
             'submission_page_id' => $response->submission_page_id,
             'page_image_url' => self::pageImageUrl($response),
             'page_mime_type' => $response->submissionPage?->mime_type,

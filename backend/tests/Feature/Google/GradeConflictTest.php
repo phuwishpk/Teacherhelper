@@ -212,6 +212,15 @@ class GradeConflictTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total_score', 3.5)
             ->assertJsonPath('data.total_overridden', true);
+        // The teacher's review screens know, to warn before a change clears it.
+        $first = Response::query()->where('submission_id', $submission->id)->orderBy('id')->firstOrFail();
+        $this->asUser($this->teacher)->getJson("/api/v1/responses/{$first->id}")
+            ->assertOk()
+            ->assertJsonPath('data.total_overridden', true);
+        $this->asUser($this->students[0])->postJson("/api/v1/student/responses/{$first->id}/appeal", ['reason' => 'ช่วยดูอีกที'])->assertCreated();
+        $this->asUser($this->teacher)->getJson('/api/v1/appeals?status=open')
+            ->assertOk()
+            ->assertJsonPath('data.0.total_overridden', true);
         $this->sync();
         $this->assertSame(1, GradeConflict::query()->count());
 
@@ -278,8 +287,47 @@ class GradeConflictTest extends TestCase
         $conflict = GradeConflict::query()->sole();
 
         $this->resolve($conflict, 'shrug')->assertStatus(422)->assertJsonPath('code', 'validation_failed');
+        $this->asUser($this->teacher)->postJson("/api/v1/grade-conflicts/{$conflict->id}/resolve", ['action' => ['dismiss']])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation_failed');
         $this->asUser($this->makeTeacher())->postJson("/api/v1/grade-conflicts/{$conflict->id}/resolve", ['action' => 'dismiss'])->assertNotFound();
         $this->asUser($this->makeTeacher())->getJson("/api/v1/assignments/{$this->assignment->id}/grade-conflicts")->assertNotFound();
+        $this->assertSame(GradeConflict::STATUS_OPEN, $conflict->refresh()->status);
+    }
+
+    public function test_an_open_conflict_goes_away_when_one_side_becomes_empty(): void
+    {
+        $this->classroomGrade = 1;
+        $this->sync();
+        $this->assertSame(1, GradeConflict::query()->count());
+
+        // The teacher cleared the grade in Classroom: nothing left to compare.
+        $this->classroomGrade = null;
+        $this->sync();
+        $this->assertSame(0, GradeConflict::query()->count());
+
+        // A difference again opens a new row.
+        $this->classroomGrade = 1;
+        $this->sync();
+        $this->assertSame(1, GradeConflict::query()->count());
+    }
+
+    public function test_accept_classroom_is_refused_on_a_stale_conflict(): void
+    {
+        $this->classroomGrade = 1;
+        $this->sync();
+        $conflict = GradeConflict::query()->sole();
+
+        // Classroom's grade is empty now, before the next sync dropped the row.
+        ClassroomSubmissionImport::query()->update(['classroom_grade' => null]);
+        $this->resolve($conflict, 'accept_classroom')->assertStatus(409)->assertJsonPath('code', 'conflict_resolved');
+        $this->assertNull($this->submission->refresh()->total_override);
+
+        // The work is being graded again (not published).
+        ClassroomSubmissionImport::query()->update(['classroom_grade' => 1]);
+        Submission::query()->whereKey($this->submission->id)->update(['status' => Submission::STATUS_NEEDS_REVIEW]);
+        $this->resolve($conflict, 'accept_classroom')->assertStatus(409)->assertJsonPath('code', 'conflict_resolved');
+        $this->assertNull($this->submission->refresh()->total_override);
         $this->assertSame(GradeConflict::STATUS_OPEN, $conflict->refresh()->status);
     }
 }

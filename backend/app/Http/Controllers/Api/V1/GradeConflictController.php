@@ -49,7 +49,8 @@ class GradeConflictController extends Controller
     /**
      * POST /api/v1/grade-conflicts/{id}/resolve {action: push_app |
      * accept_classroom | dismiss} -> {data: conflict}. 409 conflict_resolved
-     * (not open any more), coursework_not_owned (push_app of courseWork
+     * (not open any more, or accept_classroom when Classroom's grade is empty
+     * or the work is not published now), coursework_not_owned (push_app of courseWork
      * created on the Classroom website), 422 validation_failed.
      */
     public function resolve(Request $request, int $id): JsonResponse
@@ -60,7 +61,9 @@ class GradeConflictController extends Controller
             ->findOrFail($id);
         Gate::authorize('review', $conflict->submission->assignment);
 
-        $resolved = $this->conflicts->resolve($conflict, (string) $request->input('action', ''), $request->user());
+        // Anything but a string (e.g. a JSON array) is an unknown action: 422, never a 500.
+        $action = $request->input('action');
+        $resolved = $this->conflicts->resolve($conflict, is_string($action) ? $action : '', $request->user());
         $resolved->load(['submission.student', 'import']);
         $number = ClassroomStudent::query()
             ->where('classroom_id', $conflict->submission->assignment->classroom_id)
