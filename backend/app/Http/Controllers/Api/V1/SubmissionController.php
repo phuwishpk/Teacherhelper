@@ -23,7 +23,8 @@ class SubmissionController extends Controller
      * POST /api/v1/submissions/{id}/grade -> 202 {data: {id, status,
      * regrade_pending, pages}}: grades a new whole-page hand-in that waits
      * for the teacher (regrade_pending, DESIGN §19.4). A published
-     * submission is reopened. 409 nothing_to_grade when no hand-in waits.
+     * submission is reopened. 409 nothing_to_grade when no hand-in waits,
+     * answer_key_not_approved before the teacher approved the key (§19.5).
      */
     public function grade(Request $request, int $id): JsonResponse
     {

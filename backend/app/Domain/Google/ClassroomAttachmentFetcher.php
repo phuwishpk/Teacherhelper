@@ -31,7 +31,10 @@ use Throwable;
  *   `unsupported` with the reason in Thai (last_error); nothing is stored;
  * - a hand-in answering a retake request (retake_reason kept by the sync)
  *   is graded at once; any other new hand-in of a graded submission waits
- *   for the teacher (§19.4).
+ *   for the teacher (§19.4);
+ * - before the teacher approved the answer key the files are stored but
+ *   not graded: the row becomes `waiting_key` until approval releases it
+ *   (ReleaseWaitingSubmissionsJob, §19.5).
  *
  * Google errors: unreachable -> thrown (the job retries); anything else
  * (file gone, access denied, reconnect needed) -> noted on the row, which
@@ -104,13 +107,14 @@ final class ClassroomAttachmentFetcher
         }
 
         $retake = $import->retake_reason !== null;
-        $this->submissions->receive($assignment, (int) $studentId, $files, SubmissionPage::SOURCE_CLASSROOM, [
+        $received = $this->submissions->receive($assignment, (int) $studentId, $files, SubmissionPage::SOURCE_CLASSROOM, [
             'google_submission_id' => $import->google_submission_id,
             'submitted_at' => self::time($import->google_update_time),
             'late' => $import->late,
         ], $retake);
 
-        $import->state = ClassroomSubmissionImport::STATE_IMPORTED;
+        // No approved key yet: the files are kept and graded after approval (§19.5).
+        $import->state = $received['waiting_key'] ? ClassroomSubmissionImport::STATE_WAITING_KEY : ClassroomSubmissionImport::STATE_IMPORTED;
         $import->student_id = (int) $studentId;
         $import->retake_reason = null;
         $import->last_error = null;

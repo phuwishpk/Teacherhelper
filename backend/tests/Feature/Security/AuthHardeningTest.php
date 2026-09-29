@@ -170,7 +170,7 @@ class AuthHardeningTest extends TestCase
         }
 
         $this->assertSame(
-            ['ai-key', 'appeal', 'explanation', 'google', 'practice-attempt', 'practice-generate', 'student-auth', 'teacher-auth'],
+            ['ai-key', 'answer-key', 'appeal', 'documents', 'explanation', 'google', 'practice-attempt', 'practice-generate', 'student-auth', 'teacher-auth'],
             collect($throttled)->keys()->sort()->values()->all(),
         );
     }

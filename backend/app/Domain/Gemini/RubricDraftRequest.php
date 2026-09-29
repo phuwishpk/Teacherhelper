@@ -55,6 +55,11 @@ final readonly class RubricDraftRequest
                 .($steps !== [] ? "\nขั้นตอนที่ครูเขียนไว้: ".implode(' | ', $steps) : '');
         }
 
-        return '(ไม่มีเฉลยตายตัว ใช้เกณฑ์การให้คะแนน)';
+        // The teacher's model answer seeds the rubric of an open question (DESIGN §19.5).
+        $model = trim((string) $question->model_answer);
+
+        return $model !== ''
+            ? "คำตอบตัวอย่างของครู:\n{$model}"
+            : '(ไม่มีเฉลยตายตัว ใช้เกณฑ์การให้คะแนน)';
     }
 }

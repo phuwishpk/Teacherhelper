@@ -11,6 +11,7 @@ use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
+use App\Models\DocumentExtraction;
 use App\Models\GoogleAccount;
 use App\Models\Layout;
 use App\Models\LearningResource;
@@ -110,6 +111,9 @@ trait SecurityWorld
 
     protected ClassroomSubmissionImport $importA;
 
+    /** What Gemini read from a document of school A (DESIGN §19.5). */
+    protected DocumentExtraction $extractionA;
+
     /** A whole-page file of student A's (unpublished) submission (DESIGN §19.4). */
     protected SubmissionPage $pageA;
 
@@ -175,6 +179,12 @@ trait SecurityWorld
         ]);
         $this->pageA->forceFill(['file_path' => "pages/{$this->schoolA->id}/{$this->assignmentA->id}/{$this->pageA->id}.webp"])->save();
         $disk->put($this->pageA->file_path, $this->scanFixture('page.webp'));
+
+        $this->extractionA = DocumentExtraction::create([
+            'school_id' => $this->schoolA->id, 'input_hash' => str_repeat('b', 64), 'purpose' => DocumentExtraction::PURPOSE_ANSWER_KEY,
+            'status' => DocumentExtraction::STATUS_DONE, 'requested_by' => $this->teacherA->id,
+            'result' => ['kind' => 'answer_key_read', 'notes_th' => '', 'questions' => []],
+        ]);
 
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',

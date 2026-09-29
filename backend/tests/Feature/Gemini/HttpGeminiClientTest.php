@@ -108,6 +108,19 @@ class HttpGeminiClientTest extends TestCase
         $this->assertArrayNotHasKey('thinkingConfig', $payload['generationConfig']);
     }
 
+    public function test_a_request_s_own_thinking_level_and_output_limit(): void
+    {
+        $request = new GeminiRequest('answer_key_read', 'general', 'v1', 'SYSTEM', 'hello', thinkingLevel: 'medium', maxOutputTokens: 16384);
+
+        $payload = $this->client()->payload($request);
+        $this->assertSame(['thinkingLevel' => 'medium'], $payload['generationConfig']['thinkingConfig']);
+        $this->assertSame(16384, $payload['generationConfig']['maxOutputTokens']);
+
+        // A model without thinking levels (GEMINI_THINKING_LEVEL empty) never gets one.
+        $this->assertArrayNotHasKey('thinkingConfig', $this->client(thinking: null)->payload($request)['generationConfig']);
+        $this->assertArrayNotHasKey('maxOutputTokens', $this->client()->payload($this->request())['generationConfig']);
+    }
+
     public function test_media_resolution_goes_once_per_call_at_the_highest_level_by_default(): void
     {
         // DESIGN §21.5 fallback: one generationConfig.mediaResolution at the highest level of the parts.

@@ -149,6 +149,7 @@ final class ScanGrader
             array_map(fn (CallOutcome $o) => (array) $o->data, array_intersect_key($outcomes, $graded)),
             $key,
             $gradeLabel,
+            (bool) $assignment->score_only,
         );
 
         return $this->write($scan, $assignment, $responses, $outcomes, $graded, $explanations, $manual, $explanationErrors);

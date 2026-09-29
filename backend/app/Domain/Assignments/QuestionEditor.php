@@ -69,6 +69,7 @@ class QuestionEditor
                 'is_numeric' => $question->is_numeric,
                 'match_mode' => $question->match_mode,
                 'answer_key' => $question->answer_key,
+                'model_answer' => $question->model_answer,
                 ...array_intersect_key($changes, array_flip(QuestionData::FIELDS)),
             ];
             $data = QuestionData::validate($merged, $assignment);

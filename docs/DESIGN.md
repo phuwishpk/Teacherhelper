@@ -1969,6 +1969,18 @@ ALTER TABLE scans
 - ข้อ `open` มี **คำตอบตัวอย่างของครู** (`questions.model_answer`) ได้ แต่คะแนนยังตัดสินด้วยเกณฑ์ของ rubric คำตอบตัวอย่างเป็นข้อมูลตั้งต้นให้ร่าง rubric (§10.4) และส่งให้ extract ในฐานะ reference
 - **เอกสารเกิน 30 หน้า**: ครูต้องเลือกช่วงหน้า (422 `document_too_long` ถ้าไม่ระบุ) server ตัดเฉพาะช่วงนั้นเป็น PDF ใหม่ด้วย mPDF + FPDI (`importPage`, งานเบา) ก่อนส่ง Gemini ถ้า FPDI อ่านไฟล์นั้นไม่ได้ (cross-reference stream, §19.4) ตัดไม่ได้ ตอบ 422 `document_split_unsupported` ข้อความ "ไฟล์นี้ตัดช่วงหน้าไม่ได้ บันทึกเฉพาะหน้าที่ต้องใช้เป็น PDF ใหม่ (ไม่เกิน 30 หน้า) แล้วแนบใหม่" และแอป**แสดงค่าใช้จ่ายโดยประมาณก่อนส่งทุกครั้ง** = `หน้า × 560 token (PDF medium) + ~1,500 token ของ prompt` ขาเข้า และ output ประมาณจากจำนวนข้อ คูณราคาใน `.env` (`GEMINI_PRICE_INPUT_PER_M`, `GEMINI_PRICE_OUTPUT_PER_M`, `USD_THB_RATE`) แสดงเป็นบาท
 - **แคชอ่านครั้งเดียว**: ผลการอ่านเก็บใน `document_extractions` ใช้ key = SHA-256 ของไฟล์ (หลายไฟล์ใช้ SHA-256 ของรายการ hash ที่เรียงแล้วรวมช่วงหน้า) + `school_id` + ชนิดงาน ครูคนอื่นในโรงเรียนเดียวกันอัปโหลดไฟล์เดิม**ได้ผลเดิมโดยไม่เรียก Gemini** (แอปแสดง "เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย") แต่ละครูได้**สำเนาของตัวเอง**ใน `questions` ไปแก้ ผลแคชไม่เปลี่ยน
+- **implement (build ข้อ 3, 30 ก.ย. 2569)**
+  - **ไฟล์ของครู**: `POST /documents` เก็บไฟล์ตามที่ได้รับที่ `documents/{school}/{sha256}.{ext}` ไฟล์เดิมในโรงเรียนเดียวกันใช้แถว `source_documents` เดิม จำกัด `DOCUMENT_MAX_FILE_MB=10` ต่อไฟล์, 10 ไฟล์ต่อครั้ง และ `DOCUMENT_MAX_TOTAL_MB=20` ต่อการอ่านหนึ่งครั้ง (ทุกไฟล์ของ call ส่งแบบ inline ใน request เดียว เกินตอบ 422 `file_too_large`) ไฟล์ลบหลัง `DOCUMENT_RETENTION_DAYS=30` วันในรอบ `eduvision:purge-images` ผลอ่านยังอยู่ อ่านไฟล์ที่ถูกลบแล้วใหม่ (แคชไม่เจอ) ตอบ 422 `document_missing` ("แนบใหม่อีกครั้ง")
+  - **เพิ่มคอลัมน์ `assignments.key_extraction_id`** (FK `document_extractions`, `ON DELETE SET NULL`, ไม่มีใน §19.8 เดิม): แถวผลอ่านหรือร่างล่าสุดที่เฉลยของการบ้านรออยู่ ใช้ตอบ `extraction_status` ของ `GET /answer-key` และให้ job เขียนผลลงการบ้านที่ยังรอผลนั้นเท่านั้น (ครูขอใหม่ระหว่างรอ ผลเก่าไม่ทับ)
+  - **AI ร่างเฉลยใช้แคชเดียวกัน**: `purpose = answer_key` เก็บทั้งผลอ่าน (`answer_key_read`) และผลร่าง (`answer_key_draft`) แยกกันด้วย `input_hash` ผลร่างใช้ SHA-256 ของ `"draft|"` + hash ของไฟล์ (ถ้ามี) + ข้อที่พิมพ์ไว้ (เลขข้อ ชนิด โจทย์) + วิชา + ระดับชั้น ใบโจทย์ไฟล์เดียวกันจึงไม่ได้ผลร่างแทนเฉลยของครูหรือกลับกัน ครูในโรงเรียนเดียวกันที่ขอร่างจากโจทย์เดียวกันได้ผลเดิมโดยไม่เรียก Gemini
+  - `POST /answer-key/draft` รับ `document_ids` (ไม่บังคับ): ร่างจากข้อที่พิมพ์ไว้ ใบโจทย์ที่แนบ หรือทั้งสองอย่าง ไม่มีทั้งข้อและไฟล์ตอบ 422 `assignment_empty` การอ่านหรือร่างที่แคชไม่เจอต้องมี Gemini key ที่ใช้ได้ (422 `ai_key_missing` ก่อน queue) ผลในแคชใช้ได้โดยไม่ต้องมี key
+  - **เขียนผลลง `questions`** (`AnswerKeyApplier`): งานที่ยังไม่มีข้อ สร้างข้อเรียงตาม `question_no` (คะแนนตามที่อ่านได้ ไม่มีใช้ 1, `show_work`/`open` มี 5 บรรทัดและ rubric เป็น `draft`) งานที่มีข้อแล้ว เติมเฉลยตาม `position` เฉพาะข้อที่ชนิดตรงกัน ข้อที่ชนิดไม่ตรง ไม่มีคำตอบ หรือไม่มีข้อนั้น ข้ามและรายงานใน `applied.skipped` ไม่เพิ่มข้อ ไม่เปลี่ยนคะแนนเต็ม ขั้นตอนอ้างอิงของ `show_work` ที่ rubric อนุมัติแล้วถ้าเปลี่ยนกลับเป็น `draft` งาน `worksheet` ไม่เปลี่ยน `is_numeric` (กรอบตัวเลขพิมพ์อยู่บนใบงาน) ข้อ `open` ได้ `model_answer` (คำตอบตัวอย่าง + "ประเด็นสำคัญ") และข้อที่ยังไม่มีเกณฑ์เข้าคิว `DraftRubricJob` ซึ่งใช้คำตอบตัวอย่างเป็นข้อมูลตั้งต้น (§10.4) เมื่อเขียนผลแล้ว `key_origin` เป็น `document` หรือ `ai_draft` และงาน `freeform` ถูกยกเลิกการอนุมัติ (`draft` จนครูอนุมัติเฉลยใหม่)
+  - **เฉลยครบ** (`KeyCompleteness`, ใช้ตอนอนุมัติและตอนสร้าง layout): มีอย่างน้อย 1 ข้อ และ `mcq` มีตัวเลือกที่ถูก, `short` มีคำตอบที่ยอมรับอย่างน้อย 1 แบบ, `show_work` มีคำตอบสุดท้ายและ rubric อนุมัติแล้ว, `open` มี rubric อนุมัติแล้ว ไม่ครบตอบ 422 `answer_key_incomplete` (`errors.questions` บอกเลขข้อ) งาน `freeform` สร้างข้อโดยยังไม่มี `answer_key` ได้ (`null`) งาน `worksheet` ยังต้องกรอกเฉลยพร้อมข้อเหมือนเดิม
+  - **`ready` ⇔ อนุมัติแล้ว ของงาน `freeform`**: แก้ข้อหลังอนุมัติแล้วเฉลยยังครบ งานยัง `ready` (ไม่มีใบงานที่ต้องพิมพ์ใหม่) ถ้าไม่ครบ (เช่นเพิ่มข้อ `open` ที่ rubric ยังไม่อนุมัติ) กลับเป็น `draft` และล้าง `key_approved_at` `PATCH status = draft` ของงาน `freeform` ล้างการอนุมัติด้วย `mode` เปลี่ยนได้เฉพาะงาน `draft` ที่ยังไม่เคยสร้าง layout และยังไม่มี submission (422 `errors.mode`) `POST /assignments/{id}/layout` ของงาน `freeform` ตอบ 422 `assignment_freeform` ของงาน `worksheet` ต้องมีเฉลยครบ และตั้ง `key_approved_at`/`key_approved_by` ครั้งแรก `answer-key/approve` ของงาน `worksheet` ตั้งเฉพาะ `key_approved_at` สถานะไม่เปลี่ยน
+  - **migration** ตั้ง `key_approved_at` (และ `key_origin = teacher`) ให้การบ้านที่ไม่ใช่ `draft` **หรือเคยมี layout** (งานที่ถูกแก้จนกลับเป็น `draft` แต่มีใบงานที่พิมพ์ไปแล้วตรวจต่อได้) `assignments.subject_id` ยัง NOT NULL จนถึง build ข้อ 4
+  - **ไม่ตรวจก่อนอนุมัติ** (ทาง whole-page ทุกแหล่ง): `WholePageSubmissions::receive` ของงานที่ `key_approved_at` ว่าง เก็บไฟล์เป็น `stored` ไม่สร้าง `responses` ไม่เรียก Gemini แถว Classroom เป็น `waiting_key` (submission ที่เคยตรวจแล้วเป็น `regrade_pending` แทน) `POST /submissions/{id}/grade` ก่อนอนุมัติตอบ 409 `answer_key_not_approved` อนุมัติแล้ว `ReleaseWaitingSubmissionsJob` ย้ายแถว `waiting_key` เป็น `imported` และเริ่มตรวจ submission ที่มีหน้า `stored` และยังไม่เคยตรวจ
+  - **ค่าใช้จ่ายโดยประมาณ** (`CostEstimate`): ขาเข้า `หน้า × token ต่อหน้าตาม GEMINI_MEDIA_DOCUMENT (medium = 560) + 1,500` ขาออก `จำนวนข้อ × 150` (ยังไม่รู้จำนวนข้อ ใช้ 5 ข้อต่อหน้า) ไม่เกิน 16,384 บาท = ราคาใน `.env` (`GEMINI_PRICE_INPUT_PER_M`, `GEMINI_PRICE_OUTPUT_PER_M`, `USD_THB_RATE`) ถ้าไม่ได้ตั้งค่าใดค่าหนึ่ง `thb = null` (แสดงเฉพาะ token) `POST /documents` ส่งค่าประมาณของทั้งไฟล์และ `needs_page_range` ส่วน `extract`/`draft` ที่แคชไม่เจอส่งค่าประมาณของช่วงที่เลือกจริง
+  - **"เฉพาะคะแนน"** (§21.7) ใช้ข้อความ template `FeedbackTemplates::SCORE_ONLY` กับข้อที่ได้ไม่เต็มและไม่ว่าง (ข้อเต็มและข้อว่างใช้ template เดิม) ทั้งทาง crop และ whole-page
 
 ### 19.6 E. นักเรียนส่งงานในแอป และอัปโหลดจากไฟล์
 
@@ -2020,7 +2032,9 @@ ALTER TABLE assignments
   ADD COLUMN score_only      BOOLEAN NOT NULL DEFAULT FALSE,  -- "เฉพาะคะแนน" ไม่เรียก explanation (§21)
   ADD COLUMN key_origin      ENUM('teacher','document','ai_draft') NULL,
   ADD COLUMN key_approved_at TIMESTAMP NULL,          -- NULL = ยังไม่ตรวจ
-  ADD COLUMN key_approved_by BIGINT UNSIGNED NULL REFERENCES users(id);
+  ADD COLUMN key_approved_by BIGINT UNSIGNED NULL REFERENCES users(id),
+  ADD COLUMN key_extraction_id BIGINT UNSIGNED NULL REFERENCES document_extractions(id) ON DELETE SET NULL;
+                                                      -- เพิ่มตอน implement (build ข้อ 3): ผลอ่าน/ร่างที่เฉลยรออยู่ (§19.5)
 
 ALTER TABLE questions
   ADD COLUMN model_answer TEXT NULL;                  -- คำตอบตัวอย่างของครู (open)
@@ -2159,10 +2173,10 @@ CREATE TABLE explanation_cache (
 | POST | `/classrooms/{id}/google-sync` | ครู | ซิงก์งานและงานที่ส่งของห้องนี้ทันที ตอบ `202` |
 | GET | `/teacher/attention` | ครู | จำนวนที่รอครู `{keys_pending, grade_conflicts, grade_failed, feedback_failed, regrade_pending, needs_reconnect}` |
 | POST / PATCH | `/assignments`, `/assignments/{id}` | ครู | รับ field ใหม่ `mode`, `accept_late`, `score_only` (และ `course_id`, `lesson_plan_id` ใน §20) |
-| POST | `/documents` | ครู | multipart `files[]` ตอบ `[{id, sha256, page_count, cached_purposes[], estimate: {input_tokens, output_tokens, thb}}]` Word/Docs 422 `unsupported_file_type` เกิน 10 MB 422 `file_too_large` |
-| POST | `/assignments/{id}/answer-key/extract` | ครู | `{document_ids[], page_from?, page_to?}` แคชเจอตอบ `200` พร้อมข้อที่เติมแล้ว ไม่เจอตอบ `202` (queue `ExtractDocumentJob`) เกิน 30 หน้าไม่มีช่วง 422 `document_too_long` |
-| POST | `/assignments/{id}/answer-key/draft` | ครู | ให้ AI ร่างเฉลยเอง `202` (`key_origin = ai_draft`) |
-| GET | `/assignments/{id}/answer-key` | ครู | `{key_origin, key_approved_at, extraction_status, questions: [...]}` |
+| POST | `/documents` | ครู | multipart `files[]` ตอบ `201 {data: [{id, sha256, original_name, mime_type, size_bytes, page_count, needs_page_range, cached_purposes[], estimate: {input_tokens, output_tokens, thb}}]}` Word/Docs 422 `unsupported_file_type` เกิน 10 MB 422 `file_too_large` PDF อ่านไม่ได้ 422 `pdf_unreadable` |
+| POST | `/assignments/{id}/answer-key/extract` | ครู | `{document_ids[], page_from?, page_to?}` แคชเจอตอบ `200` พร้อมข้อที่เติมแล้ว ไม่เจอตอบ `202` (queue `ExtractDocumentJob`) เกิน 30 หน้าไม่มีช่วง 422 `document_too_long` ทั้งสองแบบตอบ `{data: {cached, estimate\|null, applied: {created, filled, skipped}\|null, answer_key}}` (`answer_key` = รูปของ `GET /answer-key`) |
+| POST | `/assignments/{id}/answer-key/draft` | ครู | `{document_ids?[], page_from?, page_to?}` ให้ AI ร่างเฉลยเองจากข้อที่พิมพ์และ/หรือใบโจทย์ `202` (`key_origin = ai_draft`) คำตอบเหมือน `extract` |
+| GET | `/assignments/{id}/answer-key` | ครู | `{assignment_id, mode, status, key_origin, key_approved_at, key_approved_by, extraction_status, extraction: {id, purpose, status, error, kind, notes_th}\|null, key_complete, incomplete_questions, questions: [...]}` ข้อมี `model_answer` และ `key_complete` |
 | POST | `/assignments/{id}/answer-key/approve` | ครู | `{subject_id?, course_id?}` ตั้ง `key_approved_at` และเปลี่ยนงาน `freeform` จาก `draft` เป็น `ready` (§19.5) งาน `freeform` ต้องมีอย่างน้อย 1 ข้อ ทุกข้อต้องมีเฉลยหรือ rubric ครบ งานจากเว็บที่ยังไม่มีวิชาต้องส่ง `subject_id` (ก่อน Phase 9) หรือ `course_id` ของรายวิชาที่ผูกกับห้อง (หลัง Phase 9, ตั้ง `subject_id` ตามรายวิชา) ไม่ครบ 422 `course_required` แถว `waiting_key` ของ mirror เข้าคิวตรวจผ่าน `ReleaseWaitingSubmissionsJob` |
 | GET | `/document-extractions/{id}` | ครู | สถานะและผล (เฉพาะโรงเรียนของตัวเอง) |
 | POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` ทาง whole-page ตอบ `201 {submission_id, pages: [...]}` เกินหน้า 422 `too_many_pages` |
@@ -2179,7 +2193,7 @@ CREATE TABLE explanation_cache (
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`, `nothing_to_grade` (409 ของ `POST /submissions/{id}/grade` เมื่อไม่มีงานส่งใหม่รอตรวจ เพิ่มตอน implement)
+**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`, `nothing_to_grade` (409 ของ `POST /submissions/{id}/grade` เมื่อไม่มีงานส่งใหม่รอตรวจ เพิ่มตอน implement), `answer_key_incomplete` (422 อนุมัติเฉลยหรือสร้าง layout เมื่อเฉลยไม่ครบ), `assignment_freeform` (422 สร้าง layout ของงาน `freeform`), `document_missing` (422 ไฟล์ของครูถูกลบตามรอบเก็บแล้ว) สามตัวหลังเพิ่มตอน implement build ข้อ 3
 
 ### 19.10 Job, cron และ prompt
 
@@ -2612,6 +2626,8 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 
 ค่าอยู่ในไฟล์ prompt (front matter) ปรับได้โดยเพิ่มเวอร์ชัน prompt ถ้าตอบถูกตัด (`finishReason = MAX_TOKENS`) ถือเป็น `invalid_output` และบันทึกไว้ให้เห็นใน `ai_calls`
 
+- implement (build ข้อ 3): front matter รับ `thinking:` และ `max_output_tokens:` แล้ว (`GeminiRequest.thinkingLevel`, `maxOutputTokens` → `generationConfig.thinkingConfig`, `maxOutputTokens`) ใช้กับ `answer_key_read` (medium, 16,384) และ `answer_key_draft` (medium, 4,096) prompt อื่นยังใช้ `GEMINI_THINKING_LEVEL` จนถึง build ข้อ 7 ถ้า `GEMINI_THINKING_LEVEL` ว่าง (โมเดลไม่มี thinking level) ไม่ส่ง thinking เลย
+
 ### 21.7 ข้อ 6–7: ใช้คำอธิบายซ้ำ และ "เฉพาะคะแนน"
 
 - **ข้อ 6**: ใช้คำอธิบายที่เก็บไว้ใน `explanation_cache` แทนการเรียก Gemini เมื่อคำตอบผิดที่ normalize แล้ว (§11.4) **เหมือนกันพอดี**ในข้อเดียวกัน โดย**ใช้ฉบับที่ครูแก้ก่อน**ฉบับ AI (`explanation_source = reused`) key แยกตามชนิดของคำอธิบาย (ใส่ prefix ใน hash เพื่อไม่ให้สองแบบชนกัน)
@@ -2639,7 +2655,7 @@ ALTER TABLE ai_calls
 ```
 
 - ใช้ใน DB และรายงานวิชาเท่านั้น **ไม่มีหน้าจอของครู** (admin ดูได้ใน Filament เดิม)
-- migration ของ build ข้อ 2 เพิ่มทุกคอลัมน์ข้างบนแล้ว ตอนนี้ grading กรอก `feature` (`grading_crop`, `grading_page`), `media_resolution`, `image_count`, `question_count`, `assignment_id`, `cached_tokens`, `thinking_tokens` ส่วน `batch` เป็น `FALSE` จนถึง §20.8 call แบบหลายข้อ (`extract_batch`, `extract_page`) มี `response_id = NULL` (ข้อเดียวที่ส่งซ้ำรายข้อมี `question_id`)
+- migration ของ build ข้อ 2 เพิ่มทุกคอลัมน์ข้างบนแล้ว ตอนนี้ grading กรอก `feature` (`grading_crop`, `grading_page`; เฉลยของครูใน build ข้อ 3: `key_from_document`, `key_ai_draft`), `media_resolution`, `image_count`, `question_count`, `assignment_id`, `cached_tokens`, `thinking_tokens` ส่วน `batch` เป็น `FALSE` จนถึง §20.8 call แบบหลายข้อ (`extract_batch`, `extract_page`) มี `response_id = NULL` (ข้อเดียวที่ส่งซ้ำรายข้อมี `question_id`)
 - ส่วนที่ประหยัดของแต่ละข้อคำนวณจาก: ข้อ 2 = จำนวน `responses.auto_rule` คูณค่าเฉลี่ย token ของ `extract` รายข้อ, ข้อ 3 = token ต่อข้อของ `extract_batch` เทียบ `extract`, ข้อ 4 = token ต่อภาพแยกตาม `media_resolution`, ข้อ 6 = จำนวน `explanation_source = reused`, ข้อ 7 = จำนวนข้อใน `score_only`
 
 ### 21.9 ข้อ 9: ย่อภาพบนมือถือ

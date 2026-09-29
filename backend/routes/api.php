@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AiKeyController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
+use App\Http\Controllers\Api\V1\AnswerKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
@@ -110,6 +112,15 @@ Route::prefix('v1')->group(function () {
                 Route::get('assignments/{id}/layouts', [LayoutController::class, 'index'])->name('api.assignments.layouts.index');
                 Route::post('assignments/{id}/worksheets', [WorksheetPrintController::class, 'store'])->name('api.assignments.worksheets.store');
                 Route::post('assignments/{id}/requeue-missing-key', [GradingController::class, 'requeueMissingKey'])->name('api.assignments.requeue-missing-key');
+
+                // The teacher's answer key: typed, read from documents or drafted by AI, then approved (§19.5).
+                Route::post('documents', [DocumentController::class, 'store'])->middleware('throttle:documents')->name('api.documents.store');
+                Route::get('document-extractions/{id}', [DocumentController::class, 'extraction'])->name('api.document-extractions.show');
+                Route::get('assignments/{id}/answer-key', [AnswerKeyController::class, 'show'])->name('api.assignments.answer-key.show');
+                // Queue a Gemini job (costs money) unless the school read the same files before.
+                Route::post('assignments/{id}/answer-key/extract', [AnswerKeyController::class, 'extract'])->middleware('throttle:answer-key')->name('api.assignments.answer-key.extract');
+                Route::post('assignments/{id}/answer-key/draft', [AnswerKeyController::class, 'draft'])->middleware('throttle:answer-key')->name('api.assignments.answer-key.draft');
+                Route::post('assignments/{id}/answer-key/approve', [AnswerKeyController::class, 'approve'])->name('api.assignments.answer-key.approve');
 
                 Route::patch('questions/{id}', [QuestionController::class, 'update'])->name('api.questions.update');
                 Route::delete('questions/{id}', [QuestionController::class, 'destroy'])->name('api.questions.destroy');

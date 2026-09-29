@@ -19,6 +19,12 @@ use Illuminate\Validation\ValidationException;
  *   open      null (graded with rubric_criteria)
  *
  * Unknown keys are dropped, so answer_key only ever holds the documented shape.
+ *
+ * In a freeform assignment (DESIGN §19.5) answer_key may be left out (null)
+ * until it is typed, read from a document or drafted by AI; approving the
+ * key checks it (KeyCompleteness). model_answer is kept for open questions
+ * only (the teacher's model answer, a reference for the rubric draft and
+ * for extraction).
  */
 final class QuestionData
 {
@@ -34,10 +40,12 @@ final class QuestionData
 
     public const MAX_REFERENCE_STEPS = 10;
 
+    public const MAX_MODEL_ANSWER = 4000;
+
     /** Fields a client may send for a question. */
     public const FIELDS = [
         'position', 'type', 'prompt_text', 'max_points', 'answer_lines',
-        'is_numeric', 'match_mode', 'answer_key', 'skill_ids',
+        'is_numeric', 'match_mode', 'answer_key', 'skill_ids', 'model_answer',
     ];
 
     /**
@@ -55,6 +63,7 @@ final class QuestionData
 
         $type = is_string($input['type'] ?? null) ? $input['type'] : null;
         $needsLines = $type !== null && Question::typeNeedsRubric($type);
+        $keyOptional = $assignment->isFreeform() && ($input['answer_key'] ?? null) === null;
 
         $rules = [
             'position' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:'.self::MAX_QUESTIONS],
@@ -74,7 +83,8 @@ final class QuestionData
                     ->where('subject_id', $assignment->subject_id)
                     ->where(fn ($q) => $q->whereNull('school_id')->orWhere('school_id', $assignment->school_id)),
             ],
-            ...self::answerKeyRules($type),
+            'model_answer' => ['sometimes', 'nullable', 'string', 'max:'.self::MAX_MODEL_ANSWER],
+            ...($keyOptional ? ['answer_key' => ['nullable']] : self::answerKeyRules($type)),
         ];
 
         $validated = Validator::make($input, $rules, self::messages())->validate();
@@ -90,7 +100,8 @@ final class QuestionData
                 'answer_lines' => $needsLines ? (int) $validated['answer_lines'] : null,
                 'is_numeric' => $isNumeric,
                 'match_mode' => $validated['match_mode'] ?? 'flexible',
-                'answer_key' => self::normaliseKey($type, $validated['answer_key'] ?? null),
+                'answer_key' => $keyOptional ? null : self::normaliseKey($type, $validated['answer_key'] ?? null),
+                'model_answer' => $type === Question::TYPE_OPEN ? self::modelAnswer($validated['model_answer'] ?? null) : null,
             ],
             'position' => isset($validated['position']) ? (int) $validated['position'] : null,
             'skill_ids' => array_key_exists('skill_ids', $validated)
@@ -166,6 +177,13 @@ final class QuestionData
         }
 
         return $out;
+    }
+
+    private static function modelAnswer(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     /**
@@ -244,6 +262,8 @@ final class QuestionData
             'answer_key.reference_steps.max' => 'ขั้นตอนอ้างอิงมีได้ไม่เกิน '.self::MAX_REFERENCE_STEPS.' ขั้น',
             'answer_key.reference_steps.*.string' => 'ขั้นตอนอ้างอิงต้องเป็นข้อความ',
             'answer_key.reference_steps.*.max' => 'ขั้นตอนอ้างอิงแต่ละขั้นยาวเกิน 500 ตัวอักษร',
+            'model_answer.string' => 'คำตอบตัวอย่างต้องเป็นข้อความ',
+            'model_answer.max' => 'คำตอบตัวอย่างยาวเกิน '.self::MAX_MODEL_ANSWER.' ตัวอักษร',
         ];
     }
 }

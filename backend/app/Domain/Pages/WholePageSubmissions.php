@@ -37,6 +37,11 @@ use Throwable;
  * one GradeSubmissionPageJob per page is queued. A published submission is
  * reopened (SubmissionReopened, §14.2).
  *
+ * Before the teacher approved the answer key (assignments.key_approved_at,
+ * §19.5) nothing is graded: the pages stay `stored` (waiting_key) until
+ * ReleaseWaitingSubmissionsJob starts them, and start() answers 409
+ * answer_key_not_approved.
+ *
  * Identity is the submitter (Classroom userId or the logged-in student):
  * nothing on the page, QR included, decides whose work it is.
  */
@@ -45,7 +50,7 @@ final class WholePageSubmissions
     /**
      * @param  list<array{bytes: string, mime_type: string, page_count: int, drive_file_id?: string|null}>  $files  already checked (type, size, pages)
      * @param  array{google_submission_id?: string|null, uploaded_by?: int|null, submitted_at?: Carbon|null, late?: bool}  $meta
-     * @return array{submission: Submission, pages: list<SubmissionPage>, grading: bool}
+     * @return array{submission: Submission, pages: list<SubmissionPage>, grading: bool, waiting_key: bool}
      */
     public function receive(Assignment $assignment, int $studentId, array $files, string $source, array $meta, bool $retake): array
     {
@@ -94,7 +99,14 @@ final class WholePageSubmissions
                 $submission->late = (bool) ($meta['late'] ?? false);
                 $graded = $submission->responses()->exists();
                 $toGrade = [];
-                if (! $graded || $retake) {
+                if (! Assignment::query()->whereKey($assignment->id)->whereNotNull('key_approved_at')->exists()) {
+                    // No approved key yet (§19.5): keep the pages; ReleaseWaitingSubmissionsJob grades
+                    // them after approval, or the teacher's "ตรวจ" for a submission graded before.
+                    if ($graded) {
+                        $submission->regrade_pending = true;
+                    }
+                    $submission->save();
+                } elseif (! $graded || $retake) {
                     $toGrade = $this->startLocked($submission, $assignment, $stale);
                 } else {
                     $submission->regrade_pending = true;
@@ -118,7 +130,12 @@ final class WholePageSubmissions
             'regrade_pending' => $submission->regrade_pending,
         ]);
 
-        return ['submission' => $submission, 'pages' => $pages, 'grading' => $toGrade !== []];
+        return [
+            'submission' => $submission,
+            'pages' => $pages,
+            'grading' => $toGrade !== [],
+            'waiting_key' => $toGrade === [] && ! $submission->regrade_pending,
+        ];
     }
 
     /**
@@ -126,13 +143,16 @@ final class WholePageSubmissions
      *
      * @return int pages queued for grading
      *
-     * @throws ApiException 409 nothing_to_grade
+     * @throws ApiException 409 nothing_to_grade / answer_key_not_approved
      */
     public function start(Submission $submission): int
     {
         $stale = [];
         $toGrade = DB::transaction(function () use ($submission, &$stale) {
             $locked = Submission::query()->with('assignment')->lockForUpdate()->findOrFail($submission->id);
+            if (! $locked->assignment->keyApproved()) {
+                throw new ApiException('ยังไม่ได้อนุมัติเฉลยของการบ้านนี้ อนุมัติเฉลยก่อนจึงจะตรวจได้', 'answer_key_not_approved', 409);
+            }
 
             return $this->startLocked($locked, $locked->assignment, $stale);
         });

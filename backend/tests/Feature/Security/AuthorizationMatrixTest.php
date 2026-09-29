@@ -71,6 +71,13 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.layouts.index' => ['GET', 'assignments/{assignment}/layouts', 404, 404],
         'api.assignments.worksheets.store' => ['POST', 'assignments/{assignment}/worksheets', 404, 404],
         'api.assignments.requeue-missing-key' => ['POST', 'assignments/{assignment}/requeue-missing-key', 404, 404],
+        'api.documents.store' => ['POST', 'documents', self::OK, self::OK],
+        // The read-once cache is shared by the school (§19.5): a colleague may read it.
+        'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', self::OK, 404],
+        'api.assignments.answer-key.show' => ['GET', 'assignments/{assignment}/answer-key', 404, 404],
+        'api.assignments.answer-key.extract' => ['POST', 'assignments/{assignment}/answer-key/extract', 404, 404],
+        'api.assignments.answer-key.draft' => ['POST', 'assignments/{assignment}/answer-key/draft', 404, 404],
+        'api.assignments.answer-key.approve' => ['POST', 'assignments/{assignment}/answer-key/approve', 404, 404],
         'api.questions.update' => ['PATCH', 'questions/{question}', 404, 404],
         'api.questions.destroy' => ['DELETE', 'questions/{question}', 404, 404],
         'api.questions.rubric.draft' => ['POST', 'questions/{question}/rubric/draft', 404, 404],
@@ -324,6 +331,7 @@ class AuthorizationMatrixTest extends TestCase
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
             '{page}' => $this->pageA->id,
+            '{extraction}' => $this->extractionA->id,
             '{model}' => $this->model->id,
             '{course}' => 'course-a',
         ]);

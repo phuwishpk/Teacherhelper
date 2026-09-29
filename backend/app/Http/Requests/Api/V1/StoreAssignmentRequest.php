@@ -7,8 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * POST /api/v1/assignments — {classroom_id, subject_id, title, strictness?, due_at?}
- * (DESIGN §8.3). The classroom must be one the teacher teaches.
+ * POST /api/v1/assignments — {classroom_id, subject_id, title, strictness?,
+ * due_at?, mode?: worksheet|freeform, accept_late?, score_only?}
+ * (DESIGN §8.3, §19.5). The classroom must be one the teacher teaches.
  */
 class StoreAssignmentRequest extends FormRequest
 {
@@ -36,6 +37,9 @@ class StoreAssignmentRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'strictness' => ['sometimes', 'nullable', Rule::in(Assignment::STRICTNESS)],
             'due_at' => ['sometimes', 'nullable', 'date'],
+            'mode' => ['sometimes', 'nullable', Rule::in(Assignment::MODES)],
+            'accept_late' => ['sometimes', 'nullable', 'boolean'],
+            'score_only' => ['sometimes', 'nullable', 'boolean'],
         ];
     }
 

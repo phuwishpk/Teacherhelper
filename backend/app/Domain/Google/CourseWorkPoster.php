@@ -57,8 +57,9 @@ final class CourseWorkPoster
         if ($assignment->googleLink()->exists()) {
             throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว', 'already_posted', 409);
         }
-        $layout = $assignment->isReady() ? $assignment->currentLayout() : null;
-        if ($layout === null) {
+        // A freeform assignment is ready once its key is approved; it has no layout (§19.5).
+        $ready = $assignment->isReady() && ($assignment->isFreeform() || $assignment->currentLayout() !== null);
+        if (! $ready) {
             throw new ApiException('โพสต์ได้เฉพาะการบ้านที่พร้อมพิมพ์แล้ว (อนุมัติ rubric และสร้าง layout ก่อน)', 'assignment_not_ready', 409);
         }
         $link = GoogleRoster::linkOf($assignment->classroom()->firstOrFail());

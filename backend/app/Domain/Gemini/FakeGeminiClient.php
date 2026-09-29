@@ -29,6 +29,10 @@ use App\Models\Question;
  * `extract_batch` and `extract_page` answer every question of the call with
  * the same logic (see multi() for their extra markers).
  *
+ * `answer_key_read` / `answer_key_draft` (DESIGN §19.5) answer every
+ * question in hints.questions, or, without any, a four-question sheet
+ * (mcq, short, show_work, open); see answerKey() for their markers.
+ *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
@@ -114,6 +118,7 @@ class FakeGeminiClient implements GeminiClient
                 default => $this->explanation($request),
             },
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
+            'answer_key_read', 'answer_key_draft' => self::answerKey($request),
             'practice_gen' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
@@ -418,6 +423,67 @@ class FakeGeminiClient implements GeminiClient
                 : 'พยายามตอบได้ดี แต่คำตอบยังไม่ตรงกับสิ่งที่โจทย์ถาม ลองอ่านโจทย์อีกครั้งแล้วดูว่าโจทย์ต้องการอะไร',
             'next_step_th' => 'ลองฝึกทำโจทย์แบบเดียวกันอีก 2–3 ข้อ และตรวจคำตอบทุกครั้ง',
         ];
+    }
+
+    /**
+     * A structured answer key. Markers in the document bytes or in a
+     * question text: [fake:error] (HTTP 503), [fake:invalid] (not JSON),
+     * [fake:empty] (no question at all: invalid after the check),
+     * [fake:no-answer] (the questions come back without answers). Keys:
+     * mcq C, short "42", show_work "12" with two steps, open a model answer
+     * with two key points.
+     *
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private static function answerKey(GeminiRequest $request): array|string|GeminiReply
+    {
+        $questions = array_values((array) ($request->hints['questions'] ?? []));
+        $markers = self::imageMarkers($request).' '.strtolower(implode(' ', array_map(fn ($q) => (string) ($q['question'] ?? ''), $questions)));
+        if (str_contains($markers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if (str_contains($markers, '[fake:invalid]')) {
+            return 'Here is the key: {not json';
+        }
+        if (str_contains($markers, '[fake:empty]')) {
+            return ['questions' => [], 'notes_th' => 'ไม่พบข้อในเอกสาร'];
+        }
+        if ($questions === []) {
+            $questions = [
+                ['question_no' => 1, 'type' => 'mcq', 'question' => 'ข้อใดเป็นจำนวนเฉพาะ'],
+                ['question_no' => 2, 'type' => 'short', 'question' => '6 × 7 เท่ากับเท่าไร'],
+                ['question_no' => 3, 'type' => 'show_work', 'question' => 'แม่ซื้อส้ม 3 กิโลกรัม กิโลกรัมละ 4 บาท จ่ายเงินเท่าไร'],
+                ['question_no' => 4, 'type' => 'open', 'question' => 'ทำไมใบไม้จึงมีสีเขียว'],
+            ];
+        }
+        $answers = ! str_contains($markers, '[fake:no-answer]');
+
+        $out = [];
+        foreach ($questions as $q) {
+            $item = [
+                'question_no' => (int) $q['question_no'],
+                'type' => (string) $q['type'],
+                'prompt_text' => (string) $q['question'],
+                'max_points' => match ((string) $q['type']) {
+                    'mcq' => 1,
+                    'short' => 2,
+                    'show_work' => 5,
+                    default => 4,
+                },
+                'confidence' => $answers ? 'high' : 'low',
+            ];
+            if ($answers) {
+                $item += match ((string) $q['type']) {
+                    'mcq' => ['correct_option' => 'C'],
+                    'short' => ['accepted_answers' => ['42', 'สี่สิบสอง'], 'numeric_value' => 42],
+                    'show_work' => ['accepted_answers' => ['12'], 'numeric_value' => 12, 'reference_steps' => ['3 × 4', '= 12 บาท']],
+                    default => ['model_answer' => 'ใบไม้มีคลอโรฟิลล์ซึ่งสะท้อนแสงสีเขียว', 'key_points' => ['มีคลอโรฟิลล์', 'สะท้อนแสงสีเขียว']],
+                };
+            }
+            $out[] = $item;
+        }
+
+        return ['questions' => $out, 'notes_th' => $answers ? '' : 'อ่านคำตอบไม่ได้บางข้อ'];
     }
 
     /**

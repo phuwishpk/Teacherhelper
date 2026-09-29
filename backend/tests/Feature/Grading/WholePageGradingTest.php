@@ -5,6 +5,7 @@ namespace Tests\Feature\Grading;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Google\GoogleApiException;
+use App\Domain\Grading\FeedbackTemplates;
 use App\Domain\Grading\WholePageGrader;
 use App\Domain\Notifications\Notifier;
 use App\Events\SubmissionReopened;
@@ -12,6 +13,7 @@ use App\Jobs\FetchClassroomAttachmentsJob;
 use App\Jobs\GradeSubmissionPageJob;
 use App\Jobs\SyncClassroomRosterJob;
 use App\Models\AiCall;
+use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
@@ -559,5 +561,60 @@ class WholePageGradingTest extends TestCase
         Storage::disk('local')->assertMissing($oldPath);
         Storage::disk('local')->assertExists((string) $new->file_path);
         $this->assertNull($old->refresh()->file_path);
+    }
+
+    public function test_nothing_is_graded_before_the_answer_key_is_approved(): void
+    {
+        // A freeform assignment whose key the teacher has not approved yet (§19.5).
+        $this->assignment->forceFill(['mode' => Assignment::MODE_FREEFORM, 'status' => Assignment::STATUS_DRAFT, 'current_layout_version' => null, 'key_approved_at' => null])->save();
+        $this->mark('short', '[fake:correct]');
+        $this->handIn([['f-1', 'a.jpg', self::jpeg()]]);
+        $this->sync();
+
+        $this->assertSame(ClassroomSubmissionImport::STATE_WAITING_KEY, $this->import()->state);
+        $page = SubmissionPage::query()->sole();
+        $this->assertSame(SubmissionPage::STATE_STORED, $page->state);
+        Storage::disk('local')->assertExists((string) $page->file_path);
+        $submission = Submission::query()->sole();
+        $this->assertFalse($submission->regrade_pending);
+        $this->assertSame(0, Response::query()->count(), 'not in the review queue');
+        $this->assertSame([], array_values(array_filter($this->gemini->requests, fn ($r) => $r->purpose === 'extract_page')));
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/grade")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'answer_key_not_approved');
+
+        // Approval releases it: graded from the stored file, nothing downloaded again.
+        $downloads = count($this->sentTo('/drive/v3/files/f-1'));
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/answer-key/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', Assignment::STATUS_READY)
+            ->assertJsonPath('data.key_complete', true);
+
+        $this->assertSame(SubmissionPage::STATE_GRADED, $page->refresh()->state);
+        $this->assertSame([Response::STATE_SCORED, 2.0], [$this->response('short')->grading_state, $this->response('short')->ai_score]);
+        $this->assertSame(ClassroomSubmissionImport::STATE_IMPORTED, $this->import()->state);
+        $this->assertCount($downloads, $this->sentTo('/drive/v3/files/f-1'));
+    }
+
+    public function test_a_score_only_assignment_never_asks_gemini_for_an_explanation(): void
+    {
+        $this->assignment->forceFill(['score_only' => true])->save();
+        $this->mark('short', '[fake:wrong]');
+        $this->mark('work', '[fake:partial]');
+        $this->mark('open', '[fake:correct]');
+        $this->open->update(['model_answer' => 'คลอโรฟิลล์ดูดกลืนแสงสีแดงและน้ำเงิน จึงสะท้อนแสงสีเขียว']);
+        $this->handIn([['f-1', 'a.jpg', self::jpeg()]]);
+        $this->sync();
+
+        foreach (['short', 'work'] as $question) {
+            $response = $this->response($question);
+            $this->assertLessThan((float) $this->{$question}->max_points, (float) $response->ai_score);
+            $this->assertSame([FeedbackTemplates::SCORE_ONLY, Response::EXPLANATION_TEMPLATE], [$response->explanation, $response->explanation_source]);
+        }
+        $this->assertSame(['extract_page'], AiCall::query()->pluck('purpose')->all(), 'no explanation call (§21.7)');
+
+        // The teacher's model answer goes to the page read as a reference (§19.5).
+        $page = array_values(array_filter($this->gemini->requests, fn ($r) => $r->purpose === 'extract_page'))[0];
+        $this->assertStringContainsString('"model_answer": "คลอโรฟิลล์ดูดกลืนแสงสีแดงและน้ำเงิน จึงสะท้อนแสงสีเขียว"', $page->userText);
     }
 }

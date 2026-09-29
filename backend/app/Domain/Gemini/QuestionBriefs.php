@@ -14,7 +14,9 @@ use App\Models\RubricCriterion;
  *   mcq        {question_no, type, question, options}
  *   short      {question_no, type, question, accepted, numeric?, spelling_counts}
  *   show_work  {question_no, type, question, accepted_final, reference_steps}
- *   open       {question_no, type, question, criteria: [{criterion_id, description, core}]}
+ *   open       {question_no, type, question, criteria: [{criterion_id, description, core}],
+ *               model_answer?}  (the teacher's model answer, a reference only: the
+ *               criteria decide, DESIGN §19.5)
  */
 final class QuestionBriefs
 {
@@ -51,7 +53,7 @@ final class QuestionBriefs
                     'description' => trim($c->description),
                     'core' => (bool) $c->is_core,
                 ], $criteria, array_keys($criteria)),
-            ],
+            ] + (trim((string) $question->model_answer) !== '' ? ['model_answer' => trim((string) $question->model_answer)] : []),
         };
     }
 

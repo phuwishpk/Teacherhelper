@@ -16,7 +16,11 @@ use Throwable;
  *   POST {base}/models/{GEMINI_MODEL}:generateContent   header x-goog-api-key
  *   {systemInstruction, contents: [{role: user, parts: [text, inlineData...]}],
  *    generationConfig: {responseMimeType: application/json, responseJsonSchema,
- *                       thinkingConfig?, temperature?, mediaResolution?}}
+ *                       thinkingConfig?, temperature?, mediaResolution?,
+ *                       maxOutputTokens?}}
+ *
+ * Thinking level: the request's own (prompt front matter, DESIGN §21.6),
+ * else GEMINI_THINKING_LEVEL; none at all when that setting is empty.
  *
  * Media resolution (DESIGN §21.5): per image part when media_per_part is on,
  * else one generationConfig.mediaResolution at the highest level of the
@@ -153,8 +157,13 @@ final class HttpGeminiClient implements GeminiClient
         if (! $this->mediaPerPart && $highest !== null) {
             $config['mediaResolution'] = MediaResolution::apiValue($highest, false);
         }
-        if ($this->thinkingLevel !== null) {
-            $config['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        // An empty GEMINI_THINKING_LEVEL means a model without thinking levels: never send one.
+        $thinking = $this->thinkingLevel === null ? null : ($request->thinkingLevel ?? $this->thinkingLevel);
+        if ($thinking !== null) {
+            $config['thinkingConfig'] = ['thinkingLevel' => $thinking];
+        }
+        if ($request->maxOutputTokens !== null) {
+            $config['maxOutputTokens'] = $request->maxOutputTokens;
         }
         if ($config !== []) {
             $body['generationConfig'] = $config;

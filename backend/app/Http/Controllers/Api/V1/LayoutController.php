@@ -21,14 +21,15 @@ class LayoutController extends Controller
     /**
      * POST /api/v1/assignments/{id}/layout -> 201 {data: layout} for a new
      * version, 200 when the current version already matches the questions.
-     * The assignment becomes `ready`.
+     * The assignment becomes `ready` and its key approved (DESIGN §19.5).
+     * 422 assignment_freeform for a freeform assignment.
      */
     public function store(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('print', $assignment);
 
-        $result = $this->layouts->build($assignment);
+        $result = $this->layouts->build($assignment, $request->user()->id);
 
         return (new LayoutResource($result['layout']))->response()->setStatusCode($result['created'] ? 201 : 200);
     }

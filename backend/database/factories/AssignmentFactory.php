@@ -30,6 +30,26 @@ class AssignmentFactory extends Factory
         ];
     }
 
+    /**
+     * Like the migration of build step 3: an assignment past `draft` has
+     * its key approved (DESIGN §19.5), so whole-page grading runs.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Assignment $assignment) {
+            if ($assignment->status !== Assignment::STATUS_DRAFT && $assignment->key_approved_at === null) {
+                $assignment->key_approved_at = now();
+                $assignment->key_origin ??= Assignment::KEY_TEACHER;
+            }
+        });
+    }
+
+    /** A freeform assignment (no worksheet, graded from whole pages, §19.5). */
+    public function freeform(): static
+    {
+        return $this->state(fn () => ['mode' => Assignment::MODE_FREEFORM]);
+    }
+
     /** Assignment of this classroom, created by its teacher. */
     public function for_classroom(Classroom $classroom): static
     {

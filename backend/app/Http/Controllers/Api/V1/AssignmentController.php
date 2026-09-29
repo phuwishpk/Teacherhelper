@@ -18,6 +18,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Assignments of the signed-in teacher's classrooms (DESIGN §9.3). Queries are
@@ -64,6 +65,9 @@ class AssignmentController extends Controller
             'strictness' => $request->validated('strictness') ?? 'normal',
             'status' => Assignment::STATUS_DRAFT,
             'due_at' => self::utc($request->validated('due_at')),
+            'mode' => $request->validated('mode') ?? Assignment::MODE_WORKSHEET,
+            'accept_late' => (bool) ($request->validated('accept_late') ?? true),
+            'score_only' => (bool) ($request->validated('score_only') ?? false),
         ]);
 
         return (new AssignmentResource(self::loadDetail($assignment)))->response()->setStatusCode(201);
@@ -78,7 +82,13 @@ class AssignmentController extends Controller
         return new AssignmentResource(self::loadDetail($assignment));
     }
 
-    /** PATCH /api/v1/assignments/{id} {title?, strictness?, due_at?, status?: draft|closed} */
+    /**
+     * PATCH /api/v1/assignments/{id} {title?, strictness?, due_at?, status?: draft|closed,
+     * mode?, accept_late?, score_only?}. mode changes only on a draft that
+     * never had a layout or a submission (422 errors.mode). A freeform
+     * assignment sent back to draft loses its key approval (ready ⇔
+     * approved, DESIGN §19.5).
+     */
     public function update(UpdateAssignmentRequest $request, int $id): AssignmentResource
     {
         $assignment = self::ownQuery($request)->findOrFail($id);
@@ -96,9 +106,27 @@ class AssignmentController extends Controller
             if (array_key_exists('due_at', $data)) {
                 $assignment->due_at = self::utc($data['due_at']);
             }
+            if (array_key_exists('mode', $data) && $data['mode'] !== $assignment->mode) {
+                if (! $assignment->isDraft() || $assignment->current_layout_version !== null
+                    || $assignment->layouts()->exists() || $assignment->submissions()->exists()) {
+                    throw ValidationException::withMessages([
+                        'mode' => 'เปลี่ยนโหมดได้เฉพาะการบ้านฉบับร่างที่ยังไม่เคยสร้างใบงานและยังไม่มีงานส่ง',
+                    ]);
+                }
+                $assignment->mode = $data['mode'];
+            }
+            foreach (['accept_late', 'score_only'] as $flag) {
+                if (array_key_exists($flag, $data)) {
+                    $assignment->{$flag} = (bool) $data[$flag];
+                }
+            }
             if (array_key_exists('status', $data)) {
                 // closed: stop edits and printing; draft: reopen (rebuild the layout to print again).
                 $assignment->status = $data['status'];
+                if ($data['status'] === Assignment::STATUS_DRAFT && $assignment->isFreeform()) {
+                    $assignment->key_approved_at = null;
+                    $assignment->key_approved_by = null;
+                }
             }
             $assignment->save();
         });

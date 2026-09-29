@@ -8,7 +8,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * {id, classroom_id, subject_id, title, strictness, status,
- *  current_layout_version, due_at, questions_count?, missing_ai_key_count?,
+ *  current_layout_version, due_at, mode, source, accept_late, score_only,
+ *  key_origin, key_approved_at, questions_count?, missing_ai_key_count?,
  *  classroom?: {id, name},
  *  subject?: {id, code, name}, google_link?: {course_work_id, alternate_link,
  *  drive_file_id, has_blank_worksheet, posted_at}|null, questions?: [...],
@@ -16,6 +17,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * missing_ai_key_count (detail only): answers waiting as `manual` because no
  * Gemini key was usable (DESIGN §13 banner; POST .../requeue-missing-key).
+ *
+ * mode worksheet|freeform, key_origin teacher|document|ai_draft|null
+ * (ai_draft: the app labels the key "AI ร่าง ไม่มีคำตอบของครู"),
+ * key_approved_at null = nothing is graded yet (DESIGN §19.5).
  *
  * due_at and timestamps are UTC ISO 8601; the app shows Asia/Bangkok.
  *
@@ -37,6 +42,12 @@ class AssignmentResource extends JsonResource
             'status' => $this->status,
             'current_layout_version' => $this->current_layout_version,
             'due_at' => $this->due_at?->toIso8601String(),
+            'mode' => $this->mode,
+            'source' => $this->source,
+            'accept_late' => (bool) $this->accept_late,
+            'score_only' => (bool) $this->score_only,
+            'key_origin' => $this->key_origin,
+            'key_approved_at' => $this->key_approved_at?->toIso8601String(),
             'questions_count' => $this->whenCounted('questions'),
             'missing_ai_key_count' => $this->whenCounted('missing_ai_key_count'),
             'classroom' => $this->whenLoaded('classroom', fn () => [

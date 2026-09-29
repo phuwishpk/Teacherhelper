@@ -68,6 +68,11 @@ return [
         'media_per_part' => (bool) env('GEMINI_MEDIA_PER_PART', false),
         // At most this many questions per extract_batch / extract_page call (§21.4).
         'page_max_questions' => (int) env('GEMINI_PAGE_MAX_QUESTIONS', 15),
+        // USD per million tokens, for the cost estimate shown before a
+        // document is read (DESIGN §19.5, §21.1). Set in .env, never in code;
+        // empty = the estimate has tokens only (thb null).
+        'price_input_per_m' => env('GEMINI_PRICE_INPUT_PER_M'),
+        'price_output_per_m' => env('GEMINI_PRICE_OUTPUT_PER_M'),
     ],
 
     /*

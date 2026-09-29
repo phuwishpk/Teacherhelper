@@ -29,7 +29,27 @@ class PromptsAndSchemasTest extends TestCase
             'practice_gen' => ['practice_gen', 'general', 0.8, 1],
             'extract_batch' => ['extract_batch', 'general', 0.0, 1],
             'extract_page' => ['extract_page', 'general', 0.0, 1],
+            'answer_key_read' => ['answer_key_read', 'general', 0.0, 1],
+            'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 1],
         ];
+    }
+
+    public function test_the_answer_key_prompts_think_at_medium_with_their_output_limits(): void
+    {
+        $prompts = app(PromptRepository::class);
+        $read = $prompts->get('answer_key_read', 'general');
+        $draft = $prompts->get('answer_key_draft', 'general');
+
+        // DESIGN §21.6: answer_key_read medium / 16,384; answer_key_draft medium / 4,096.
+        $this->assertSame(['medium', 16384], [$read->thinking, $read->maxOutputTokens]);
+        $this->assertSame(['medium', 4096], [$draft->thinking, $draft->maxOutputTokens]);
+        $this->assertSame([null, null], [$prompts->get('extract', 'short')->thinking, $prompts->get('extract', 'short')->maxOutputTokens], 'the other prompts keep GEMINI_THINKING_LEVEL');
+        $this->assertStringContainsString('Do not solve questions yourself', $read->system);
+        $this->assertStringContainsString('AI ร่าง ไม่มีคำตอบของครู', $draft->system);
+        foreach ([$read, $draft] as $prompt) {
+            $this->assertStringContainsString('Never copy', $prompt->system);
+            $this->assertStringContainsString('{questions_json}', $prompt->user);
+        }
     }
 
     #[DataProvider('prompts')]

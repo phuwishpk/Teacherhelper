@@ -287,7 +287,7 @@ final class WholePageGrader
 
         [$explanations, $explanationErrors] = $key === null
             ? [[], []]
-            : $this->applier->explain($graded, $responses->keyBy('id')->all(), $extractions, $key, RubricDraftRequest::gradeLabel((int) $assignment->classroom?->grade_level));
+            : $this->applier->explain($graded, $responses->keyBy('id')->all(), $extractions, $key, RubricDraftRequest::gradeLabel((int) $assignment->classroom?->grade_level), (bool) $assignment->score_only);
 
         $written = DB::transaction(function () use ($submission, $responses, $pageIds, $graded, $extractions, $manual, $pageOf, $traces, $explanations, $explanationErrors) {
             $locked = Submission::query()->lockForUpdate()->find($submission->id);

@@ -19,6 +19,8 @@ final readonly class Prompt
         public string $system,
         public string $user,
         public ?float $temperature = null,
+        public ?string $thinking = null,
+        public ?int $maxOutputTokens = null,
     ) {}
 
     /** ai_calls.prompt_version, e.g. "v1" (purpose and question type are known from the row). */

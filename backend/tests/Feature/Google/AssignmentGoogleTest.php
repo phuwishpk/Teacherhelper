@@ -164,6 +164,24 @@ class AssignmentGoogleTest extends TestCase
         $this->assertStringContainsString('ส่งได้ไม่เกิน 5 หน้า ไฟล์ละไม่เกิน 10 MB', $work['description']);
     }
 
+    public function test_a_freeform_assignment_is_posted_once_its_key_is_approved(): void
+    {
+        // DESIGN §19.5: no layout; `draft` until the key is approved, then `ready`.
+        $this->fakeGoogle([$this->courseWorkUrl() => Http::response(['id' => self::COURSE_WORK_ID, 'alternateLink' => 'https://classroom.google.com/x'])]);
+        $freeform = Assignment::factory()->for_classroom($this->classroom)->freeform()->create(['title' => 'แบบฝึกหัดในหนังสือ หน้า 12']);
+        Question::factory()->create(['assignment_id' => $freeform->id]);
+        $url = "/api/v1/assignments/{$freeform->id}/google-post";
+
+        $this->asUser($this->teacher)->postJson($url, ['attach_blank_worksheet' => false])
+            ->assertStatus(409)->assertJsonPath('code', 'assignment_not_ready');
+        $this->assertCount(0, $this->sentTo('/courseWork', 'POST'));
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$freeform->id}/answer-key/approve")->assertOk();
+        $this->asUser($this->teacher)->postJson($url, ['attach_blank_worksheet' => false])
+            ->assertCreated()->assertJsonPath('data.course_work_id', self::COURSE_WORK_ID);
+        $this->assertSame('แบบฝึกหัดในหนังสือ หน้า 12', $this->sentTo('/courseWork', 'POST')[0]['title']);
+    }
+
     public function test_posting_needs_a_ready_assignment_a_linked_room_and_a_google_account(): void
     {
         $this->fakeGoogle();

@@ -55,6 +55,23 @@ return [
         'max_file_mb' => max(1, (int) env('SUBMISSION_MAX_FILE_MB', 10)),
     ],
 
+    // Teachers' documents (DESIGN §19.5): answer keys and question sheets
+    // uploaded with POST /documents and read once by Gemini. max_total_mb
+    // bounds one read (its files go inline in one request); a read of more
+    // than max_pages pages needs a page range (document_too_long). Files are
+    // deleted after retention_days by eduvision:purge-images; the read
+    // result stays in document_extractions.
+    'documents' => [
+        'max_file_mb' => max(1, (int) env('DOCUMENT_MAX_FILE_MB', 10)),
+        'max_total_mb' => max(1, (int) env('DOCUMENT_MAX_TOTAL_MB', 20)),
+        'max_files' => 10,
+        'max_pages' => max(1, (int) env('DOCUMENT_MAX_PAGES', 30)),
+        'retention_days' => max(1, (int) env('DOCUMENT_RETENTION_DAYS', 30)),
+    ],
+
+    // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
+    'usd_thb_rate' => env('USD_THB_RATE'),
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,

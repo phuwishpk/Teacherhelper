@@ -17,6 +17,8 @@ use App\Models\ScoreEvent;
  * - explain(): template praise for full marks, the blank template for blank
  *   answers, Gemini `explanation` (text only, §10.5) for anything else
  *   below full marks, nothing for suspicious ones (the teacher looks first);
+ *   an assignment set to "เฉพาะคะแนน" (score_only, §21.7) never calls
+ *   Gemini: the score-only template instead;
  * - applyGrade() / applyFailure() / markManual(): the response columns,
  *   the `ai_scored` score event and the sticky review flags. The teacher's
  *   own explanation is never overwritten; explanation_source says where the
@@ -37,7 +39,7 @@ final class GradeApplier
      * @param  array<int, array<string, mixed>>  $extractions  by response id
      * @return array{0: array<int, array{text: string, source: string}>, 1: array<int, string>} explanations, failed explanation statuses
      */
-    public function explain(array $graded, array $responses, array $extractions, GeminiKey $key, string $gradeLabel): array
+    public function explain(array $graded, array $responses, array $extractions, GeminiKey $key, string $gradeLabel, bool $scoreOnly = false): array
     {
         $explanations = [];
         $calls = [];
@@ -51,6 +53,10 @@ final class GradeApplier
                 $explanations[$id] = ['text' => FeedbackTemplates::praise($id), 'source' => Response::EXPLANATION_TEMPLATE];
             } elseif ($grade->blank) {
                 $explanations[$id] = ['text' => FeedbackTemplates::BLANK, 'source' => Response::EXPLANATION_TEMPLATE];
+            } elseif ($scoreOnly) {
+                if (! $grade->suspicious) {
+                    $explanations[$id] = ['text' => FeedbackTemplates::SCORE_ONLY, 'source' => Response::EXPLANATION_TEMPLATE];
+                }
             } elseif (! $grade->suspicious && $response->question->type !== 'mcq') {
                 $calls[$id] = $this->explanations->forResponse(
                     $response,

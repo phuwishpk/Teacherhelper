@@ -14,6 +14,10 @@ namespace App\Domain\Gemini;
  *
  * timeout: seconds for this call instead of GEMINI_TIMEOUT (a whole page
  * with every question takes longer than one crop).
+ *
+ * thinkingLevel / maxOutputTokens: the task's own setting from the prompt
+ * front matter (DESIGN §21.6, e.g. answer_key_read: medium, 16,384);
+ * null = GEMINI_THINKING_LEVEL and Gemini's default output limit.
  */
 final readonly class GeminiRequest
 {
@@ -33,5 +37,7 @@ final readonly class GeminiRequest
         public ?float $temperature = null,
         public array $hints = [],
         public ?int $timeout = null,
+        public ?string $thinkingLevel = null,
+        public ?int $maxOutputTokens = null,
     ) {}
 }
