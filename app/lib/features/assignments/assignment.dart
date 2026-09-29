@@ -77,6 +77,7 @@ class Assignment {
     this.courseLabel,
     this.lessonPlanId,
     this.lessonPlanTitle,
+    this.unmappedQuestionCount = 0,
   });
 
   final int id;
@@ -132,6 +133,10 @@ class Assignment {
   final int? lessonPlanId;
   final String? lessonPlanTitle;
 
+  /// Questions without an indicator (`unmapped_question_count`, DESIGN
+  /// §20.3): their scores are not counted in the charts. A warning only.
+  final int unmappedQuestionCount;
+
   /// The teacher still has to pick a course when approving the key: a
   /// Classroom website mirror (or an assignment without a subject) that has
   /// none (422 `course_required`, DESIGN §19.3, §20.1).
@@ -179,6 +184,7 @@ class Assignment {
     courseLabel: courseLabel,
     lessonPlanId: lessonPlanId,
     lessonPlanTitle: lessonPlanTitle,
+    unmappedQuestionCount: unmappedQuestionCount,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -194,6 +200,12 @@ class Assignment {
     final approved = json['key_approved_at'];
     final course = json['course'];
     final plan = json['lesson_plan'];
+    final questions =
+        ((json['questions'] as List?) ?? const [])
+            .cast<Map<String, dynamic>>()
+            .map(Question.fromJson)
+            .toList()
+          ..sort((a, b) => a.position.compareTo(b.position));
     return Assignment(
       id: (json['id'] as num).toInt(),
       classroomId: ((json['classroom_id'] ?? classroom?['id']) as num).toInt(),
@@ -203,12 +215,7 @@ class Assignment {
       status: json['status'] as String? ?? 'draft',
       currentLayoutVersion: (json['current_layout_version'] as num?)?.toInt(),
       dueAt: due == null ? null : DateTime.tryParse(due),
-      questions:
-          ((json['questions'] as List?) ?? const [])
-              .cast<Map<String, dynamic>>()
-              .map(Question.fromJson)
-              .toList()
-            ..sort((a, b) => a.position.compareTo(b.position)),
+      questions: questions,
       classroomName: classroom?['name'] as String?,
       subjectName: subject?['name'] as String?,
       needsReviewCount: (json['needs_review_count'] as num?)?.toInt(),
@@ -234,6 +241,9 @@ class Assignment {
           (json['lesson_plan_id'] as num?)?.toInt() ??
           (plan is Map ? (plan['id'] as num?)?.toInt() : null),
       lessonPlanTitle: plan is Map ? plan['title'] as String? : null,
+      unmappedQuestionCount:
+          (json['unmapped_question_count'] as num?)?.toInt() ??
+          questions.where((q) => q.skills.isEmpty).length,
     );
   }
 }

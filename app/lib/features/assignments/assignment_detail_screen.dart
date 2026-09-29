@@ -15,6 +15,8 @@ import 'assignment.dart';
 import 'assignments_page.dart';
 import 'assignments_providers.dart';
 import 'assignments_repository.dart';
+import 'indicator_mapping.dart';
+import 'indicator_mapping_screen.dart';
 import 'question.dart';
 
 class AssignmentDetailScreen extends ConsumerWidget {
@@ -288,6 +290,32 @@ class AssignmentDetailScreen extends ConsumerWidget {
                   ],
                   const SizedBox(height: 12),
                   AssignmentGoogleSection(assignment: a, classroom: classroom),
+                  if (a.questions.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        key: const ValueKey('assignment_indicator_mapping'),
+                        leading: const Icon(Icons.account_tree_outlined),
+                        title: const Text('จับคู่ข้อกับตัวชี้วัด'),
+                        subtitle: Text(
+                          a.lessonPlanId != null
+                              ? 'ให้ AI เสนอตัวชี้วัดจากแผนการสอน แล้วยืนยันหรือแก้'
+                              : 'เลือกตัวชี้วัดของแต่ละข้อ ใช้คำนวณกราฟตามตัวชี้วัด',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(AppRoutes.indicatorMapping(a.id)),
+                      ),
+                    ),
+                    if (unmappedWarningText(a.unmappedQuestionCount)
+                        case final warning?)
+                      UnmappedWarning(
+                        key: const ValueKey('assignment_unmapped'),
+                        text: warning,
+                        onTap: () =>
+                            context.push(AppRoutes.indicatorMapping(a.id)),
+                      ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'คำถาม (${a.questions.length} ข้อ · รวม ${_totalPoints(a)} คะแนน)',
@@ -476,6 +504,11 @@ class _QuestionTile extends StatelessWidget {
               Text(
                 q.skills.map((s) => s.code).join(', '),
                 style: theme.textTheme.bodySmall,
+              )
+            else
+              StatusChip(
+                label: 'ยังไม่ผูกตัวชี้วัด',
+                color: Colors.orange.shade800,
               ),
             if (q.type.needsRubric)
               InkWell(

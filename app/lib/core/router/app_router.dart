@@ -6,6 +6,7 @@ import '../../features/assignments/answer_key_screen.dart';
 import '../../features/assignments/assignment.dart';
 import '../../features/assignments/assignment_detail_screen.dart';
 import '../../features/assignments/assignment_form_screen.dart';
+import '../../features/assignments/indicator_mapping_screen.dart';
 import '../../features/assignments/question.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
@@ -152,6 +153,9 @@ abstract final class AppRoutes {
 
   /// Item analysis of one assignment (DESIGN §9.6, §14.3).
   static String assignmentAnalytics(int id) => '/assignments/$id/analytics';
+
+  /// Question → indicator mapping with AI suggestions (DESIGN §20.3).
+  static String indicatorMapping(int id) => '/assignments/$id/indicators';
 
   /// Student x skill mastery heatmap of a classroom (§14.3).
   static String classroomMastery(int id) => '/classrooms/$id/mastery';
@@ -471,6 +475,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'analytics',
             builder: (context, state) =>
                 AssignmentAnalyticsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'indicators',
+            builder: (context, state) =>
+                IndicatorMappingScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'google-submissions',
