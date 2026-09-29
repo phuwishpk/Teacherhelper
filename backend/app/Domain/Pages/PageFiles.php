@@ -40,6 +40,9 @@ final class PageFiles
         'pdf' => 'application/pdf',
     ];
 
+    /** Office and Google files people try to hand in; refused with "save as PDF". */
+    private const OFFICE_EXTENSIONS = ['doc', 'docx', 'odt', 'rtf', 'pages', 'gdoc', 'ppt', 'pptx', 'xls', 'xlsx'];
+
     public static function disk(): FilesystemAdapter
     {
         return ScanFiles::disk();
@@ -68,6 +71,17 @@ final class PageFiles
         }
 
         return null;
+    }
+
+    /** A Word, Office or Google Docs file (by name or declared type): read only once saved as PDF. */
+    public static function isOfficeDocument(?string $mimeType, string $name): bool
+    {
+        $mimeType = strtolower((string) $mimeType);
+
+        return in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), self::OFFICE_EXTENSIONS, true)
+            || str_contains($mimeType, 'officedocument')
+            || str_contains($mimeType, 'msword')
+            || str_starts_with($mimeType, 'application/vnd.google-apps.');
     }
 
     public static function maxBytes(): int

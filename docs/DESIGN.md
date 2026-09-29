@@ -2000,6 +2000,10 @@ ALTER TABLE scans
 - **ฝั่งครู**: อัปโหลดจากไฟล์ได้นอกจากกล้อง สำหรับรูปของการบ้านแบบ `worksheet` มือถือ**ลองทาง marker/QR ก่อน** (`detectPage` บนภาพจากไฟล์) ถ้าไม่เจอ marker หรือ QR ให้ถอยไปทาง whole-page โดยครูเลือกนักเรียนเอง บน**เว็บ (Chrome)** ใช้ได้เฉพาะทาง whole-page
 - มือถือย่อภาพก่อนอัปโหลด (ด้านยาวไม่เกิน 2,000 px, JPEG คุณภาพ 85) เพื่อลดเวลาและพื้นที่เท่านั้น จำนวน token ไม่เปลี่ยนเพราะคิดตามระดับ media resolution (§21)
 - dependency ใหม่ของแอป: **`file_picker`**
+- **implement (build ข้อ 5 backend, 30 ก.ย. 2569)**
+  - ตรวจไฟล์ที่อัปโหลดด้วย `PageUploads` ร่วมกันทั้งทางนักเรียนและครู (กติกาเดียวกับไฟล์จาก Classroom): อย่างน้อย 1 ไฟล์ (422 `validation_failed`), เฉพาะ JPEG/PNG/WebP/HEIC/HEIF/PDF (Word/Google Docs 422 `unsupported_file_type` "บันทึกเป็น PDF หรือถ่ายรูปแล้วส่งใหม่"), ไม่เกิน `SUBMISSION_MAX_FILE_MB` ต่อไฟล์ (422 `file_too_large`), PDF นับหน้าด้วย `PdfPageCounter` (อ่านไม่ได้ 422 `pdf_unreadable`) และรวมไม่เกิน `SUBMISSION_MAX_PAGES` หน้า (422 `too_many_pages`) ตรวจครบก่อนเก็บไฟล์ใดๆ
+  - **นักเรียน**: ตัวตนมาจาก token เท่านั้น การบ้านต้องอยู่ในห้องที่นักเรียนลงทะเบียน (`classroom_students`) ไม่อย่างนั้น 404 ลำดับการตรวจ: สถานะ (409 `assignment_not_ready`) → ส่งช้า (`now > due_at`: `accept_late` ติดป้าย `late` ไม่อย่างนั้น 422 `submission_late`) → ไฟล์ แล้วเข้า `WholePageSubmissions::receive` (`source = student_app`, `uploaded_by` = นักเรียน) การส่งใหม่หลังตรวจแล้วรอครูกด "ตรวจ" (`regrade_pending`) ไม่ถือเป็นการตีกลับของ Classroom คำตอบไม่มีคะแนนหรือสถานะการตรวจ
+  - **ครู**: `source = teacher_upload`, `uploaded_by` = ครู ไม่ตรวจกติกาส่งช้า (ครูเป็นผู้ตัดสิน) แต่คงค่า `late` ที่มีอยู่ของ submission การส่งใหม่หลังตรวจแล้วรอครูกด "ตรวจ" เหมือนทางอื่น (แอปเรียก `POST /submissions/{id}/grade` ต่อได้) ก่อนอนุมัติเฉลยเก็บเป็น `stored` (`waiting_key = true`)
 
 ### 19.7 F. ส่งผลกลับ Classroom
 
@@ -2193,7 +2197,7 @@ CREATE TABLE explanation_cache (
 | GET | `/assignments/{id}/answer-key` | ครู | `{assignment_id, mode, status, key_origin, key_approved_at, key_approved_by, extraction_status, extraction: {id, purpose, status, error, kind, notes_th}\|null, key_complete, incomplete_questions, questions: [...]}` ข้อมี `model_answer` และ `key_complete` |
 | POST | `/assignments/{id}/answer-key/approve` | ครู | `{subject_id?, course_id?}` ตั้ง `key_approved_at` และเปลี่ยนงาน `freeform` จาก `draft` เป็น `ready` (§19.5) งาน `freeform` ต้องมีอย่างน้อย 1 ข้อ ทุกข้อต้องมีเฉลยหรือ rubric ครบ งานจากเว็บที่ยังไม่มีวิชาต้องส่ง `subject_id` (ก่อน Phase 9) หรือ `course_id` ของรายวิชาที่ผูกกับห้อง (หลัง Phase 9, ตั้ง `subject_id` ตามรายวิชา) ไม่ครบ 422 `course_required` แถว `waiting_key` ของ mirror เข้าคิวตรวจผ่าน `ReleaseWaitingSubmissionsJob` |
 | GET | `/document-extractions/{id}` | ครู | สถานะและผล (เฉพาะโรงเรียนของตัวเอง) |
-| POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` ทาง whole-page ตอบ `201 {submission_id, pages: [...]}` เกินหน้า 422 `too_many_pages` |
+| POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` (1–5 หน้า รูปหรือ PDF) ทาง whole-page ตอบ `201 {data: {submission_id, student_id, pages: [{id, position, mime_type, page_count, size_bytes, state}], grading, waiting_key, regrade_pending}}` เฉพาะครูของห้อง (อื่นๆ 404) นักเรียนต้องอยู่ในห้องของการบ้าน (404) เกินหน้า 422 `too_many_pages` ไฟล์ 422 `unsupported_file_type`/`file_too_large`/`pdf_unreadable` ไม่ใช้กติกาส่งช้า (คงป้าย "ส่งช้า" เดิมของนักเรียนไว้) throttle `page-upload` 60 ครั้ง/นาที/ครู |
 | POST | `/submissions/{id}/grade` | ครู | ตรวจงานที่ส่งใหม่ (`regrade_pending`) ตอบ `202` |
 | GET | `/submission-pages/{id}/image` | ครู / นักเรียนเจ้าของ (หลังเผยแพร่) | stream หลังตรวจสิทธิ์ |
 | GET | `/assignments/{id}/grade-conflicts` | ครู | รายการ "คะแนนไม่ตรงกัน" `{data: [{id, submission_id, import_id, student: {id, name, student_number}, app_score, classroom_score, status, reason, detected_at, resolved_by, resolved_at, can_push_app, alternate_link}]}` แถว `open` ก่อน แล้วใหม่สุดก่อน |
@@ -2201,8 +2205,8 @@ CREATE TABLE explanation_cache (
 | POST | `/google-submissions/{id}/accept-late` | ครู | รับงานที่ส่งช้าซึ่งถูกปฏิเสธ (`rejected_late`) แถวเป็น `new` + `late = TRUE` ตอบ `202` สถานะอื่น 409 `import_not_rejected` |
 | GET | `/assignments/{id}/google-feedback` | ครู | สถานะประกาศรายคน |
 | POST | `/assignments/{id}/google-feedback/retry` | ครู | ส่งประกาศใหม่ให้แถว `failed` |
-| GET | `/student/assignments` | นักเรียน | งานที่ต้องส่ง เฉพาะการบ้าน `ready` `[{id, title, due_at, accept_late, submitted_at, late, status}]` |
-| POST | `/student/assignments/{id}/submission` | นักเรียน | multipart `files[]` ส่งเลย (whole-page) รับเฉพาะการบ้าน `ready` (`draft` ที่ยังไม่อนุมัติเฉลย และ `closed` ตอบ 409 `assignment_not_ready`) ปิดรับแล้ว 422 `submission_late` |
+| GET | `/student/assignments` | นักเรียน | งานที่ต้องส่ง เฉพาะการบ้าน `ready` ของห้องที่นักเรียนอยู่ `{data: [{id, title, classroom: {id, name}, subject_name, due_at, accept_late, can_submit, submission_id, submitted_at, late, status}]}` `status` = `not_submitted`/`submitted`/`published` `can_submit = false` เมื่อเลยกำหนดและไม่รับงานส่งช้า เรียงกำหนดส่งใกล้สุดก่อน ไม่มีกำหนดอยู่ท้าย (ไม่เกิน 100 รายการ) |
+| POST | `/student/assignments/{id}/submission` | นักเรียน | multipart `files[]` ส่งเลย (whole-page) ตอบ `201 {data: {assignment_id, submission_id, submitted_at, late, status: submitted, files, pages}}` รับเฉพาะการบ้าน `ready` (`draft` ที่ยังไม่อนุมัติเฉลย และ `closed` ตอบ 409 `assignment_not_ready`) ปิดรับแล้ว 422 `submission_late` การบ้านของห้องอื่น 404 ไฟล์ใช้กติกาเดียวกับครู throttle `student-submission` 10 ครั้ง/นาที/คน |
 | GET | `/r/{submission_id}` (web route) | สาธารณะ | หน้าไทย "เปิดผลในแอป EduVision" ไม่มีข้อมูลนักเรียน |
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`

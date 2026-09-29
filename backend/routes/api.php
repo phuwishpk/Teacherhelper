@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\RubricController;
 use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SkillController;
+use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
@@ -50,6 +51,7 @@ use Illuminate\Support\Facades\Route;
 Route::pattern('id', '[0-9]{1,18}');
 Route::pattern('submission_id', '[0-9]{1,18}');
 Route::pattern('item_id', '[0-9]{1,18}');
+Route::pattern('student_id', '[0-9]{1,18}');
 
 // All endpoints live under /api/v1 (DESIGN §9).
 Route::prefix('v1')->group(function () {
@@ -139,6 +141,8 @@ Route::prefix('v1')->group(function () {
 
                 // Scans (§9.4): upload, confirm a rescan of a published page, page image.
                 Route::post('scans', [ScanController::class, 'store'])->name('api.scans.store');
+                // A student's hand-in uploaded by the teacher from files (§19.6): whole-page path.
+                Route::post('assignments/{id}/students/{student_id}/pages', [SubmissionPageController::class, 'store'])->middleware('throttle:page-upload')->name('api.assignments.students.pages');
                 Route::post('scans/{id}/confirm-replace', [ScanController::class, 'confirmReplace'])->name('api.scans.confirm-replace');
                 Route::get('scans/{id}/page', [ScanController::class, 'page'])->name('api.scans.page');
 
@@ -201,13 +205,16 @@ Route::prefix('v1')->group(function () {
                 });
             });
 
-            // Student-only (§9.7): their own published results.
+            // Student-only (§9.7, §19.6): their own published results and hand-ins.
             Route::middleware('role:student')->prefix('student')->group(function () {
                 Route::get('results', [StudentResultController::class, 'index'])->name('api.student.results.index');
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->name('api.student.results.show');
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:appeal')->name('api.student.responses.appeal');
                 Route::get('mastery', StudentMasteryController::class)->name('api.student.mastery');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
+                // Hand in from the app (§19.6): open assignments and a whole-page submission.
+                Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');
+                Route::post('assignments/{id}/submission', [StudentAssignmentController::class, 'submit'])->middleware('throttle:student-submission')->name('api.student.assignments.submission');
                 // Practice (§9.7, §14.1): recommendations and graded attempts.
                 Route::get('practice', [StudentPracticeController::class, 'index'])->name('api.student.practice.index');
                 Route::post('practice/{item_id}/attempts', [StudentPracticeController::class, 'attempt'])->middleware('throttle:practice-attempt')->name('api.student.practice.attempts');

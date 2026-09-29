@@ -46,8 +46,8 @@ return [
         'max_crop_kb' => max(16, (int) env('SCAN_MAX_CROP_KB', 1024)),
     ],
 
-    // Whole-page submissions (DESIGN §19.4): files a Classroom hand-in (and
-    // later the student's or the teacher's upload) may carry. A PDF counts
+    // Whole-page submissions (DESIGN §19.4, §19.6): files a Classroom
+    // hand-in, a student's hand-in in the app or a teacher's upload may carry. A PDF counts
     // each of its pages. PHP must allow upload_max_filesize >= max_file_mb
     // and post_max_size >= 55M for the upload endpoints.
     'submissions' => [

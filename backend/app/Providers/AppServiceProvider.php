@@ -124,6 +124,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('documents', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));
+        // Whole-page hand-ins (§19.6): each stores up to 5 pages and may queue Gemini reads.
+        // A student hands in a few times at most; a teacher uploads a class one student at a time.
+        RateLimiter::for('student-submission', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('page-upload', fn (Request $request) => self::perUser($request, 60));
     }
 
     /** A per-user limit (per address before login; these routes all need a token). */

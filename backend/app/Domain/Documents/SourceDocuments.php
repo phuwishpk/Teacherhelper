@@ -31,8 +31,6 @@ use Illuminate\Support\Str;
  */
 final class SourceDocuments
 {
-    private const WORD_EXTENSIONS = ['doc', 'docx', 'odt', 'rtf', 'pages', 'gdoc', 'ppt', 'pptx', 'xls', 'xlsx'];
-
     public static function disk(): FilesystemAdapter
     {
         return ScanFiles::disk();
@@ -149,12 +147,8 @@ final class SourceDocuments
     private static function check(UploadedFile $file, string $field): array
     {
         $name = Str::limit(trim((string) $file->getClientOriginalName()) ?: 'document', 250, '');
-        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
         $declared = strtolower((string) $file->getClientMimeType());
-        $isWord = in_array($extension, self::WORD_EXTENSIONS, true)
-            || str_contains($declared, 'officedocument')
-            || str_contains($declared, 'msword')
-            || str_starts_with($declared, 'application/vnd.google-apps.');
+        $isWord = PageFiles::isOfficeDocument($declared, $name);
         $type = $isWord ? null : (PageFiles::acceptedType($declared, $name) ?? PageFiles::acceptedType($file->getMimeType(), $name));
         if ($type === null) {
             $message = $isWord

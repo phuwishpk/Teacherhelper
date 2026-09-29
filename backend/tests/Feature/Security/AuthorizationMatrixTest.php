@@ -86,6 +86,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.worksheet-prints.show' => ['GET', 'worksheet-prints/{print}', 403, 404],
         'api.worksheet-prints.file' => ['GET', 'worksheet-prints/{print}/file', 403, 404],
         'api.scans.store' => ['POST', 'scans', 403, 403],
+        'api.assignments.students.pages' => ['POST', 'assignments/{assignment}/students/{student}/pages', 404, 404],
         'api.scans.confirm-replace' => ['POST', 'scans/{scan}/confirm-replace', 403, 404],
         'api.scans.page' => ['GET', 'scans/{scan}/page', 403, 404],
         'api.assignments.review-queue' => ['GET', 'assignments/{assignment}/review-queue', 404, 404],
@@ -142,6 +143,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.responses.appeal' => ['POST', 'student/responses/{response_a2}/appeal', 404, 404],
         'api.student.mastery' => ['GET', 'student/mastery', self::OK, self::OK],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
+        'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
+        // A classmate hands in to the same assignment as themself (their own work).
+        'api.student.assignments.submission' => ['POST', 'student/assignments/{assignment}/submission', self::OK, 404],
         'api.student.practice.index' => ['GET', 'student/practice', self::OK, self::OK],
         'api.student.practice.attempts' => ['POST', 'student/practice/{item}/attempts', self::OK, 404],
     ];
