@@ -61,18 +61,32 @@ class ClassroomGoogleLink {
     required this.courseId,
     required this.courseName,
     this.linkedAt,
+    this.rosterSyncedAt,
+    this.workSyncedAt,
   });
 
   final String courseId;
   final String courseName;
   final DateTime? linkedAt;
 
+  /// The last "ซิงก์รายชื่อ" (DESIGN §19.2).
+  final DateTime? rosterSyncedAt;
+
+  /// The last sync round of work, hand-ins and grades: every 5 minutes by
+  /// the cron, or "ซิงก์ตอนนี้" (DESIGN §19.3).
+  final DateTime? workSyncedAt;
+
   factory ClassroomGoogleLink.fromJson(Map<String, dynamic> json) {
-    final linked = json['linked_at'];
+    DateTime? time(String key) => switch (json[key]) {
+      String s => DateTime.tryParse(s),
+      _ => null,
+    };
     return ClassroomGoogleLink(
       courseId: json['course_id'].toString(),
       courseName: (json['course_name'] ?? json['name'] ?? '') as String,
-      linkedAt: linked is String ? DateTime.tryParse(linked) : null,
+      linkedAt: time('linked_at'),
+      rosterSyncedAt: time('roster_synced_at'),
+      workSyncedAt: time('work_synced_at'),
     );
   }
 }

@@ -202,6 +202,78 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
     retries++;
     return 1;
   }
+
+  final syncNows = <int>[];
+
+  /// Rows of `GET /assignments/{id}/grade-conflicts`.
+  List<GradeConflict> conflictRows = [];
+  final resolved = <(int, GradeConflictAction)>[];
+
+  /// Thrown by [resolveConflict] only (the list still loads).
+  Object? resolveError;
+  final acceptedLate = <int>[];
+
+  @override
+  Future<void> syncNow(int classroomId) async {
+    await _maybeFail();
+    syncNows.add(classroomId);
+  }
+
+  @override
+  Future<List<GradeConflict>> gradeConflicts(int assignmentId) async {
+    await _maybeFail();
+    return conflictRows;
+  }
+
+  @override
+  Future<GradeConflict> resolveConflict(
+    int conflictId,
+    GradeConflictAction action,
+  ) async {
+    await _maybeFail();
+    if (resolveError case final e?) throw e;
+    resolved.add((conflictId, action));
+    final row = conflictRows.firstWhere((c) => c.id == conflictId);
+    final updated = GradeConflict(
+      id: row.id,
+      submissionId: row.submissionId,
+      importId: row.importId,
+      student: row.student,
+      appScore: row.appScore,
+      classroomScore: row.classroomScore,
+      canPushApp: row.canPushApp,
+      alternateLink: row.alternateLink,
+      status: switch (action) {
+        GradeConflictAction.pushApp => GradeConflictStatus.pushedApp,
+        GradeConflictAction.acceptClassroom =>
+          GradeConflictStatus.acceptedClassroom,
+        GradeConflictAction.dismiss => GradeConflictStatus.dismissed,
+      },
+      reason: action == GradeConflictAction.acceptClassroom
+          ? 'รับคะแนนจาก Classroom'
+          : null,
+      resolvedAt: DateTime.utc(2026, 9, 30, 3),
+    );
+    conflictRows = [
+      for (final c in conflictRows) c.id == conflictId ? updated : c,
+    ];
+    return updated;
+  }
+
+  @override
+  Future<GoogleSubmission?> acceptLate(int importId) async {
+    await _maybeFail();
+    acceptedLate.add(importId);
+    final row = submissionRows.firstWhere((r) => r.id == importId);
+    return GoogleSubmission(
+      id: row.id,
+      googleSubmissionId: row.googleSubmissionId,
+      state: SubmissionImportState.newSubmission,
+      student: row.student,
+      attachments: row.attachments,
+      late: true,
+    );
+  }
 }
 
 /// Gateway that "signs in" without the plugin.

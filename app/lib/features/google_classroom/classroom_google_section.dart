@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'google_providers.dart';
+import 'google_reconnect_banner.dart';
 import 'roster_sync_dialog.dart';
 import 'google_repository.dart';
 
@@ -16,8 +18,9 @@ const gradeReturnNote =
     'ส่งคะแนนกลับ Classroom ได้เฉพาะงานที่สั่งผ่านปุ่ม "โพสต์ลง Classroom" ในแอป '
     'งานที่สร้างในเว็บ Classroom เองดึงงานที่ส่งมาตรวจได้ แต่ส่งคะแนนกลับไม่ได้';
 
-/// "Google Classroom" card on the classroom detail (DESIGN §18.7): link a
-/// course, match students, unlink. Hidden unless the server has Google
+/// "Google Classroom" card on the classroom detail (DESIGN §18.7, §19.11):
+/// link a course, match students, sync the roster, sync the work now (with
+/// the time of the last sync round), unlink. Hidden unless the server has Google
 /// Classroom set up ([googleClassroomEnabledProvider]).
 class ClassroomGoogleSection extends ConsumerStatefulWidget {
   const ClassroomGoogleSection({super.key, required this.classroom});
@@ -85,6 +88,30 @@ class _ClassroomGoogleSectionState
     }
   }
 
+  /// "ซิงก์ตอนนี้" (DESIGN §19.3): one sync round of this room now instead
+  /// of waiting for the next 5-minute round of the cron.
+  Future<void> _syncNow() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(googleClassroomRepositoryProvider)
+          .syncNow(widget.classroom.id);
+      if (mounted) {
+        showMessage(
+          context,
+          'เริ่มซิงก์กับ Classroom แล้ว งานใหม่ งานที่ส่ง และคะแนนจะเข้ามาภายในไม่กี่นาที',
+        );
+      }
+    } catch (e) {
+      if (isGoogleReconnectError(e)) {
+        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
+      }
+      if (mounted) showMessage(context, googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!ref.watch(googleClassroomEnabledProvider)) {
@@ -121,7 +148,17 @@ class _ClassroomGoogleSectionState
             ),
             const SizedBox(height: 8),
             if (link != null) ...[
+              const GoogleReconnectBanner(),
               Text('ผูกกับคอร์ส: ${link.courseName}'),
+              const SizedBox(height: 4),
+              Text(
+                link.workSyncedAt == null
+                    ? 'ยังไม่ได้ซิงก์งาน ระบบซิงก์งานใหม่ งานที่ส่ง และคะแนนให้เองทุก 5 นาที'
+                    : 'ซิงก์งานล่าสุด ${formatThaiDateTime(link.workSyncedAt!)} '
+                          '(ซิงก์เองทุก 5 นาที)',
+                key: const ValueKey('classroom_last_synced'),
+                style: muted,
+              ),
               const SizedBox(height: 4),
               Text(
                 'จับคู่บัญชี Google ของนักเรียนกับเลขที่ในห้อง เพื่อให้รู้ว่างานที่ส่งมาเป็นของใคร '
@@ -149,6 +186,14 @@ class _ClassroomGoogleSectionState
                     onPressed: _busy ? null : _syncRoster,
                     icon: const Icon(Icons.sync),
                     label: const Text('ซิงก์รายชื่อ'),
+                  ),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('google_sync_now'),
+                    onPressed: _busy || status?.needsReconnect == true
+                        ? null
+                        : _syncNow,
+                    icon: const Icon(Icons.cloud_sync_outlined),
+                    label: const Text('ซิงก์ตอนนี้'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _busy ? null : () => _unlink(link),

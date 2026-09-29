@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,9 +10,12 @@ import '../assignments/assignments_providers.dart';
 import '../review/review_models.dart';
 import '../review/review_providers.dart';
 import '../review/review_queue_screen.dart' show reviewActionError;
-import 'assignment_google_section.dart' show copyLink;
+import '../home/teacher_attention.dart';
+import 'assignment_google_section.dart'
+    show copyLink, openInClassroom, webCourseWorkNote;
 import 'google_models.dart';
 import 'google_providers.dart';
+import 'google_reconnect_banner.dart';
 import 'google_repository.dart';
 
 /// Classroom submissions of one assignment (DESIGN §18.7, §19.4). Since
@@ -22,7 +26,10 @@ import 'google_repository.dart';
 /// waiting for the answer key, grade sent back) and, once the server holds
 /// the files, the grading state of the student's submission from the review
 /// queue, with "ตรวจ" for a new hand-in that waits for the teacher
-/// (`regrade_pending`), "ตีกลับให้ถ่ายใหม่" and "ส่งคะแนนกลับอีกครั้ง".
+/// (`regrade_pending`), "ตีกลับให้ถ่ายใหม่", "ส่งคะแนนกลับอีกครั้ง" and
+/// "รับงานส่งช้า" for a hand-in the late policy refused (§19.3). For
+/// courseWork created on the Classroom website the app cannot set grades,
+/// so the screen offers "เปิดใน Classroom" and "คัดลอกคะแนน" instead.
 class GoogleSubmissionsScreen extends ConsumerWidget {
   const GoogleSubmissionsScreen({super.key, required this.assignmentId});
 
@@ -38,10 +45,8 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
     final rows = ref.watch(googleSubmissionsProvider(assignmentId));
     // Grading progress per student; the list works without it.
     final queue = ref.watch(reviewQueueProvider(assignmentId));
-    final title = ref
-        .watch(assignmentDetailProvider(assignmentId))
-        .value
-        ?.title;
+    final assignment = ref.watch(assignmentDetailProvider(assignmentId)).value;
+    final title = assignment?.title;
 
     return Scaffold(
       appBar: AppBar(
@@ -85,6 +90,8 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
           },
           refreshing: rows.isLoading || queue.isLoading,
           onRefresh: () => _refresh(ref),
+          fromClassroomWeb: assignment?.fromClassroomWeb ?? false,
+          courseWorkLink: assignment?.googleLink?.alternateLink,
         ),
       },
     );
@@ -138,7 +145,9 @@ RowProgress rowProgress(
       return (
         label: 'ไม่รับงานส่งช้า',
         color: scheme.tertiary,
-        detail: 'ส่งหลังกำหนด และการบ้านนี้ไม่รับงานส่งช้า จึงไม่ได้ตรวจ',
+        detail:
+            'ส่งหลังกำหนด และการบ้านนี้ไม่รับงานส่งช้า จึงไม่ได้ตรวจ '
+            'กด "รับงานส่งช้า" ถ้าจะตรวจงานนี้',
       );
     case SubmissionImportState.returnedForRetake:
       return (
@@ -175,7 +184,8 @@ RowProgress rowProgress(
           color: Colors.green.shade700,
           detail: submission.totalScore == null
               ? null
-              : 'คะแนนรวม ${_score(submission.totalScore!)}',
+              : 'คะแนนรวม ${formatScore(submission.totalScore!)}'
+                    '${submission.totalOverridden ? ' (รับจาก Classroom)' : ''}',
         ),
         'reviewed' => (
           label: 'ตรวจทานครบ รอเผยแพร่',
@@ -193,8 +203,31 @@ RowProgress rowProgress(
   }
 }
 
-String _score(double v) =>
-    v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+/// The effective total to type into Classroom: only once published.
+double? publishedScore(SubmissionSummary? submission) =>
+    submission != null && submission.isPublished ? submission.totalScore : null;
+
+/// "คัดลอกคะแนน" of the whole list: one line per published student,
+/// `เลขที่<TAB>ชื่อ<TAB>คะแนน` in student-number order, ready to read off
+/// while typing grades on the Classroom website.
+String scoresForClipboard(
+  List<GoogleSubmission> rows,
+  Map<int, SubmissionSummary> submissions,
+) {
+  final lines = <(int, String)>[];
+  for (final r in rows) {
+    final student = r.student;
+    if (student == null) continue;
+    final score = publishedScore(submissions[student.id]);
+    if (score == null) continue;
+    lines.add((
+      student.studentNumber ?? 1 << 30,
+      '${student.studentNumber ?? '-'}\t${student.name}\t${formatScore(score)}',
+    ));
+  }
+  lines.sort((a, b) => a.$1.compareTo(b.$1));
+  return lines.map((l) => l.$2).join('\n');
+}
 
 /// The list itself (separate so tests can pump it with rows).
 class SubmissionsList extends ConsumerWidget {
@@ -205,10 +238,19 @@ class SubmissionsList extends ConsumerWidget {
     required this.onRefresh,
     this.submissions = const {},
     this.refreshing = false,
+    this.fromClassroomWeb = false,
+    this.courseWorkLink,
   });
 
   final int assignmentId;
   final List<GoogleSubmission> rows;
+
+  /// CourseWork created on the Classroom website: no grade goes back, the
+  /// teacher copies the scores instead (DESIGN §19.3).
+  final bool fromClassroomWeb;
+
+  /// The courseWork in the Classroom web app ("เปิดใน Classroom").
+  final String? courseWorkLink;
 
   /// The students' submissions (review queue `meta.submissions`) by
   /// student id.
@@ -240,6 +282,21 @@ class SubmissionsList extends ConsumerWidget {
   SubmissionSummary? _submissionOf(GoogleSubmission row) =>
       row.student == null ? null : submissions[row.student!.id];
 
+  Future<void> _copyScores(BuildContext context) async {
+    final text = scoresForClipboard(rows, submissions);
+    if (text.isEmpty) {
+      showMessage(context, 'ยังไม่มีคะแนนที่เผยแพร่แล้วให้คัดลอก');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (context.mounted) {
+      showMessage(
+        context,
+        'คัดลอกคะแนน ${text.split('\n').length} คนแล้ว (เลขที่ ชื่อ คะแนน)',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -265,6 +322,7 @@ class SubmissionsList extends ConsumerWidget {
         child: ListView(
           children: [
             if (refreshing) const LinearProgressIndicator(),
+            const GoogleReconnectBanner(),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -284,6 +342,15 @@ class SubmissionsList extends ConsumerWidget {
                           if (late > 0) 'ส่งช้า $late',
                         ].join(' · '),
                         key: const ValueKey('submission_counts'),
+                      ),
+                    ],
+                    if (fromClassroomWeb) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '$webCourseWorkNote เมื่อเผยแพร่ผลแล้ว กด "คัดลอกคะแนน" '
+                        'แล้วกรอกคะแนนในเว็บ Classroom เอง',
+                        key: const ValueKey('web_coursework_note'),
+                        style: TextStyle(color: theme.colorScheme.tertiary),
                       ),
                     ],
                     const SizedBox(height: 8),
@@ -315,13 +382,37 @@ class SubmissionsList extends ConsumerWidget {
                           icon: const Icon(Icons.rate_review_outlined),
                           label: const Text('ตรวจทาน'),
                         ),
-                        if (failedGrades > 0)
+                        if (failedGrades > 0 && !fromClassroomWeb)
                           OutlinedButton.icon(
                             key: const ValueKey('retry_grades'),
                             onPressed: () => _retryGrades(context, ref),
                             icon: const Icon(Icons.replay),
                             label: Text('ส่งคะแนนกลับอีกครั้ง ($failedGrades)'),
                           ),
+                        if (fromClassroomWeb)
+                          OutlinedButton.icon(
+                            key: const ValueKey('copy_scores'),
+                            onPressed: () => _copyScores(context),
+                            icon: const Icon(Icons.content_copy),
+                            label: const Text('คัดลอกคะแนน'),
+                          ),
+                        if (courseWorkLink case final link?
+                            when link.isNotEmpty)
+                          OutlinedButton.icon(
+                            key: const ValueKey('open_in_classroom'),
+                            onPressed: () =>
+                                openInClassroom(context, ref, link),
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('เปิดใน Classroom'),
+                          ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('open_grade_conflicts'),
+                          onPressed: () => context.push(
+                            AppRoutes.gradeConflicts(assignmentId),
+                          ),
+                          icon: const Icon(Icons.compare_arrows),
+                          label: const Text('คะแนนไม่ตรงกัน'),
+                        ),
                       ],
                     ),
                   ],
@@ -341,6 +432,7 @@ class SubmissionsList extends ConsumerWidget {
                 assignmentId: assignmentId,
                 row: row,
                 submission: _submissionOf(row),
+                fromClassroomWeb: fromClassroomWeb,
               ),
           ],
         ),
@@ -354,11 +446,13 @@ class _SubmissionCard extends ConsumerStatefulWidget {
     required this.assignmentId,
     required this.row,
     required this.submission,
+    this.fromClassroomWeb = false,
   });
 
   final int assignmentId;
   final GoogleSubmission row;
   final SubmissionSummary? submission;
+  final bool fromClassroomWeb;
 
   @override
   ConsumerState<_SubmissionCard> createState() => _SubmissionCardState();
@@ -399,6 +493,48 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
     }
   }
 
+  Future<void> _acceptLate() async {
+    final ok = await confirm(
+      context,
+      title: 'รับงานส่งช้าของ ${row.studentLabel}?',
+      message:
+          'งานนี้ส่งหลังกำหนดและถูกปฏิเสธตามการตั้งค่าของการบ้าน '
+          'ถ้ารับ ระบบจะดาวน์โหลดและตรวจในรอบซิงก์ถัดไป (ภายในไม่กี่นาที) พร้อมป้าย "ส่งช้า"',
+      confirmLabel: 'รับงาน',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(googleSubmissionsProvider(widget.assignmentId).notifier)
+          .acceptLate(row);
+      ref.invalidate(teacherAttentionProvider);
+      if (mounted) {
+        showMessage(
+          context,
+          'รับงานของ ${row.studentLabel} แล้ว จะตรวจในรอบซิงก์ถัดไป',
+        );
+      }
+    } catch (e) {
+      if (isGoogleReconnectError(e)) {
+        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
+      }
+      if (mounted) showMessage(context, googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _copyScore(double score) async {
+    await Clipboard.setData(ClipboardData(text: formatScore(score)));
+    if (mounted) {
+      showMessage(
+        context,
+        'คัดลอกคะแนน ${formatScore(score)} ของ ${row.studentLabel} แล้ว',
+      );
+    }
+  }
+
   Future<void> _grade(SubmissionSummary submission) async {
     setState(() => _busy = true);
     try {
@@ -418,6 +554,10 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
     }
   }
 
+  /// The published total to type into Classroom, for web courseWork.
+  double? fromClassroomWebScore(SubmissionSummary? submission) =>
+      widget.fromClassroomWeb ? publishedScore(submission) : null;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -428,6 +568,7 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
     );
     final canGrade =
         row.state.hasFiles && (submission?.regradePending ?? false);
+    final score = fromClassroomWebScore(submission);
     return Card(
       key: ValueKey('submission_${row.id}'),
       child: Padding(
@@ -484,6 +625,15 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text('เหตุผลที่ตีกลับ: $reason'),
               ),
+            if (row.classroomGrade case final grade?)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'คะแนนใน Classroom: ${formatScore(grade)}',
+                  key: ValueKey('classroom_grade_${row.id}'),
+                  style: muted,
+                ),
+              ),
             if (row.state == SubmissionImportState.gradeFailed &&
                 row.lastError != null)
               Padding(
@@ -507,6 +657,20 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
                     onPressed: _busy ? null : () => _grade(submission!),
                     icon: const Icon(Icons.fact_check_outlined),
                     label: const Text('ตรวจ'),
+                  ),
+                if (row.canAcceptLate)
+                  FilledButton.tonalIcon(
+                    key: ValueKey('accept_late_${row.id}'),
+                    onPressed: _busy ? null : _acceptLate,
+                    icon: const Icon(Icons.schedule),
+                    label: const Text('รับงานส่งช้า'),
+                  ),
+                if (score != null)
+                  TextButton.icon(
+                    key: ValueKey('copy_score_${row.id}'),
+                    onPressed: () => _copyScore(score),
+                    icon: const Icon(Icons.content_copy),
+                    label: Text('คัดลอกคะแนน ${formatScore(score)}'),
                   ),
                 if (row.state.canReturnForRetake)
                   TextButton.icon(

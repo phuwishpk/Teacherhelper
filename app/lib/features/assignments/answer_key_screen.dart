@@ -164,18 +164,29 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
     if (mounted) ref.invalidate(answerKeyProvider(_id));
   }
 
-  Future<void> _approve(AnswerKeyState key) async {
-    final ok = await confirm(
-      context,
-      title: 'อนุมัติเฉลย?',
-      message: key.mode == AssignmentMode.freeform
-          ? 'หลังอนุมัติ การบ้านจะพร้อมใช้ ระบบเริ่มตรวจงานที่ส่งมาด้วยเฉลยนี้'
-          : 'ระบบจะตรวจงานที่ส่งมาด้วยเฉลยนี้',
-      confirmLabel: 'อนุมัติ',
-    );
-    if (!ok || !mounted) return;
+  Future<void> _approve(AnswerKeyState key, Assignment? a) async {
+    int? subjectId;
+    if (a != null && a.needsSubject) {
+      // A mirror of Classroom website courseWork has no subject until the
+      // teacher picks one here (DESIGN §19.3, 422 course_required).
+      subjectId = await showDialog<int>(
+        context: context,
+        builder: (_) => const SubjectPickerDialog(),
+      );
+      if (subjectId == null || !mounted) return;
+    } else {
+      final ok = await confirm(
+        context,
+        title: 'อนุมัติเฉลย?',
+        message: key.mode == AssignmentMode.freeform
+            ? 'หลังอนุมัติ การบ้านจะพร้อมใช้ ระบบเริ่มตรวจงานที่ส่งมาด้วยเฉลยนี้'
+            : 'ระบบจะตรวจงานที่ส่งมาด้วยเฉลยนี้',
+        confirmLabel: 'อนุมัติ',
+      );
+      if (!ok || !mounted) return;
+    }
     await _run(() async {
-      await _notifier.approve();
+      await _notifier.approve(subjectId: subjectId);
       if (mounted) showMessage(context, 'อนุมัติเฉลยแล้ว');
     });
   }
@@ -198,7 +209,7 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
           : _ApproveBar(
               answerKey: key,
               busy: _busy,
-              onApprove: () => _approve(key),
+              onApprove: () => _approve(key, assignment),
             ),
       body: AsyncView(
         value: value,
@@ -212,6 +223,10 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
               child: ListView(
                 children: [
                   _StatusCard(answerKey: key),
+                  if (assignment != null && assignment.fromClassroomWeb) ...[
+                    const SizedBox(height: 12),
+                    ClassroomWebKeyNote(assignment: assignment),
+                  ],
                   if (key.keyOrigin case final origin?
                       when origin != KeyOrigin.teacher) ...[
                     const SizedBox(height: 12),
@@ -308,6 +323,114 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Asks for the subject of a Classroom website mirror before its key is
+/// approved; pops the subject id.
+class SubjectPickerDialog extends ConsumerStatefulWidget {
+  const SubjectPickerDialog({super.key});
+
+  @override
+  ConsumerState<SubjectPickerDialog> createState() =>
+      _SubjectPickerDialogState();
+}
+
+class _SubjectPickerDialogState extends ConsumerState<SubjectPickerDialog> {
+  int? _subjectId;
+
+  @override
+  Widget build(BuildContext context) {
+    final subjects = ref.watch(subjectsProvider);
+    return AlertDialog(
+      title: const Text('เลือกวิชาแล้วอนุมัติเฉลย'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'งานนี้นำเข้าจากเว็บ Classroom จึงยังไม่มีวิชา เลือกวิชาก่อน '
+            'หลังอนุมัติ ระบบเริ่มตรวจงานที่นักเรียนส่งใน Classroom ด้วยเฉลยนี้',
+          ),
+          const SizedBox(height: 12),
+          if (subjects.hasError)
+            Text(
+              'โหลดรายวิชาไม่ได้: ${apiErrorMessage(subjects.error!)}',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            )
+          else
+            DropdownButtonFormField<int>(
+              key: const ValueKey('approve_subject'),
+              initialValue: _subjectId,
+              decoration: const InputDecoration(labelText: 'วิชา'),
+              items: [
+                for (final s in subjects.value ?? const [])
+                  DropdownMenuItem(value: s.id, child: Text(s.name)),
+              ],
+              onChanged: (v) => setState(() => _subjectId = v),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ยกเลิก'),
+        ),
+        FilledButton(
+          key: const ValueKey('approve_subject_confirm'),
+          onPressed: _subjectId == null
+              ? null
+              : () => Navigator.of(context).pop(_subjectId),
+          child: const Text('อนุมัติ'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Where the key of a Classroom website mirror came from (DESIGN §19.3):
+/// AI drafted it from the courseWork, and attached Google Docs could not
+/// be read.
+class ClassroomWebKeyNote extends StatelessWidget {
+  const ClassroomWebKeyNote({super.key, required this.assignment});
+
+  final Assignment assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final materials = assignment.googleLink?.materials ?? const [];
+    final unreadable = materials.where((m) => !m.supported).toList();
+    return Card(
+      key: const ValueKey('classroom_web_key_note'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('งานใหม่จาก Classroom', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            const Text(
+              'ครูสร้างงานนี้ในเว็บ Classroom AI ร่างข้อและเฉลยจากชื่องาน คำอธิบาย '
+              'และไฟล์ PDF หรือรูปที่แนบในงาน ตรวจทุกข้อ แก้ให้ถูก แล้วอนุมัติ '
+              'งานที่นักเรียนส่งมาก่อนอนุมัติรอตรวจอยู่',
+            ),
+            if (unreadable.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'อ่านไม่ได้: ${unreadable.map((m) => m.title).join(', ')}',
+                style: theme.textTheme.bodySmall,
+              ),
+              if (unreadable.any((m) => m.isGoogleDoc))
+                Text(
+                  'อ่านไฟล์ Google Docs ไม่ได้ บันทึกเป็น PDF แล้วแนบในแอป หรือพิมพ์เฉลยเอง',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }

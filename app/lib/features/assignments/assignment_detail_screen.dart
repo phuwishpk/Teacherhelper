@@ -149,7 +149,19 @@ class AssignmentDetailScreen extends ConsumerWidget {
                                 a.classroomName ??
                                 'ห้อง #${a.classroomId}',
                           ),
-                          if (a.subjectName != null) Text(a.subjectName!),
+                          if (a.fromClassroomWeb)
+                            StatusChip(
+                              key: const ValueKey('web_coursework_chip'),
+                              label: 'สร้างในเว็บ Classroom',
+                              color: theme.colorScheme.tertiary,
+                            ),
+                          if (a.subjectName != null)
+                            Text(a.subjectName!)
+                          else if (a.needsSubject)
+                            Text(
+                              'ยังไม่เลือกวิชา (เลือกตอนอนุมัติเฉลย)',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
                           Text('ตรวจแบบ${a.strictness.label}'),
                           if (a.dueAt != null)
                             Text('ส่ง ${formatThaiDate(a.dueAt!)}'),
@@ -330,7 +342,7 @@ class QuestionFormArgs {
     this.freeform = false,
   });
 
-  final int subjectId;
+  final int? subjectId;
   final int? gradeLevel;
   final Question? question;
 

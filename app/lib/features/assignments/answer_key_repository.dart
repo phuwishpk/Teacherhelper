@@ -32,8 +32,10 @@ abstract class AnswerKeyRepository {
     int? pageTo,
   });
 
-  /// `POST /assignments/{id}/answer-key/approve`.
-  Future<AnswerKeyState> approve(int assignmentId);
+  /// `POST /assignments/{id}/answer-key/approve`. [subjectId] is required
+  /// (422 `course_required`) for a mirror of Classroom website courseWork
+  /// that has no subject yet (DESIGN §19.9).
+  Future<AnswerKeyState> approve(int assignmentId, {int? subjectId});
 }
 
 class ApiAnswerKeyRepository implements AnswerKeyRepository {
@@ -118,9 +120,10 @@ class ApiAnswerKeyRepository implements AnswerKeyRepository {
   }
 
   @override
-  Future<AnswerKeyState> approve(int assignmentId) async {
+  Future<AnswerKeyState> approve(int assignmentId, {int? subjectId}) async {
     final res = await _dio.post<Object?>(
       '/assignments/$assignmentId/answer-key/approve',
+      data: {'subject_id': ?subjectId},
     );
     return AnswerKeyState.fromJson(unwrapJson(res.data));
   }

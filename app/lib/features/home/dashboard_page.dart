@@ -8,11 +8,14 @@ import '../assignments/assignments_providers.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../dashboard/teacher_overview.dart';
+import '../google_classroom/google_reconnect_banner.dart';
 import '../review/review_providers.dart';
 import 'ai_key_card.dart';
+import 'teacher_attention.dart';
 
 /// Teacher landing page: greeting, the Gemini API key card (DESIGN §10.1),
-/// live overview counts (classrooms, assignments, answers waiting for
+/// the Google reconnect banner and the "รอดำเนินการ" card (§19.11), live
+/// overview counts (classrooms, assignments, answers waiting for
 /// review, open appeals, practice drafts), shortcuts to the Phase 6
 /// dashboards (§14.3) and the getting-started steps of DESIGN §4.
 class DashboardPage extends ConsumerWidget {
@@ -68,7 +71,19 @@ class DashboardPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
+            GoogleReconnectBanner(
+              needsReconnect:
+                  ref.watch(teacherAttentionProvider).value?.needsReconnect ??
+                  false,
+            ),
             AiKeyCard(onOpenSettings: () => context.push(AppRoutes.settings)),
+            const SizedBox(height: 12),
+            TeacherAttentionCard(
+              onOpen: (target) => onNavigate(switch (target) {
+                AttentionTarget.assignments => 2,
+                AttentionTarget.review => 3,
+              }),
+            ),
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),

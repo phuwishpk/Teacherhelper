@@ -209,6 +209,20 @@ class FakeApiServer {
         return (200, _page(const <Object>[]));
       case ('GET', ['practice-items']):
         return (200, _page(const <Object>[]));
+      case ('GET', ['teacher', 'attention']):
+        return (
+          200,
+          {
+            'data': {
+              'keys_pending': 0,
+              'grade_conflicts': 0,
+              'grade_failed': 0,
+              'feedback_failed': 0,
+              'regrade_pending': 0,
+              'needs_reconnect': false,
+            },
+          },
+        );
       case ('GET', ['ml', 'models', 'active']):
         return (404, _error('ยังไม่มีโมเดลที่เปิดใช้', code: 'not_found'));
       // A server without Google Classroom (no OAuth client): the app hides

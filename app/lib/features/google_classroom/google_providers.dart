@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_retry.dart';
 import '../../core/auth/session.dart';
+import '../home/teacher_attention.dart';
 import 'google_auth.dart';
 import 'google_config.dart';
 import 'google_models.dart';
@@ -161,11 +162,78 @@ class GoogleSubmissionsNotifier extends AsyncNotifier<List<GoogleSubmission>> {
         .read(googleClassroomRepositoryProvider)
         .retryGrades(assignmentId);
     await refresh();
+    ref.invalidate(teacherAttentionProvider);
     return queued;
+  }
+
+  /// "รับงานส่งช้า": the row goes back to `new` (late) and the next sync
+  /// round downloads and grades it (DESIGN §19.3).
+  Future<void> acceptLate(GoogleSubmission row) async {
+    final updated = await ref
+        .read(googleClassroomRepositoryProvider)
+        .acceptLate(row.id);
+    final rows = state.value;
+    if (updated == null || rows == null) {
+      await refresh();
+      return;
+    }
+    state = AsyncData([for (final r in rows) r.id == row.id ? updated : r]);
   }
 }
 
 final googleSubmissionsProvider = AsyncNotifierProvider.autoDispose
     .family<GoogleSubmissionsNotifier, List<GoogleSubmission>, int>(
       GoogleSubmissionsNotifier.new,
+    );
+
+/// "คะแนนไม่ตรงกัน" of one assignment (DESIGN §19.3): grades the teacher
+/// changed on the Classroom website, and how each was settled.
+class GradeConflictsNotifier extends AsyncNotifier<List<GradeConflict>> {
+  GradeConflictsNotifier(this.assignmentId);
+
+  final int assignmentId;
+
+  @override
+  Future<List<GradeConflict>> build() {
+    watchSignedInUser(ref, keepAlive: false);
+    return ref
+        .watch(googleClassroomRepositoryProvider)
+        .gradeConflicts(assignmentId);
+  }
+
+  Future<void> refresh() async {
+    ref.invalidateSelf();
+    await future;
+  }
+
+  /// Settles [conflict]; the row is replaced with the server's answer, and
+  /// the home count and the submissions list follow.
+  Future<GradeConflict> resolve(
+    GradeConflict conflict,
+    GradeConflictAction action,
+  ) async {
+    final updated = await ref
+        .read(googleClassroomRepositoryProvider)
+        .resolveConflict(conflict.id, action);
+    final rows = state.value;
+    if (rows != null) {
+      final next = [for (final r in rows) r.id == conflict.id ? updated : r]
+        ..sort(_openFirst);
+      state = AsyncData(next);
+    }
+    ref.invalidate(teacherAttentionProvider);
+    ref.invalidate(googleSubmissionsProvider(assignmentId));
+    return updated;
+  }
+
+  /// The server's order: open rows first, then the newest.
+  static int _openFirst(GradeConflict a, GradeConflict b) {
+    if (a.isOpen != b.isOpen) return a.isOpen ? -1 : 1;
+    return b.id.compareTo(a.id);
+  }
+}
+
+final gradeConflictsProvider = AsyncNotifierProvider.autoDispose
+    .family<GradeConflictsNotifier, List<GradeConflict>, int>(
+      GradeConflictsNotifier.new,
     );

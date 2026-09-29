@@ -62,6 +62,25 @@ abstract class GoogleClassroomRepository {
   /// Sends the grades of `grade_failed` rows again; returns how many were
   /// queued when the server says.
   Future<int?> retryGrades(int assignmentId);
+
+  /// "ซิงก์ตอนนี้": queues one sync round of the classroom (new courseWork
+  /// from the website, hand-ins, grades) instead of waiting for the cron
+  /// (DESIGN §19.3). 409 `google_reconnect_required`.
+  Future<void> syncNow(int classroomId);
+
+  /// "คะแนนไม่ตรงกัน" of an assignment, open ones first.
+  Future<List<GradeConflict>> gradeConflicts(int assignmentId);
+
+  /// Settles one conflict. 409 `conflict_resolved` / `coursework_not_owned`.
+  Future<GradeConflict> resolveConflict(
+    int conflictId,
+    GradeConflictAction action,
+  );
+
+  /// Takes a hand-in the late policy refused (`rejected_late` -> `new`);
+  /// the next sync round downloads and grades it. 409
+  /// `import_not_rejected`.
+  Future<GoogleSubmission?> acceptLate(int importId);
 }
 
 class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
@@ -263,6 +282,43 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
         ? ((json['queued'] ?? json['retried'] ?? json['count']) as num).toInt()
         : null;
   }
+
+  @override
+  Future<void> syncNow(int classroomId) async {
+    await _dio.post<Object?>('/classrooms/$classroomId/google-sync');
+  }
+
+  @override
+  Future<List<GradeConflict>> gradeConflicts(int assignmentId) async {
+    final res = await _dio.get<Object?>(
+      '/assignments/$assignmentId/grade-conflicts',
+    );
+    return unwrapList(res.data).map(GradeConflict.fromJson).toList();
+  }
+
+  @override
+  Future<GradeConflict> resolveConflict(
+    int conflictId,
+    GradeConflictAction action,
+  ) async {
+    final res = await _dio.post<Object?>(
+      '/grade-conflicts/$conflictId/resolve',
+      data: {'action': action.apiValue},
+    );
+    return GradeConflict.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<GoogleSubmission?> acceptLate(int importId) async {
+    final res = await _dio.post<Object?>(
+      '/google-submissions/$importId/accept-late',
+    );
+    final body = res.data;
+    if (body is Map && (body['id'] != null || body['data'] is Map)) {
+      return GoogleSubmission.fromJson(unwrapJson(body));
+    }
+    return null;
+  }
 }
 
 final googleClassroomRepositoryProvider = Provider<GoogleClassroomRepository>(
@@ -301,6 +357,11 @@ String googleErrorMessage(Object error) {
       'คอร์สนี้ผูกกับห้องเรียนในแอปแล้ว เลือกคอร์สอื่น หรือเปิดห้องที่ผูกไว้',
     'classroom_not_linked' =>
       'ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ผูกที่หน้าห้องเรียนก่อน',
+    'coursework_not_owned' =>
+      'งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้ '
+          'เปิดใน Classroom แล้วกรอกคะแนนเอง',
+    'conflict_resolved' => 'รายการนี้ตัดสินไปแล้ว ดึงรายการใหม่อีกครั้ง',
+    'import_not_rejected' => 'งานนี้ไม่ได้ถูกปฏิเสธเพราะส่งช้าแล้ว',
     'ProjectPermissionDenied' || 'project_permission_denied' =>
       'งานนี้สร้างในเว็บ Classroom เอง แอปส่งคะแนนกลับหรือส่งคืนงานให้ไม่ได้ '
           'ต้องสั่งงานผ่านปุ่ม "โพสต์ลง Classroom" ในแอป',

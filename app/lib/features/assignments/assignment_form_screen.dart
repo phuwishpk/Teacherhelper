@@ -295,8 +295,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('รับงานส่งช้า'),
-              subtitle: const Text(
-                'งานที่ส่งหลังกำหนดยังตรวจได้ และมีป้าย "ส่งช้า"',
+              subtitle: Text(
+                _acceptLate
+                    ? 'งานที่ส่งหลังกำหนดยังตรวจได้ และมีป้าย "ส่งช้า"'
+                    : 'งานที่ส่งหลังกำหนดไม่ถูกตรวจ นักเรียนส่งในแอปไม่ได้ '
+                          'งานจาก Classroom ครูกด "รับงานส่งช้า" เองได้ที่หน้างานที่ส่ง',
               ),
               value: _acceptLate,
               onChanged: (v) => setState(() => _acceptLate = v),

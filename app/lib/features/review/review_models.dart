@@ -253,6 +253,7 @@ class SubmissionSummary {
     this.late = false,
     this.regradePending = false,
     this.publishable,
+    this.totalOverridden = false,
   });
 
   final int id;
@@ -277,6 +278,10 @@ class SubmissionSummary {
   /// The server's verdict (`publishable`), when it sent one.
   final bool? publishable;
 
+  /// The teacher took the total from Google Classroom (`total_override`,
+  /// §19.3): [totalScore] of a published submission is that total.
+  final bool totalOverridden;
+
   bool get isPublished => status == 'published';
   bool get isGrading => status == 'grading';
   bool get canPublish =>
@@ -297,6 +302,7 @@ class SubmissionSummary {
         publishable: json['publishable'] is bool
             ? json['publishable'] as bool
             : null,
+        totalOverridden: json['total_override'] != null,
       );
 
   /// Fallback when the queue has no `meta.submissions`: derived from rows.

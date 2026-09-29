@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import '../helpers/pump_screen.dart';
 import '../review/review_fixtures.dart';
+import '../helpers/home_fakes.dart';
 
 class _NoClassrooms extends Fake implements ClassroomsRepository {
   @override
@@ -47,6 +48,7 @@ Future<void> _pumpDashboard(WidgetTester tester, FakeAiKeyRepository keys) {
         aiKeyRepositoryProvider.overrideWithValue(keys),
         classroomsRepositoryProvider.overrideWithValue(_NoClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(_NoAssignments()),
+        ...homeOverrides(),
       ],
       child: MaterialApp.router(routerConfig: router),
     ),

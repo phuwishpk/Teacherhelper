@@ -76,7 +76,10 @@ class Assignment {
 
   final int id;
   final int classroomId;
-  final int subjectId;
+
+  /// Null only for a mirror of courseWork created on the Classroom website
+  /// until the teacher picks the subject when approving its key (§19.3).
+  final int? subjectId;
   final String title;
   final Strictness strictness;
 
@@ -100,6 +103,16 @@ class Assignment {
 
   /// `app`, or `classroom_web` for work created on the Classroom website.
   final String source;
+
+  /// A mirror of courseWork the teacher created on the Classroom website
+  /// (DESIGN §19.3): its hand-ins are graded here, but the app cannot set
+  /// its grades in Classroom ("เปิดใน Classroom" and "คัดลอกคะแนน" instead).
+  bool get fromClassroomWeb =>
+      source == 'classroom_web' ||
+      googleLink?.origin == AssignmentGoogleLink.originClassroomWeb;
+
+  /// The teacher still has to pick a subject (when approving the key).
+  bool get needsSubject => subjectId == null;
 
   /// Hand-ins after the due date are still graded (labelled late).
   final bool acceptLate;
@@ -153,7 +166,7 @@ class Assignment {
     return Assignment(
       id: (json['id'] as num).toInt(),
       classroomId: ((json['classroom_id'] ?? classroom?['id']) as num).toInt(),
-      subjectId: ((json['subject_id'] ?? subject?['id']) as num).toInt(),
+      subjectId: ((json['subject_id'] ?? subject?['id']) as num?)?.toInt(),
       title: json['title'] as String,
       strictness: Strictness.fromApi(json['strictness'] as String?),
       status: json['status'] as String? ?? 'draft',
@@ -183,16 +196,25 @@ class Assignment {
   }
 }
 
-/// The Classroom `courseWork` made by "โพสต์ลง Classroom" (DESIGN §18.2):
+/// The Classroom `courseWork` of an assignment (DESIGN §18.2, §19.3):
 /// `google_link` of an assignment and the answer of
-/// `POST /assignments/{id}/google-post`.
+/// `POST /assignments/{id}/google-post`. [origin] is `app` for work posted
+/// by "โพสต์ลง Classroom", or `classroom_web` for courseWork the teacher
+/// created on the Classroom website and the sync mirrored.
 class AssignmentGoogleLink {
   const AssignmentGoogleLink({
     required this.courseWorkId,
     required this.alternateLink,
     this.hasBlankWorksheet = false,
     this.postedAt,
-  });
+    this.origin = originApp,
+    bool? canPushGrades,
+    this.materials = const [],
+    this.lastSyncedAt,
+  }) : canPushGrades = canPushGrades ?? origin != originClassroomWeb;
+
+  static const originApp = 'app';
+  static const originClassroomWeb = 'classroom_web';
 
   final String courseWorkId;
 
@@ -202,9 +224,24 @@ class AssignmentGoogleLink {
   /// The anonymous spare worksheet (§18.3) is attached as material.
   final bool hasBlankWorksheet;
   final DateTime? postedAt;
+  final String origin;
+
+  /// Classroom accepts grades only for courseWork this project created
+  /// (Google answers `ProjectPermissionDenied` otherwise, §19.3).
+  final bool canPushGrades;
+
+  /// Files the teacher attached to the courseWork on the website.
+  final List<CourseWorkMaterial> materials;
+
+  /// The last sync of its hand-ins and grades.
+  final DateTime? lastSyncedAt;
+
+  bool get fromClassroomWeb => origin == originClassroomWeb;
 
   factory AssignmentGoogleLink.fromJson(Map<String, dynamic> json) {
     final posted = json['posted_at'];
+    final synced = json['last_synced_at'];
+    final materials = json['materials'];
     return AssignmentGoogleLink(
       courseWorkId: json['course_work_id'].toString(),
       alternateLink: (json['alternate_link'] ?? '') as String,
@@ -213,6 +250,45 @@ class AssignmentGoogleLink {
           (json['drive_file_id'] is String &&
               (json['drive_file_id'] as String).isNotEmpty),
       postedAt: posted is String ? DateTime.tryParse(posted) : null,
+      origin: json['origin'] as String? ?? originApp,
+      canPushGrades: json['can_push_grades'] is bool
+          ? json['can_push_grades'] as bool
+          : null,
+      materials: [
+        if (materials is List)
+          for (final m in materials)
+            if (m is Map)
+              CourseWorkMaterial.fromJson(m.cast<String, dynamic>()),
+      ],
+      lastSyncedAt: synced is String ? DateTime.tryParse(synced) : null,
+    );
+  }
+}
+
+/// A Drive file attached to courseWork on the Classroom website
+/// (`google_link.materials`). Only PDFs and pictures can be read for the
+/// AI draft of the key; Google Docs/Sheets/Slides cannot (§19.3).
+class CourseWorkMaterial {
+  const CourseWorkMaterial({
+    required this.title,
+    required this.mimeType,
+    required this.supported,
+  });
+
+  final String title;
+  final String mimeType;
+  final bool supported;
+
+  bool get isGoogleDoc => mimeType.startsWith('application/vnd.google-apps.');
+
+  factory CourseWorkMaterial.fromJson(Map<String, dynamic> json) {
+    final mime = (json['mime_type'] ?? '') as String;
+    return CourseWorkMaterial(
+      title: (json['title'] ?? 'ไฟล์แนบ') as String,
+      mimeType: mime,
+      supported: json['supported'] is bool
+          ? json['supported'] as bool
+          : mime == 'application/pdf' || mime.startsWith('image/'),
     );
   }
 }

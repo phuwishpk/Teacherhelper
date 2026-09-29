@@ -409,6 +409,8 @@ class GoogleSubmission {
     this.lastError,
     this.late = false,
     this.updatedAt,
+    this.pushedGrade,
+    this.classroomGrade,
   });
 
   /// `classroom_submission_imports.id` (used by `/google-submissions/{id}`).
@@ -430,6 +432,15 @@ class GoogleSubmission {
   /// Classroom marked the hand-in late.
   final bool late;
   final DateTime? updatedAt;
+
+  /// The grade the app sent to Classroom last (app courseWork only).
+  final double? pushedGrade;
+
+  /// Classroom's `assignedGrade` at the last sync; null = empty there.
+  final double? classroomGrade;
+
+  /// The assignment refused it as late; the teacher may take it anyway.
+  bool get canAcceptLate => state == SubmissionImportState.rejectedLate;
 
   String get studentLabel => student?.label ?? 'ยังไม่ได้จับคู่นักเรียน';
 
@@ -459,9 +470,131 @@ class GoogleSubmission {
       updatedAt: json['updated_at'] is String
           ? DateTime.tryParse(json['updated_at'] as String)
           : null,
+      pushedGrade: _double(json['pushed_grade']),
+      classroomGrade: _double(json['classroom_grade']),
     );
   }
 }
+
+/// `grade_conflicts.status` (DESIGN §19.8).
+enum GradeConflictStatus {
+  open('open', 'ยังไม่ได้เลือก'),
+  pushedApp('pushed_app', 'ส่งคะแนนจากแอปแล้ว'),
+  acceptedClassroom('accepted_classroom', 'ใช้คะแนนจาก Classroom แล้ว'),
+  dismissed('dismissed', 'ไม่สนใจแล้ว');
+
+  const GradeConflictStatus(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static GradeConflictStatus fromApi(Object? value) => values.firstWhere(
+    (s) => s.apiValue == value,
+    orElse: () => GradeConflictStatus.open,
+  );
+}
+
+/// How the teacher settles one "คะแนนไม่ตรงกัน" row
+/// (`POST /grade-conflicts/{id}/resolve`, DESIGN §19.3).
+enum GradeConflictAction {
+  /// Set Classroom's grade to the app's effective total (app courseWork).
+  pushApp('push_app'),
+
+  /// Take Classroom's grade as the submission's total (`total_override`).
+  acceptClassroom('accept_classroom'),
+
+  /// Change neither side; the row stays settled until a score changes.
+  dismiss('dismiss');
+
+  const GradeConflictAction(this.apiValue);
+
+  final String apiValue;
+}
+
+/// One row of `GET /assignments/{id}/grade-conflicts`: the teacher changed
+/// a grade on the Classroom website, so it no longer matches the app.
+class GradeConflict {
+  const GradeConflict({
+    required this.id,
+    required this.submissionId,
+    required this.status,
+    this.importId,
+    this.student,
+    this.appScore,
+    this.classroomScore,
+    this.reason,
+    this.detectedAt,
+    this.resolvedAt,
+    this.canPushApp = true,
+    this.alternateLink,
+  });
+
+  final int id;
+  final int submissionId;
+  final int? importId;
+  final SubmissionStudent? student;
+
+  /// The app's effective total when the difference was found or settled.
+  final double? appScore;
+  final double? classroomScore;
+  final GradeConflictStatus status;
+
+  /// 'รับคะแนนจาก Classroom' once accepted.
+  final String? reason;
+  final DateTime? detectedAt;
+  final DateTime? resolvedAt;
+
+  /// False for courseWork created on the Classroom website: the app
+  /// cannot set its grades (409 `coursework_not_owned`).
+  final bool canPushApp;
+
+  /// The student's hand-in in the Classroom web app.
+  final String? alternateLink;
+
+  bool get isOpen => status == GradeConflictStatus.open;
+
+  String get studentLabel => student?.label ?? 'นักเรียน';
+
+  factory GradeConflict.fromJson(Map<String, dynamic> json) {
+    final student = json['student'];
+    DateTime? time(String key) => switch (json[key]) {
+      String s => DateTime.tryParse(s),
+      _ => null,
+    };
+    return GradeConflict(
+      id: (json['id'] as num).toInt(),
+      submissionId: (json['submission_id'] as num).toInt(),
+      importId: (json['import_id'] as num?)?.toInt(),
+      student: student is Map
+          ? SubmissionStudent(
+              id: (student['id'] as num).toInt(),
+              name: (student['name'] ?? '') as String,
+              studentNumber: (student['student_number'] as num?)?.toInt(),
+            )
+          : null,
+      appScore: _double(json['app_score']),
+      classroomScore: _double(json['classroom_score']),
+      status: GradeConflictStatus.fromApi(json['status']),
+      reason: _nonEmpty(json['reason']),
+      detectedAt: time('detected_at'),
+      resolvedAt: time('resolved_at'),
+      canPushApp: json['can_push_app'] != false,
+      alternateLink: _nonEmpty(json['alternate_link']),
+    );
+  }
+}
+
+/// Scores are DECIMAL columns: Laravel may send them as strings ("7.50").
+double? _double(Object? value) => switch (value) {
+  num n => n.toDouble(),
+  String s => double.tryParse(s),
+  _ => null,
+};
+
+/// A score as the teacher reads it: no ".0", at most two decimals.
+String formatScore(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 
 String? _nonEmpty(Object? value) =>
     value is String && value.trim().isNotEmpty ? value : null;

@@ -22,6 +22,7 @@ import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
 import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
+import '../../features/google_classroom/grade_conflicts_screen.dart';
 import '../../features/google_classroom/roster_matching_screen.dart';
 import '../../features/google_classroom/submissions_screen.dart';
 import '../../features/home/teacher_shell.dart';
@@ -72,6 +73,10 @@ abstract final class AppRoutes {
       '/classrooms/$id/google-roster';
   static String googleSubmissions(int assignmentId) =>
       '/assignments/$assignmentId/google-submissions';
+
+  /// "คะแนนไม่ตรงกัน": grades changed on the Classroom website (§19.3).
+  static String gradeConflicts(int assignmentId) =>
+      '/assignments/$assignmentId/grade-conflicts';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -349,6 +354,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'google-submissions',
             builder: (context, state) =>
                 GoogleSubmissionsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'grade-conflicts',
+            builder: (context, state) =>
+                GradeConflictsScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'review',

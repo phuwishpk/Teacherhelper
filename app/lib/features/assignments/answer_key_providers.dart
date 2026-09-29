@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
+import '../home/teacher_attention.dart';
 import 'answer_key_models.dart';
 import 'answer_key_repository.dart';
 import 'assignments_providers.dart';
@@ -44,10 +45,11 @@ class AnswerKeyNotifier extends AsyncNotifier<AnswerKeyState> {
   /// as filled now, polled on while Gemini is still reading.
   void accept(KeyRequestResult result) => _set(result.answerKey);
 
-  Future<AnswerKeyState> approve() async {
-    final key = await _repo.approve(assignmentId);
+  Future<AnswerKeyState> approve({int? subjectId}) async {
+    final key = await _repo.approve(assignmentId, subjectId: subjectId);
     _set(key);
     ref.invalidate(assignmentsProvider);
+    ref.invalidate(teacherAttentionProvider);
     return key;
   }
 

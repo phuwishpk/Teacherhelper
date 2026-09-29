@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../practice/practice_fixtures.dart';
 import '../review/review_fixtures.dart';
+import '../helpers/home_fakes.dart';
 
 class _Classrooms extends Fake implements ClassroomsRepository {
   @override
@@ -151,6 +152,7 @@ void main() {
           aiKeyRepositoryProvider.overrideWithValue(
             FakeAiKeyRepository(const AiKeyStatus(configured: true)),
           ),
+          ...homeOverrides(),
         ],
         child: MaterialApp(
           home: Scaffold(

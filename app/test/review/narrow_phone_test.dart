@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/pump_screen.dart';
 import 'review_fixtures.dart';
+import '../helpers/home_fakes.dart';
 
 class _OneAssignment extends Fake implements AssignmentsRepository {
   @override
@@ -136,6 +137,7 @@ void main() {
         ),
         classroomsRepositoryProvider.overrideWithValue(_NoClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(_NoAssignments()),
+        ...homeOverrides(),
       ],
     );
     expect(tester.takeException(), isNull);
