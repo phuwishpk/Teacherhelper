@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/classroom_google_section.dart';
+import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
 import '../scan/offline_cache_repository.dart';
 import '../worksheets/print_flow.dart';
 import 'classroom.dart';
@@ -308,6 +309,16 @@ class _StudentTile extends ConsumerWidget {
         child: Text('${student.studentNumber}'),
       ),
       title: Text(student.name),
+      subtitle: student.leftCourse
+          ? Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: StatusChip(
+                key: ValueKey('left_course_${student.studentId}'),
+                label: leftCourseLabel,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
+            )
+          : null,
       onTap: () => context.push(
         AppRoutes.studentMastery(classroomId, student.studentId),
       ),

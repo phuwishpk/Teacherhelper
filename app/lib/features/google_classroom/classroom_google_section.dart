@@ -7,6 +7,7 @@ import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'google_providers.dart';
+import 'roster_sync_dialog.dart';
 import 'google_repository.dart';
 
 /// Explains the grade-return limit of the Classroom API (DESIGN §18.2);
@@ -62,6 +63,28 @@ class _ClassroomGoogleSectionState
     }
   }
 
+  /// "ซิงก์รายชื่อ" (DESIGN §19.2): new course accounts are appended with
+  /// their one-time PINs, students who left are marked, names never change.
+  Future<void> _syncRoster() async {
+    final id = widget.classroom.id;
+    setState(() => _busy = true);
+    try {
+      final result = await ref
+          .read(googleClassroomRepositoryProvider)
+          .syncRoster(id);
+      ref.invalidate(rosterProvider(id));
+      if (result.added.isNotEmpty) ref.invalidate(classroomsProvider);
+      if (mounted) await showRosterSyncResult(context, result);
+    } catch (e) {
+      if (isGoogleReconnectError(e)) {
+        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
+      }
+      if (mounted) showMessage(context, googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!ref.watch(googleClassroomEnabledProvider)) {
@@ -102,7 +125,7 @@ class _ClassroomGoogleSectionState
               const SizedBox(height: 4),
               Text(
                 'จับคู่บัญชี Google ของนักเรียนกับเลขที่ในห้อง เพื่อให้รู้ว่างานที่ส่งมาเป็นของใคร '
-                'และส่งคะแนนกลับได้',
+                'และส่งคะแนนกลับได้ กด "ซิงก์รายชื่อ" เพื่อเพิ่มนักเรียนที่เพิ่งเข้าคอร์ส',
                 style: muted,
               ),
               const SizedBox(height: 12),
@@ -120,6 +143,12 @@ class _ClassroomGoogleSectionState
                           ),
                     icon: const Icon(Icons.people_alt_outlined),
                     label: const Text('จับคู่นักเรียน'),
+                  ),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('google_roster_sync'),
+                    onPressed: _busy ? null : _syncRoster,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('ซิงก์รายชื่อ'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _busy ? null : () => _unlink(link),

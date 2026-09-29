@@ -18,6 +18,17 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
 
   GoogleStatus statusValue;
   List<GoogleRosterEntry> rosterRows;
+
+  /// `import-preview` answers by course id.
+  Map<String, ClassroomImportPreview> previews = {};
+
+  /// Answer of `POST /classrooms/import-google`; defaults to a room built
+  /// from the request with a PIN per student.
+  ClassroomImportResult? importResult;
+  RosterSyncResult syncResult = const RosterSyncResult();
+  final previewCalls = <String>[];
+  final imports = <ClassroomImportRequest>[];
+  final syncs = <int>[];
   List<GoogleSubmission> submissionRows;
   List<GoogleCourse> courseRows;
   Object? error;
@@ -74,6 +85,52 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
   Future<List<GoogleCourse>> courses() async {
     await _maybeFail();
     return courseRows;
+  }
+
+  @override
+  Future<ClassroomImportPreview> importPreview(String courseId) async {
+    previewCalls.add(courseId);
+    await _maybeFail();
+    return previews[courseId]!;
+  }
+
+  @override
+  Future<ClassroomImportResult> importClassroom(
+    ClassroomImportRequest request,
+  ) async {
+    await _maybeFail();
+    imports.add(request);
+    return importResult ??
+        ClassroomImportResult(
+          classroom: Classroom(
+            id: 70,
+            name: request.name,
+            gradeLevel: request.gradeLevel,
+            academicYear: request.academicYear,
+            classCode: 'GCL001',
+            studentCount: request.numbers.length,
+            googleLink: ClassroomGoogleLink(
+              courseId: request.courseId,
+              courseName: request.name,
+            ),
+          ),
+          students: [
+            for (final (i, e) in request.numbers.entries.indexed)
+              EnrolledStudent(
+                studentId: 500 + i,
+                studentNumber: e.value,
+                name: 'นักเรียน ${e.key}',
+                pin: '${123400 + i}',
+              ),
+          ],
+        );
+  }
+
+  @override
+  Future<RosterSyncResult> syncRoster(int classroomId) async {
+    await _maybeFail();
+    syncs.add(classroomId);
+    return syncResult;
   }
 
   @override

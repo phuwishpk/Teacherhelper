@@ -83,16 +83,27 @@ class RosterStudent {
     required this.studentId,
     required this.studentNumber,
     required this.name,
+    this.leftCourseAt,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
 
+  /// When the student's Google account left the linked course (DESIGN
+  /// §19.2): the student stays, shown as "ไม่อยู่ใน Classroom แล้ว".
+  final DateTime? leftCourseAt;
+
+  bool get leftCourse => leftCourseAt != null;
+
   factory RosterStudent.fromJson(Map<String, dynamic> json) => RosterStudent(
     studentId: ((json['student_id'] ?? json['id']) as num).toInt(),
     studentNumber: (json['student_number'] as num).toInt(),
     name: json['name'] as String,
+    leftCourseAt: switch (json['left_course_at']) {
+      String s => DateTime.tryParse(s),
+      _ => null,
+    },
   );
 }
 

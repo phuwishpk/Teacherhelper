@@ -25,6 +25,18 @@ abstract class GoogleClassroomRepository {
   Future<void> disconnect();
 
   Future<List<GoogleCourse>> courses();
+
+  /// The room, grade, year and numbered students proposed for importing
+  /// [courseId] (DESIGN §19.2). 409 `course_already_linked`.
+  Future<ClassroomImportPreview> importPreview(String courseId);
+
+  /// Creates the room, its students, the course link and every account
+  /// match in one step. The answer carries the one-time PINs.
+  Future<ClassroomImportResult> importClassroom(ClassroomImportRequest request);
+
+  /// Appends new course accounts, marks students who left and matches
+  /// returning ones back ("ซิงก์รายชื่อ"). 422 `classroom_not_linked`.
+  Future<RosterSyncResult> syncRoster(int classroomId);
   Future<ClassroomGoogleLink> link(int classroomId, GoogleCourse course);
   Future<void> unlink(int classroomId);
   Future<List<GoogleRosterEntry>> roster(int classroomId);
@@ -102,6 +114,36 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
   Future<List<GoogleCourse>> courses() async {
     final res = await _dio.get<Object?>('/google/courses', options: _slow);
     return unwrapList(res.data).map(GoogleCourse.fromJson).toList();
+  }
+
+  @override
+  Future<ClassroomImportPreview> importPreview(String courseId) async {
+    final res = await _dio.get<Object?>(
+      '/google/courses/${Uri.encodeComponent(courseId)}/import-preview',
+      options: _slow,
+    );
+    return ClassroomImportPreview.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<ClassroomImportResult> importClassroom(
+    ClassroomImportRequest request,
+  ) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/import-google',
+      data: request.toJson(),
+      options: _slow,
+    );
+    return ClassroomImportResult.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<RosterSyncResult> syncRoster(int classroomId) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/$classroomId/google-roster/sync',
+      options: _slow,
+    );
+    return RosterSyncResult.fromJson(unwrapJson(res.data));
   }
 
   @override
@@ -255,6 +297,8 @@ String googleErrorMessage(Object error) {
     'google_scope_missing' =>
       'ต้องติ๊กอนุญาตทุกสิทธิ์ที่แอปขอ (Classroom และ Drive) กดเชื่อมอีกครั้งแล้วอนุญาตให้ครบ',
     'already_posted' => 'การบ้านนี้โพสต์ลง Google Classroom แล้ว',
+    'course_already_linked' =>
+      'คอร์สนี้ผูกกับห้องเรียนในแอปแล้ว เลือกคอร์สอื่น หรือเปิดห้องที่ผูกไว้',
     'classroom_not_linked' =>
       'ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ผูกที่หน้าห้องเรียนก่อน',
     'ProjectPermissionDenied' || 'project_permission_denied' =>

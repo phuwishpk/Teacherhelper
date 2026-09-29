@@ -49,6 +49,18 @@ class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
     return updated;
   }
 
+  /// A room created elsewhere (imported from Google Classroom, DESIGN
+  /// §19.2), so the list and the detail screen show it without a reload.
+  void addCreated(Classroom created) {
+    final list = state.value;
+    if (list == null) return;
+    state = AsyncData([
+      for (final c in list)
+        if (c.id != created.id) c,
+      created,
+    ]);
+  }
+
   /// After linking or unlinking a Google Classroom course (DESIGN §18.6),
   /// so the screens update without waiting for a reload.
   void setGoogleLink(int id, ClassroomGoogleLink? link) {

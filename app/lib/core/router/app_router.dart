@@ -19,6 +19,7 @@ import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
+import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/roster_matching_screen.dart';
 import '../../features/google_classroom/submissions_screen.dart';
@@ -60,6 +61,12 @@ abstract final class AppRoutes {
   /// Google Classroom (DESIGN §18.7): course picker, student matching and
   /// the submissions of a posted assignment.
   static String classroomGoogleLink(int id) => '/classrooms/$id/google-link';
+
+  /// Import a classroom from Google Classroom (DESIGN §19.2): course
+  /// picker, then the preview of one course.
+  static const classroomImportGoogle = '/classrooms/import-google';
+  static String classroomImportPreview(String courseId) =>
+      '$classroomImportGoogle/${Uri.encodeComponent(courseId)}';
   static String classroomGoogleRoster(int id) =>
       '/classrooms/$id/google-roster';
   static String googleSubmissions(int assignmentId) =>
@@ -206,6 +213,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.classroomNew,
         builder: (context, state) => const ClassroomFormScreen(),
+      ),
+      // Before '/classrooms/:id', which would take "import-google" as an id.
+      GoRoute(
+        path: AppRoutes.classroomImportGoogle,
+        builder: (context, state) => const GoogleCoursePickerScreen.forImport(),
+        routes: [
+          GoRoute(
+            path: ':courseId',
+            builder: (context, state) => ClassroomImportScreen(
+              courseId: state.pathParameters['courseId']!,
+            ),
+          ),
+        ],
       ),
       GoRoute(
         path: '/classrooms/:id',

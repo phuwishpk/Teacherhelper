@@ -120,6 +120,15 @@ final googleCoursesProvider = FutureProvider.autoDispose<List<GoogleCourse>>((
   return ref.watch(googleClassroomRepositoryProvider).courses();
 });
 
+/// What importing a course would create (DESIGN §19.2 preview screen).
+final googleImportPreviewProvider = FutureProvider.autoDispose
+    .family<ClassroomImportPreview, String>((ref, courseId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref
+          .watch(googleClassroomRepositoryProvider)
+          .importPreview(courseId);
+    });
+
 /// Students of the linked course with suggested pairs (matching screen).
 final googleRosterProvider = FutureProvider.autoDispose
     .family<List<GoogleRosterEntry>, int>((ref, classroomId) {
