@@ -2667,6 +2667,7 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 
 - implement (build ข้อ 3): front matter รับ `thinking:` และ `max_output_tokens:` แล้ว (`GeminiRequest.thinkingLevel`, `maxOutputTokens` → `generationConfig.thinkingConfig`, `maxOutputTokens`) ใช้กับ `answer_key_read` (medium, 16,384) และ `answer_key_draft` (medium, 4,096) ถ้า `GEMINI_THINKING_LEVEL` ว่าง (โมเดลไม่มี thinking level) ไม่ส่ง thinking เลย
 - implement (build ข้อ 7): ทุก prompt มีค่าตามตารางแล้วโดยเพิ่มเวอร์ชัน (`extract.short.v2`, `extract.show_work.v3`, `extract.open.v2`, `extract_batch.general.v2`, `extract_page.general.v2`, `explanation.general.v3`, `practice_gen.general.v2`, `rubric_draft.*.v2` เนื้อหาเท่าเดิม) `GEMINI_THINKING_LEVEL` เหลือเป็นค่าตั้งต้นของ prompt ที่ไม่ระบุ (`check` ของ `eduvision:gemini-check`) คำตอบที่ `finishReason = MAX_TOKENS` ถูกนับเป็น `invalid_output` ส่งซ้ำหนึ่งครั้งตามกติกาเดิม และ `ai_calls.error` เขียนว่า "output cut off at maxOutputTokens (finishReason MAX_TOKENS)"
+- **ต้องตรวจหลังตรวจงานจริงครั้งแรก**: calibration (§21.10) วัดเฉพาะงาน extract, หน้า และเอกสาร ยังไม่ได้วัด `explanation` (512 token, thinking low) ถ้า Gemini 3.x นับ thinking token รวมใน `maxOutputTokens` คำอธิบายอาจถูกตัดบ่อย ซึ่งจะกลายเป็น `invalid_output` ส่งซ้ำ และจ่ายสองเท่า หลังตรวจงานจริงรอบแรกให้ดู `ai_calls` ของ purpose `explanation` ว่ามี error "finishReason MAX_TOKENS" กี่แถว ถ้าเกินราว 2% ให้เพิ่มเวอร์ชัน prompt แล้วขึ้นเพดานเป็น 1,024
 
 ### 21.7 ข้อ 6–7: ใช้คำอธิบายซ้ำ และ "เฉพาะคะแนน"
 
