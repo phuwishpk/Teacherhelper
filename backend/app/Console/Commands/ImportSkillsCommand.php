@@ -9,10 +9,13 @@ use Illuminate\Console\Command;
 /**
  * php artisan eduvision:import-skills {csv} [--school=ID]
  *
- * Imports curriculum indicators (DESIGN §2.3 CSV: subject_code,skill_code,
- * parent_code,grade_level,name; UTF-8 without BOM). With --school the rows
- * become that school's own sub-skills (DESIGN §8.2 school_id). Re-running
- * updates rows with the same (school, skill_code) instead of duplicating them.
+ * Imports the core-curriculum indicators (DESIGN §20.2, docs/curriculum:
+ * subject_code,level,code,parent_code,grade_level,name, or the earlier
+ * subject_code,skill_code,parent_code,grade_level,name; UTF-8). With
+ * --school the rows become that school's own rows (DESIGN §8.2 school_id).
+ * Re-running updates rows with the same (school, code) instead of
+ * duplicating them. Rows with errors are skipped and listed with their line;
+ * the exit code is then 1 (the other rows are imported).
  */
 class ImportSkillsCommand extends Command
 {
@@ -34,6 +37,7 @@ class ImportSkillsCommand extends Command
             return self::INVALID;
         }
 
+        $started = microtime(true);
         try {
             $result = $importer->importFile($path, $schoolId);
         } catch (SkillImportException $e) {
@@ -50,13 +54,24 @@ class ImportSkillsCommand extends Command
         }
 
         $this->info(sprintf(
-            'Imported %d skills (%d created, %d updated), %d new subjects%s.',
+            'Imported %d skills (%d created, %d updated, %d unchanged), %d new subjects%s in %.1f s.',
             $result->rows(),
             $result->created,
             $result->updated,
+            $result->unchanged,
             $result->subjectsCreated,
             $schoolId === null ? '' : " for school {$schoolId}",
+            microtime(true) - $started,
         ));
+
+        if ($result->hasErrors()) {
+            $this->error(count($result->errors).' rows had errors:');
+            foreach ($result->errorLines() as $line) {
+                $this->line('  - '.$line);
+            }
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

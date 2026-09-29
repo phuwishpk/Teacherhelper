@@ -80,6 +80,9 @@ trait SecurityWorld
     /** A curriculum skill every school sees. */
     protected Skill $curriculumSkill;
 
+    /** An indicator teacher A added for school A (DESIGN §20.2, "ครูเพิ่มเอง"). */
+    protected Skill $teacherSkillA;
+
     protected Assignment $assignmentA;
 
     protected Question $shortA;
@@ -141,7 +144,12 @@ trait SecurityWorld
 
         $this->subject = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
         $this->curriculumSkill = Skill::factory()->create(['subject_id' => $this->subject->id, 'code' => 'ค 1.1 ป.4/1', 'name' => 'จำนวนนับ']);
-        $this->skillA = Skill::factory()->create(['subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id, 'code' => 'ค 1.1 ป.4/1-ก', 'name' => 'ทักษะย่อยของโรงเรียน ก']);
+        $this->skillA = Skill::factory()->create(['subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id, 'code' => 'ค 1.1 ป.4/1-ก', 'name' => 'ทักษะย่อยของโรงเรียน ก', 'level' => Skill::LEVEL_SUB_INDICATOR, 'source' => Skill::SOURCE_SCHOOL_ADMIN]);
+        $this->teacherSkillA = Skill::factory()->create([
+            'subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id,
+            'code' => 'ค 1.1 ป.4/1/ค1', 'name' => 'ครู ก เพิ่มเอง', 'level' => Skill::LEVEL_SUB_INDICATOR,
+            'source' => Skill::SOURCE_TEACHER, 'created_by' => $this->teacherA->id,
+        ]);
 
         $this->assignmentA = Assignment::factory()->for_classroom($this->classroomA)->create([
             'subject_id' => $this->subject->id,

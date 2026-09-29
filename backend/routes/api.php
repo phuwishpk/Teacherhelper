@@ -106,6 +106,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('login-card-prints/{id}/file', [LoginCardController::class, 'download'])->name('api.login-card-prints.file');
 
                 Route::get('skills', [SkillController::class, 'index'])->name('api.skills.index');
+                // A teacher adds a missing indicator for the school, and edits it before any observation (§20.2).
+                Route::post('skills', [SkillController::class, 'store'])->name('api.skills.store');
+                Route::patch('skills/{id}', [SkillController::class, 'update'])->name('api.skills.update');
                 Route::get('subjects', [SubjectController::class, 'index'])->name('api.subjects.index');
 
                 // Assignments, rubric and worksheets (§9.3).

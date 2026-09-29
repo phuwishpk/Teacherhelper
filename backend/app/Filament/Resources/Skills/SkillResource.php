@@ -5,6 +5,10 @@ namespace App\Filament\Resources\Skills;
 use App\Filament\Resources\Skills\Pages\ManageSkills;
 use App\Models\Skill;
 use BackedEnum;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -15,9 +19,10 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * DESIGN §2.3 / §7.5: skills are a fixed list imported from CSV. This resource
- * is read-only (SkillPolicy denies create/update/delete); the import lives in
- * ManageSkills as a header action.
+ * DESIGN §2.3 / §7.5 / §20.2: the curriculum is imported from CSV (the
+ * import lives in ManageSkills as a header action) and is read-only here.
+ * A school's own rows (an admin's CSV, or indicators a teacher added,
+ * "ครูเพิ่มเอง") can be renamed by an admin at any time (SkillPolicy).
  */
 class SkillResource extends Resource
 {
@@ -35,9 +40,29 @@ class SkillResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'code';
 
+    public const LEVEL_LABELS = [
+        Skill::LEVEL_STRAND => 'สาระ',
+        Skill::LEVEL_STANDARD => 'มาตรฐาน',
+        Skill::LEVEL_INDICATOR => 'ตัวชี้วัด',
+        Skill::LEVEL_SUB_INDICATOR => 'ทักษะย่อย',
+    ];
+
+    public const SOURCE_LABELS = [
+        Skill::SOURCE_CURRICULUM => 'หลักสูตรแกนกลาง',
+        Skill::SOURCE_SCHOOL_ADMIN => 'admin ของโรงเรียน',
+        Skill::SOURCE_TEACHER => Skill::TEACHER_LABEL,
+    ];
+
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([]);
+        return $schema->components([
+            TextInput::make('code')->label('รหัส')->required()->maxLength(40),
+            Textarea::make('name')->label('ชื่อ')->required()->rows(3),
+            Select::make('grade_level')
+                ->label('ชั้น')
+                ->options(array_combine(range(1, 12), array_map(fn (int $g) => self::gradeLabel($g), range(1, 12))))
+                ->nullable(),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -48,12 +73,16 @@ class SkillResource extends Resource
                 TextColumn::make('code')->label('รหัส')->searchable()->sortable()->fontFamily('mono'),
                 TextColumn::make('name')->label('ตัวชี้วัด')->searchable()->wrap()->limit(160),
                 TextColumn::make('grade_level')->label('ชั้น')->formatStateUsing(fn (?int $state) => self::gradeLabel($state))->sortable(),
+                TextColumn::make('level')->label('ระดับ')->formatStateUsing(fn (?string $state) => self::LEVEL_LABELS[$state] ?? '—')->sortable(),
                 TextColumn::make('parent.code')->label('ภายใต้')->placeholder('—')->fontFamily('mono'),
                 TextColumn::make('school.name')->label('ของโรงเรียน')->placeholder('หลักสูตรแกนกลาง'),
+                TextColumn::make('source')->label('ที่มา')->badge()->formatStateUsing(fn (?string $state) => self::SOURCE_LABELS[$state] ?? '—'),
             ])
             ->defaultSort('code')
             ->filters([
                 SelectFilter::make('subject_id')->label('วิชา')->relationship('subject', 'name'),
+                SelectFilter::make('level')->label('ระดับ')->options(self::LEVEL_LABELS),
+                SelectFilter::make('source')->label('ที่มา')->options(self::SOURCE_LABELS),
                 SelectFilter::make('grade_level')
                     ->label('ชั้น')
                     ->options(array_combine(range(1, 12), array_map(fn (int $g) => self::gradeLabel($g), range(1, 12)))),
@@ -67,7 +96,9 @@ class SkillResource extends Resource
                         false: fn (Builder $q) => $q->whereNull('school_id'),
                     ),
             ])
-            ->recordActions([]);
+            ->recordActions([
+                EditAction::make(),
+            ]);
     }
 
     public static function getEloquentQuery(): Builder

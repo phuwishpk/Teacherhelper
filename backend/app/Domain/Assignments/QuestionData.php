@@ -4,6 +4,7 @@ namespace App\Domain\Assignments;
 
 use App\Models\Assignment;
 use App\Models\Question;
+use App\Models\Skill;
 use Closure;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -79,8 +80,10 @@ final class QuestionData
             'skill_ids.*' => [
                 'integer',
                 'distinct',
+                // Questions use indicators and sub-indicators only (DESIGN §20.2).
                 Rule::exists('skills', 'id')
                     ->where('subject_id', $assignment->subject_id)
+                    ->whereIn('level', Skill::ASSESSABLE_LEVELS)
                     ->where(fn ($q) => $q->whereNull('school_id')->orWhere('school_id', $assignment->school_id)),
             ],
             'model_answer' => ['sometimes', 'nullable', 'string', 'max:'.self::MAX_MODEL_ANSWER],
@@ -232,7 +235,7 @@ final class QuestionData
             'skill_ids.max' => 'เลือกทักษะได้ไม่เกิน '.self::MAX_SKILLS.' ทักษะต่อข้อ',
             'skill_ids.*.integer' => 'รหัสทักษะไม่ถูกต้อง',
             'skill_ids.*.distinct' => 'เลือกทักษะซ้ำกัน',
-            'skill_ids.*.exists' => 'ไม่พบทักษะนี้ในวิชาของการบ้าน',
+            'skill_ids.*.exists' => 'ไม่พบตัวชี้วัดนี้ในวิชาของการบ้าน (เลือกได้เฉพาะตัวชี้วัดหรือทักษะย่อย)',
             'answer_key.required' => 'กรุณากรอกเฉลย',
             'answer_key.array' => 'รูปแบบเฉลยไม่ถูกต้อง',
             'answer_key.prohibited' => 'ข้ออัตนัยไม่ใช้เฉลย ให้ใช้เกณฑ์การให้คะแนน (rubric) แทน',

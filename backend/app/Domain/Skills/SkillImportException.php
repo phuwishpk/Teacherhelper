@@ -5,8 +5,10 @@ namespace App\Domain\Skills;
 use RuntimeException;
 
 /**
- * The CSV was rejected as a whole; `errors` lists every problem found
- * (line numbers are 1-based, line 1 = header).
+ * The CSV could not be imported at all (unreadable file, unknown school, a
+ * wrong header row, no data rows, another import running): nothing was
+ * written. Problems of single rows are reported in SkillImportResult
+ * instead. Line numbers are 1-based, line 1 = the header row.
  */
 class SkillImportException extends RuntimeException
 {

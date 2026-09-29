@@ -60,6 +60,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.login-card-prints.show' => ['GET', 'login-card-prints/{card_print}', 403, 404],
         'api.login-card-prints.file' => ['GET', 'login-card-prints/{card_print}/file', 403, 404],
         'api.skills.index' => ['GET', 'skills', self::OK, self::OK],
+        'api.skills.store' => ['POST', 'skills', self::OK, self::OK],
+        // A teacher-added indicator is shared by the school but edited by its creator only (§20.2).
+        'api.skills.update' => ['PATCH', 'skills/{teacher_skill}', 403, 404],
         'api.subjects.index' => ['GET', 'subjects', self::OK, self::OK],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
@@ -340,6 +343,7 @@ class AuthorizationMatrixTest extends TestCase
             '{appeal}' => $this->appealA2->id,
             '{item}' => $this->practiceItemA->id,
             '{skill}' => $this->skillA->id,
+            '{teacher_skill}' => $this->teacherSkillA->id,
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
             '{conflict}' => $this->conflictA->id,
