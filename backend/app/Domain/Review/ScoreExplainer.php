@@ -132,7 +132,14 @@ final class ScoreExplainer
         $inputs = (array) ($trace['inputs'] ?? []);
         $signals = (array) ($trace['signals'] ?? []);
 
-        if (($trace['blank'] ?? false) === true) {
+        if (($trace['auto_rule'] ?? null) === Response::AUTO_BLANK_INK) {
+            $lines[] = 'ไม่ได้ตอบ: กรอบคำตอบแทบไม่มีรอยเขียน (หมึก '.self::num(100 * (float) ($signals['ink_ratio'] ?? 0)).'% ของกรอบ) จึงได้ 0 คะแนนโดยไม่ส่งให้ AI อ่าน ครูควรดูภาพเพื่อยืนยัน';
+        } elseif (($trace['auto_rule'] ?? null) === Response::AUTO_CNN_MATCH) {
+            $lines[] = 'อ่านด้วย CNN: ตัวอ่านตัวเลขบนมือถืออ่านได้ "'.($signals['cnn_text'] ?? '').'" มั่นใจ '.self::num($signals['cnn_confidence'] ?? 0).' ตรงกับเฉลย จึงได้คะแนนเต็มโดยไม่ส่งให้ AI อ่าน';
+            if (($signals['sampled'] ?? false) === true) {
+                $lines[] = 'ข้อนี้ถูกสุ่มให้ครูดู เพื่อตรวจว่าการอ่านด้วย CNN ยังแม่นอยู่';
+            }
+        } elseif (($trace['blank'] ?? false) === true) {
             $lines[] = 'AI อ่านแล้วไม่พบคำตอบ จึงได้ 0 คะแนนโดยไม่ผ่านกฎ fuzzy';
         } else {
             if ($system === Question::TYPE_SHOW_WORK) {

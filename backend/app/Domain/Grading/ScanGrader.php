@@ -22,7 +22,10 @@ use Illuminate\Support\Facades\DB;
  * The grading pipeline behind GradeScanJob (DESIGN §7.2):
  *
  * 1. the scan's responses that are `queued`, or `failed` with attempts < 3;
- * 2. the key per §10.1 (teacher, then server); none -> `manual`, ai_key_missing;
+ * 2. answers code can decide (AutoRules, §21.3: an empty box, or a sure
+ *    digit reading of an accepted answer) are graded without Gemini and
+ *    without a key;
+ *    the key per §10.1 (teacher, then server); none -> the rest `manual`, ai_key_missing;
  * 3. extraction through CropExtractor: one `extract_batch` call for the
  *    page's answers, then `extract` alone for any answer the batch missed
  *    or got wrong (DESIGN §21.4; invalid output retried once by the gateway);
@@ -92,11 +95,28 @@ final class ScanGrader
             return new ScanGradingResult;
         }
 
+        // Answers code can decide need neither Gemini nor a key (§21.3).
+        $auto = [];
+        foreach ($responses as $response) {
+            $question = $response->question;
+            $rule = $question->type === Question::TYPE_MCQ ? null : AutoRules::decide($response, $question);
+            if ($rule !== null) {
+                $auto[$response->id] = AutoRules::grade($rule, $response, $question, $question->rubricCriteria->count(), $assignment->strictness);
+            }
+        }
+        $autoGraded = array_map(fn (array $a) => $a[0], $auto);
+        $autoOutcomes = array_map(fn (array $a) => new CallOutcome(CallOutcome::OK, $a[1]), $auto);
+        $autoExplanations = [];
+        foreach ($autoGraded as $id => $grade) {
+            $autoExplanations[$id] = AutoRules::explanation($id, $grade);
+        }
+
         $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
         if ($key === null) {
-            $manual = $responses->mapWithKeys(fn (Response $r) => [$r->id => self::REASON_KEY_MISSING])->all();
+            $manual = $responses->reject(fn (Response $r) => isset($auto[$r->id]))
+                ->mapWithKeys(fn (Response $r) => [$r->id => self::REASON_KEY_MISSING])->all();
 
-            return $this->write($scan, $assignment, $responses, [], [], [], $manual);
+            return $this->write($scan, $assignment, $responses, $autoOutcomes, $autoGraded, $autoExplanations, $manual);
         }
 
         $gradeLabel = RubricDraftRequest::gradeLabel((int) $assignment->classroom->grade_level);
@@ -105,6 +125,9 @@ final class ScanGrader
         $items = [];
         $manual = [];
         foreach ($responses as $response) {
+            if (isset($auto[$response->id])) {
+                continue;
+            }
             $question = $response->question;
             $criteria = $question->rubricCriteria->all();
             if ($question->type === Question::TYPE_MCQ) {
@@ -152,7 +175,7 @@ final class ScanGrader
             (bool) $assignment->score_only,
         );
 
-        return $this->write($scan, $assignment, $responses, $outcomes, $graded, $explanations, $manual, $explanationErrors);
+        return $this->write($scan, $assignment, $responses, $outcomes + $autoOutcomes, $graded + $autoGraded, $explanations + $autoExplanations, $manual, $explanationErrors);
     }
 
     /**

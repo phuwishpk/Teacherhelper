@@ -57,6 +57,7 @@ final class ResponseWriter
         'explanation_edited' => false,
         'ai_explanation' => null,
         'explanation_source' => null,
+        'auto_rule' => null,
         'reviewed_by' => null,
         'reviewed_at' => null,
     ];

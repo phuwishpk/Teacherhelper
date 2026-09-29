@@ -77,6 +77,22 @@ return [
         'budget_seconds' => max(1, (int) env('CLASSROOM_SYNC_BUDGET_SECONDS', 40)),
     ],
 
+    // Answers decided by code before any Gemini call (DESIGN §21.3):
+    // - blank_ink_max: an answer box whose ink_ratio is below this gets 0
+    //   points as "ไม่ได้ตอบ" (auto_rule blank_ink) and lands in the `look`
+    //   band. Stricter than the 0.02 the review priority uses (§11.8).
+    // - cnn_skip_*: a numeric `short` answer the on-device digit reader
+    //   reads with at least min_confidence, exactly as an accepted answer,
+    //   gets full marks as "อ่านด้วย CNN" (auto_rule cnn_match); sample_rate
+    //   of them go to the `look` band for the teacher. OFF until the
+    //   calibration harness (§21.10) passes on the team's real handwriting.
+    'grading' => [
+        'blank_ink_max' => (float) env('GRADING_BLANK_INK_MAX', 0.005),
+        'cnn_skip_enabled' => (bool) env('GRADING_CNN_SKIP_ENABLED', false),
+        'cnn_skip_min_confidence' => (float) env('GRADING_CNN_SKIP_MIN_CONFIDENCE', 0.97),
+        'cnn_skip_sample_rate' => (float) env('GRADING_CNN_SKIP_SAMPLE_RATE', 0.10),
+    ],
+
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 

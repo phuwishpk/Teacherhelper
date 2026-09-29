@@ -104,6 +104,7 @@ final class GradeApplier
             'ai_error_types' => $grade->errorTypes,
             'review_priority' => $grade->reviewPriority,
             'priority_band' => $grade->priorityBand,
+            'auto_rule' => $grade->autoRule,
         ]);
         if (! $response->explanation_edited) {
             $response->explanation = $explanation['text'] ?? null;
@@ -162,6 +163,7 @@ final class GradeApplier
             'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, array_filter(['manual_reason' => $reason, 'last_error' => $lastError]) + $traceExtra),
             'review_priority' => $priority->storedP(),
             'priority_band' => $priority->band,
+            'auto_rule' => null,
         ])->save();
     }
 }

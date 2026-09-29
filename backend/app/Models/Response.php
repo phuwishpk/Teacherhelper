@@ -49,6 +49,7 @@ use Illuminate\Support\Carbon;
  * @property bool $explanation_edited
  * @property string|null $ai_explanation Gemini's text once the teacher edited the explanation (§19.4)
  * @property string|null $explanation_source ai|template|reused|teacher
+ * @property string|null $auto_rule blank_ink|cnn_match: decided by code without Gemini (§21.3)
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
  * @property Carbon|null $created_at
@@ -81,6 +82,12 @@ class Response extends Model
 
     public const EXPLANATION_TEACHER = 'teacher';
 
+    /** responses.auto_rule (DESIGN §21.3): an empty answer box, 0 points, no Gemini call. */
+    public const AUTO_BLANK_INK = 'blank_ink';
+
+    /** responses.auto_rule: the digit reader is sure and reads an accepted answer, full marks. */
+    public const AUTO_CNN_MATCH = 'cnn_match';
+
     protected $fillable = [
         'submission_id',
         'question_id',
@@ -108,6 +115,7 @@ class Response extends Model
         'explanation_edited',
         'ai_explanation',
         'explanation_source',
+        'auto_rule',
         'reviewed_by',
         'reviewed_at',
     ];

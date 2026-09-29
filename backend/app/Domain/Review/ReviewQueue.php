@@ -238,6 +238,7 @@ final class ReviewQueue
             'final_understanding' => $response->final_understanding,
             'final_error_types' => $response->final_error_types,
             'explanation_error' => $response->explanationError(),
+            'auto_rule' => $response->auto_rule,
             'has_crop' => $response->crop_path !== null,
             'has_final_crop' => $response->final_crop_path !== null,
             'submission_page_id' => $response->submission_page_id,

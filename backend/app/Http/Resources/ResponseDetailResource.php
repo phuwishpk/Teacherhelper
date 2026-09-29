@@ -32,6 +32,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  channel, late, total_overridden, submission_page_id, page_image_url, page_mime_type,
  *  answer_box ([ymin, xmin, ymax, xmax] 0–1000 on that page, or null),
  *  ai_explanation (Gemini's text once the teacher edited it), explanation_source,
+ *  auto_rule (blank_ink "ไม่ได้ตอบ" | cnn_match "อ่านด้วย CNN" | null, §21.3),
  *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...]}
  *
  * rubric_criteria.criterion_id is the number `extraction.criteria[].criterion_id`
@@ -122,6 +123,7 @@ class ResponseDetailResource extends JsonResource
             'answer_box' => is_array($response->extraction['answer_box'] ?? null) ? $response->extraction['answer_box'] : null,
             'ai_explanation' => $response->ai_explanation,
             'explanation_source' => $response->explanation_source,
+            'auto_rule' => $response->auto_rule,
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
             'appeal' => $appeal === null ? null : AppealResource::summary($appeal),
