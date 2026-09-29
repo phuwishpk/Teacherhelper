@@ -34,6 +34,9 @@ use App\Models\Question;
  * question in hints.questions, or, without any, a four-question sheet
  * (mcq, short, show_work, open); see answerKey() for their markers.
  *
+ * `document_read` (DESIGN §20.1) answers a fixed course of two units and
+ * three lesson plans; see courseDocument() for its markers.
+ *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
@@ -124,6 +127,7 @@ class FakeGeminiClient implements GeminiClient
             },
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
             'answer_key_read', 'answer_key_draft' => self::answerKey($request),
+            'document_read' => self::courseDocument($request),
             'practice_gen' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
@@ -490,6 +494,54 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return ['questions' => $out, 'notes_th' => $answers ? '' : 'อ่านคำตอบไม่ได้บางข้อ'];
+    }
+
+    /**
+     * A course description / structure (hints.kind course) or lesson plans
+     * (lesson_plan) read from documents. Markers in the document bytes:
+     * [fake:error] (HTTP 503), [fake:invalid] (not JSON), [fake:empty]
+     * (nothing found: invalid after the check). The indicator codes are
+     * printed three ways: as in the curriculum (ค 1.1 ป.5/1), with other
+     * spacing and Thai digits (ค1.1 ป.๕/๒), and one that no curriculum has
+     * (ค 9.9 ป.5/9).
+     *
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private static function courseDocument(GeminiRequest $request): array|string|GeminiReply
+    {
+        $markers = self::imageMarkers($request);
+        if (str_contains($markers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if (str_contains($markers, '[fake:invalid]')) {
+            return 'Here is the course: {not json';
+        }
+        if (str_contains($markers, '[fake:empty]')) {
+            return ['indicators' => [], 'units' => [], 'lesson_plans' => [], 'notes_th' => 'ไม่พบข้อมูลรายวิชาในเอกสาร'];
+        }
+        $plans = [
+            ['position' => 1, 'unit_position' => 1, 'title' => 'การบวกเศษส่วน', 'hours' => 2, 'objectives' => 'บวกเศษส่วนที่ตัวส่วนเท่ากันได้', 'content' => 'การบวกเศษส่วน', 'activities' => 'ใช้แถบเศษส่วน', 'assessment' => 'ใบงาน', 'indicator_codes' => ['ค 1.1 ป.5/1']],
+            ['position' => 2, 'unit_position' => 1, 'title' => 'การลบเศษส่วน', 'hours' => 2, 'indicator_codes' => ['ค1.1 ป.๕/๒']],
+            ['position' => 3, 'unit_position' => 2, 'title' => 'ทศนิยม', 'hours' => 3, 'indicator_codes' => ['ค 9.9 ป.5/9']],
+        ];
+        if (($request->hints['kind'] ?? 'course') === 'lesson_plan') {
+            return ['indicators' => [], 'units' => [], 'lesson_plans' => array_map(fn (array $p) => array_diff_key($p, ['unit_position' => true]), $plans), 'notes_th' => ''];
+        }
+
+        return [
+            'course' => ['code' => 'ค15101', 'name' => 'คณิตศาสตร์ 5', 'subject_code' => 'ค', 'grade_level' => 5, 'semester' => 0, 'academic_year' => 2569, 'hours' => 160, 'description' => 'ศึกษาเศษส่วนและทศนิยม'],
+            'indicators' => [
+                ['code' => 'ค 1.1 ป.5/1', 'text' => 'แสดงวิธีหาคำตอบของโจทย์ปัญหาเศษส่วน'],
+                ['code' => 'ค1.1 ป.๕/๒', 'text' => 'เขียนเศษส่วนในรูปทศนิยม'],
+                ['code' => 'ค 9.9 ป.5/9', 'text' => 'ตัวชี้วัดที่ไม่มีในระบบ'],
+            ],
+            'units' => [
+                ['position' => 1, 'title' => 'เศษส่วน', 'hours' => 20, 'indicator_codes' => ['ค 1.1 ป.5/1', 'ค1.1 ป.๕/๒']],
+                ['position' => 2, 'title' => 'ทศนิยม', 'hours' => 16, 'description' => 'ทศนิยมสองตำแหน่ง', 'indicator_codes' => []],
+            ],
+            'lesson_plans' => $plans,
+            'notes_th' => 'หน้า 3 อ่านไม่ชัด',
+        ];
     }
 
     /**

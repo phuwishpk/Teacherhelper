@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\CourseController;
+use App\Http\Controllers\Api\V1\CourseDocumentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
@@ -131,6 +132,11 @@ Route::prefix('v1')->group(function () {
                 Route::patch('lesson-plans/{id}', [LessonPlanController::class, 'update'])->name('api.lesson-plans.update');
                 Route::delete('lesson-plans/{id}', [LessonPlanController::class, 'destroy'])->name('api.lesson-plans.destroy');
                 Route::put('lesson-plans/{id}/indicators', [LessonPlanController::class, 'indicators'])->name('api.lesson-plans.indicators');
+                // From documents (§20.1): read once (queues a Gemini job unless the school read the same
+                // files before, so it is throttled), estimate for free, then import what the teacher confirmed.
+                Route::post('courses/extract', [CourseDocumentController::class, 'extract'])->middleware('throttle:course-extract')->name('api.courses.extract');
+                Route::post('courses/extract/estimate', [CourseDocumentController::class, 'estimate'])->name('api.courses.extract.estimate');
+                Route::post('courses/import', [CourseDocumentController::class, 'import'])->name('api.courses.import');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');

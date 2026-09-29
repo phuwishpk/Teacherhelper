@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Courses\CourseDocumentResult;
+use App\Domain\Courses\CourseDocuments;
 use App\Domain\Documents\SourceDocuments;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -16,7 +18,10 @@ use Illuminate\Http\UploadedFile;
  */
 class DocumentController extends Controller
 {
-    public function __construct(private readonly SourceDocuments $documents) {}
+    public function __construct(
+        private readonly SourceDocuments $documents,
+        private readonly CourseDocuments $courseDocuments,
+    ) {}
 
     /**
      * POST /api/v1/documents multipart files[] -> 201 {data: [{id, sha256,
@@ -55,11 +60,18 @@ class DocumentController extends Controller
     /**
      * GET /api/v1/document-extractions/{id} -> {data: {id, purpose, status,
      * error, created_at, updated_at, result}} of the teacher's own school
-     * (404 otherwise). result: the structured key once `done`.
+     * (404 otherwise). result: the structured key (or course, DESIGN
+     * §20.1) once `done`. A course or lesson-plan read adds
+     * indicator_matches: [{code, skill|null}] for the teacher's school.
      */
     public function extraction(Request $request, int $id): JsonResponse
     {
-        $extraction = DocumentExtraction::query()->where('school_id', $request->user()->school_id)->findOrFail($id);
+        $schoolId = $request->user()->school_id;
+        $extraction = DocumentExtraction::query()->where('school_id', $schoolId)->findOrFail($id);
+
+        if (in_array($extraction->purpose, CourseDocumentResult::KINDS, true)) {
+            return response()->json(['data' => $extraction->toApi() + $this->courseDocuments->payload($extraction, $schoolId)]);
+        }
 
         return response()->json(['data' => $extraction->toApi() + [
             'result' => $extraction->isDone() ? $extraction->result : null,

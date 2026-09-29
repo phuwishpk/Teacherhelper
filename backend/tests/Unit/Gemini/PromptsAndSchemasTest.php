@@ -32,6 +32,7 @@ class PromptsAndSchemasTest extends TestCase
             'extract_page' => ['extract_page', 'general', 0.0, 2, 'low', 4096],
             'answer_key_read' => ['answer_key_read', 'general', 0.0, 1, 'medium', 16384],
             'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 2, 'medium', 4096],
+            'document_read' => ['document_read', 'general', 0.0, 1, 'medium', 16384],
         ];
     }
 
