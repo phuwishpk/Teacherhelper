@@ -70,7 +70,7 @@ class ExplanationReuseTest extends TestCase
         $this->assertSame(1, $this->explanationCalls());
         $row = DB::table('explanation_cache')->sole();
         $this->assertSame([$this->short->id, 'ai', $first->id, $first->explanation], [(int) $row->question_id, $row->source, (int) $row->response_id, $row->explanation]);
-        $this->assertSame(hash('sha256', 'short:50'), $row->answer_hash, 'the fake writes 50 for a wrong answer to 20');
+        $this->assertSame(hash('sha256', ExplanationCache::fingerprint($this->short->fresh())."\n".'short:50'), $row->answer_hash, 'the fake writes 50 for a wrong answer to 20');
 
         $second = $this->gradeStudent($this->newStudent(13));
         $this->assertSame([$first->explanation, 'reused'], [$second->explanation, $second->explanation_source]);
@@ -175,5 +175,44 @@ class ExplanationReuseTest extends TestCase
         $this->assertSame(['ai', 'reused'], [$explanations[$ids[0]]['source'], $explanations[$ids[1]]['source']]);
         $this->assertSame($explanations[$ids[0]]['text'], $explanations[$ids[1]]['text']);
         $this->assertSame(1, $this->explanationCalls());
+    }
+
+    public function test_editing_the_answer_key_stops_reusing_the_old_text(): void
+    {
+        $first = $this->gradeStudent($this->student);
+        $this->assertSame('ai', $first->explanation_source);
+
+        // The key was typed wrong: the stored text explains against the old key.
+        $this->asUser($this->teacher)->patchJson("/api/v1/questions/{$this->short->id}", [
+            'answer_key' => ['accepted' => ['21'], 'numeric' => ['value' => 21, 'abs_tol' => 0]],
+        ])->assertOk();
+
+        $second = $this->gradeStudent($this->newStudent(13));
+        $this->assertSame('ai', $second->explanation_source, 'a fresh explanation, not the one written against the old key');
+        $this->assertSame(2, $this->explanationCalls());
+        $this->assertSame(2, DB::table('explanation_cache')->where('question_id', $this->short->id)->count());
+
+        $third = $this->gradeStudent($this->newStudent(14));
+        $this->assertSame('reused', $third->explanation_source, 'the new key reuses the new text');
+        $this->assertSame(2, $this->explanationCalls());
+    }
+
+    public function test_the_fingerprint_follows_the_question_and_its_rubric(): void
+    {
+        $question = $this->short->fresh();
+        $base = ExplanationCache::fingerprint($question);
+        $this->assertSame($base, ExplanationCache::fingerprint($this->short->fresh()), 'stable');
+
+        foreach ([
+            ['prompt_text' => 'โจทย์ใหม่'],
+            ['model_answer' => 'คำตอบตัวอย่าง'],
+            ['max_points' => 3],
+            ['match_mode' => 'exact'],
+        ] as $change) {
+            $this->assertNotSame($base, ExplanationCache::fingerprint($question->replicate()->fill($change)), (string) array_key_first($change));
+        }
+
+        $question->rubricCriteria()->create(['position' => 1, 'description' => 'บวกทศนิยมถูก', 'points' => 2, 'is_core' => true, 'source' => 'teacher']);
+        $this->assertNotSame($base, ExplanationCache::fingerprint($question->fresh()), 'a rubric criterion');
     }
 }

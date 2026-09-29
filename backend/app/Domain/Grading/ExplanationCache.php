@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
  *                                 explanation)
  *   open, mcq, blank, empty       no key: never reused
  *
+ * The hashed key also carries a fingerprint of what the explanation was
+ * written against (prompt text, answer key, model answer, points, match
+ * mode and the rubric criteria), so editing the question or its rubric
+ * after grading makes the old texts unreachable: a text that says "the
+ * correct answer is 25" is never reused once the key is corrected to 24.
+ *
  * A teacher's edited text beats Gemini's: remember() never lets an `ai`
  * row replace a `teacher` row.
  */
@@ -38,7 +44,29 @@ final class ExplanationCache
     {
         $key = self::key($question->type, $extraction);
 
-        return $key === null ? null : hash('sha256', $key);
+        return $key === null ? null : hash('sha256', self::fingerprint($question)."\n".$key);
+    }
+
+    /**
+     * What the stored explanation depends on besides the answer itself.
+     * Loads the rubric criteria when the caller has not.
+     */
+    public static function fingerprint(Question $question): string
+    {
+        $criteria = $question->rubricCriteria
+            ->map(fn ($c) => [(int) $c->position, (string) $c->description, round((float) $c->points, 2), (bool) $c->is_core])
+            ->sortBy(fn (array $c) => $c[0])
+            ->values()
+            ->all();
+
+        return hash('sha256', (string) json_encode([
+            'prompt' => (string) $question->prompt_text,
+            'answer_key' => $question->answer_key,
+            'model_answer' => $question->model_answer,
+            'max_points' => round((float) $question->max_points, 2),
+            'match_mode' => (string) $question->match_mode,
+            'criteria' => $criteria,
+        ], JSON_UNESCAPED_UNICODE));
     }
 
     /**

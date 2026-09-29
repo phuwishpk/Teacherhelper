@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Schema;
  * One explanation per (question, normalised wrong answer); a later answer
  * with the same key reuses it instead of calling Gemini. answer_hash is the
  * SHA-256 of the key with a prefix per kind of explanation (short answer /
- * final answer / every show_work line). source teacher always beats ai.
+ * final answer / every show_work line) together with a fingerprint of the
+ * question and its rubric, so an edited question stops reusing old texts.
+ * source teacher always beats ai.
  */
 return new class extends Migration
 {
