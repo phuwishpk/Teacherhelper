@@ -36,7 +36,8 @@ class AssignmentController extends Controller
 
         $query = self::ownQuery($request)
             ->with(['classroom', 'subject', 'googleLink'])
-            ->withCount('questions')
+            // submissions_count: students who handed in anything (§19.6 "อัปโหลดรูปเพื่อตรวจ").
+            ->withCount(['questions', 'submissions'])
             ->orderByDesc('id');
 
         if ($request->filled('classroom_id')) {

@@ -9,7 +9,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * {id, classroom_id, subject_id, title, strictness, status,
  *  current_layout_version, due_at, mode, source, accept_late, score_only,
- *  key_origin, key_approved_at, questions_count?, missing_ai_key_count?,
+ *  key_origin, key_approved_at, questions_count?, submissions_count? (list
+ *  only: students with a submission row), missing_ai_key_count?,
  *  classroom?: {id, name},
  *  subject?: {id, code, name}, google_link?: {course_work_id, alternate_link,
  *  drive_file_id, has_blank_worksheet, posted_at, origin, can_push_grades,
@@ -50,6 +51,7 @@ class AssignmentResource extends JsonResource
             'key_origin' => $this->key_origin,
             'key_approved_at' => $this->key_approved_at?->toIso8601String(),
             'questions_count' => $this->whenCounted('questions'),
+            'submissions_count' => $this->whenCounted('submissions'),
             'missing_ai_key_count' => $this->whenCounted('missing_ai_key_count'),
             'classroom' => $this->whenLoaded('classroom', fn () => [
                 'id' => $this->classroom->id,

@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Assignment;
 use App\Models\Subject;
+use App\Models\Submission;
 use App\Models\User;
 use App\Models\WorksheetPrint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,6 +98,21 @@ class AssignmentsTest extends TestCase
             ->assertJsonPath('data.0.id', $mine->id)
             ->assertJsonPath('data.0.questions_count', 0)
             ->assertJsonPath('data.0.classroom.id', $classroom->id);
+    }
+
+    public function test_the_list_counts_the_students_who_handed_in(): void
+    {
+        [$teacher, $classroom, $subject] = $this->setUpTeacher();
+        $assignment = Assignment::factory()->for_classroom($classroom)->create(['subject_id' => $subject->id]);
+        $empty = Assignment::factory()->for_classroom($classroom)->create(['subject_id' => $subject->id]);
+        foreach ([1, 2] as $n) {
+            $student = $this->enrollStudent($classroom, $n)['student'];
+            Submission::create(['assignment_id' => $assignment->id, 'student_id' => $student->id]);
+        }
+
+        $rows = collect($this->asUser($teacher)->getJson('/api/v1/assignments')->assertOk()->json('data'))->keyBy('id');
+        $this->assertSame(2, $rows[$assignment->id]['submissions_count']);
+        $this->assertSame(0, $rows[$empty->id]['submissions_count']);
     }
 
     public function test_another_teachers_assignment_is_not_found(): void
