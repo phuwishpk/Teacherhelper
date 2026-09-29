@@ -7,6 +7,7 @@ use App\Domain\Gemini\ExplanationRequests;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDraftRequest;
+use App\Domain\Grading\ExplanationCache;
 use App\Domain\Grading\FeedbackTemplates;
 use App\Domain\Scans\SubmissionStatus;
 use App\Domain\Training\TrainingSamples;
@@ -26,7 +27,10 @@ use Illuminate\Validation\ValidationException;
  * - review(): PATCH /responses/{id}. The teacher's score, understanding,
  *   error types and (optionally) explanation become final_*, the answer is
  *   marked reviewed. The first edit of an AI explanation keeps Gemini's
- *   text in ai_explanation (explanation_source = teacher, §19.4). A score that differs from ai_score needs a reason. Every
+ *   text in ai_explanation (explanation_source = teacher, §19.4); the
+ *   teacher's text of a wrong answer becomes the stored explanation that
+ *   identical answers reuse (ExplanationCache, §21.7). A score that
+ *   differs from ai_score needs a reason. Every
  *   change of score or understanding is logged as score_events `override`
  *   (a manual answer's first score too), the data of the bias analysis. An
  *   overridden numeric answer may also become a training sample
@@ -34,7 +38,8 @@ use Illuminate\Validation\ValidationException;
  * - approveConfident(): "อนุมัติทั้งหมดที่มั่นใจ", AI values become final for
  *   every ReviewQueue::approvable() answer, logged as `bulk_approve`.
  * - regenerateExplanation(): a new `explanation` from Gemini (text only,
- *   §10.5) after the teacher changed the score or the error types.
+ *   §10.5) after the teacher changed the score or the error types; it
+ *   replaces a stored AI text of that answer, never a teacher's.
  *
  * Published submissions are frozen here: after publishing a score changes
  * only through an appeal (Appeals) or a confirmed rescan.
@@ -47,6 +52,7 @@ final class ResponseReviewer
         private readonly GeminiKeyResolver $keys,
         private readonly ExplanationRequests $explanations,
         private readonly TrainingSamples $samples,
+        private readonly ExplanationCache $cache,
     ) {}
 
     /**
@@ -79,7 +85,7 @@ final class ResponseReviewer
                 if ($text !== $response->explanation) {
                     // §19.4: the first edit keeps Gemini's own text in ai_explanation.
                     // (A row graded before explanation_source existed counts as the AI's.)
-                    $machine = $response->explanation_source === Response::EXPLANATION_AI
+                    $machine = in_array($response->explanation_source, [Response::EXPLANATION_AI, Response::EXPLANATION_REUSED], true)
                         || ($response->explanation_source === null && ! $response->explanation_edited);
                     if ($machine && $response->explanation !== null && $response->ai_explanation === null) {
                         $response->ai_explanation = $response->explanation;
@@ -88,6 +94,9 @@ final class ResponseReviewer
                     $response->explanation_edited = true;
                     $response->explanation_source = Response::EXPLANATION_TEACHER;
                     self::clearExplanationError($response);
+                    if ($text !== null && $newScore < (float) $response->question->max_points - 0.001) {
+                        $this->rememberExplanation($response, $text, ExplanationCache::SOURCE_TEACHER);
+                    }
                 }
             }
             $response->reviewed_by = $teacher->id;
@@ -226,6 +235,9 @@ final class ResponseReviewer
             $locked->ai_explanation = null; // what the student sees is the AI's (or a template) again
             self::clearExplanationError($locked);
             $locked->save();
+            if ($text['source'] === Response::EXPLANATION_AI) {
+                $this->rememberExplanation($locked, $text['text'], ExplanationCache::SOURCE_AI, replaceAi: true);
+            }
 
             return $locked;
         });
@@ -258,6 +270,20 @@ final class ResponseReviewer
         }
 
         return ExplanationRequests::text((array) $outcome->data);
+    }
+
+    /**
+     * §21.7 item 6: the text becomes the stored explanation of this wrong
+     * answer, so an identical answer to the same question reuses it. A
+     * teacher's text replaces anything; a regenerated AI text replaces only
+     * an AI text.
+     */
+    private function rememberExplanation(Response $response, string $text, string $source, bool $replaceAi = false): void
+    {
+        $hash = is_array($response->extraction) ? ExplanationCache::hash($response->question, $response->extraction) : null;
+        if ($hash !== null) {
+            $this->cache->remember($response->question_id, $hash, $text, $source, $response->id, $replaceAi);
+        }
     }
 
     /**

@@ -18,11 +18,13 @@ use App\Models\ScoreEvent;
  *   answers, Gemini `explanation` (text only, §10.5) for anything else
  *   below full marks, nothing for suspicious ones (the teacher looks first);
  *   an assignment set to "เฉพาะคะแนน" (score_only, §21.7) never calls
- *   Gemini: the score-only template instead;
+ *   Gemini: the score-only template instead; an identical wrong answer to
+ *   the same question reuses the stored text (ExplanationCache, §21.7
+ *   item 6, explanation_source = reused);
  * - applyGrade() / applyFailure() / markManual(): the response columns,
  *   the `ai_scored` score event and the sticky review flags. The teacher's
  *   own explanation is never overwritten; explanation_source says where the
- *   text came from (ai | template, §19.8).
+ *   text came from (ai | template | reused, §19.8).
  *
  * The write methods run inside the caller's transaction.
  */
@@ -31,6 +33,7 @@ final class GradeApplier
     public function __construct(
         private readonly GeminiGateway $gateway,
         private readonly ExplanationRequests $explanations,
+        private readonly ExplanationCache $cache,
     ) {}
 
     /**
@@ -42,7 +45,7 @@ final class GradeApplier
     public function explain(array $graded, array $responses, array $extractions, GeminiKey $key, string $gradeLabel, bool $scoreOnly = false): array
     {
         $explanations = [];
-        $calls = [];
+        $wanted = [];
         foreach ($graded as $id => $grade) {
             $response = $responses[$id];
             $max = (float) $response->question->max_points;
@@ -58,14 +61,46 @@ final class GradeApplier
                     $explanations[$id] = ['text' => FeedbackTemplates::SCORE_ONLY, 'source' => Response::EXPLANATION_TEMPLATE];
                 }
             } elseif (! $grade->suspicious && $response->question->type !== 'mcq') {
-                $calls[$id] = $this->explanations->forResponse(
-                    $response,
-                    $response->question,
-                    $response->question->rubricCriteria->all(),
-                    $gradeLabel,
-                    $extractions[$id],
-                );
+                $wanted[$id] = ExplanationCache::hash($response->question, $extractions[$id]);
             }
+        }
+
+        // §21.7 item 6: an identical wrong answer to the same question reuses
+        // the stored text (the teacher's edit first); within this batch only
+        // the first of a group asks Gemini, the others take its answer.
+        $pairs = [];
+        foreach ($wanted as $id => $hash) {
+            if ($hash !== null) {
+                $pairs[] = [(int) $responses[$id]->question_id, $hash];
+            }
+        }
+        $stored = $this->cache->find($pairs);
+        $calls = [];
+        $leaders = [];
+        $followers = [];
+        foreach ($wanted as $id => $hash) {
+            $response = $responses[$id];
+            $group = $hash === null ? null : $response->question_id.':'.$hash;
+            if ($group !== null && isset($stored[$group])) {
+                $explanations[$id] = ['text' => $stored[$group]['explanation'], 'source' => Response::EXPLANATION_REUSED];
+
+                continue;
+            }
+            if ($group !== null && isset($leaders[$group])) {
+                $followers[$id] = $leaders[$group];
+
+                continue;
+            }
+            if ($group !== null) {
+                $leaders[$group] = $id;
+            }
+            $calls[$id] = $this->explanations->forResponse(
+                $response,
+                $response->question,
+                $response->question->rubricCriteria->all(),
+                $gradeLabel,
+                $extractions[$id],
+            );
         }
 
         $errors = [];
@@ -74,10 +109,21 @@ final class GradeApplier
             foreach (array_keys($calls) as $id) {
                 $outcome = $explained[$id] ?? null;
                 if ($outcome?->isOk()) {
-                    $explanations[$id] = ['text' => ExplanationRequests::text((array) $outcome->data), 'source' => Response::EXPLANATION_AI];
+                    $text = ExplanationRequests::text((array) $outcome->data);
+                    $explanations[$id] = ['text' => $text, 'source' => Response::EXPLANATION_AI];
+                    if ($wanted[$id] !== null) {
+                        $this->cache->remember((int) $responses[$id]->question_id, $wanted[$id], $text, ExplanationCache::SOURCE_AI, $id);
+                    }
                 } else {
                     $errors[$id] = $outcome->status ?? CallOutcome::ERROR;
                 }
+            }
+        }
+        foreach ($followers as $id => $leader) {
+            if (isset($explanations[$leader])) {
+                $explanations[$id] = ['text' => $explanations[$leader]['text'], 'source' => Response::EXPLANATION_REUSED];
+            } else {
+                $errors[$id] = $errors[$leader] ?? CallOutcome::ERROR;
             }
         }
 
