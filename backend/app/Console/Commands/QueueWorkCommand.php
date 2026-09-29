@@ -2,12 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ClassroomSyncJob;
 use App\Jobs\QueueHeartbeatJob;
 use Illuminate\Console\Command;
 
 /**
  * Wrapper the Plesk Scheduled Task runs every minute (no daemons on shared
- * hosting). Dispatches the heartbeat, then runs one bounded worker pass with
+ * hosting). Dispatches the heartbeat and, when due, a Google Classroom sync
+ * round (ClassroomSyncJob), then runs one bounded worker pass with
  * exactly the options from DESIGN §7.2. No --tries: GradeScanJob (Phase 3)
  * counts its own attempts. --memory is queue:work's graceful-exit threshold
  * (MB, default 128 like queue:work itself); raise it only when the host's PHP
@@ -24,6 +26,8 @@ class QueueWorkCommand extends Command
     public function handle(): int
     {
         QueueHeartbeatJob::dispatch();
+        // The Google Classroom sync round, at most every 5 minutes (DESIGN §19.3, §19.10).
+        ClassroomSyncJob::dispatchIfDue();
 
         return $this->call('queue:work', [
             '--queue' => 'grading,default,pdf',

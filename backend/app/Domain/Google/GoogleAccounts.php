@@ -127,6 +127,7 @@ final class GoogleAccounts
                 'scopes' => implode(' ', $grant->scopes),
                 'connected_at' => now(),
                 'last_error' => null,
+                'reconnect_notified_at' => null,
             ]);
         } catch (UniqueConstraintViolationException) {
             throw self::accountInUse();

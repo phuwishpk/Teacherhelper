@@ -69,6 +69,14 @@ return [
         'retention_days' => max(1, (int) env('DOCUMENT_RETENTION_DAYS', 30)),
     ],
 
+    // The cron sync with Google Classroom (DESIGN §19.3): at most
+    // max_coursework assignments' submissions per round, and no new work
+    // started after budget_seconds (the worker pass is 50 s).
+    'classroom_sync' => [
+        'max_coursework' => max(1, (int) env('CLASSROOM_SYNC_MAX_COURSEWORK', 20)),
+        'budget_seconds' => max(1, (int) env('CLASSROOM_SYNC_BUDGET_SECONDS', 40)),
+    ],
+
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 

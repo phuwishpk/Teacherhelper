@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Google\CourseWorkPoster;
 use App\Domain\Google\GoogleSubmissionSync;
+use App\Domain\Google\GradeConflicts;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GooglePostRequest;
 use App\Http\Resources\GoogleSubmissionResource;
@@ -63,11 +64,15 @@ class AssignmentGoogleController extends Controller
      * POST /api/v1/assignments/{id}/google-grades/retry -> 202 {data: {queued}}:
      * a PushClassroomGradeJob for every published submission whose grade did
      * not reach Classroom (grade_failed, or a matched student without a row).
+     * 409 coursework_not_owned for courseWork created on the Classroom website.
      */
     public function retryGrades(Request $request, int $id): JsonResponse
     {
         $assignment = $this->find($request, $id);
-        GoogleSubmissionSync::links($assignment);
+        [$posted] = GoogleSubmissionSync::links($assignment);
+        if ($posted->isFromClassroomWeb()) {
+            throw GradeConflicts::notOwned();
+        }
 
         $published = Submission::query()
             ->where('assignment_id', $assignment->id)

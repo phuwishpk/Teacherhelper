@@ -12,7 +12,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  key_origin, key_approved_at, questions_count?, missing_ai_key_count?,
  *  classroom?: {id, name},
  *  subject?: {id, code, name}, google_link?: {course_work_id, alternate_link,
- *  drive_file_id, has_blank_worksheet, posted_at}|null, questions?: [...],
+ *  drive_file_id, has_blank_worksheet, posted_at, origin, can_push_grades,
+ *  materials, last_synced_at}|null, questions?: [...],
  *  created_by, created_at, updated_at}
  *
  * missing_ai_key_count (detail only): answers waiting as `manual` because no
@@ -54,12 +55,13 @@ class AssignmentResource extends JsonResource
                 'id' => $this->classroom->id,
                 'name' => $this->classroom->name,
             ]),
-            'subject' => $this->whenLoaded('subject', fn () => [
+            // null for a Classroom website mirror until its key is approved (DESIGN §19.3).
+            'subject' => $this->whenLoaded('subject', fn () => $this->subject === null ? null : [
                 'id' => $this->subject->id,
                 'code' => $this->subject->code,
                 'name' => $this->subject->name,
             ]),
-            // DESIGN §18.4 assignment_google_links: {course_work_id, alternate_link, drive_file_id, has_blank_worksheet, posted_at} | null
+            // DESIGN §18.4, §19.8 assignment_google_links (AssignmentGoogleLink::toApi) | null
             'google_link' => $this->whenLoaded('googleLink', fn () => $this->googleLink?->toApi()),
             'questions' => QuestionResource::collection($this->whenLoaded('questions')),
             'created_by' => $this->created_by,

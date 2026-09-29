@@ -13,6 +13,7 @@ use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -30,6 +31,17 @@ use Illuminate\Support\Facades\Log;
  * alone is not enough: grading and returning change it too.
  * userId -> student comes from the roster match (classroom_students.google_user_id)
  * while the row is not scanned yet; after that the scans decide.
+ *
+ * Since build step 4 (DESIGN §19.3) the same sync runs from the cron
+ * (ClassroomSyncJob, with the account of the teacher who linked the course)
+ * and also:
+ * - reads RETURNED submissions for their assignedGrade only: every row
+ *   stores Classroom's grade (classroom_grade) and GradeConflicts::detect
+ *   compares it with the app's;
+ * - applies the assignment's late policy: a late hand-in of an assignment
+ *   that does not accept late work becomes `rejected_late` (not downloaded,
+ *   not graded) until the teacher accepts it (POST .../accept-late);
+ * - stamps assignment_google_links.last_synced_at.
  */
 final class GoogleSubmissionSync
 {
@@ -38,7 +50,14 @@ final class GoogleSubmissionSync
         ClassroomSubmissionImport::STATE_NEW,
         ClassroomSubmissionImport::STATE_NEEDS_RETAKE,
         ClassroomSubmissionImport::STATE_RETURNED_FOR_RETAKE,
+        ClassroomSubmissionImport::STATE_REJECTED_LATE,
     ];
+
+    /**
+     * Hand-ins (TURNED_IN) and work already returned (RETURNED), whose
+     * assignedGrade the teacher may have changed on the website (§19.3).
+     */
+    public const LISTED_STATES = ['TURNED_IN', 'RETURNED'];
 
     public const COURSE_WORK_GONE = 'ไม่พบงานนี้ใน Google Classroom แล้ว (อาจถูกลบในเว็บ Classroom)';
 
@@ -58,11 +77,30 @@ final class GoogleSubmissionSync
         [$posted, $link] = self::links($assignment);
 
         $this->accounts->call($teacher, function (GoogleApi $api) use ($assignment, $posted, $link) {
-            $submissions = $api->studentSubmissions($link->course_id, $posted->course_work_id, 'TURNED_IN');
-            $this->apply($api, $assignment, $submissions);
+            $submissions = $api->studentSubmissions($link->course_id, $posted->course_work_id, self::LISTED_STATES);
+            $this->apply($api, $assignment, $posted, $submissions);
         }, self::COURSE_WORK_GONE);
 
+        $posted->last_synced_at = now();
+        $posted->save();
+
         return self::rows($assignment);
+    }
+
+    /**
+     * The cron's sync of one assignment (ClassroomSyncJob), with the Google
+     * account of the teacher who linked the course.
+     *
+     * @throws ApiException
+     */
+    public function syncAsOwner(Assignment $assignment): void
+    {
+        [, $link] = self::links($assignment);
+        $owner = User::query()->find($link->owner_user_id);
+        if ($owner === null) {
+            throw GoogleErrors::notConnected();
+        }
+        $this->sync($owner, $assignment);
     }
 
     /**
@@ -97,7 +135,7 @@ final class GoogleSubmissionSync
     /**
      * @param  list<array<string, mixed>>  $submissions
      */
-    private function apply(GoogleApi $api, Assignment $assignment, array $submissions): void
+    private function apply(GoogleApi $api, Assignment $assignment, AssignmentGoogleLink $posted, array $submissions): void
     {
         $existing = ClassroomSubmissionImport::query()->where('assignment_id', $assignment->id)->get()->keyBy('google_submission_id');
         $matched = ClassroomStudent::query()
@@ -106,77 +144,135 @@ final class GoogleSubmissionSync
             ->pluck('student_id', 'google_user_id');
         $created = 0;
         $renewed = 0;
+        $rejectedLate = 0;
+        $conflicts = 0;
+        $handIns = [];
 
         foreach ($submissions as $submission) {
             $id = (string) ($submission['id'] ?? '');
             $userId = (string) ($submission['userId'] ?? '');
-            $files = self::driveFiles($submission);
-            if ($id === '' || $userId === '' || $files === []) {
+            if ($id === '' || $userId === '') {
                 continue;
             }
-
             /** @var ClassroomSubmissionImport|null $row */
             $row = $existing[$id] ?? null;
-            if ($row === null && ClassroomSubmissionImport::query()->where('google_submission_id', $id)->exists()) {
-                continue; // belongs to another assignment (cannot happen with Classroom's ids)
-            }
-            $row ??= new ClassroomSubmissionImport([
-                'assignment_id' => $assignment->id,
-                'google_submission_id' => $id,
-                'google_user_id' => $userId,
-                'state' => ClassroomSubmissionImport::STATE_NEW,
-                'attachments' => [],
-            ]);
+            $turnedIn = ($submission['state'] ?? 'TURNED_IN') === 'TURNED_IN';
+            $files = self::driveFiles($submission);
 
-            $known = [];
-            foreach ($row->attachments ?? [] as $attachment) {
-                $known[$attachment['drive_file_id']] = $attachment['mime_type'] ?? '';
+            if ($turnedIn && $files !== []) {
+                $handIns[] = $submission;
+                $row = $this->applyHandIn($api, $assignment, $submission, $row, $files, $matched, $created, $renewed, $rejectedLate);
             }
-            $filesChanged = array_map('strval', array_keys($known)) !== array_column($files, 'id');
-            $handedInAgain = $row->exists && $row->state === ClassroomSubmissionImport::STATE_RETURNED_FOR_RETAKE;
-
-            if (! $row->exists || $filesChanged || $handedInAgain) {
-                $row->attachments = array_map(fn (array $file) => [
-                    'drive_file_id' => $file['id'],
-                    'title' => $file['title'],
-                    'mime_type' => $known[$file['id']] ?? $this->mimeType($api, $file),
-                ], $files);
-                if ($row->exists) {
-                    $row->state = ClassroomSubmissionImport::STATE_NEW;
-                    if (! $handedInAgain) {
-                        // Kept after a retake request: the fetch grades that hand-in
-                        // at once (§19.4); any other new hand-in waits for "ตรวจ".
-                        $row->retake_reason = null;
-                    }
-                    $row->last_error = null;
-                    $renewed++;
-                } else {
-                    $created++;
-                }
+            if ($row === null || ! $row->exists) {
+                continue; // not handed in with files, and nothing synced before
             }
 
-            $row->google_user_id = $userId;
-            $row->late = ($submission['late'] ?? false) === true;
-            $row->google_update_time = mb_substr((string) ($submission['updateTime'] ?? ''), 0, 40);
-            $alternate = $submission['alternateLink'] ?? null;
-            $row->alternate_link = is_string($alternate) && $alternate !== '' ? mb_substr($alternate, 0, 512) : $row->alternate_link;
-            if (in_array($row->state, self::FOLLOWS_ROSTER_STATES, true)) {
-                $studentId = $matched[$userId] ?? null;
-                $row->student_id = $studentId !== null ? (int) $studentId : null;
-            }
+            $grade = $submission['assignedGrade'] ?? null;
+            $row->classroom_grade = is_numeric($grade) ? round((float) $grade, 2) : null;
             $row->save();
+            if (GradeConflicts::detect($row, $posted)?->wasRecentlyCreated) {
+                $conflicts++;
+            }
         }
 
-        $this->syncRosterIfUnknown($assignment, $submissions, $matched->keys()->map(fn ($id) => (string) $id)->all());
+        $this->syncRosterIfUnknown($assignment, $handIns, $matched->keys()->map(fn ($id) => (string) $id)->all());
         $fetching = FetchClassroomAttachmentsJob::dispatchForNewRows($assignment);
 
         Log::info('google.submissions_synced', [
             'assignment_id' => $assignment->id,
-            'turned_in' => count($submissions),
+            'listed' => count($submissions),
+            'turned_in' => count($handIns),
             'created' => $created,
             'renewed' => $renewed,
+            'rejected_late' => $rejectedLate,
+            'conflicts' => $conflicts,
             'fetching' => $fetching,
         ]);
+    }
+
+    /**
+     * A TURNED_IN submission with Drive files: creates its row, or puts it
+     * back to `new` when the files changed or it answers a retake request.
+     * A late hand-in of an assignment that does not accept late work waits
+     * as `rejected_late` instead (§19.3).
+     *
+     * @param  array<string, mixed>  $submission
+     * @param  list<array{id: string, title: string}>  $files
+     * @param  SupportCollection<string, int>  $matched  google user id -> student id
+     */
+    private function applyHandIn(
+        GoogleApi $api,
+        Assignment $assignment,
+        array $submission,
+        ?ClassroomSubmissionImport $row,
+        array $files,
+        SupportCollection $matched,
+        int &$created,
+        int &$renewed,
+        int &$rejectedLate,
+    ): ?ClassroomSubmissionImport {
+        $id = (string) $submission['id'];
+        $userId = (string) $submission['userId'];
+        if ($row === null && ClassroomSubmissionImport::query()->where('google_submission_id', $id)->exists()) {
+            return null; // belongs to another assignment (cannot happen with Classroom's ids)
+        }
+        $row ??= new ClassroomSubmissionImport([
+            'assignment_id' => $assignment->id,
+            'google_submission_id' => $id,
+            'google_user_id' => $userId,
+            'state' => ClassroomSubmissionImport::STATE_NEW,
+            'attachments' => [],
+        ]);
+
+        $known = [];
+        foreach ($row->attachments ?? [] as $attachment) {
+            $known[$attachment['drive_file_id']] = $attachment['mime_type'] ?? '';
+        }
+        $filesChanged = array_map('strval', array_keys($known)) !== array_column($files, 'id');
+        $handedInAgain = $row->exists && $row->state === ClassroomSubmissionImport::STATE_RETURNED_FOR_RETAKE;
+        $renew = ! $row->exists || $filesChanged || $handedInAgain;
+        $late = ($submission['late'] ?? false) === true;
+
+        if ($renew) {
+            $row->attachments = array_map(fn (array $file) => [
+                'drive_file_id' => $file['id'],
+                'title' => $file['title'],
+                'mime_type' => $known[$file['id']] ?? $this->mimeType($api, $file),
+            ], $files);
+            if ($row->exists) {
+                $row->state = ClassroomSubmissionImport::STATE_NEW;
+                if (! $handedInAgain) {
+                    // Kept after a retake request: the fetch grades that hand-in
+                    // at once (§19.4); any other new hand-in waits for "ตรวจ".
+                    $row->retake_reason = null;
+                }
+                $row->last_error = null;
+                $renewed++;
+            } else {
+                $created++;
+            }
+            $row->late = $late;
+            if ($late && ! $assignment->accept_late) {
+                // Not downloaded nor graded until the teacher accepts it (§19.3).
+                $row->state = ClassroomSubmissionImport::STATE_REJECTED_LATE;
+                $rejectedLate++;
+            }
+        } elseif ($row->state !== ClassroomSubmissionImport::STATE_NEW) {
+            // A late hand-in the teacher accepted stays `new` + late until it is fetched.
+            $row->late = $late;
+        }
+
+        $row->google_user_id = $userId;
+        $row->google_update_time = mb_substr((string) ($submission['updateTime'] ?? ''), 0, 40);
+        $alternate = $submission['alternateLink'] ?? null;
+        $row->alternate_link = is_string($alternate) && $alternate !== '' ? mb_substr($alternate, 0, 512) : $row->alternate_link;
+        if (in_array($row->state, self::FOLLOWS_ROSTER_STATES, true)) {
+            $studentId = $matched[$userId] ?? null;
+            $row->student_id = $studentId !== null ? (int) $studentId : null;
+        }
+        $row->save();
+
+        return $row;
     }
 
     /**

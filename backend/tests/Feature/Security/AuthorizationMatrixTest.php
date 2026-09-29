@@ -125,6 +125,11 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.google-submissions' => ['GET', 'assignments/{assignment}/google-submissions', 404, 404],
         'api.assignments.google-grades.retry' => ['POST', 'assignments/{assignment}/google-grades/retry', 404, 404],
         'api.google-submissions.return' => ['POST', 'google-submissions/{import}/return', 404, 404],
+        'api.google-submissions.accept-late' => ['POST', 'google-submissions/{import}/accept-late', 404, 404],
+        'api.classrooms.google-sync' => ['POST', 'classrooms/{classroom}/google-sync', 404, 404],
+        'api.assignments.grade-conflicts' => ['GET', 'assignments/{assignment}/grade-conflicts', 404, 404],
+        'api.grade-conflicts.resolve' => ['POST', 'grade-conflicts/{conflict}/resolve', 404, 404],
+        'api.teacher.attention' => ['GET', 'teacher/attention', self::OK, self::OK],
     ];
 
     /**
@@ -331,6 +336,7 @@ class AuthorizationMatrixTest extends TestCase
             '{skill}' => $this->skillA->id,
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
+            '{conflict}' => $this->conflictA->id,
             '{page}' => $this->pageA->id,
             '{extraction}' => $this->extractionA->id,
             '{model}' => $this->model->id,

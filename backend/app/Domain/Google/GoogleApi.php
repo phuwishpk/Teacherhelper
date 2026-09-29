@@ -160,12 +160,29 @@ final class GoogleApi
     }
 
     /**
-     * courses.courseWork.studentSubmissions.list, optionally for one state
-     * (TURNED_IN) or one student (userId).
+     * courses.courseWork.list of PUBLISHED courseWork (DESIGN §19.10): the
+     * sync looks for courseWork the teacher created on the Classroom website
+     * (associatedWithDeveloper false) and reads its materials.
      *
+     * @return list<array<string, mixed>> raw CourseWork resources
+     */
+    public function courseWorks(string $courseId): array
+    {
+        return $this->pages('courseWork.list', self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork', [
+            'courseWorkStates' => 'PUBLISHED',
+            'pageSize' => 100,
+        ], 'courseWork');
+    }
+
+    /**
+     * courses.courseWork.studentSubmissions.list, optionally for some states
+     * (TURNED_IN, or TURNED_IN and RETURNED for the grade sync; the
+     * parameter repeats) or one student (userId).
+     *
+     * @param  string|list<string>|null  $state
      * @return list<array<string, mixed>> raw StudentSubmission resources
      */
-    public function studentSubmissions(string $courseId, string $courseWorkId, ?string $state = null, ?string $userId = null): array
+    public function studentSubmissions(string $courseId, string $courseWorkId, string|array|null $state = null, ?string $userId = null): array
     {
         $query = ['pageSize' => 100];
         if ($state !== null) {
@@ -301,7 +318,7 @@ final class GoogleApi
         $items = [];
         $pageToken = null;
         for ($page = 0; $page < self::MAX_PAGES; $page++) {
-            $params = $pageToken === null ? $query : [...$query, 'pageToken' => $pageToken];
+            $params = self::queryString($pageToken === null ? $query : [...$query, 'pageToken' => $pageToken]);
             $body = $this->send($what, fn (PendingRequest $http) => $http->get($url, $params))->json();
             foreach (is_array($body[$key] ?? null) ? $body[$key] : [] as $item) {
                 if (is_array($item)) {
@@ -315,6 +332,24 @@ final class GoogleApi
         }
 
         return $items;
+    }
+
+    /**
+     * Google repeats a list parameter (states=TURNED_IN&states=RETURNED);
+     * PHP's http_build_query would write states[0]=..., which Google ignores.
+     *
+     * @param  array<string, scalar|list<scalar>>  $query
+     */
+    private static function queryString(array $query): string
+    {
+        $pairs = [];
+        foreach ($query as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $item) {
+                $pairs[] = rawurlencode((string) $key).'='.rawurlencode(is_bool($item) ? ($item ? 'true' : 'false') : (string) $item);
+            }
+        }
+
+        return implode('&', $pairs);
     }
 
     /**

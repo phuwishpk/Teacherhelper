@@ -20,7 +20,7 @@ class QueueClassroomGradePush
 {
     public function handleSubmissionPublished(SubmissionPublished $event): void
     {
-        if (AssignmentGoogleLink::query()->whereKey($event->assignmentId)->exists()) {
+        if (self::pushable($event->assignmentId)) {
             PushClassroomGradeJob::dispatch($event->submissionId);
         }
     }
@@ -32,9 +32,17 @@ class QueueClassroomGradePush
         }
         $submissionId = Response::query()->whereKey($event->responseId)->value('submission_id');
         $submission = $submissionId !== null ? Submission::query()->find($submissionId) : null;
-        if ($submission !== null && $submission->isPublished()
-            && AssignmentGoogleLink::query()->whereKey($submission->assignment_id)->exists()) {
+        if ($submission !== null && $submission->isPublished() && self::pushable($submission->assignment_id)) {
             PushClassroomGradeJob::dispatch($submission->id);
         }
+    }
+
+    /** Posted by the app: courseWork created on the Classroom website takes no grades (§19.3). */
+    private static function pushable(int $assignmentId): bool
+    {
+        return AssignmentGoogleLink::query()
+            ->whereKey($assignmentId)
+            ->where('origin', AssignmentGoogleLink::ORIGIN_APP)
+            ->exists();
     }
 }

@@ -54,4 +54,18 @@ final class NoticeTexts
 
         return $reason !== '' ? "{$text}: {$reason}" : $text;
     }
+
+    /** To the teacher when the sync mirrored courseWork created on the Classroom website (§19.3). */
+    public static function classroomWorkImported(string $title): string
+    {
+        $title = trim($title);
+
+        return $title !== '' ? "มีงานใหม่จาก Classroom รออนุมัติเฉลย: {$title}" : 'มีงานใหม่จาก Classroom รออนุมัติเฉลย';
+    }
+
+    /** To the teacher once per drop of the Google grant (§19.3). */
+    public static function googleReconnectNeeded(): string
+    {
+        return 'ต้องเชื่อมบัญชี Google ใหม่ แอปจึงจะซิงก์งานกับ Google Classroom ต่อได้';
+    }
 }

@@ -30,7 +30,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $school_id
  * @property int $classroom_id
- * @property int $subject_id
+ * @property int|null $subject_id null only for a Classroom website mirror until its key is approved (DESIGN §19.3)
  * @property int $created_by
  * @property string $title
  * @property string $strictness lenient|normal|strict

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
+use App\Http\Controllers\Api\V1\GradeConflictController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\LayoutController;
@@ -38,6 +39,7 @@ use App\Http\Controllers\Api\V1\StudentRetakeController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\SubmissionPageController;
+use App\Http\Controllers\Api\V1\TeacherAttentionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +85,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('me/ai-key', [AiKeyController::class, 'show'])->name('api.me.ai-key.show');
                 Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:ai-key')->name('api.me.ai-key.update');
                 Route::delete('me/ai-key', [AiKeyController::class, 'destroy'])->name('api.me.ai-key.destroy');
+
+                // The home screen's "รอดำเนินการ" card (§19.9).
+                Route::get('teacher/attention', TeacherAttentionController::class)->name('api.teacher.attention');
 
                 Route::get('classrooms', [ClassroomController::class, 'index'])->name('api.classrooms.index');
                 Route::post('classrooms', [ClassroomController::class, 'store'])->name('api.classrooms.store');
@@ -171,6 +176,10 @@ Route::prefix('v1')->group(function () {
                 Route::middleware('google.configured')->group(function () {
                     Route::delete('google/disconnect', [GoogleAccountController::class, 'disconnect'])->name('api.google.disconnect');
                     Route::delete('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'unlink'])->name('api.classrooms.google-link.destroy');
+                    // Grade conflicts and late hand-ins (§19.3): no Google call in the request.
+                    Route::get('assignments/{id}/grade-conflicts', [GradeConflictController::class, 'index'])->name('api.assignments.grade-conflicts');
+                    Route::post('grade-conflicts/{id}/resolve', [GradeConflictController::class, 'resolve'])->name('api.grade-conflicts.resolve');
+                    Route::post('google-submissions/{id}/accept-late', [GoogleSubmissionController::class, 'acceptLate'])->name('api.google-submissions.accept-late');
                     Route::middleware('throttle:google')->group(function () {
                         Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
                         Route::post('google/oauth/url', [GoogleAccountController::class, 'oauthUrl'])->name('api.google.oauth-url');
@@ -179,6 +188,8 @@ Route::prefix('v1')->group(function () {
                         Route::get('google/courses/{course_id}/import-preview', [GoogleImportController::class, 'preview'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.import-preview');
                         Route::post('classrooms/import-google', [GoogleImportController::class, 'import'])->name('api.classrooms.import-google');
                         Route::post('classrooms/{id}/google-roster/sync', [GoogleImportController::class, 'syncRoster'])->name('api.classrooms.google-roster.sync');
+                        // "ซิงก์ตอนนี้": one sync round of the classroom (§19.3).
+                        Route::post('classrooms/{id}/google-sync', [ClassroomGoogleController::class, 'syncNow'])->name('api.classrooms.google-sync');
                         Route::post('classrooms/{id}/google-link', [ClassroomGoogleController::class, 'link'])->name('api.classrooms.google-link.store');
                         Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');
                         Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->name('api.classrooms.google-roster.update');

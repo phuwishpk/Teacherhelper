@@ -65,6 +65,35 @@ final class SourceDocuments
     }
 
     /**
+     * A file the server fetched itself (the Drive material of courseWork
+     * created on the Classroom website, DESIGN §19.3), kept like an upload
+     * of $teacher: same types, size limit and PDF check.
+     *
+     * @throws ApiException unsupported_file_type / file_too_large / pdf_unreadable
+     */
+    public function storeBytes(User $teacher, string $bytes, ?string $mimeType, string $name): SourceDocument
+    {
+        $name = Str::limit(trim($name) ?: 'document', 250, '');
+        $type = PageFiles::acceptedType($mimeType, $name);
+        if ($type === null || $bytes === '') {
+            throw new ApiException("ไฟล์ \"{$name}\" เป็นชนิดที่อ่านไม่ได้", 'unsupported_file_type', 422);
+        }
+        $maxMb = (int) config('eduvision.documents.max_file_mb');
+        if (strlen($bytes) > $maxMb * 1024 * 1024) {
+            throw new ApiException("ไฟล์ \"{$name}\" ใหญ่เกิน {$maxMb} MB", 'file_too_large', 422);
+        }
+        $pages = 1;
+        if ($type === 'application/pdf') {
+            $pages = PdfPageCounter::count($bytes);
+            if ($pages === 0) {
+                throw new ApiException('อ่านไฟล์ PDF นี้ไม่ได้', 'pdf_unreadable', 422);
+            }
+        }
+
+        return $this->keep($teacher, ['bytes' => $bytes, 'mime_type' => $type, 'name' => $name, 'page_count' => min(65535, $pages)]);
+    }
+
+    /**
      * The API form of an uploaded document (POST /documents).
      *
      * @return array<string, mixed>

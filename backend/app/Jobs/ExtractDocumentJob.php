@@ -36,6 +36,7 @@ class ExtractDocumentJob implements ShouldQueue
         public readonly array $documentIds,
         public readonly ?int $pageFrom = null,
         public readonly ?int $pageTo = null,
+        public readonly string $coursework = '',
     ) {
         $this->onQueue('default');
     }
@@ -55,6 +56,7 @@ class ExtractDocumentJob implements ShouldQueue
             $this->pageFrom,
             $this->pageTo,
             lastAttempt: $this->attempts() >= $this->tries,
+            coursework: $this->coursework,
         );
     }
 

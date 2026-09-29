@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $scopes space-separated
  * @property Carbon $connected_at
  * @property string|null $last_error
+ * @property Carbon|null $reconnect_notified_at the FCM of the current drop went out (DESIGN §19.3)
  * @property Carbon|null $updated_at
  */
 class GoogleAccount extends Model
@@ -45,6 +46,7 @@ class GoogleAccount extends Model
         'scopes',
         'connected_at',
         'last_error',
+        'reconnect_notified_at',
     ];
 
     protected $hidden = [
@@ -59,6 +61,7 @@ class GoogleAccount extends Model
         return [
             'encrypted_refresh_token' => 'encrypted',
             'connected_at' => 'datetime',
+            'reconnect_notified_at' => 'datetime',
         ];
     }
 

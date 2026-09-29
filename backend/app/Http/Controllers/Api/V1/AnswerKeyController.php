@@ -88,17 +88,24 @@ class AnswerKeyController extends Controller
     }
 
     /**
-     * POST /api/v1/assignments/{id}/answer-key/approve -> {data: answer key}:
-     * key_approved_at is set, a freeform draft becomes ready, and hand-ins
-     * that waited are graded. 422 assignment_empty / answer_key_incomplete
-     * (errors.questions), 409 assignment_closed.
+     * POST /api/v1/assignments/{id}/answer-key/approve {subject_id?} ->
+     * {data: answer key}: key_approved_at is set, a freeform draft becomes
+     * ready, and hand-ins that waited are graded. subject_id is required
+     * (422 course_required) while the assignment has none: a mirror of
+     * courseWork created on the Classroom website (DESIGN §19.9).
+     * 422 assignment_empty / answer_key_incomplete (errors.questions),
+     * 409 assignment_closed.
      */
     public function approve(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
 
-        $assignment = $this->keys->approve($request->user(), $assignment);
+        $subjectId = $request->input('subject_id');
+        if ($subjectId !== null && filter_var($subjectId, FILTER_VALIDATE_INT) === false) {
+            throw new ApiException('รหัสวิชาไม่ถูกต้อง', 'validation_failed', 422, ['subject_id' => ['รหัสวิชาไม่ถูกต้อง']]);
+        }
+        $assignment = $this->keys->approve($request->user(), $assignment, $subjectId === null ? null : (int) $subjectId);
 
         return response()->json(['data' => self::payload($assignment->refresh())]);
     }

@@ -13,6 +13,7 @@ use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\DocumentExtraction;
 use App\Models\GoogleAccount;
+use App\Models\GradeConflict;
 use App\Models\Layout;
 use App\Models\LearningResource;
 use App\Models\LoginCardPrint;
@@ -110,6 +111,8 @@ trait SecurityWorld
     protected ModelVersion $model;
 
     protected ClassroomSubmissionImport $importA;
+
+    protected GradeConflict $conflictA;
 
     /** What Gemini read from a document of school A (DESIGN §19.5). */
     protected DocumentExtraction $extractionA;
@@ -209,6 +212,10 @@ trait SecurityWorld
             'assignment_id' => $this->assignmentA->id, 'google_submission_id' => 'sub-1', 'google_user_id' => 'guser-1',
             'student_id' => $this->studentA->id, 'state' => ClassroomSubmissionImport::STATE_NEW, 'google_update_time' => now(),
             'attachments' => [['drive_file_id' => 'f1', 'title' => 'page.jpg', 'mime_type' => 'image/jpeg']],
+        ]);
+        $this->conflictA = GradeConflict::create([
+            'submission_id' => $this->submissionA->id, 'import_id' => $this->importA->id,
+            'app_score' => 5, 'classroom_score' => 4, 'detected_at' => now(),
         ]);
     }
 

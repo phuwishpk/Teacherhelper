@@ -18,6 +18,7 @@ use App\Models\Assignment;
 use App\Models\DocumentExtraction;
 use App\Models\Question;
 use App\Models\SourceDocument;
+use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -59,12 +60,16 @@ final class AnswerKeyService
     ) {}
 
     /**
+     * $coursework (draft only): the title and instructions of courseWork
+     * created on the Classroom website (DESIGN §19.3), drafted from them
+     * and its materials when the mirror is imported.
+     *
      * @param  array<string, mixed>  $input  {document_ids[], page_from?, page_to?}
      * @return array{extraction: DocumentExtraction, cached: bool, applied: array<string, mixed>|null, estimate: array<string, mixed>}
      *
      * @throws ApiException
      */
-    public function request(User $teacher, Assignment $assignment, string $kind, array $input): array
+    public function request(User $teacher, Assignment $assignment, string $kind, array $input, string $coursework = ''): array
     {
         $assignment = Assignment::query()->with(['classroom', 'subject'])->findOrFail($assignment->id);
         if ($assignment->isClosed()) {
@@ -73,11 +78,12 @@ final class AnswerKeyService
         $read = $kind === AnswerKeyResult::KIND_READ;
         $selection = DocumentSelection::resolve($teacher, $input, required: $read);
         $questions = $assignment->questions()->get();
-        if (! $read && $selection->isEmpty() && $questions->isEmpty()) {
+        $coursework = $read ? '' : trim($coursework);
+        if (! $read && $selection->isEmpty() && $questions->isEmpty() && $coursework === '') {
             throw new ApiException('ยังไม่มีคำถาม พิมพ์โจทย์หรือแนบใบโจทย์ก่อนให้ AI ร่างเฉลย', 'assignment_empty', 422);
         }
 
-        $hash = $read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all());
+        $hash = $read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all(), $coursework);
         $estimate = CostEstimate::forPages($selection->pageCount(), $questions->isEmpty() ? null : $questions->count());
         $existing = DocumentExtraction::query()
             ->where('school_id', $assignment->school_id)
@@ -111,7 +117,7 @@ final class AnswerKeyService
         });
 
         $args = [$extraction->id, $assignment->id, $selection->ids(), $selection->pageFrom, $selection->pageTo];
-        $read ? ExtractDocumentJob::dispatch(...$args) : DraftAnswerKeyJob::dispatch(...$args);
+        $read ? ExtractDocumentJob::dispatch(...$args) : DraftAnswerKeyJob::dispatch(...$args, coursework: $coursework);
 
         return ['extraction' => $extraction->refresh(), 'cached' => false, 'applied' => null, 'estimate' => $estimate];
     }
@@ -160,7 +166,7 @@ final class AnswerKeyService
      *
      * @throws GeminiException transport error while retries are left
      */
-    public function process(string $kind, int $extractionId, int $assignmentId, array $documentIds, ?int $pageFrom, ?int $pageTo, bool $lastAttempt): void
+    public function process(string $kind, int $extractionId, int $assignmentId, array $documentIds, ?int $pageFrom, ?int $pageTo, bool $lastAttempt, string $coursework = ''): void
     {
         $extraction = DocumentExtraction::query()->find($extractionId);
         $assignment = Assignment::query()->with(['classroom', 'subject'])->find($assignmentId);
@@ -200,7 +206,7 @@ final class AnswerKeyService
         try {
             $result = $kind === AnswerKeyResult::KIND_READ
                 ? $this->reader->read($files, $questions, $subject, $grade, $key, $assignment->id)
-                : $this->reader->draft($files, $questions, $subject, $grade, $key, $assignment->id);
+                : $this->reader->draft($files, $questions, $subject, $grade, $key, $assignment->id, $coursework);
         } catch (GeminiException $e) {
             if ($e->status === GeminiException::ERROR && ! $lastAttempt) {
                 throw $e; // transient: the queue retries with backoff
@@ -236,11 +242,26 @@ final class AnswerKeyService
     }
 
     /**
-     * @throws ApiException 422 assignment_empty / answer_key_incomplete, 409 assignment_closed
+     * $subjectId: required when the assignment has no subject yet (a mirror
+     * of courseWork created on the Classroom website, DESIGN §19.3, §19.9):
+     * 422 course_required without one.
+     *
+     * @throws ApiException 422 assignment_empty / answer_key_incomplete / course_required, 409 assignment_closed
      */
-    public function approve(User $teacher, Assignment $assignment): Assignment
+    public function approve(User $teacher, Assignment $assignment, ?int $subjectId = null): Assignment
     {
-        $assignment = AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($teacher) {
+        $assignment = AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($teacher, $subjectId) {
+            if ($locked->subject_id === null) {
+                if ($subjectId === null || ! Subject::query()->whereKey($subjectId)->exists()) {
+                    throw new ApiException(
+                        'เลือกวิชาของการบ้านนี้ก่อนอนุมัติเฉลย',
+                        'course_required',
+                        422,
+                        ['subject_id' => ['กรุณาเลือกวิชา']],
+                    );
+                }
+                $locked->subject_id = $subjectId;
+            }
             KeyCompleteness::assertComplete($locked);
             $locked->key_approved_at = now();
             $locked->key_approved_by = $teacher->id;
@@ -262,7 +283,7 @@ final class AnswerKeyService
     /**
      * @param  list<Question>  $questions
      */
-    private static function draftHash(Assignment $assignment, DocumentSelection $selection, array $questions): string
+    private static function draftHash(Assignment $assignment, DocumentSelection $selection, array $questions, string $coursework = ''): string
     {
         $briefs = array_map(fn (Question $q) => [(int) $q->position, $q->type, trim($q->prompt_text)], $questions);
 
@@ -272,6 +293,7 @@ final class AnswerKeyService
             json_encode($briefs, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             (string) $assignment->subject?->name,
             (string) $assignment->classroom?->grade_level,
+            ...($coursework === '' ? [] : ['coursework', hash('sha256', $coursework)]),
         ]));
     }
 

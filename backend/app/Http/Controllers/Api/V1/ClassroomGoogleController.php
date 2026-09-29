@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Google\GoogleAccounts;
 use App\Domain\Google\GoogleApi;
+use App\Domain\Google\GoogleErrors;
 use App\Domain\Google\GoogleRoster;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GoogleLinkRequest;
 use App\Http\Requests\Api\V1\GoogleRosterRequest;
+use App\Jobs\ClassroomSyncJob;
 use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -122,6 +125,27 @@ class ClassroomGoogleController extends Controller
             'data' => $this->roster->save($request->user(), $classroom, $link, $request->matches()),
             'meta' => ['course_id' => $link->course_id, 'course_name' => $link->course_name],
         ]);
+    }
+
+    /**
+     * POST /api/v1/classrooms/{id}/google-sync -> 202 {data: {queued: true}}:
+     * "ซิงก์ตอนนี้", one sync round of this classroom now (DESIGN §19.3):
+     * new courseWork from the Classroom website, hand-ins and grades.
+     * 422 classroom_not_linked; 409 google_not_connected /
+     * google_reconnect_required for the account that linked the course.
+     */
+    public function syncNow(Request $request, int $id): JsonResponse
+    {
+        $classroom = $this->find($request, $id);
+        $link = GoogleRoster::linkOf($classroom);
+        $owner = User::query()->find($link->owner_user_id);
+        if ($owner === null) {
+            throw GoogleErrors::notConnected();
+        }
+        $this->accounts->accountOf($owner);
+        ClassroomSyncJob::dispatch($classroom->id);
+
+        return response()->json(['data' => ['queued' => true]], 202);
     }
 
     private function find(Request $request, int $id): Classroom

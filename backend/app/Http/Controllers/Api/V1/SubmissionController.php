@@ -44,7 +44,8 @@ class SubmissionController extends Controller
 
     /**
      * POST /api/v1/submissions/{id}/publish -> {data: {id, assignment_id,
-     * student_id, status, total_score, published_at, published_by}};
+     * student_id, status, total_score, total_override, published_at,
+     * published_by}} (total_score: the effective total, DESIGN §19.3);
      * 409 submission_not_reviewed while any answer is not reviewed.
      * Publishing again is a no-op 200.
      */
@@ -60,7 +61,8 @@ class SubmissionController extends Controller
             'assignment_id' => $submission->assignment_id,
             'student_id' => $submission->student_id,
             'status' => $submission->status,
-            'total_score' => $submission->total_score,
+            'total_score' => $submission->effectiveTotal(),
+            'total_override' => $submission->total_override,
             'published_at' => $submission->published_at?->toIso8601String(),
             'published_by' => $submission->published_by,
         ]]);

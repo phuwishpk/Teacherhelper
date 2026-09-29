@@ -279,7 +279,9 @@ final class ReviewQueue
                 'missing_pages' => SubmissionCoverage::pages($missing),
                 'publishable' => ! $submission->isPublished() && $responses->isNotEmpty() && $missing === [] && $reviewed === $responses->count(),
                 'open_appeal_count' => $responses->filter(fn (Response $r) => isset($this->openAppeals()[$r->id]))->count(),
-                'total_score' => $submission->isPublished() ? $submission->total_score : $current,
+                // The effective total (COALESCE(total_override, total_score), §19.3) once published.
+                'total_score' => $submission->isPublished() ? $submission->effectiveTotal() : $current,
+                'total_override' => $submission->total_override,
                 'published_at' => $submission->published_at?->toIso8601String(),
             ];
         }

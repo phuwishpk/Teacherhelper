@@ -15,7 +15,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  state: new|imported|needs_retake|returned_for_retake|graded|grade_failed
  *         |waiting_key|rejected_late|unsupported (§19.8; unsupported: last_error says why),
  *  late, attachments: [{drive_file_id, title, mime_type}], alternate_link,
- *  retake_reason, last_error, grade_pushed_at, updated_at}
+ *  retake_reason, last_error, grade_pushed_at, pushed_grade, classroom_grade,
+ *  updated_at}
+ *
+ * pushed_grade: the grade the app sent last; classroom_grade: Classroom's
+ * assignedGrade at the last sync (null = empty there), DESIGN §19.3.
  *
  * student_number is set by GoogleSubmissionSync::rows().
  *
@@ -49,6 +53,8 @@ class GoogleSubmissionResource extends JsonResource
             'retake_reason' => $row->retake_reason,
             'last_error' => $row->last_error,
             'grade_pushed_at' => $row->grade_pushed_at?->toIso8601String(),
+            'pushed_grade' => $row->pushed_grade,
+            'classroom_grade' => $row->classroom_grade,
             'updated_at' => $row->updated_at?->toIso8601String(),
         ];
     }

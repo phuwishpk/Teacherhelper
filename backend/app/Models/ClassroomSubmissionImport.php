@@ -23,6 +23,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $grade_pushed_at
  * @property string|null $last_error
  * @property bool $late Classroom marked the hand-in late (DESIGN §19.8)
+ * @property float|null $pushed_grade the grade the app sent last (DESIGN §19.3)
+ * @property float|null $classroom_grade Classroom's assignedGrade at the last sync
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -65,6 +67,8 @@ class ClassroomSubmissionImport extends Model
         'grade_pushed_at',
         'last_error',
         'late',
+        'pushed_grade',
+        'classroom_grade',
     ];
 
     protected $attributes = [
@@ -81,6 +85,8 @@ class ClassroomSubmissionImport extends Model
             'attachments' => 'array',
             'grade_pushed_at' => 'datetime',
             'late' => 'boolean',
+            'pushed_grade' => 'float',
+            'classroom_grade' => 'float',
         ];
     }
 

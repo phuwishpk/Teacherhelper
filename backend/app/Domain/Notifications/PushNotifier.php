@@ -71,4 +71,22 @@ abstract class PushNotifier implements Notifier
             ['assignment_id' => $import->assignment_id],
         ));
     }
+
+    public function classroomWorkImported(Assignment $assignment): void
+    {
+        $teacherId = $assignment->classroom?->teacher_id;
+        if ($teacherId === null) {
+            return;
+        }
+        $this->push([$teacherId], new PushMessage(
+            PushMessage::CLASSROOM_WORK_IMPORTED,
+            NoticeTexts::classroomWorkImported((string) $assignment->title),
+            ['assignment_id' => $assignment->id],
+        ));
+    }
+
+    public function googleReconnectNeeded(int $teacherId): void
+    {
+        $this->push([$teacherId], new PushMessage(PushMessage::GOOGLE_RECONNECT, NoticeTexts::googleReconnectNeeded()));
+    }
 }

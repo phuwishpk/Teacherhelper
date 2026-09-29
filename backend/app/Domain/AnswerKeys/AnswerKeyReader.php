@@ -56,19 +56,20 @@ final class AnswerKeyReader
     /**
      * @param  list<array{bytes: string, mime_type: string, page_count: int}>  $files  question sheets (may be empty)
      * @param  list<Question>  $questions
+     * @param  string  $coursework  title and instructions of courseWork created on the Classroom website (DESIGN §19.3)
      *
      * @throws GeminiException
      */
-    public function draft(array $files, array $questions, string $subject, string $gradeLabel, GeminiKey $key, ?int $assignmentId = null): AnswerKeyResult
+    public function draft(array $files, array $questions, string $subject, string $gradeLabel, GeminiKey $key, ?int $assignmentId = null, string $coursework = ''): AnswerKeyResult
     {
-        return $this->run(AnswerKeyResult::KIND_DRAFT, $files, $questions, $subject, $gradeLabel, $key, $assignmentId);
+        return $this->run(AnswerKeyResult::KIND_DRAFT, $files, $questions, $subject, $gradeLabel, $key, $assignmentId, $coursework);
     }
 
     /**
      * @param  list<array{bytes: string, mime_type: string, page_count: int}>  $files
      * @param  list<Question>  $questions
      */
-    public function request(string $kind, array $files, array $questions, string $subject, string $gradeLabel): GeminiRequest
+    public function request(string $kind, array $files, array $questions, string $subject, string $gradeLabel, string $coursework = ''): GeminiRequest
     {
         $prompt = $this->prompts->get($kind, 'general');
         $briefs = array_map(fn (Question $q) => [
@@ -88,6 +89,7 @@ final class AnswerKeyReader
                 'grade_label' => $gradeLabel,
                 'questions_json' => $briefs === [] ? '[]' : json_encode($briefs, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
                 'file_note' => self::fileNote($kind, $files),
+                'coursework' => trim($coursework) !== '' ? trim($coursework) : '-',
             ]),
             images: array_map(fn (array $f) => new GeminiImage($f['bytes'], $f['mime_type'], $level), array_values($files)),
             responseSchema: ResponseSchemas::get($kind, 'general'),
@@ -103,10 +105,10 @@ final class AnswerKeyReader
      * @param  list<array{bytes: string, mime_type: string, page_count: int}>  $files
      * @param  list<Question>  $questions
      */
-    private function run(string $kind, array $files, array $questions, string $subject, string $gradeLabel, GeminiKey $key, ?int $assignmentId): AnswerKeyResult
+    private function run(string $kind, array $files, array $questions, string $subject, string $gradeLabel, GeminiKey $key, ?int $assignmentId, string $coursework = ''): AnswerKeyResult
     {
         $call = new GeminiCall(
-            request: $this->request($kind, $files, $questions, $subject, $gradeLabel),
+            request: $this->request($kind, $files, $questions, $subject, $gradeLabel, $coursework),
             check: fn (array $data) => AnswerKeyResult::fromGemini($kind, $data)->toArray(),
             feature: $kind === AnswerKeyResult::KIND_READ ? self::FEATURE_READ : self::FEATURE_DRAFT,
             assignmentId: $assignmentId,
