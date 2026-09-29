@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\AnswerKeys\AnswerKeyResult;
 use App\Domain\AnswerKeys\AnswerKeyService;
 use App\Domain\AnswerKeys\KeyCompleteness;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\QuestionResource;
 use App\Models\Assignment;
@@ -59,6 +60,31 @@ class AnswerKeyController extends Controller
     public function draft(Request $request, int $id): JsonResponse
     {
         return $this->request($request, $id, AnswerKeyResult::KIND_DRAFT);
+    }
+
+    /**
+     * POST /api/v1/assignments/{id}/answer-key/estimate {kind?: read|draft,
+     * document_ids?[], page_from?, page_to?} -> {data: {kind, pages, cached,
+     * estimate: {input_tokens, output_tokens, thb}}}: what extract (read,
+     * the default) or draft would cost for this selection and whether the
+     * school read it before (cached: free). Queues nothing. Same 422s as
+     * extract/draft for the selection (document_too_long,
+     * validation_failed, assignment_empty).
+     */
+    public function estimate(Request $request, int $id): JsonResponse
+    {
+        $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
+        Gate::authorize('view', $assignment);
+
+        $kind = $request->input('kind', 'read');
+        if (! in_array($kind, ['read', 'draft'], true)) {
+            throw new ApiException('ชนิดคำขอไม่ถูกต้อง', 'validation_failed', 422, ['kind' => ['ชนิดคำขอต้องเป็น read หรือ draft']]);
+        }
+        $kind = $kind === 'read' ? AnswerKeyResult::KIND_READ : AnswerKeyResult::KIND_DRAFT;
+
+        $outcome = $this->keys->estimate($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to']));
+
+        return response()->json(['data' => $outcome]);
     }
 
     /**

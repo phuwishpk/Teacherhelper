@@ -292,6 +292,46 @@ class AnswerKeyTest extends TestCase
         $this->assertNotSame(SourceDocument::query()->sole()->sha256, DocumentExtraction::query()->sole()->input_hash);
     }
 
+    public function test_the_estimate_of_a_picked_range_and_the_cache_are_shown_before_a_read(): void
+    {
+        $id = $this->documents([UploadedFile::fake()->createWithContent('book.pdf', self::pdfBytes(32))])[0];
+        $url = "/api/v1/assignments/{$this->assignment->id}/answer-key/estimate";
+
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => [$id]])
+            ->assertStatus(422)->assertJsonPath('code', 'document_too_long');
+        $this->asUser($this->teacher)->postJson($url, ['kind' => 'other', 'document_ids' => [$id]])
+            ->assertStatus(422)->assertJsonPath('code', 'validation_failed');
+
+        // Pages 3-7: 5 x 560 + 1,500 in, 5 pages x 5 questions x 150 out, in baht from the .env prices.
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => [$id], 'page_from' => 3, 'page_to' => 7])
+            ->assertOk()
+            ->assertJsonPath('data.kind', 'answer_key_read')
+            ->assertJsonPath('data.pages', 5)
+            ->assertJsonPath('data.cached', false)
+            ->assertJsonPath('data.estimate', ['input_tokens' => 4300, 'output_tokens' => 3750, 'thb' => round((4300 * 0.5 + 3750 * 3.0) / 1e6 * 33, 2)]);
+        $this->assertSame([], $this->gemini->requests, 'an estimate never calls Gemini');
+        $this->assertSame(0, DocumentExtraction::query()->count());
+
+        // After the read, the same range is free; another range is not.
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/answer-key/extract", ['document_ids' => [$id], 'page_from' => 3, 'page_to' => 7])
+            ->assertStatus(202);
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => [$id], 'page_from' => 3, 'page_to' => 7])
+            ->assertOk()->assertJsonPath('data.cached', true);
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => [$id], 'page_from' => 3, 'page_to' => 8])
+            ->assertOk()->assertJsonPath('data.cached', false);
+
+        // A draft hashes the questions too: not the read's cache entry; outputs follow the question count.
+        $this->asUser($this->teacher)->postJson($url, ['kind' => 'draft'])
+            ->assertOk()
+            ->assertJsonPath('data.kind', 'answer_key_draft')
+            ->assertJsonPath('data.pages', 0)
+            ->assertJsonPath('data.cached', false)
+            ->assertJsonPath('data.estimate.output_tokens', $this->assignment->questions()->count() * 150);
+
+        // Only the owner may ask.
+        $this->asUser($this->makeTeacher())->postJson($url, ['document_ids' => [$id], 'page_from' => 3, 'page_to' => 7])->assertNotFound();
+    }
+
     public function test_a_range_of_a_pdf_with_a_cross_reference_stream_cannot_be_cut(): void
     {
         config(['eduvision.documents.max_pages' => 1]);

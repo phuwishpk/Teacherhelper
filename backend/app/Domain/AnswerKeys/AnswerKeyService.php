@@ -40,6 +40,9 @@ use Illuminate\Support\Str;
  * cached, then written into the questions (AnswerKeyApplier) of the
  * assignment still waiting for it.
  *
+ * estimate(): POST /answer-key/estimate, the same lookup without queueing
+ * anything: pages, cost estimate and whether the cache already has it.
+ *
  * approve(): POST /answer-key/approve: every question complete
  * (KeyCompleteness), key_approved_at set, a freeform draft becomes ready,
  * and submissions that waited for the key are graded
@@ -111,6 +114,43 @@ final class AnswerKeyService
         $read ? ExtractDocumentJob::dispatch(...$args) : DraftAnswerKeyJob::dispatch(...$args);
 
         return ['extraction' => $extraction->refresh(), 'cached' => false, 'applied' => null, 'estimate' => $estimate];
+    }
+
+    /**
+     * POST /answer-key/estimate: what the same extract or draft call would
+     * cost, for the files and page range the teacher picked, and whether the
+     * school read it before (free). Nothing is queued and no Gemini key is
+     * needed, so the app can show the estimate before every read (§19.5).
+     *
+     * @param  array<string, mixed>  $input  {document_ids?[], page_from?, page_to?}
+     * @return array{kind: string, pages: int, cached: bool, estimate: array{input_tokens: int, output_tokens: int, thb: float|null}}
+     *
+     * @throws ApiException
+     */
+    public function estimate(User $teacher, Assignment $assignment, string $kind, array $input): array
+    {
+        $assignment = Assignment::query()->with(['classroom', 'subject'])->findOrFail($assignment->id);
+        $read = $kind === AnswerKeyResult::KIND_READ;
+        $selection = DocumentSelection::resolve($teacher, $input, required: $read);
+        $questions = $assignment->questions()->get();
+        if (! $read && $selection->isEmpty() && $questions->isEmpty()) {
+            throw new ApiException('ยังไม่มีคำถาม พิมพ์โจทย์หรือแนบใบโจทย์ก่อนให้ AI ร่างเฉลย', 'assignment_empty', 422);
+        }
+
+        $hash = $read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all());
+        $cached = DocumentExtraction::query()
+            ->where('school_id', $assignment->school_id)
+            ->where('input_hash', $hash)
+            ->where('purpose', DocumentExtraction::PURPOSE_ANSWER_KEY)
+            ->where('status', DocumentExtraction::STATUS_DONE)
+            ->exists();
+
+        return [
+            'kind' => $kind,
+            'pages' => $selection->pageCount(),
+            'cached' => $cached,
+            'estimate' => CostEstimate::forPages($selection->pageCount(), $questions->isEmpty() ? null : $questions->count()),
+        ];
     }
 
     /**

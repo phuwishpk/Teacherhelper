@@ -77,6 +77,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.answer-key.show' => ['GET', 'assignments/{assignment}/answer-key', 404, 404],
         'api.assignments.answer-key.extract' => ['POST', 'assignments/{assignment}/answer-key/extract', 404, 404],
         'api.assignments.answer-key.draft' => ['POST', 'assignments/{assignment}/answer-key/draft', 404, 404],
+        'api.assignments.answer-key.estimate' => ['POST', 'assignments/{assignment}/answer-key/estimate', 404, 404],
         'api.assignments.answer-key.approve' => ['POST', 'assignments/{assignment}/answer-key/approve', 404, 404],
         'api.questions.update' => ['PATCH', 'questions/{question}', 404, 404],
         'api.questions.destroy' => ['DELETE', 'questions/{question}', 404, 404],

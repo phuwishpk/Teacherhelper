@@ -120,6 +120,8 @@ Route::prefix('v1')->group(function () {
                 // Queue a Gemini job (costs money) unless the school read the same files before.
                 Route::post('assignments/{id}/answer-key/extract', [AnswerKeyController::class, 'extract'])->middleware('throttle:answer-key')->name('api.assignments.answer-key.extract');
                 Route::post('assignments/{id}/answer-key/draft', [AnswerKeyController::class, 'draft'])->middleware('throttle:answer-key')->name('api.assignments.answer-key.draft');
+                // Free: what extract/draft would cost for the picked files and range, and whether it is cached.
+                Route::post('assignments/{id}/answer-key/estimate', [AnswerKeyController::class, 'estimate'])->name('api.assignments.answer-key.estimate');
                 Route::post('assignments/{id}/answer-key/approve', [AnswerKeyController::class, 'approve'])->name('api.assignments.answer-key.approve');
 
                 Route::patch('questions/{id}', [QuestionController::class, 'update'])->name('api.questions.update');
