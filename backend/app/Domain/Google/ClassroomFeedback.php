@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  *   the assignment title and the effective total "x/y" (§19.3),
  *   the per-question explanations (the teacher's edited text when there is
  *   one; responses.explanation always holds the current text), cut to
- *   3,000 characters in all,
+ *   3,000 characters in all; none for score_only assignments,
  *   the link APP_URL/r/{submission_id} (a Thai page that opens the app).
  *
  * queue() records a `classroom_feedback_posts` row per publish;
@@ -190,7 +190,9 @@ final class ClassroomFeedback
             'คะแนน '.self::number($submission->effectiveTotal() ?? 0.0).'/'.self::number($max),
         ];
 
-        $explanations = self::explanations($submission);
+        // score_only work has no explanations section: its responses hold
+        // only template lines (FeedbackTemplates), not explanations.
+        $explanations = $assignment?->score_only ? '' : self::explanations($submission);
         if ($explanations !== '') {
             $lines[] = '';
             $lines[] = 'คำอธิบายรายข้อ';

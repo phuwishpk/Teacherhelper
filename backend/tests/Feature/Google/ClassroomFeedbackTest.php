@@ -176,6 +176,24 @@ class ClassroomFeedbackTest extends TestCase
         $this->assertStringContainsString('/r/'.$submission->id, $text);
     }
 
+    public function test_a_score_only_assignment_gets_no_explanations_section(): void
+    {
+        $this->assignment->forceFill(['score_only' => true])->save();
+        $submission = $this->reviewedSubmission(0);
+        foreach ($submission->responses as $response) {
+            $response->forceFill(['explanation' => 'ข้อนี้ยังได้คะแนนไม่เต็ม'])->save();
+        }
+        $this->fake();
+
+        $this->publish($submission);
+
+        $text = $this->announcements()[0]['text'];
+        $this->assertStringContainsString('คะแนน ', $text);
+        $this->assertStringNotContainsString('คำอธิบายรายข้อ', $text);
+        $this->assertStringNotContainsString('ข้อ 1:', $text);
+        $this->assertStringContainsString('/r/'.$submission->id, $text);
+    }
+
     public function test_nothing_is_sent_for_an_unmatched_student_or_an_assignment_not_in_classroom(): void
     {
         $unmatched = $this->reviewedSubmission(2);

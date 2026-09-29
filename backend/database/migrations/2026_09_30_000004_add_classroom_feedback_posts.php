@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Schema;
  *   required are marked scope_missing (needs_reconnect, §19.7), so every
  *   query on last_error (the cron sync, the reconnect FCM) sees them. No
  *   push is sent from here: the app shows the banner on its next status.
+ *
+ * down() drops the table only: it cannot tell which accounts up() marked,
+ * so those keep last_error = scope_missing and must connect again.
  */
 return new class extends Migration
 {
