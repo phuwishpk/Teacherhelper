@@ -470,6 +470,22 @@ class ClassroomSyncTest extends TestCase
         Queue::assertPushed(ClassroomSyncJob::class, 1);
     }
 
+    public function test_the_classroom_shows_when_its_work_was_last_synced(): void
+    {
+        $this->asUser($this->teacher)->getJson("/api/v1/classrooms/{$this->classroom->id}")
+            ->assertOk()
+            ->assertJsonPath('data.google_link.work_synced_at', null)
+            ->assertJsonPath('data.google_link.roster_synced_at', null);
+
+        $this->round();
+
+        $synced = $this->asUser($this->teacher)->getJson("/api/v1/classrooms/{$this->classroom->id}")
+            ->assertOk()
+            ->json('data.google_link.work_synced_at');
+        $this->assertIsString($synced);
+        $this->assertEqualsWithDelta(now()->timestamp, strtotime($synced), 5);
+    }
+
     public function test_a_round_for_one_classroom_touches_only_that_course(): void
     {
         $this->posted('cw-1');

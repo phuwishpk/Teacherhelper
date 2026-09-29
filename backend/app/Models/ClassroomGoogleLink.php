@@ -61,8 +61,10 @@ class ClassroomGoogleLink extends Model
 
     /**
      * `google_link` of a classroom (GET /classrooms, POST .../google-link).
+     * roster_synced_at / work_synced_at: the last roster sync and the last
+     * work sync round (DESIGN §19.2, §19.3), shown next to "ซิงก์ตอนนี้".
      *
-     * @return array{course_id: string, course_name: string, linked_at: string|null}
+     * @return array{course_id: string, course_name: string, linked_at: string|null, roster_synced_at: string|null, work_synced_at: string|null}
      */
     public function toApi(): array
     {
@@ -70,6 +72,8 @@ class ClassroomGoogleLink extends Model
             'course_id' => $this->course_id,
             'course_name' => $this->course_name,
             'linked_at' => $this->linked_at?->toIso8601String(),
+            'roster_synced_at' => $this->roster_synced_at?->toIso8601String(),
+            'work_synced_at' => $this->work_synced_at?->toIso8601String(),
         ];
     }
 }
