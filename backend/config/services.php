@@ -52,6 +52,22 @@ return [
         // DESIGN §10.1 stay in the prompt files and are sent only when this is true
         // (for a 2.x model).
         'send_temperature' => (bool) env('GEMINI_SEND_TEMPERATURE', false),
+        // Media resolution per image part (DESIGN §21.5): low | medium | high.
+        // Every student image stays `high` until the calibration harness
+        // (§21.10) shows a lower level reads as well; then lower it here.
+        'media' => [
+            'short' => env('GEMINI_MEDIA_SHORT', 'high'),       // short crops and the show_work final-answer box (target low)
+            'work' => env('GEMINI_MEDIA_WORK', 'high'),         // show_work and open crops (target medium)
+            'page' => env('GEMINI_MEDIA_PAGE', 'high'),         // every whole page of student work, PDF pages included
+            'document' => env('GEMINI_MEDIA_DOCUMENT', 'medium'), // teachers' documents only
+        ],
+        // true: send mediaResolution on each part (needs an API version that
+        // accepts it, e.g. GEMINI_BASE_URL=.../v1alpha). false (default):
+        // generationConfig.mediaResolution per call at the highest level of
+        // the call's parts (the fallback of §21.5, works on v1beta).
+        'media_per_part' => (bool) env('GEMINI_MEDIA_PER_PART', false),
+        // At most this many questions per extract_batch / extract_page call (§21.4).
+        'page_max_questions' => (int) env('GEMINI_PAGE_MAX_QUESTIONS', 15),
     ],
 
     /*

@@ -5,6 +5,7 @@ namespace Tests\Feature\Google;
 use App\Domain\Google\CourseWorkPoster;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Notifications\PushMessage;
+use App\Jobs\FetchClassroomAttachmentsJob;
 use App\Jobs\PushClassroomGradeJob;
 use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
@@ -144,43 +145,23 @@ class AssignmentGoogleTest extends TestCase
             ->assertJsonPath('code', 'assignment_posted');
     }
 
-    public function test_the_spare_worksheet_is_uploaded_to_drive_and_attached_for_viewing(): void
+    public function test_no_spare_worksheet_is_attached_any_more(): void
     {
+        // DESIGN §19.4 drops the anonymous spare sheet of §18.3: older apps may still ask for it.
         $this->fakeGoogle([
-            'www.googleapis.com/upload/drive/v3/files*' => Http::response(['id' => 'drive-spare-1']),
             $this->courseWorkUrl() => Http::response(['id' => self::COURSE_WORK_ID, 'alternateLink' => 'https://classroom.google.com/x']),
         ]);
 
         $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/google-post", ['attach_blank_worksheet' => true])
             ->assertCreated()
-            ->assertJsonPath('data.drive_file_id', 'drive-spare-1')
-            ->assertJsonPath('data.has_blank_worksheet', true);
+            ->assertJsonPath('data.drive_file_id', null)
+            ->assertJsonPath('data.has_blank_worksheet', false);
 
-        $upload = $this->sentTo('/upload/drive/v3/files')[0];
-        $this->assertStringContainsString('uploadType=multipart', $upload->url());
-        $this->assertStringStartsWith('multipart/related; boundary=', $upload->header('Content-Type')[0]);
-        $this->assertStringContainsString('"name":"ใบงานสำรอง เศษส่วน ชุดที่ 3.pdf"', $upload->body());
-        $this->assertStringContainsString('%PDF-', $upload->body());
-        $this->assertStringNotContainsString('นักเรียนคนที่', $upload->body());
-
+        $this->assertCount(0, $this->sentTo('/upload/drive/v3/files'));
         $work = $this->sentTo('/courseWork', 'POST')[0];
-        $this->assertSame([['driveFile' => ['driveFile' => ['id' => 'drive-spare-1', 'title' => 'ใบงานสำรอง เศษส่วน ชุดที่ 3.pdf'], 'shareMode' => 'VIEW']]], $work['materials']);
-        $this->assertStringContainsString('ใบงานสำรอง', $work['description']);
-    }
-
-    public function test_a_failed_course_work_removes_the_uploaded_spare_sheet(): void
-    {
-        $this->fakeGoogle([
-            'www.googleapis.com/upload/drive/v3/files*' => Http::response(['id' => 'drive-spare-1']),
-            'www.googleapis.com/drive/v3/files/drive-spare-1' => Http::response(null, 204),
-            $this->courseWorkUrl() => Http::response(self::googleError(403, 'PERMISSION_DENIED', 'The caller does not have permission'), 403),
-        ]);
-
-        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/google-post", ['attach_blank_worksheet' => true])
-            ->assertStatus(409)
-            ->assertJsonPath('code', 'google_permission_denied');
-        $this->assertCount(1, $this->sentTo('/drive/v3/files/drive-spare-1', 'DELETE'));
-        $this->assertDatabaseCount('assignment_google_links', 0);
+        $this->assertArrayNotHasKey('materials', $work->data());
+        $this->assertStringNotContainsString('ใบงานสำรอง', $work['description']);
+        $this->assertStringContainsString('ส่งได้ไม่เกิน 5 หน้า ไฟล์ละไม่เกิน 10 MB', $work['description']);
     }
 
     public function test_posting_needs_a_ready_assignment_a_linked_room_and_a_google_account(): void
@@ -212,7 +193,7 @@ class AssignmentGoogleTest extends TestCase
 
     public function test_sync_keeps_one_row_per_turned_in_submission_with_attachments(): void
     {
-        Queue::fake([SyncClassroomRosterJob::class]);
+        Queue::fake([SyncClassroomRosterJob::class, FetchClassroomAttachmentsJob::class]);
         $this->posted();
         $this->fakeGoogle([
             $this->submissionsUrl().'*' => Http::response(['studentSubmissions' => [
@@ -247,12 +228,15 @@ class AssignmentGoogleTest extends TestCase
         // g-9 and g-3 are matched to no student: one roster sync for the room (§19.2).
         Queue::assertPushed(SyncClassroomRosterJob::class, 1);
         Queue::assertPushed(SyncClassroomRosterJob::class, fn (SyncClassroomRosterJob $job) => $job->classroomId === $this->classroom->id);
+        // The server downloads the files of the matched new rows (§19.4): sub-1 and sub-2.
+        Queue::assertPushed(FetchClassroomAttachmentsJob::class, 2);
         $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/google-submissions")->assertOk();
         Queue::assertPushed(SyncClassroomRosterJob::class, 1);
     }
 
     public function test_resync_renews_only_new_hand_ins(): void
     {
+        Queue::fake([FetchClassroomAttachmentsJob::class]);
         $this->posted();
         $imported = $this->import('sub-1', ['state' => ClassroomSubmissionImport::STATE_IMPORTED]);
         $graded = $this->import('sub-2', ['google_user_id' => 'g-2', 'student_id' => $this->students[2]->id, 'state' => ClassroomSubmissionImport::STATE_GRADED, 'attachments' => [['drive_file_id' => 'f2', 'title' => 'a.jpg', 'mime_type' => 'image/jpeg']]]);
@@ -273,7 +257,12 @@ class AssignmentGoogleTest extends TestCase
         $this->assertSame(ClassroomSubmissionImport::STATE_NEW, $graded->refresh()->state);
         $this->assertSame('image/png', $graded->attachments[0]['mime_type']);
         $returned->refresh();
-        $this->assertSame([ClassroomSubmissionImport::STATE_NEW, null, $this->students[3]->id], [$returned->state, $returned->retake_reason, $returned->student_id]);
+        // The retake reason stays until the files are fetched: that hand-in is graded at once (§19.4).
+        $this->assertSame([ClassroomSubmissionImport::STATE_NEW, 'รูปเบลอ', $this->students[3]->id], [$returned->state, $returned->retake_reason, $returned->student_id]);
+        $this->assertNull($graded->retake_reason);
+        Queue::assertPushed(FetchClassroomAttachmentsJob::class, fn (FetchClassroomAttachmentsJob $job) => $job->importId === $graded->id);
+        Queue::assertPushed(FetchClassroomAttachmentsJob::class, fn (FetchClassroomAttachmentsJob $job) => $job->importId === $returned->id);
+        Queue::assertNotPushed(FetchClassroomAttachmentsJob::class, fn (FetchClassroomAttachmentsJob $job) => $job->importId === $imported->id);
     }
 
     public function test_sync_errors(): void

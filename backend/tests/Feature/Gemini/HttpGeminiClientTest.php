@@ -8,6 +8,7 @@ use App\Domain\Gemini\GeminiImage;
 use App\Domain\Gemini\GeminiReply;
 use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\HttpGeminiClient;
+use App\Domain\Gemini\MediaResolution;
 use App\Jobs\GradeScanJob;
 use App\Models\AiCall;
 use App\Models\Response;
@@ -105,6 +106,55 @@ class HttpGeminiClientTest extends TestCase
 
         $this->assertSame(0.0, $payload['generationConfig']['temperature']);
         $this->assertArrayNotHasKey('thinkingConfig', $payload['generationConfig']);
+    }
+
+    public function test_media_resolution_goes_once_per_call_at_the_highest_level_by_default(): void
+    {
+        // DESIGN §21.5 fallback: one generationConfig.mediaResolution at the highest level of the parts.
+        $payload = $this->client()->payload($this->request('batch', [
+            new GeminiImage('CROP', GeminiImage::WEBP, MediaResolution::LOW, 'Q2: answer box'),
+            new GeminiImage('WORK', GeminiImage::WEBP, MediaResolution::MEDIUM, 'Q3: working area'),
+        ]));
+
+        $this->assertSame('MEDIA_RESOLUTION_MEDIUM', $payload['generationConfig']['mediaResolution']);
+        $this->assertSame([
+            ['text' => 'batch'],
+            ['text' => 'Q2: answer box'],
+            ['inlineData' => ['mimeType' => 'image/webp', 'data' => base64_encode('CROP')]],
+            ['text' => 'Q3: working area'],
+            ['inlineData' => ['mimeType' => 'image/webp', 'data' => base64_encode('WORK')]],
+        ], $payload['contents'][0]['parts'], 'each label is a text part right before its image');
+
+        $plain = $this->client()->payload($this->request('no level', [new GeminiImage('X')]));
+        $this->assertArrayNotHasKey('mediaResolution', $plain['generationConfig']);
+    }
+
+    public function test_media_resolution_per_part_when_enabled(): void
+    {
+        $client = new HttpGeminiClient('gemini-3.8-flash', 'https://generativelanguage.googleapis.com/v1alpha', 30, 8, 'low', false, mediaPerPart: true);
+        $payload = $client->payload($this->request('page', [
+            new GeminiImage('PAGE', 'application/pdf', MediaResolution::HIGH),
+            new GeminiImage('BOX', GeminiImage::WEBP, MediaResolution::LOW),
+        ]));
+
+        $this->assertArrayNotHasKey('mediaResolution', $payload['generationConfig']);
+        $this->assertSame(['level' => 'MEDIA_RESOLUTION_HIGH'], $payload['contents'][0]['parts'][1]['mediaResolution']);
+        $this->assertSame(['level' => 'MEDIA_RESOLUTION_LOW'], $payload['contents'][0]['parts'][2]['mediaResolution']);
+    }
+
+    public function test_the_configured_levels_and_the_token_details_of_a_reply(): void
+    {
+        $this->assertSame('high', MediaResolution::forPart(MediaResolution::PART_SHORT), 'high until calibrated');
+        $this->assertSame('medium', MediaResolution::forPart(MediaResolution::PART_DOCUMENT));
+        config(['services.gemini.media.short' => 'low', 'services.gemini.media.work' => 'nonsense']);
+        $this->assertSame('low', MediaResolution::forPart(MediaResolution::PART_SHORT));
+        $this->assertSame('high', MediaResolution::forPart(MediaResolution::PART_WORK), 'an unknown value falls back to the default');
+        $this->assertSame('mixed', MediaResolution::summary(['low', 'high']));
+        $this->assertNull(MediaResolution::summary([null]));
+
+        Http::fake([self::URL => Http::response(self::answer('{"ok":true}', ['promptTokenCount' => 900, 'candidatesTokenCount' => 30, 'thoughtsTokenCount' => 12, 'cachedContentTokenCount' => 512]))]);
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame([900, 42, 512, 12], [$reply->inputTokens, $reply->outputTokens, $reply->cachedTokens, $reply->thinkingTokens]);
     }
 
     public function test_a_batch_runs_through_the_pool_with_one_reply_per_request(): void

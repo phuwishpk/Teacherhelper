@@ -16,7 +16,12 @@ use Throwable;
  *   POST {base}/models/{GEMINI_MODEL}:generateContent   header x-goog-api-key
  *   {systemInstruction, contents: [{role: user, parts: [text, inlineData...]}],
  *    generationConfig: {responseMimeType: application/json, responseJsonSchema,
- *                       thinkingConfig?, temperature?}}
+ *                       thinkingConfig?, temperature?, mediaResolution?}}
+ *
+ * Media resolution (DESIGN §21.5): per image part when media_per_part is on,
+ * else one generationConfig.mediaResolution at the highest level of the
+ * call's parts. An image with a label gets that text as a part of its own
+ * right before it.
  *
  * The key travels only in the header, so it never appears in a URL, a log
  * line or an exception message. Requests run through Http::pool with at most
@@ -33,6 +38,7 @@ final class HttpGeminiClient implements GeminiClient
         private readonly int $concurrency = 8,
         private readonly ?string $thinkingLevel = 'low',
         private readonly bool $sendTemperature = false,
+        private readonly bool $mediaPerPart = false,
     ) {}
 
     public static function fromConfig(): self
@@ -46,6 +52,7 @@ final class HttpGeminiClient implements GeminiClient
             concurrency: max(1, (int) ($config['concurrency'] ?? 8)),
             thinkingLevel: ($config['thinking_level'] ?? null) ?: null,
             sendTemperature: (bool) ($config['send_temperature'] ?? false),
+            mediaPerPart: (bool) ($config['media_per_part'] ?? false),
         );
     }
 
@@ -69,7 +76,7 @@ final class HttpGeminiClient implements GeminiClient
                     ->acceptJson()
                     ->asJson()
                     ->connectTimeout(10)
-                    ->timeout($this->timeout)
+                    ->timeout(max($this->timeout, (int) $request->timeout))
                     ->post($url, $this->payload($request));
             }
         }, $this->concurrency);
@@ -119,7 +126,14 @@ final class HttpGeminiClient implements GeminiClient
     {
         $parts = [['text' => $request->userText]];
         foreach ($request->images as $image) {
-            $parts[] = ['inlineData' => ['mimeType' => $image->mimeType, 'data' => base64_encode($image->data)]];
+            if ($image->label !== null) {
+                $parts[] = ['text' => $image->label];
+            }
+            $part = ['inlineData' => ['mimeType' => $image->mimeType, 'data' => base64_encode($image->data)]];
+            if ($this->mediaPerPart && $image->mediaResolution !== null) {
+                $part['mediaResolution'] = ['level' => MediaResolution::apiValue($image->mediaResolution, true)];
+            }
+            $parts[] = $part;
         }
 
         $body = [
@@ -134,6 +148,10 @@ final class HttpGeminiClient implements GeminiClient
         }
         if ($this->sendTemperature && $request->temperature !== null) {
             $config['temperature'] = $request->temperature;
+        }
+        $highest = MediaResolution::highest(array_map(fn (GeminiImage $i) => $i->mediaResolution, $request->images));
+        if (! $this->mediaPerPart && $highest !== null) {
+            $config['mediaResolution'] = MediaResolution::apiValue($highest, false);
         }
         if ($this->thinkingLevel !== null) {
             $config['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
@@ -169,6 +187,8 @@ final class HttpGeminiClient implements GeminiClient
         }
         $usage = (array) ($json['usageMetadata'] ?? []);
         $input = isset($usage['promptTokenCount']) ? (int) $usage['promptTokenCount'] : null;
+        $cached = isset($usage['cachedContentTokenCount']) ? (int) $usage['cachedContentTokenCount'] : null;
+        $thinking = isset($usage['thoughtsTokenCount']) ? (int) $usage['thoughtsTokenCount'] : null;
         $output = isset($usage['candidatesTokenCount']) || isset($usage['thoughtsTokenCount'])
             ? (int) ($usage['candidatesTokenCount'] ?? 0) + (int) ($usage['thoughtsTokenCount'] ?? 0)
             : null;
@@ -186,7 +206,7 @@ final class HttpGeminiClient implements GeminiClient
             }
         }
 
-        return GeminiReply::ok($text, $input, $output, $latency);
+        return GeminiReply::ok($text, $input, $output, $latency, $cached, $thinking);
     }
 
     private static function latency(Response $response): ?int

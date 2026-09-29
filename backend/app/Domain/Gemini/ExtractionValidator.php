@@ -14,6 +14,8 @@ use App\Models\Question;
  *   scores 0 without reading the criteria (§11.1), so there a short or empty
  *   list is accepted and every criterion is stored as not_met: a model that
  *   answers blank = true with criteria [] is right, not invalid;
+ * - mcq (read from a whole page, extract_page): selected_options without
+ *   duplicates;
  * - error_types without duplicates; a blank answer is tagged no_answer.
  *
  * Anything wrong throws GeminiException::invalidOutput().
@@ -53,6 +55,11 @@ final class ExtractionValidator
             $data['criteria'] = $data['blank']
                 ? self::blankCriteria($data['criteria'], $criteriaCount)
                 : self::everyCriterion($data['criteria'], $criteriaCount);
+        }
+
+        if ($type === Question::TYPE_MCQ) {
+            // Whole-page only (extract_page): the letters the student marked.
+            $data['selected_options'] = array_values(array_unique(array_map('strval', $data['selected_options'])));
         }
 
         $errors = array_values(array_unique($data['error_types']));

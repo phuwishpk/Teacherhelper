@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Google;
 
+use App\Jobs\FetchClassroomAttachmentsJob;
 use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
@@ -14,6 +15,7 @@ use App\Models\GoogleAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -268,6 +270,7 @@ class RosterSyncTest extends TestCase
 
     public function test_handing_in_from_an_unknown_account_syncs_the_roster_once_per_round(): void
     {
+        Queue::fake([FetchClassroomAttachmentsJob::class]); // the downloads are FetchClassroomAttachmentsTest's
         $assignment = Assignment::factory()->for_classroom($this->classroom)->create(['status' => Assignment::STATUS_READY]);
         AssignmentGoogleLink::create(['assignment_id' => $assignment->id, 'course_work_id' => self::COURSE_WORK_ID, 'alternate_link' => 'https://classroom.google.com/x', 'posted_by' => $this->teacher->id, 'posted_at' => now()]);
         $this->roster([...self::current(), self::courseStudent('g-new', 'ใหม่ มาเรียน', null)]);

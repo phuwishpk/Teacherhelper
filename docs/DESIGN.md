@@ -1912,13 +1912,14 @@ ALTER TABLE scans
 ### 19.4 C. ทางตรวจจากรูปทั้งหน้า (whole-page)
 
 - **รูปจากไฟล์แนบใน Classroom และจากนักเรียนที่ส่งในแอปขึ้น server** server ดาวน์โหลดไฟล์ Drive ด้วย token ของครู (`drive.readonly` มีอยู่แล้ว) เก็บไฟล์ต้นฉบับ แล้วส่งให้ Gemini ทันที Gemini รับ JPEG, PNG, WebP, HEIC/HEIF และ PDF ได้โดยตรง **server ไม่แปลงหรือแยกหน้า** (ไม่มีงาน CPU หนักบน server ตาม §3.3) ข้อนี้กลับคำตัดสินใน §18.1 "รูปไม่ผ่าน server" และ §2.4 "ไม่มีใบงานที่ไม่มี template"
-- ใช้ได้ทั้ง**ใบงานของแอป** (มี marker และ QR) และ**หน้ากระดาษอิสระ** QR ในภาพ**ไม่ถูกใช้** เจ้าของงานคือคนที่ส่งใน Classroom (จับคู่ด้วย `userId`) หรือนักเรียนที่ login อยู่ **เลิกใช้ใบงานสำรอง** (`student_id = 0`)
+- ใช้ได้ทั้ง**ใบงานของแอป** (มี marker และ QR) และ**หน้ากระดาษอิสระ** QR ในภาพ**ไม่ถูกใช้** เจ้าของงานคือคนที่ส่งใน Classroom (จับคู่ด้วย `userId`) หรือนักเรียนที่ login อยู่ **เลิกใช้ใบงานสำรอง** (`student_id = 0`): `google-post` ไม่สร้างและไม่แนบใบงานสำรองแล้ว (`attach_blank_worksheet` ยังรับจากแอปรุ่นเก่าแต่ไม่ใช้) คำสั่งในงานบอกให้ถ่ายรูปหรือแนบ PDF พร้อมจำนวนหน้าและขนาดที่รับ ส่วนใบงานสำรองที่แจกไปแล้วยังสแกนผ่านทางเดิมของ §18.3 ได้
 - **หนึ่ง Gemini call ต่อหนึ่งหน้า** (prompt `extract_page`, §19.10) แนบเฉลยทุกข้อของการบ้านเป็น JSON แบบย่อในข้อความ แล้วได้ผลสกัดรายข้อกลับมา
   - ไฟล์ PDF ของนักเรียนส่งเป็น part เดียวต่อไฟล์ (Gemini เห็นทุกหน้าในไฟล์) นับจำนวนหน้ารวมกับข้อจำกัดด้านล่าง
   - **ระดับ media ของทุกหน้างานนักเรียน** (รูป หรือแต่ละหน้าของ PDF) คือระดับของหน้า `GEMINI_MEDIA_PAGE` (`high` จนกว่าจะผ่าน calibration, §21.5) PDF ของนักเรียน**ไม่ใช้** `GEMINI_MEDIA_DOCUMENT` ซึ่งใช้กับเอกสารของครูเท่านั้น
   - ถ้าผลขาดบางข้อหรือไม่ผ่าน schema ให้ **retry รายข้อ** (หน้าเดิม ถามเฉพาะข้อนั้น) หนึ่งครั้ง
   - หลายหน้า: รวมผลทุกหน้า ข้อที่เจอในหลายหน้าให้ใช้หน้าที่ไม่ว่าง ถ้าไม่ว่างทั้งสองหน้าและต่างกัน ให้ `D = 1` (§11.8)
-  - ข้อที่ Gemini **จับคู่คำตอบกับข้อไม่ได้** (ไม่เจอในทุกหน้าหลัง retry) ได้ `priority_band = check` ("ต้องตรวจ" ซึ่งเป็นความหมายของ "ต้องดู" ที่ตกลงไว้ เลือก band ที่เข้มที่สุดเพื่อไม่ให้หลุดไปกับการอนุมัติแบบกลุ่ม ไม่ใช่ `look` "ควรดู") พร้อมป้าย "หาคำตอบข้อนี้ในภาพไม่เจอ" และ `grading_state = manual`
+  - ข้อที่ Gemini **จับคู่คำตอบกับข้อไม่ได้** (ไม่เจอในทุกหน้าหลัง retry) ได้ `priority_band = check` ("ต้องตรวจ" ซึ่งเป็นความหมายของ "ต้องดู" ที่ตกลงไว้ เลือก band ที่เข้มที่สุดเพื่อไม่ให้หลุดไปกับการอนุมัติแบบกลุ่ม ไม่ใช่ `look` "ควรดู") พร้อมป้าย "หาคำตอบข้อนี้ในภาพไม่เจอ" และ `grading_state = manual` (`fuzzy_trace.manual_reason = answer_not_found`) ข้อที่ไม่ผ่าน schema ทั้งสองครั้งเป็น `invalid_output` ข้อที่อยู่บนหน้าที่ Gemini อ่านไม่สำเร็จเป็น `ai_error` หรือเหตุผลเรื่อง key เหมือนทาง crop
+  - **implement (build ข้อ 2, 30 ก.ย. 2569)**: `GradeSubmissionPageJob` อ่านทีละไฟล์ แล้วเก็บผลรายข้อของไฟล์นั้นใน `submission_pages.result` (คอลัมน์ที่เพิ่มใน §19.8) เมื่อไม่มีหน้าใดของรอบนั้นยัง `grading` job ที่เสร็จหลังสุดรวมผล ตรวจ fuzzy และเขียน `responses` ใน transaction เดียวภายใต้ lock ของ submission ข้อ mcq ให้ Gemini รายงานตัวเลือกที่เลือก (`selected_options`) แล้วตรวจด้วยโค้ดตาม §11.6 transport error ลองใหม่ทั้งหน้า 60 / 180 / 600 วินาทีเหมือน `GradeScanJob` ครบ 3 ครั้งหน้าเป็น `failed`
   - ขอพิกัดกรอบคำตอบ `answer_box` (0–1000 แบบ `box_2d` ของ Gemini, ไม่บังคับ) ไว้ให้หน้าตรวจทานไฮไลต์บนภาพ
 - **Fuzzy เหมือนเดิม** (§11) ทางนี้ไม่มี CNN และ `ink_ratio` ค่า `D` จึงมาจากความขัดกันระหว่างหน้าเท่านั้น
 - ครูเปิดดูทุกข้อได้ อนุมัติแบบกลุ่มใช้กติกาเดิมตาม band
@@ -1929,6 +1930,8 @@ ALTER TABLE scans
   3. ถ้ายังได้ 0 (ไฟล์เข้ารหัสหรือเสีย) ถือว่า**อ่านไม่ได้**: ในแอปตอบ 422 `pdf_unreadable` ข้อความ "อ่านไฟล์ PDF นี้ไม่ได้ ส่งเป็นรูป หรือบันทึกเป็น PDF ใหม่" จาก Classroom แถว import เป็น `unsupported` พร้อมเหตุผลเดียวกัน
   - `page_count` ใน `submission_pages` และ `source_documents` จึงมีค่าเสมอ
 - **ส่งใหม่**: ตรวจใหม่อัตโนมัติ**เฉพาะ**เมื่อครูตีกลับให้ทำใหม่ (`returned_for_retake`) การส่งใหม่กรณีอื่นให้รอครูกด "ตรวจ" (`submissions.regrade_pending = TRUE`) ถ้า submission เผยแพร่แล้ว การตรวจใหม่ใช้ `SubmissionReopened` ตาม §14.2
+  - implement: รอบซิงก์ที่เจองานที่ส่งใหม่หลังตีกลับ**คง `retake_reason` ไว้**บนแถวที่กลับเป็น `new` เป็นเครื่องหมายว่าต้องตรวจทันที แล้วล้างเมื่อดาวน์โหลดเสร็จ (`imported`) submission ที่ยังไม่มี `responses` เลยตรวจทันทีเสมอ ไฟล์ที่รอครูเป็น `submission_pages.state = stored` เมื่อครูกด "ตรวจ" หน้าในรอบเดิมเป็น `superseded` และคะแนนเดิมของทุกข้อถูกบันทึกเป็น `score_events.rescan` ถ้าไม่มีงานรอตรวจตอบ 409 `nothing_to_grade`
+- **ดาวน์โหลดจาก Classroom** (`FetchClassroomAttachmentsJob`, build ข้อ 2): dispatch หลังรอบซิงก์งานที่ส่ง (ตอนนี้คือ `GET /assignments/{id}/google-submissions`, ข้อ 4 เพิ่ม cron) สำหรับแถว `new` ที่ผู้ส่งจับคู่กับนักเรียนแล้ว ใช้บัญชี Google ของครูที่ผูกคอร์ส (`owner_user_id`) ถาม Drive ชนิดและขนาดก่อนดาวน์โหลด ไฟล์ที่ไม่รองรับ (Word, Google Docs/Sheets/Slides, เกินขนาด, เกินจำนวนหน้า, PDF อ่านไม่ได้) ทำให้แถวเป็น `unsupported` พร้อมเหตุผลภาษาไทยใน `last_error` โดยไม่เก็บไฟล์ใดเลย ผู้ส่งที่ยังไม่จับคู่ ไฟล์ที่ถูกลบ หรือบัญชีที่ต้องเชื่อมใหม่ แถวยังเป็น `new` พร้อมหมายเหตุ Google ล่มให้ queue ลองใหม่
 - **ครูแก้ข้อความอธิบายรายข้อก่อนเผยแพร่ได้** ข้อความที่แก้ใช้แทนของ Gemini ทั้งในหน้าผลของนักเรียนและในประกาศ Classroom ส่วนต้นฉบับของ Gemini เก็บไว้ที่ `responses.ai_explanation` (ใช้ได้กับทั้งสองทางตรวจ)
 - **แสดงภาพที่ server ไม่แปลง**: server เก็บไฟล์ต้นฉบับและไม่แปลงชนิด (ไม่มีงาน CPU หนัก) ไฟล์ HEIC/HEIF (เช่นจาก iPhone ผ่าน Classroom) แสดงใน Chrome ไม่ได้และถอดบน Android บางรุ่นไม่ได้ ส่วน PDF แสดงเป็นภาพในหน้าตรวจทานไม่ได้ แอปจึงลองแสดงภาพก่อน ถ้าถอดไม่ได้หรือเป็น PDF ให้แสดงกล่อง **"แสดงภาพนี้บนเครื่องนี้ไม่ได้"** พร้อมปุ่ม **"ดาวน์โหลดไฟล์"** (เปิดด้วยแอปอื่นในเครื่อง) และไม่ไฮไลต์ `answer_box` การตรวจไม่กระทบเพราะ Gemini อ่าน HEIC และ PDF ได้เอง
 - **ครูสแกนกระดาษด้วยกล้อง**ยังใช้ทาง marker/crop บนมือถือเหมือนเดิม (§6.2)
@@ -2072,6 +2075,9 @@ CREATE TABLE submission_pages (
   file_path             VARCHAR(255) NULL,                    -- pages/{school}/{assignment}/{id}.{ext}
   state                 ENUM('stored','grading','graded','failed','superseded') NOT NULL DEFAULT 'stored',
   received_at           TIMESTAMP NOT NULL,
+  result                JSON NULL,     -- เพิ่มตอน implement (build ข้อ 2): ผลรายข้อของไฟล์นี้
+                                       -- {status, questions: {question_id: {found, data?, answer_box?, invalid?, error?}}}
+                                       -- เก็บไว้จนทุกหน้าของรอบอ่านเสร็จแล้วรวมผล (job ละหน้า รวมผลในหน่วยความจำไม่ได้)
   INDEX idx_pages_submission (submission_id, state)
 );
 
@@ -2173,7 +2179,7 @@ CREATE TABLE explanation_cache (
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`
+**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`, `nothing_to_grade` (409 ของ `POST /submissions/{id}/grade` เมื่อไม่มีงานส่งใหม่รอตรวจ เพิ่มตอน implement)
 
 ### 19.10 Job, cron และ prompt
 
@@ -2193,6 +2199,7 @@ CREATE TABLE explanation_cache (
 **hook ใน `eduvision:queue-work`** (ไม่ใช้ `schedule:run`) ก่อนเริ่ม worker ทุกนาที: (1) heartbeat เดิม (2) `ClassroomSyncJob` ถ้า `Cache::add('classroom-sync:lock', now, 300)` สำเร็จ (3) hook ของ Phase 9 (§20.8)
 
 **prompt ใหม่** (`backend/resources/prompts/`, §10.2): `extract_page.v1` (ทุกข้อในหน้าเดียว output เป็น `{answers: [{question_no, found, answer_box?, ...field ตามประเภทใน §10.3}]}`), `answer_key_read.v1`, `answer_key_draft.v1` (ใช้กับงานจากเว็บด้วย โดยแนบ material)
+- ชื่อไฟล์ตามแบบ §10.2: `extract_page.general.v1.md` และ `extract_batch.general.v1.md` (§21.4) schema ของ output ส่งให้ Gemini เต็มรูป แต่ server ตรวจเฉพาะซองนอก (`answers[].question_no`) แล้วตรวจแต่ละข้อกับ schema ของประเภทนั้น (`extract.{type}.json`) แยกกัน ข้อที่ไม่ผ่านจึงไม่ทำให้ข้ออื่นเสีย ข้อ mcq ของทาง whole-page ใช้ `extract.mcq.json` (`selected_options`)
 
 **Classroom / Drive API ที่ใช้เพิ่ม**
 
@@ -2583,6 +2590,7 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 - PDF ของนักเรียนใช้ระดับของหน้า (`GEMINI_MEDIA_PAGE`) ไม่ใช่ `GEMINI_MEDIA_DOCUMENT` เพราะเป็นลายมือที่ต้องอ่านละเอียดเท่ารูปทั้งหน้า (§19.4)
 - **เปิดระดับที่ต่ำลงได้หลังผ่าน calibration harness (§21.10) เท่านั้น** ถ้าไม่ผ่านให้ใช้ระดับที่สูงกว่าถัดไป (`low` ไม่ผ่าน → `medium`, `medium` ไม่ผ่าน → `high`)
 - ส่งเป็น `mediaResolution` ระดับ part ⚠️ ตรวจกับเอกสาร API ตอน implement ว่าต้องใช้ API version ไหน ถ้าตั้งระดับ part ไม่ได้ ให้ตั้ง `generationConfig.mediaResolution` ต่อ call โดยใช้ระดับ**สูงสุด**ของ part ใน call นั้น (หน้าที่มีทั้งตอบสั้นและแสดงวิธีทำจะได้ `medium`)
+  - **implement (build ข้อ 2)**: ยังยืนยันกับ API จริงไม่ได้ (test ห้ามเรียก Gemini จริง) จึงทำทั้งสองแบบ เลือกด้วย `GEMINI_MEDIA_PER_PART` ค่าตั้งต้น `false` = `generationConfig.mediaResolution` ต่อ call ที่ระดับสูงสุด (ใช้ได้กับ `v1beta`) `true` = `parts[].mediaResolution.level` ต่อ part (ต้องตั้ง `GEMINI_BASE_URL` เป็น API version ที่รองรับ) เปลี่ยนหลังทดสอบด้วย `eduvision:gemini-check` หรือ calibration harness ตอนนี้ทุกระดับของภาพนักเรียนเป็น `high` ผลของสองแบบจึงเท่ากัน `ai_calls.media_resolution` บันทึกระดับของ part (`mixed` เมื่อต่างกัน)
 - ทำพร้อมทางตรวจทั้งหน้า (build order ข้อ 2 ใน §15)
 
 ### 21.6 ข้อ 5: thinking level และเพดาน output
@@ -2629,6 +2637,7 @@ ALTER TABLE ai_calls
 ```
 
 - ใช้ใน DB และรายงานวิชาเท่านั้น **ไม่มีหน้าจอของครู** (admin ดูได้ใน Filament เดิม)
+- migration ของ build ข้อ 2 เพิ่มทุกคอลัมน์ข้างบนแล้ว ตอนนี้ grading กรอก `feature` (`grading_crop`, `grading_page`), `media_resolution`, `image_count`, `question_count`, `assignment_id`, `cached_tokens`, `thinking_tokens` ส่วน `batch` เป็น `FALSE` จนถึง §20.8 call แบบหลายข้อ (`extract_batch`, `extract_page`) มี `response_id = NULL` (ข้อเดียวที่ส่งซ้ำรายข้อมี `question_id`)
 - ส่วนที่ประหยัดของแต่ละข้อคำนวณจาก: ข้อ 2 = จำนวน `responses.auto_rule` คูณค่าเฉลี่ย token ของ `extract` รายข้อ, ข้อ 3 = token ต่อข้อของ `extract_batch` เทียบ `extract`, ข้อ 4 = token ต่อภาพแยกตาม `media_resolution`, ข้อ 6 = จำนวน `explanation_source = reused`, ข้อ 7 = จำนวนข้อใน `score_only`
 
 ### 21.9 ข้อ 9: ย่อภาพบนมือถือ

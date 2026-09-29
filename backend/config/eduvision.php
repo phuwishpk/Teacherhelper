@@ -46,6 +46,15 @@ return [
         'max_crop_kb' => max(16, (int) env('SCAN_MAX_CROP_KB', 1024)),
     ],
 
+    // Whole-page submissions (DESIGN §19.4): files a Classroom hand-in (and
+    // later the student's or the teacher's upload) may carry. A PDF counts
+    // each of its pages. PHP must allow upload_max_filesize >= max_file_mb
+    // and post_max_size >= 55M for the upload endpoints.
+    'submissions' => [
+        'max_pages' => max(1, (int) env('SUBMISSION_MAX_PAGES', 5)),
+        'max_file_mb' => max(1, (int) env('SUBMISSION_MAX_FILE_MB', 10)),
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,

@@ -24,6 +24,10 @@ use Illuminate\Support\Carbon;
  * @property float|null $total_score
  * @property Carbon|null $published_at
  * @property int|null $published_by
+ * @property string|null $channel scan|whole_page: the grading path used last (DESIGN §19.8)
+ * @property Carbon|null $submitted_at when the student handed in (whole-page)
+ * @property bool $late handed in after the due time (Classroom's `late`)
+ * @property bool $regrade_pending a new hand-in waits for the teacher's "ตรวจ" (§19.4)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -39,6 +43,10 @@ class Submission extends Model
 
     public const STATUS_PUBLISHED = 'published';
 
+    public const CHANNEL_SCAN = 'scan';
+
+    public const CHANNEL_WHOLE_PAGE = 'whole_page';
+
     protected $fillable = [
         'assignment_id',
         'student_id',
@@ -46,10 +54,16 @@ class Submission extends Model
         'total_score',
         'published_at',
         'published_by',
+        'channel',
+        'submitted_at',
+        'late',
+        'regrade_pending',
     ];
 
     protected $attributes = [
         'status' => self::STATUS_AWAITING_SCAN,
+        'late' => false,
+        'regrade_pending' => false,
     ];
 
     /**
@@ -60,6 +74,9 @@ class Submission extends Model
         return [
             'total_score' => 'float',
             'published_at' => 'datetime',
+            'submitted_at' => 'datetime',
+            'late' => 'boolean',
+            'regrade_pending' => 'boolean',
         ];
     }
 
@@ -85,6 +102,12 @@ class Submission extends Model
     public function scans(): HasMany
     {
         return $this->hasMany(Scan::class);
+    }
+
+    /** @return HasMany<SubmissionPage, $this> */
+    public function pages(): HasMany
+    {
+        return $this->hasMany(SubmissionPage::class);
     }
 
     /** @return HasMany<Response, $this> */

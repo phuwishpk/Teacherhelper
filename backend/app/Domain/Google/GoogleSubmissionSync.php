@@ -3,6 +3,7 @@
 namespace App\Domain\Google;
 
 use App\Exceptions\ApiException;
+use App\Jobs\FetchClassroomAttachmentsJob;
 use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
@@ -18,8 +19,11 @@ use Illuminate\Support\Facades\Log;
  * "ดึงงานที่ส่ง" (DESIGN §18.2, §18.6 GET /assignments/{id}/google-submissions):
  * reads the TURNED_IN studentSubmissions of the assignment's courseWork and
  * keeps one classroom_submission_imports row per submission that has Drive
- * attachments. The phone downloads the files itself (§18.1: the pictures
- * never pass through the server).
+ * attachments, with Classroom's `late` flag.
+ *
+ * Since Phase 8 (DESIGN §19.4, replacing §18.1) the server downloads the
+ * files of every `new` row whose submitter is matched to a student
+ * (FetchClassroomAttachmentsJob) and grades them from the whole page.
  *
  * A row goes back to `new` when the student handed in again after being
  * sent back for a retake, or when the attached files changed. updateTime
@@ -139,7 +143,11 @@ final class GoogleSubmissionSync
                 ], $files);
                 if ($row->exists) {
                     $row->state = ClassroomSubmissionImport::STATE_NEW;
-                    $row->retake_reason = null;
+                    if (! $handedInAgain) {
+                        // Kept after a retake request: the fetch grades that hand-in
+                        // at once (§19.4); any other new hand-in waits for "ตรวจ".
+                        $row->retake_reason = null;
+                    }
                     $row->last_error = null;
                     $renewed++;
                 } else {
@@ -148,6 +156,7 @@ final class GoogleSubmissionSync
             }
 
             $row->google_user_id = $userId;
+            $row->late = ($submission['late'] ?? false) === true;
             $row->google_update_time = mb_substr((string) ($submission['updateTime'] ?? ''), 0, 40);
             $alternate = $submission['alternateLink'] ?? null;
             $row->alternate_link = is_string($alternate) && $alternate !== '' ? mb_substr($alternate, 0, 512) : $row->alternate_link;
@@ -159,12 +168,14 @@ final class GoogleSubmissionSync
         }
 
         $this->syncRosterIfUnknown($assignment, $submissions, $matched->keys()->map(fn ($id) => (string) $id)->all());
+        $fetching = FetchClassroomAttachmentsJob::dispatchForNewRows($assignment);
 
         Log::info('google.submissions_synced', [
             'assignment_id' => $assignment->id,
             'turned_in' => count($submissions),
             'created' => $created,
             'renewed' => $renewed,
+            'fetching' => $fetching,
         ]);
     }
 

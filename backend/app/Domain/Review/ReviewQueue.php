@@ -240,6 +240,7 @@ final class ReviewQueue
             'explanation_error' => $response->explanationError(),
             'has_crop' => $response->crop_path !== null,
             'has_final_crop' => $response->final_crop_path !== null,
+            'submission_page_id' => $response->submission_page_id,
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
         ];
@@ -268,6 +269,9 @@ final class ReviewQueue
                 'id' => $submission->id,
                 'status' => $submission->status,
                 'student' => $this->student($submission),
+                'channel' => $submission->channel,
+                'late' => (bool) $submission->late,
+                'regrade_pending' => (bool) $submission->regrade_pending,
                 'response_count' => $responses->count(),
                 'reviewed_count' => $reviewed,
                 // Questions of the printed sheet; pages not scanned yet block publishing (§9.5).

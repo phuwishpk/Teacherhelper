@@ -87,6 +87,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.responses.update' => ['PATCH', 'responses/{response}', 403, 404],
         'api.responses.regenerate-explanation' => ['POST', 'responses/{response}/regenerate-explanation', 403, 404],
         'api.submissions.publish' => ['POST', 'submissions/{submission}/publish', 403, 404],
+        'api.submissions.grade' => ['POST', 'submissions/{submission}/grade', 403, 404],
         'api.appeals.index' => ['GET', 'appeals', self::OK, self::OK],
         'api.appeals.update' => ['PATCH', 'appeals/{appeal}', 404, 404],
         'api.practice-items.index' => ['GET', 'practice-items', self::OK, self::OK],
@@ -137,6 +138,7 @@ class AuthorizationMatrixTest extends TestCase
      */
     private const SHARED = [
         'api.responses.crop' => ['GET', 'responses/{response}/crop', 404, 404, 403, 404],
+        'api.submission-pages.image' => ['GET', 'submission-pages/{page}/image', 404, 404, 403, 404],
         'api.ml.models.active' => ['GET', 'ml/models/active', self::OK, self::OK, self::OK, self::OK],
         'api.ml.models.file' => ['GET', 'ml/models/{model}/file', self::OK, self::OK, self::OK, self::OK],
     ];
@@ -321,6 +323,7 @@ class AuthorizationMatrixTest extends TestCase
             '{skill}' => $this->skillA->id,
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
+            '{page}' => $this->pageA->id,
             '{model}' => $this->model->id,
             '{course}' => 'course-a',
         ]);

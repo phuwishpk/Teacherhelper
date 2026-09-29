@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\StudentResultController;
 use App\Http\Controllers\Api\V1\StudentRetakeController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use App\Http\Controllers\Api\V1\SubmissionController;
+use App\Http\Controllers\Api\V1\SubmissionPageController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
 use Illuminate\Support\Facades\Route;
@@ -132,6 +133,7 @@ Route::prefix('v1')->group(function () {
                 // Calls Gemini synchronously (and costs money), so it is throttled.
                 Route::post('responses/{id}/regenerate-explanation', [ResponseController::class, 'regenerateExplanation'])->middleware('throttle:explanation')->name('api.responses.regenerate-explanation');
                 Route::post('submissions/{id}/publish', [SubmissionController::class, 'publish'])->name('api.submissions.publish');
+                Route::post('submissions/{id}/grade', [SubmissionController::class, 'grade'])->name('api.submissions.grade');
                 Route::get('appeals', [AppealController::class, 'index'])->name('api.appeals.index');
                 Route::patch('appeals/{id}', [AppealController::class, 'update'])->name('api.appeals.update');
 
@@ -190,6 +192,7 @@ Route::prefix('v1')->group(function () {
             // Teacher or student (§9.5, §9.7); ResponsePolicy::viewCrop decides.
             Route::middleware('role:teacher,student')->group(function () {
                 Route::get('responses/{id}/crop', [ResponseController::class, 'crop'])->name('api.responses.crop');
+                Route::get('submission-pages/{id}/image', [SubmissionPageController::class, 'image'])->name('api.submission-pages.image');
                 // On-device model distribution (§9.8).
                 Route::get('ml/models/active', [ModelController::class, 'active'])->name('api.ml.models.active');
                 Route::get('ml/models/{id}/file', [ModelController::class, 'file'])->name('api.ml.models.file');

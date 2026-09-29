@@ -88,6 +88,7 @@ class StudentResultResource extends JsonResource
             'has_final_crop' => $response->final_crop_path !== null,
             'crop_url' => $response->crop_path !== null ? route('api.responses.crop', $response->id, false) : null,
             'final_crop_url' => $response->final_crop_path !== null ? route('api.responses.crop', ['id' => $response->id, 'part' => 'final'], false) : null,
+            'page_image_url' => ResponseDetailResource::pageImageUrl($response),
             'appeal' => $appeal instanceof Appeal ? AppealResource::summary($appeal) : null,
             'can_appeal' => $appeal === null,
         ];

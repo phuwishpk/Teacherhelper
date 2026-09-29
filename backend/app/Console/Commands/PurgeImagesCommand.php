@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Log;
  *
  * - worksheet PDFs: 30 days after the print was created (WorksheetFiles);
  * - scanned page images: after the submission is published;
- * - answer crops: after schools.crop_retention_until;
+ * - answer crops and whole-page files: after schools.crop_retention_until;
+ * - whole-page files replaced by a newer hand-in: at the next run;
  * - rescans of a published submission never confirmed by the teacher:
  *   after ScanRetention::PENDING_RESCAN_DAYS (ScanRetention).
  */
@@ -35,6 +36,7 @@ class PurgeImagesCommand extends Command
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
         $this->info("Unconfirmed rescans expired (page image and crops deleted): {$scans['pending_expired']}");
         $this->info("Leftover rescan files swept: {$scans['leftovers']}");
+        $this->info("Whole-page files deleted (superseded or past crop_retention_until): {$scans['whole_pages']}");
 
         return self::SUCCESS;
     }

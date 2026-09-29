@@ -51,6 +51,8 @@ final class ScoreExplainer
         'fuzzy_degenerate' => 'กฎการให้คะแนนไม่ทำงานกับข้อมูลที่อ่านได้',
         'answer_key_missing' => 'ข้อนี้ไม่มีเฉลยที่ใช้ตรวจได้',
         'layout_type_mismatch' => 'ประเภทของข้อเปลี่ยนหลังพิมพ์ใบงาน',
+        'answer_not_found' => 'หาคำตอบข้อนี้ในภาพไม่เจอ',
+        'page_file_missing' => 'ไม่พบไฟล์งานที่ส่งของข้อนี้',
     ];
 
     private const MATCH = [
@@ -96,6 +98,10 @@ final class ScoreExplainer
         }
         if (ReviewFlags::identityMismatch($response)) {
             $lines[] = 'QR บนใบงานเป็นของนักเรียนคนอื่น ไม่ตรงกับคนที่ส่งงานใน Google Classroom';
+        }
+
+        if (($trace['whole_page']['page_conflict'] ?? false) === true) {
+            $lines[] = 'พบคำตอบข้อนี้มากกว่าหนึ่งหน้าและเขียนไม่ตรงกัน ครูควรดูภาพทุกหน้า';
         }
 
         if (($trace['system'] ?? null) === 'mcq') {
@@ -180,11 +186,13 @@ final class ScoreExplainer
     {
         $filled = array_values((array) ($trace['filled'] ?? []));
         $correct = (string) ($trace['correct'] ?? '');
+        // Read by Gemini from a whole page (§19.4): marked in any way, not bubbled.
+        $verb = ($trace['read_by'] ?? null) === 'gemini_page' ? 'เลือก' : 'ฝน';
         $lines = [match (true) {
-            $filled === [] => 'ไม่ได้ฝนตัวเลือกใด เฉลยคือ '.$correct,
-            count($filled) > 1 => 'ฝนมากกว่าหนึ่งตัวเลือก ('.implode(', ', $filled).') นับเป็นผิด เฉลยคือ '.$correct,
-            $filled[0] === $correct => "ฝนตัวเลือก {$filled[0]} ตรงกับเฉลย",
-            default => "ฝนตัวเลือก {$filled[0]} แต่เฉลยคือ {$correct}",
+            $filled === [] => "ไม่ได้{$verb}ตัวเลือกใด เฉลยคือ ".$correct,
+            count($filled) > 1 => "{$verb}มากกว่าหนึ่งตัวเลือก (".implode(', ', $filled).') นับเป็นผิด เฉลยคือ '.$correct,
+            $filled[0] === $correct => "{$verb}ตัวเลือก {$filled[0]} ตรงกับเฉลย",
+            default => "{$verb}ตัวเลือก {$filled[0]} แต่เฉลยคือ {$correct}",
         }];
         $ambiguous = array_values((array) ($trace['ambiguous'] ?? []));
         if ($ambiguous !== []) {

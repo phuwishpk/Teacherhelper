@@ -254,6 +254,37 @@ final class GoogleApi
         return is_string($mime) && $mime !== '' ? $mime : null;
     }
 
+    /**
+     * Drive files.get?fields=mimeType,size,name (drive.readonly): what a
+     * Classroom attachment is before the server downloads it (DESIGN §19.4).
+     * size is null for Google Docs, Sheets and Slides (they have no bytes).
+     *
+     * @return array{mime_type: string, size: int|null, name: string}
+     */
+    public function driveFile(string $fileId): array
+    {
+        $body = (array) $this->send(
+            'drive.files.get',
+            fn (PendingRequest $http) => $http->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['fields' => 'mimeType,size,name', 'supportsAllDrives' => 'true']),
+        )->json();
+
+        return [
+            'mime_type' => is_string($body['mimeType'] ?? null) ? $body['mimeType'] : '',
+            'size' => is_numeric($body['size'] ?? null) ? (int) $body['size'] : null,
+            'name' => is_string($body['name'] ?? null) ? $body['name'] : '',
+        ];
+    }
+
+    /** Drive files.get?alt=media: the attachment's bytes, with the teacher's token. */
+    public function downloadDriveFile(string $fileId): string
+    {
+        return $this->send(
+            'drive.files.download',
+            fn (PendingRequest $http) => $http->withHeaders(['Accept' => '*/*'])
+                ->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['alt' => 'media', 'supportsAllDrives' => 'true']),
+        )->body();
+    }
+
     private static function submissionsUrl(string $courseId, string $courseWorkId): string
     {
         return self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork/'.rawurlencode($courseWorkId).'/studentSubmissions';

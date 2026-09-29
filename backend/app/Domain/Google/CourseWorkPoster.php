@@ -2,25 +2,23 @@
 
 namespace App\Domain\Google;
 
-use App\Domain\Worksheets\QrSigningKeyMissing;
-use App\Domain\Worksheets\WorksheetLayoutException;
-use App\Domain\Worksheets\WorksheetPdfRenderer;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
-use App\Models\Layout;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Throwable;
 
 /**
  * "โพสต์ลง Classroom" (DESIGN §18.2, §18.6 POST /assignments/{id}/google-post):
  * creates a PUBLISHED courseWork in the linked course with maxPoints = the
- * assignment's full marks and the photo instructions, optionally with the
- * anonymous spare worksheet (§18.3: QR student_id 0, no name) uploaded to the
- * teacher's Drive and attached as a VIEW material.
+ * assignment's full marks and the photo instructions.
+ *
+ * No spare worksheet any more (DESIGN §19.4 drops §18.3's anonymous sheet):
+ * a hand-in is graded from the whole page and belongs to whoever handed it
+ * in, so any paper works. attach_blank_worksheet is still accepted from
+ * older apps and ignored.
  *
  * Only courseWork created here can take grades from EduVision later, so an
  * assignment is posted at most once (409 already_posted); a cache lock stops
@@ -28,7 +26,7 @@ use Throwable;
  */
 final class CourseWorkPoster
 {
-    public const INSTRUCTIONS = 'ทำบนใบงานที่ได้รับ ถ่ายรูปทุกหน้าให้เห็นมุมทั้ง 4 แล้วส่งที่นี่';
+    public const INSTRUCTIONS = 'ถ่ายรูปงานทุกหน้าให้เห็นตัวหนังสือชัดเจน หรือแนบไฟล์ PDF แล้วส่งที่นี่';
 
     public function __construct(private readonly GoogleAccounts $accounts) {}
 
@@ -66,26 +64,8 @@ final class CourseWorkPoster
         $link = GoogleRoster::linkOf($assignment->classroom()->firstOrFail());
         $this->accounts->accountOf($teacher);
 
-        $attach = $input['attach_blank_worksheet'];
-        $pdf = $attach ? $this->spareWorksheet($assignment, $layout) : null;
-        $fileName = 'ใบงานสำรอง '.$assignment->title.'.pdf';
-
-        return $this->accounts->call($teacher, function (GoogleApi $api) use ($teacher, $assignment, $link, $input, $pdf, $fileName) {
-            $fileId = $pdf !== null ? $api->uploadPdf($fileName, $pdf) : null;
-
-            try {
-                $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input, $fileId, $fileName));
-            } catch (Throwable $e) {
-                if ($fileId !== null) {
-                    try {
-                        $api->deleteDriveFile($fileId);
-                    } catch (GoogleApiException) {
-                        // The empty spare sheet stays in the teacher's Drive; harmless.
-                    }
-                }
-
-                throw $e;
-            }
+        return $this->accounts->call($teacher, function (GoogleApi $api) use ($teacher, $assignment, $link, $input) {
+            $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input));
             if ($work['id'] === '') {
                 throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'courseWork.create answered without an id');
             }
@@ -94,11 +74,11 @@ final class CourseWorkPoster
                 'assignment_id' => $assignment->id,
                 'course_work_id' => $work['id'],
                 'alternate_link' => $work['alternate_link'],
-                'drive_file_id' => $fileId,
+                'drive_file_id' => null,
                 'posted_by' => $teacher->id,
                 'posted_at' => now(),
             ]);
-            Log::info('google.posted', ['assignment_id' => $assignment->id, 'course_work_id' => $work['id'], 'spare_sheet' => $fileId !== null]);
+            Log::info('google.posted', ['assignment_id' => $assignment->id, 'course_work_id' => $work['id']]);
 
             return $posted;
         }, GoogleRoster::COURSE_GONE);
@@ -110,18 +90,15 @@ final class CourseWorkPoster
      * @param  array{attach_blank_worksheet: bool, instructions?: string|null, due_at?: string|null}  $input
      * @return array<string, mixed>
      */
-    public function courseWork(Assignment $assignment, array $input, ?string $fileId, string $fileName): array
+    public function courseWork(Assignment $assignment, array $input): array
     {
         $work = [
             'title' => $assignment->title,
-            'description' => $this->description($input['instructions'] ?? null, $fileId !== null),
+            'description' => $this->description($input['instructions'] ?? null),
             'workType' => 'ASSIGNMENT',
             'state' => 'PUBLISHED',
             'maxPoints' => (float) $assignment->questions()->sum('max_points'),
         ];
-        if ($fileId !== null) {
-            $work['materials'] = [['driveFile' => ['driveFile' => ['id' => $fileId, 'title' => $fileName], 'shareMode' => 'VIEW']]];
-        }
 
         $due = $this->dueAt($assignment, $input['due_at'] ?? null);
         if ($due !== null) {
@@ -132,12 +109,12 @@ final class CourseWorkPoster
         return $work;
     }
 
-    private function description(?string $instructions, bool $spare): string
+    private function description(?string $instructions): string
     {
         $lines = [self::INSTRUCTIONS];
-        if ($spare) {
-            $lines[] = 'ถ้าใบงานหาย ใช้ใบงานสำรองที่แนบไว้ พิมพ์แล้วเขียนชื่อและเลขที่ให้ครบ';
-        }
+        $maxPages = (int) config('eduvision.submissions.max_pages');
+        $maxMb = (int) config('eduvision.submissions.max_file_mb');
+        $lines[] = "ส่งได้ไม่เกิน {$maxPages} หน้า ไฟล์ละไม่เกิน {$maxMb} MB (รูป JPEG, PNG, HEIC หรือ PDF)";
         $instructions = trim((string) $instructions);
         if ($instructions !== '') {
             $lines[] = '';
@@ -161,24 +138,5 @@ final class CourseWorkPoster
         }
 
         return null;
-    }
-
-    /**
-     * The anonymous spare sheet (§18.3), rendered with the same renderer and
-     * layout check as the class worksheets.
-     */
-    private function spareWorksheet(Assignment $assignment, Layout $layout): string
-    {
-        try {
-            return app(WorksheetPdfRenderer::class)->render($assignment, $layout, [null]);
-        } catch (QrSigningKeyMissing) {
-            throw new ApiException(
-                'ยังสร้างใบงานสำรองไม่ได้ เพราะเซิร์ฟเวอร์ยังไม่ได้ตั้งค่า QR_SIGNING_KEY กรุณาแจ้งผู้ดูแลระบบ',
-                'qr_key_missing',
-                503,
-            );
-        } catch (WorksheetLayoutException $e) {
-            throw new ApiException($e->getMessage(), 'assignment_not_ready', 409);
-        }
     }
 }

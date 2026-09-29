@@ -40,7 +40,7 @@ use App\Models\User;
 final class ResponseWriter
 {
     /** Fields a rescan resets: the new image has to be graded and reviewed again. */
-    private const RESET = [
+    public const RESET = [
         'grading_state' => Response::STATE_QUEUED,
         'attempts' => 0,
         'extraction' => null,
@@ -55,6 +55,8 @@ final class ResponseWriter
         'final_error_types' => null,
         'explanation' => null,
         'explanation_edited' => false,
+        'ai_explanation' => null,
+        'explanation_source' => null,
         'reviewed_by' => null,
         'reviewed_at' => null,
     ];
@@ -76,6 +78,7 @@ final class ResponseWriter
         $queued = 0;
         $fileOps = [];
         $stale = [];
+        $submission->channel = Submission::CHANNEL_SCAN; // saved by the caller's SubmissionStatus::refresh
 
         foreach ($regions as $matched) {
             $response = Response::query()
@@ -104,6 +107,7 @@ final class ResponseWriter
             $response->fill(self::RESET);
             $response->fill([
                 'scan_id' => $scan->id,
+                'submission_page_id' => null,
                 'ink_ratio' => $isMcqRegion ? null : $region->inkRatio,
                 'mcq_fill' => $isMcqRegion ? self::fullFill($region->mcqFill ?? [], $matched->bubbleOptions()) : null,
                 'cnn_text' => $isMcqRegion ? null : $region->cnnText,

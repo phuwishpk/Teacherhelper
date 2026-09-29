@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Grading\ScanGrader;
+use App\Domain\Pages\WholePageSubmissions;
 use App\Domain\Review\ReviewFlags;
 use App\Domain\Scans\SubmissionStatus;
 use App\Exceptions\ApiException;
@@ -49,9 +50,10 @@ class GradingController extends Controller
             ->pluck('submission_id');
 
         $scanIds = [];
+        $pageIds = [];
         $requeued = 0;
         foreach ($submissionIds as $submissionId) {
-            DB::transaction(function () use ($submissionId, &$scanIds, &$requeued) {
+            DB::transaction(function () use ($submissionId, &$scanIds, &$pageIds, &$requeued) {
                 $submission = Submission::query()->lockForUpdate()->find($submissionId);
                 if ($submission === null || $submission->isPublished()) {
                     return;
@@ -65,8 +67,14 @@ class GradingController extends Controller
                         'review_priority' => null,
                         'priority_band' => null,
                     ])->save();
-                    $scanIds[$response->scan_id] = true;
+                    if ($response->scan_id !== null) {
+                        $scanIds[$response->scan_id] = true;
+                    }
                     $requeued++;
+                }
+                // Whole-page answers (§19.4): the pages of the round are read again.
+                if ($responses->contains(fn (Response $r) => $r->scan_id === null && $r->submission_page_id !== null)) {
+                    array_push($pageIds, ...WholePageSubmissions::restartCurrentRound($submission));
                 }
                 SubmissionStatus::refresh($submission);
             });
@@ -75,6 +83,7 @@ class GradingController extends Controller
         foreach (array_keys($scanIds) as $scanId) {
             GradeScanJob::dispatch($scanId);
         }
+        WholePageSubmissions::dispatch($pageIds);
 
         return response()->json(['data' => [
             'requeued' => $requeued,

@@ -24,6 +24,7 @@ use App\Models\School;
 use App\Models\Skill;
 use App\Models\Subject;
 use App\Models\Submission;
+use App\Models\SubmissionPage;
 use App\Models\User;
 use App\Models\WorksheetPrint;
 use Illuminate\Http\UploadedFile;
@@ -109,6 +110,9 @@ trait SecurityWorld
 
     protected ClassroomSubmissionImport $importA;
 
+    /** A whole-page file of student A's (unpublished) submission (DESIGN §19.4). */
+    protected SubmissionPage $pageA;
+
     protected function makeSecurityWorld(): void
     {
         Storage::fake('local');
@@ -165,6 +169,12 @@ trait SecurityWorld
         $this->responseA2->forceFill(['final_score' => 1.0, 'final_understanding' => 'partial', 'final_error_types' => ['calculation'], 'reviewed_by' => $this->teacherA->id, 'reviewed_at' => now()])->save();
         $this->submissionA2->forceFill(['published_at' => now(), 'published_by' => $this->teacherA->id, 'total_score' => 1.0])->save();
         $this->appealA2 = Appeal::create(['response_id' => $this->responseA2->id, 'student_id' => $this->studentA2->id, 'reason' => 'ขอตรวจใหม่']);
+        $this->pageA = SubmissionPage::create([
+            'submission_id' => $this->submissionA->id, 'source' => SubmissionPage::SOURCE_CLASSROOM, 'position' => 1,
+            'mime_type' => 'image/webp', 'size_bytes' => 10, 'sha256' => str_repeat('a', 64), 'state' => SubmissionPage::STATE_GRADED, 'received_at' => now(),
+        ]);
+        $this->pageA->forceFill(['file_path' => "pages/{$this->schoolA->id}/{$this->assignmentA->id}/{$this->pageA->id}.webp"])->save();
+        $disk->put($this->pageA->file_path, $this->scanFixture('page.webp'));
 
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',

@@ -29,6 +29,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  explanation, explanation_edited, explanation_error,
  *  cnn_text, cnn_confidence, ink_ratio, mcq_fill,
  *  has_crop, has_final_crop, crop_url, final_crop_url,
+ *  channel, late, submission_page_id, page_image_url, page_mime_type,
+ *  answer_box ([ymin, xmin, ymax, xmax] 0–1000 on that page, or null),
+ *  ai_explanation (Gemini's text once the teacher edited it), explanation_source,
  *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...]}
  *
  * rubric_criteria.criterion_id is the number `extraction.criteria[].criterion_id`
@@ -108,6 +111,15 @@ class ResponseDetailResource extends JsonResource
             'has_final_crop' => $response->final_crop_path !== null,
             'crop_url' => $response->crop_path !== null ? route('api.responses.crop', $response->id, false) : null,
             'final_crop_url' => $response->final_crop_path !== null ? route('api.responses.crop', ['id' => $response->id, 'part' => 'final'], false) : null,
+            // Whole-page answers (§19.4): the file it was read from and where on it.
+            'channel' => $submission->channel,
+            'late' => (bool) $submission->late,
+            'submission_page_id' => $response->submission_page_id,
+            'page_image_url' => self::pageImageUrl($response),
+            'page_mime_type' => $response->submissionPage?->mime_type,
+            'answer_box' => is_array($response->extraction['answer_box'] ?? null) ? $response->extraction['answer_box'] : null,
+            'ai_explanation' => $response->ai_explanation,
+            'explanation_source' => $response->explanation_source,
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
             'appeal' => $appeal === null ? null : AppealResource::summary($appeal),
@@ -127,6 +139,11 @@ class ResponseDetailResource extends JsonResource
                     'created_at' => $e->created_at?->toIso8601String(),
                 ])->all(),
         ];
+    }
+
+    public static function pageImageUrl(Response $response): ?string
+    {
+        return $response->submission_page_id !== null ? route('api.submission-pages.image', $response->submission_page_id, false) : null;
     }
 
     private static function studentNumber(Response $response): ?int

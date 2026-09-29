@@ -26,6 +26,9 @@ use App\Models\Question;
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
+ * `extract_batch` and `extract_page` answer every question of the call with
+ * the same logic (see multi() for their extra markers).
+ *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
@@ -104,6 +107,7 @@ class FakeGeminiClient implements GeminiClient
 
                 return $this->extract($request, $has);
             })(),
+            'extract_batch', 'extract_page' => $this->multi($request, $has, $signature),
             'explanation' => match (true) {
                 $has('explanation-error') => GeminiReply::error('HTTP 500: fake explanation failure', 0, 500),
                 $has('explanation-invalid') => ['explanation_th' => 42],
@@ -144,6 +148,117 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return strtolower(implode(' ', $found));
+    }
+
+    /**
+     * `extract_batch` (crops of several questions, DESIGN §21.4) and
+     * `extract_page` (a whole page, §19.4): one answer per question in
+     * hints.questions (question_no => the hints of `extract`, plus `images`,
+     * the indexes of the question's own crops in a batch). The page or crop
+     * image and the question text carry the markers above, per question:
+     *
+     *   [fake:error]         left out of a call with several questions (the
+     *                        fallback call then fails); HTTP 503 when alone
+     *   [fake:invalid]       an answer that fails its schema; not JSON when alone
+     *   [fake:invalid-once]  as [fake:invalid], valid on the gateway's retry when alone
+     *   [fake:page-missing]  left out of a call with several questions only
+     *   [fake:not-found]     extract_page: found = false
+     *
+     * and, in a page image, [fake:questions=1,3]: only those question numbers
+     * are on this page (the rest found = false). Markers in a page image
+     * that are not per question ([fake:error], [fake:invalid]) fail the call.
+     *
+     * @param  callable(string): bool  $pageHas
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private function multi(GeminiRequest $request, callable $pageHas, string $signature): array|string|GeminiReply
+    {
+        $page = $request->purpose === 'extract_page';
+        $questions = (array) ($request->hints['questions'] ?? []);
+        $alone = count($questions) === 1;
+        $pageMarkers = self::imageMarkers($request);
+        if ($page && str_contains($pageMarkers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if ($page && str_contains($pageMarkers, '[fake:invalid]')) {
+            return 'Sorry, here is the page: {not json';
+        }
+        $onPage = null;
+        foreach ($request->images as $image) {
+            if (preg_match('/\[fake:questions=([0-9,]+)\]/i', $image->data, $m) === 1) {
+                $onPage = array_map('intval', explode(',', $m[1]));
+            }
+        }
+
+        $answers = [];
+        foreach ($questions as $no => $hints) {
+            $no = (int) $no;
+            $images = $page
+                ? $request->images
+                : array_values(array_intersect_key($request->images, array_flip((array) ($hints['images'] ?? []))));
+            $sub = new GeminiRequest('extract', (string) $hints['type'], 'fake', '', '', $images, null, null, $hints);
+            $markers = strtolower((string) ($hints['question_text'] ?? '')).' '.($page ? '' : self::imageMarkers($sub));
+            $has = fn (string $marker) => str_contains($markers, '[fake:'.$marker.']') || ($page && $marker !== 'error' && $marker !== 'invalid' && $pageHas($marker));
+
+            if ($has('error') || ($has('page-missing') && ! $alone)) {
+                if ($alone) {
+                    return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+                }
+
+                continue;
+            }
+            if ($has('invalid') || ($has('invalid-once') && ! ($alone && $this->seen[$signature] > 1))) {
+                if ($alone) {
+                    return 'Sorry, here is the answer: {not json';
+                }
+                $answers[] = ['question_no' => $no, 'found' => true, 'blank' => 'no'];
+
+                continue;
+            }
+            if ($page && ($has('not-found') || ($onPage !== null && ! in_array($no, $onPage, true)))) {
+                $answers[] = ['question_no' => $no, 'found' => false];
+
+                continue;
+            }
+            if ($has('schema')) {
+                $answers[] = ['question_no' => $no, 'found' => true, 'blank' => false, 'legibility' => 'clear'];
+
+                continue;
+            }
+
+            $answer = $hints['type'] === Question::TYPE_MCQ ? $this->mcq($sub, $has) : $this->extract($sub, $has);
+            $answers[] = ['question_no' => $no] + ($page ? ['found' => true, 'answer_box' => [min(900, 80 * $no), 60, min(990, 80 * $no + 70), 940]] : []) + $answer;
+        }
+
+        return ['answers' => $answers];
+    }
+
+    /**
+     * An mcq read from a whole page: the key for a correct outcome, another
+     * letter otherwise.
+     *
+     * @param  callable(string): bool  $has
+     * @return array<string, mixed>
+     */
+    private function mcq(GeminiRequest $request, callable $has): array
+    {
+        $correct = (string) ($request->hints['correct'] ?? 'A');
+        $outcome = match (true) {
+            $has('correct') => 'correct',
+            $has('wrong'), $has('partial') => 'wrong',
+            default => ['correct', 'wrong'][crc32($request->images[0]->data ?? '') % 2],
+        };
+        $blank = $has('blank');
+        $other = $correct === 'A' ? 'B' : 'A';
+
+        return [
+            'blank' => $blank,
+            'suspicious_instruction' => $has('suspicious'),
+            'legibility' => 'clear',
+            'selected_options' => $blank ? [] : [$outcome === 'correct' ? $correct : $other],
+            'error_types' => $blank ? ['no_answer'] : ($outcome === 'correct' ? [] : ['concept']),
+            'summary_th' => $blank ? 'ไม่ได้เลือกคำตอบ' : self::summary($outcome),
+        ];
     }
 
     /**

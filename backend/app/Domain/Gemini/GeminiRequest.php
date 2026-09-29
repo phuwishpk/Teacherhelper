@@ -11,6 +11,9 @@ namespace App\Domain\Gemini;
  * hints repeat, as structured data, what the prompt text already says (the
  * key, the criterion ids): FakeGeminiClient reads them to answer
  * plausibly. They are never sent to Google.
+ *
+ * timeout: seconds for this call instead of GEMINI_TIMEOUT (a whole page
+ * with every question takes longer than one crop).
  */
 final readonly class GeminiRequest
 {
@@ -29,5 +32,6 @@ final readonly class GeminiRequest
         public ?array $responseSchema = null,
         public ?float $temperature = null,
         public array $hints = [],
+        public ?int $timeout = null,
     ) {}
 }

@@ -1,0 +1,170 @@
+{
+  "type": "object",
+  "properties": {
+    "answers": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_no": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "found": {
+            "type": "boolean"
+          },
+          "answer_box": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            }
+          },
+          "blank": {
+            "type": "boolean"
+          },
+          "suspicious_instruction": {
+            "type": "boolean"
+          },
+          "legibility": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "readable",
+              "hard"
+            ]
+          },
+          "answer_text": {
+            "type": "string"
+          },
+          "key_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "equivalent",
+              "partial",
+              "different",
+              "missing"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "text": {
+                  "type": "string"
+                },
+                "valid": {
+                  "type": "boolean"
+                },
+                "note_th": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "line",
+                "text",
+                "valid"
+              ]
+            }
+          },
+          "final_answer_text": {
+            "type": "string"
+          },
+          "final_answer_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "equivalent",
+              "partial",
+              "different",
+              "missing"
+            ]
+          },
+          "transcription": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "criterion_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "met",
+                    "partially_met",
+                    "not_met"
+                  ]
+                },
+                "evidence_th": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "criterion_id",
+                "level"
+              ]
+            }
+          },
+          "error_types": {
+            "type": "array",
+            "maxItems": 9,
+            "items": {
+              "type": "string",
+              "enum": [
+                "concept",
+                "procedure",
+                "calculation",
+                "careless",
+                "incomplete",
+                "misread_question",
+                "spelling_grammar",
+                "no_answer",
+                "other"
+              ]
+            }
+          },
+          "summary_th": {
+            "type": "string"
+          },
+          "selected_options": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            }
+          }
+        },
+        "required": [
+          "question_no",
+          "found"
+        ]
+      }
+    }
+  },
+  "required": [
+    "answers"
+  ]
+}

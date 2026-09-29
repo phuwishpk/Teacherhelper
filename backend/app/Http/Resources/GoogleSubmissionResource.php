@@ -12,8 +12,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * {id, google_submission_id, google_user_id,
  *  student: {id, name, student_number}|null (null = account not matched yet),
- *  state: new|imported|needs_retake|returned_for_retake|graded|grade_failed,
- *  attachments: [{drive_file_id, title, mime_type}], alternate_link,
+ *  state: new|imported|needs_retake|returned_for_retake|graded|grade_failed
+ *         |waiting_key|rejected_late|unsupported (§19.8; unsupported: last_error says why),
+ *  late, attachments: [{drive_file_id, title, mime_type}], alternate_link,
  *  retake_reason, last_error, grade_pushed_at, updated_at}
  *
  * student_number is set by GoogleSubmissionSync::rows().
@@ -42,6 +43,7 @@ class GoogleSubmissionResource extends JsonResource
                 'student_number' => $number === null ? null : (int) $number,
             ],
             'state' => $row->state,
+            'late' => (bool) $row->late,
             'attachments' => array_values($row->attachments ?? []),
             'alternate_link' => $row->alternate_link,
             'retake_reason' => $row->retake_reason,

@@ -14,8 +14,9 @@ use JsonException;
  *    call's semantic check;
  * 3. invalid output is retried once; still invalid -> invalid_output;
  * 4. logs every request, retries included, to `ai_calls` (purpose, model,
- *    prompt_version, tokens, latency, status, key_source) and never the
- *    prompt, the images or the key.
+ *    prompt_version, tokens, latency, status, key_source, and the §21.8
+ *    labels: feature, media resolution, image and question counts) and
+ *    never the prompt, the images or the key.
  *
  * Transport errors are not retried here: GradeScanJob counts attempts and
  * releases itself with backoff.
@@ -97,8 +98,9 @@ final class GeminiGateway
             return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'output is not a JSON object');
         }
 
-        if ($call->request->responseSchema !== null) {
-            $errors = SchemaValidator::validate($call->request->responseSchema, $data);
+        $schema = $call->validationSchema ?? $call->request->responseSchema;
+        if ($schema !== null) {
+            $errors = SchemaValidator::validate($schema, $data);
             if ($errors !== []) {
                 return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'schema: '.implode('; ', array_slice($errors, 0, 5)));
             }
@@ -145,6 +147,13 @@ final class GeminiGateway
                 default => AiCall::STATUS_ERROR,
             },
             'error' => $outcome->error === null ? null : Str::limit(self::redact($outcome->error, $key), self::ERROR_LIMIT),
+            'feature' => $call->feature === null ? null : Str::limit($call->feature, 40, ''),
+            'cached_tokens' => $reply->cachedTokens,
+            'thinking_tokens' => $reply->thinkingTokens,
+            'media_resolution' => MediaResolution::summary(array_map(fn (GeminiImage $i) => $i->mediaResolution, $call->request->images)),
+            'image_count' => $call->request->images === [] ? null : min(255, count($call->request->images)),
+            'question_count' => $call->questionCount === null ? null : min(255, $call->questionCount),
+            'assignment_id' => $call->assignmentId,
         ]);
     }
 
