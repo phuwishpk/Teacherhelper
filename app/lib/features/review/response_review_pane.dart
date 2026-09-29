@@ -264,12 +264,12 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 label: 'ตรวจจากรูปทั้งหน้า',
                 color: theme.colorScheme.secondary,
               ),
-            if (d.cnnText case final text? when text.isNotEmpty)
+            if (d.isCnnMatch)
               StatusChip(
                 label: 'อ่านด้วย CNN',
                 color: theme.colorScheme.secondary,
               ),
-            if (d.extraction?['blank'] == true)
+            if (d.isAutoBlank || d.extraction?['blank'] == true)
               const StatusChip(label: 'ไม่ได้ตอบ', color: Colors.grey),
             if (d.isReviewed)
               StatusChip(label: 'ตรวจทานแล้ว', color: Colors.green.shade700),

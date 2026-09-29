@@ -22,6 +22,7 @@ Map<String, dynamic> queueRow({
   String? reviewedAt,
   int studentNumber = 12,
   String studentName = 'ด.ญ. สมหญิง',
+  String? autoRule,
 }) => {
   'id': id,
   'submission_id': submissionId,
@@ -45,6 +46,7 @@ Map<String, dynamic> queueRow({
   'ai_understanding': state == 'manual' ? null : 'good',
   'reviewed_at': reviewedAt,
   'submission_status': 'needs_review',
+  'auto_rule': autoRule,
 };
 
 /// GET /responses/{id} of a short numeric answer the AI scored full marks.
@@ -54,6 +56,7 @@ Map<String, dynamic> responseJson({
   String state = 'scored',
   String? manualReason,
   String? reviewedAt,
+  String? autoRule,
 }) => {
   'id': id,
   'submission_id': 70,
@@ -126,6 +129,7 @@ Map<String, dynamic> responseJson({
   'ink_ratio': 0.12,
   'has_crop': true,
   'has_final_crop': false,
+  'auto_rule': autoRule,
 };
 
 DioException apiError(

@@ -400,6 +400,10 @@ class ReviewItemTile extends StatelessWidget {
           label: item.missingAiKey ? 'ตรวจเอง · ไม่มี key' : 'ตรวจเอง',
           color: error,
         ),
+      if (item.isAutoBlank)
+        const StatusChip(label: 'ไม่ได้ตอบ', color: Colors.grey),
+      if (item.isCnnMatch)
+        StatusChip(label: 'อ่านด้วย CNN', color: theme.colorScheme.secondary),
       if (item.isSuspicious) StatusChip(label: 'น่าสงสัย', color: error),
       if (item.identityMismatch) StatusChip(label: 'ตัวตนไม่ตรง', color: error),
       if (item.hasOpenAppeal)

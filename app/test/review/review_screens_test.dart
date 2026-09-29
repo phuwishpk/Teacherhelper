@@ -313,6 +313,62 @@ void main() {
       expect(find.text('settings-page'), findsOneWidget);
     });
 
+    testWidgets('rows decided by code show "ไม่ได้ตอบ" / "อ่านด้วย CNN" '
+        '(§21.3)', (tester) async {
+      _phone(tester);
+      await pumpScreen(
+        tester,
+        const ReviewQueueScreen(assignmentId: 5),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(
+            FakeReviewRepository(
+              rows: [
+                queueRow(id: 11, band: 'look', autoRule: 'blank_ink'),
+                queueRow(id: 12, band: 'look', position: 2),
+              ],
+            ),
+          ),
+          assignmentsRepositoryProvider.overrideWithValue(_OneAssignment()),
+          aiKeyRepositoryProvider.overrideWithValue(
+            FakeAiKeyRepository(const AiKeyStatus(configured: true)),
+          ),
+        ],
+      );
+      await tester.tap(find.textContaining('ควรดู'));
+      await tester.pumpAndSettle();
+      expect(find.text('ไม่ได้ตอบ'), findsOneWidget);
+      expect(find.text('อ่านด้วย CNN'), findsNothing);
+    });
+
+    testWidgets('the detail shows "อ่านด้วย CNN" only for a cnn_match '
+        'answer, not whenever the CNN read something', (tester) async {
+      _phone(tester);
+      Future<void> open(String? rule) => pumpScreen(
+        tester,
+        const ReviewDetailScreen(
+          assignmentId: 5,
+          responseId: 11,
+          band: PriorityBand.check,
+        ),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(
+            FakeReviewRepository(
+              rows: [queueRow(id: 11)],
+              responses: {11: responseJson(autoRule: rule)},
+            ),
+          ),
+          cropLoaderProvider.overrideWithValue(NoCropLoader()),
+        ],
+      );
+
+      await open(null);
+      expect(find.textContaining('CNN อ่านตัวเลขได้: 126'), findsOneWidget);
+      expect(find.text('อ่านด้วย CNN'), findsNothing);
+
+      await open('cnn_match');
+      expect(find.text('อ่านด้วย CNN'), findsOneWidget);
+    });
+
     testWidgets('no banner when nothing waits for a key', (tester) async {
       _phone(tester);
       await pumpScreen(

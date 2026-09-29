@@ -75,6 +75,10 @@ Set<String> _flags(Map<String, dynamic> json) {
 /// whole-page submission (DESIGN §19.4).
 const answerNotFoundReason = 'answer_not_found';
 
+/// `responses.auto_rule` values (DESIGN §21.3): decided by code, no Gemini.
+const autoRuleBlankInk = 'blank_ink';
+const autoRuleCnnMatch = 'cnn_match';
+
 /// `manual_reason` at the top level, or where the backend stores it
 /// (`fuzzy_trace.manual_reason`).
 String? _manualReason(Map<String, dynamic> json) =>
@@ -103,6 +107,7 @@ class ReviewItem {
     this.reviewedAt,
     this.submissionStatus,
     this.submissionPageId,
+    this.autoRule,
   });
 
   /// The response id.
@@ -131,6 +136,12 @@ class ReviewItem {
   /// the crop path.
   final int? submissionPageId;
 
+  /// How code decided this answer without Gemini (DESIGN §21.3):
+  /// `blank_ink` ("ไม่ได้ตอบ"), `cnn_match` ("อ่านด้วย CNN") or null.
+  final String? autoRule;
+
+  bool get isAutoBlank => autoRule == autoRuleBlankInk;
+  bool get isCnnMatch => autoRule == autoRuleCnnMatch;
   bool get isManual => gradingState == 'manual';
   bool get isSuspicious => flags.contains('suspicious');
   bool get identityMismatch => flags.contains('identity_mismatch');
@@ -210,6 +221,7 @@ class ReviewItem {
       submissionStatus:
           (json['submission_status'] ?? submission?['status']) as String?,
       submissionPageId: _int(json['submission_page_id']),
+      autoRule: json['auto_rule'] as String?,
     );
   }
 }
@@ -512,6 +524,7 @@ class ResponseDetail {
     this.aiExplanation,
     this.explanationSource,
     this.totalOverridden = false,
+    this.autoRule,
   });
 
   final int id;
@@ -573,6 +586,11 @@ class ResponseDetail {
   /// (`total_overridden`, §19.3): changing this score clears it.
   final bool totalOverridden;
 
+  /// `blank_ink` / `cnn_match` / null (DESIGN §21.3), see [ReviewItem.autoRule].
+  final String? autoRule;
+
+  bool get isAutoBlank => autoRule == autoRuleBlankInk;
+  bool get isCnnMatch => autoRule == autoRuleCnnMatch;
   bool get isManual => gradingState == 'manual';
   bool get isWholePage => submissionPageId != null;
   bool get answerNotFound => isManual && manualReason == answerNotFoundReason;
@@ -645,6 +663,7 @@ class ResponseDetail {
       totalOverridden: _bool(
         json['total_overridden'] ?? submission?['total_overridden'],
       ),
+      autoRule: json['auto_rule'] as String?,
     );
   }
 }

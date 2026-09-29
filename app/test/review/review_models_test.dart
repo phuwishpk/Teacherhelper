@@ -124,4 +124,21 @@ void main() {
     });
     expect(item.missingAiKey, isTrue);
   });
+
+  group('auto_rule (DESIGN §21.3)', () {
+    test('queue rows and the detail read which rule decided the answer', () {
+      final blank = ReviewItem.fromJson(queueRow(id: 1, autoRule: 'blank_ink'));
+      expect([blank.isAutoBlank, blank.isCnnMatch], [true, false]);
+      final cnn = ReviewItem.fromJson(queueRow(id: 2, autoRule: 'cnn_match'));
+      expect([cnn.isAutoBlank, cnn.isCnnMatch], [false, true]);
+      final gemini = ReviewItem.fromJson(queueRow(id: 3));
+      expect([gemini.autoRule, gemini.isCnnMatch], [null, false]);
+
+      final detail = ResponseDetail.fromJson(
+        responseJson(autoRule: 'cnn_match'),
+      );
+      expect(detail.isCnnMatch, isTrue);
+      expect(ResponseDetail.fromJson(responseJson()).isCnnMatch, isFalse);
+    });
+  });
 }
