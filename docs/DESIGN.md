@@ -1672,6 +1672,8 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | 41 | AI วิเคราะห์รายคน | โค้ดคำนวณจุดเด่น/จุดที่ควรพัฒนา Gemini เขียนสองฉบับใน call เดียว ผ่าน Batch API กลางคืนเฉพาะคนที่เปลี่ยน ไม่มีชื่อใน input นักเรียนเห็นหลังครูอนุมัติ (§20.5) | ถูกลงครึ่งหนึ่ง, ปลอดภัยต่อข้อมูลส่วนตัว และครูอยู่ในวงเสมอ |
 | 42 | token ของ Gemini | 9 วิธีใน §21 (อ่านครั้งเดียว, ตัดสินด้วยโค้ด, หนึ่ง call ต่อหน้า, media resolution หลัง calibration, thinking ต่องาน, ใช้คำอธิบายซ้ำ, เฉพาะคะแนน, บันทึกต่อฟีเจอร์, ย่อภาพบนมือถือ) ไม่ใช้ context caching และไม่ใช้ Batch กับการตรวจ (แทน #15 เรื่องการเรียกทีละข้อ) | ลด input ต่อข้อราว 60–70% โดยไม่ลดความแม่นที่วัดได้ และราคา Flash จะขึ้นเป็นสองเท่าตั้งแต่ 1 ม.ค. 2570 |
 
+หมายเหตุ #41 (J, §20.5) ชี้แจงเพิ่มที่ยอมรับแล้ว: input ของ prompt `student_analysis` มีระดับชั้น ชื่อวิชา รหัสตัวชี้วัด และจำนวนแบบฝึกที่มีด้วย ทุกค่าไม่มีข้อมูลที่ระบุตัวนักเรียน
+
 ---
 
 ## 18. การเชื่อม Google Classroom (Phase 7)
@@ -1702,7 +1704,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 ### 18.3 ตัวตนของนักเรียนในใบงาน
 
 - ใบงานปกติพิมพ์แยกรายคน QR มี `student_id` (§5.4) นักเรียนทำบนกระดาษที่ครูแจกแล้วถ่ายรูปส่งใน Classroom ได้ตามปกติ
-- ~~**ใบงานสำรอง**~~ **เลิกใช้แล้ว (29 ก.ย. 2569)** เดิมแนบใน Classroom สำหรับคนที่ทำใบงานหาย ใช้ QR แบบไม่ระบุคน (`student_id = 0`) ตอนนี้คนที่ไม่มีใบงานทำบนกระดาษเปล่าแล้วส่งรูป ระบบตรวจด้วยทางรูปทั้งหน้า (§19.4) แอปจึงไม่แสดงตัวเลือก `attach_blank_worksheet` ของ `google-post` อีก (API ยังรับค่า `false` ได้เพื่อไม่ให้ client เดิมพัง)
+- ~~**ใบงานสำรอง**~~ **เลิกใช้แล้ว (29 ก.ย. 2569)** เดิมแนบใน Classroom สำหรับคนที่ทำใบงานหาย ใช้ QR แบบไม่ระบุคน (`student_id = 0`) ตอนนี้คนที่ไม่มีใบงานทำบนกระดาษเปล่าแล้วส่งรูป ระบบตรวจด้วยทางรูปทั้งหน้า (§19.4) แอปจึงไม่แสดงตัวเลือก `attach_blank_worksheet` ของ `google-post` อีก field นี้ไม่บังคับแล้ว และเพื่อไม่ให้ client เดิมพัง **ถ้า client เดิมส่ง `attach_blank_worksheet = true` server ไม่สนใจค่านั้น (ถือเป็น `false`)** ไม่แนบใบงานสำรอง ไม่ตอบ error และตอบเหมือนการโพสต์ปกติ
 - **เจ้าของงานคือคนที่ส่ง** (Phase 8): ทางรูปทั้งหน้าไม่อ่าน QR ในภาพ งานเป็นของนักเรียนที่จับคู่กับ `userId` ที่ส่งใน Classroom หรือนักเรียนที่ login ส่งในแอป กติกาด้านล่างใช้เฉพาะเมื่อครูสแกนรูปจาก Classroom ผ่านทาง crop บนมือถือ
 - ตอนรับสแกนจาก Classroom server หาตัวนักเรียนตามลำดับ: (1) `student_id` ใน QR ถ้าไม่ใช่ 0 (2) นักเรียนที่จับคู่กับ `userId` ของ submission ถ้า (1) และ (2) ไม่ตรงกัน ให้รับไว้ตาม QR และติดป้าย `identity_mismatch` ให้ครูดูในคิวตรวจทาน
 - **แถวใน `classroom_submission_imports` เป็นของ "คนที่กดส่งใน Classroom"** (นักเรียนที่จับคู่กับ `userId`) ไม่ใช่ของคนใน QR เมื่อสองคนนี้ต่างกัน ส่วน QR ตัดสินเฉพาะว่าคำตอบเข้า submission ของใคร (ปรับ 26 ก.ย. 2569 หลังพบว่าการเก็บแถวไว้กับคนใน QR ทำให้คะแนนถูกส่งไปที่งานของเพื่อนร่วมห้อง) ถ้าบัญชีที่ส่งยังไม่จับคู่กับใคร แถวจึงเป็นของคนใน QR
@@ -1814,7 +1816,7 @@ ALTER TABLE scans
 | POST / DELETE | `/classrooms/{id}/google-link` | ครู | ผูก/เลิกผูก `{course_id}` |
 | GET | `/classrooms/{id}/google-roster` | ครู | นักเรียนในคอร์สพร้อมคู่ที่เสนอ `[{google_user_id, name, email, suggested_student_id, matched_student_id}]` เสนอคู่จากชื่อที่ normalize แล้ว |
 | PUT | `/classrooms/{id}/google-roster` | ครู | `{matches: [{google_user_id, student_id\|null}]}` ห้ามจับคู่นักเรียนคนเดียวกับสองบัญชี |
-| POST | `/assignments/{id}/google-post` | ครู | `{instructions?, due_at?, attach_blank_worksheet}` การบ้านต้อง `ready` ห้องต้องผูกคอร์สแล้ว ตอบ `{course_work_id, alternate_link}` โพสต์ซ้ำไม่ได้ (409 `code: already_posted`) |
+| POST | `/assignments/{id}/google-post` | ครู | `{instructions?, due_at?, attach_blank_worksheet?}` (`attach_blank_worksheet` เลิกใช้แล้ว ค่า `true` ถือเป็น `false` ตาม §18.3) การบ้านต้อง `ready` (งาน `freeform` ของแอปเป็น `ready` หลังครูอนุมัติเฉลย จึงโพสต์ได้หลังอนุมัติเท่านั้น §19.5) ห้องต้องผูกคอร์สแล้ว ตอบ `{course_work_id, alternate_link}` โพสต์ซ้ำไม่ได้ (409 `code: already_posted`) |
 | GET | `/assignments/{id}/google-submissions` | ครู | sync จาก Classroom แล้วคืน `[{id, google_submission_id, student: {id, name, student_number}\|null, state, attachments, alternate_link, retake_reason}]` |
 | POST | `/google-submissions/{id}/return` | ครู | `{reason}` return ใน Classroom, state `returned_for_retake`, แจ้งนักเรียนผ่าน FCM |
 | POST | `/assignments/{id}/google-grades/retry` | ครู | ส่งคะแนนกลับอีกครั้งให้แถวที่ `grade_failed` |
@@ -1891,7 +1893,7 @@ ALTER TABLE scans
   - แจ้งครูทาง FCM (ถ้าตั้งค่า) ว่า **"มีงานใหม่จาก Classroom รออนุมัติเฉลย"** และแสดงในการ์ด "รอดำเนินการ" ของหน้าหลักครู (`GET /teacher/attention`)
   - `subject_id` ของงานที่นำเข้าเป็น `NULL` ได้จนกว่าครูเลือกวิชาตอนอนุมัติเฉลย (§19.9)
   - **หลัง Phase 9** (§20.1) งานจากเว็บต้องมีรายวิชาเหมือนการบ้านใหม่ทุกงาน: ตอนนำเข้า ถ้าห้องผูกรายวิชาไว้**ตัวเดียว** ตั้ง `course_id` และ `subject_id` จากรายวิชานั้นอัตโนมัติ ถ้ามีหลายตัวหรือไม่มีเลย ให้เป็น `NULL` แล้วครู**ต้องเลือก `course_id` จากรายวิชาที่ผูกกับห้องนั้น**ตอนอนุมัติเฉลย (ห้องที่ยังไม่มีรายวิชา แอปพาไปสร้างหรือผูกรายวิชาก่อน)
-  - **ไม่ตรวจจนกว่าครูอนุมัติเฉลย**
+  - **ไม่ตรวจจนกว่าครูอนุมัติเฉลย** งานที่ส่งใน Classroom ก่อนอนุมัติถูกดาวน์โหลดไว้แล้วรอในสถานะ `waiting_key` (ตารางสถานะใน §19.5)
 - **ข้อจำกัดของงานที่สร้างในเว็บ**: แอปอ่าน submission และตรวจในแอปได้ แต่ **ตั้งคะแนนและ return ใน Classroom ไม่ได้** (Google ตอบ `ProjectPermissionDenied` เพราะ project ของเราไม่ได้สร้างงานนั้น) UI ต้องบอกชัดว่า "งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้" และมีปุ่ม **"เปิดใน Classroom"** กับ **"คัดลอกคะแนน"** ส่วนผลรายคนยังส่งทางประกาศส่วนตัวได้ (§19.7)
 - **คะแนนในแอปคือค่าจริง** ตรวจจับการแก้คะแนนใน Classroom: ตอนซิงก์ บันทึก `assignedGrade` ล่าสุดไว้ใน `classroom_submission_imports.classroom_grade` แล้วเทียบกับ**ค่าฐาน**: `pushed_grade` (งานที่แอปสร้าง) หรือ**คะแนนรวมที่ใช้จริง**ของ submission ที่เผยแพร่แล้ว (งานที่สร้างในเว็บ) ใช้ `submissionHistory.gradeHistory` ประกอบเพื่อบอกว่าแก้เมื่อไหร่ ถ้าต่างกันสร้างแถว `grade_conflicts` สถานะ `open` (ไม่สร้างซ้ำถ้ามีแถว open อยู่แล้ว) แสดงเป็นรายการ **"คะแนนไม่ตรงกัน"** ครูเลือกได้
   - **ค่าว่างไม่ถือเป็นความต่าง**: ถ้า `assignedGrade` ใน Classroom ว่าง (ครูยังไม่ได้กรอกในเว็บ ซึ่งเป็นปกติของงานที่สร้างในเว็บเพราะแอปส่งคะแนนให้ไม่ได้ หรือครูลบคะแนนออก) ให้บันทึก `classroom_grade = NULL` และ**ไม่เทียบ** ฝั่งแอปก็เช่นกัน งานที่แอปสร้างแต่ `pushed_grade` ยังเป็น `NULL` (ยังไม่เผยแพร่หรือยังส่งคะแนนไม่สำเร็จ) และงานจากเว็บที่ submission ยังไม่เผยแพร่ ไม่เทียบ เทียบเฉพาะเมื่อทั้งสองฝั่งมีตัวเลข (ปัดทศนิยม 2 ตำแหน่งก่อนเทียบ)
@@ -1912,6 +1914,7 @@ ALTER TABLE scans
 - ใช้ได้ทั้ง**ใบงานของแอป** (มี marker และ QR) และ**หน้ากระดาษอิสระ** QR ในภาพ**ไม่ถูกใช้** เจ้าของงานคือคนที่ส่งใน Classroom (จับคู่ด้วย `userId`) หรือนักเรียนที่ login อยู่ **เลิกใช้ใบงานสำรอง** (`student_id = 0`)
 - **หนึ่ง Gemini call ต่อหนึ่งหน้า** (prompt `extract_page`, §19.10) แนบเฉลยทุกข้อของการบ้านเป็น JSON แบบย่อในข้อความ แล้วได้ผลสกัดรายข้อกลับมา
   - ไฟล์ PDF ของนักเรียนส่งเป็น part เดียวต่อไฟล์ (Gemini เห็นทุกหน้าในไฟล์) นับจำนวนหน้ารวมกับข้อจำกัดด้านล่าง
+  - **ระดับ media ของทุกหน้างานนักเรียน** (รูป หรือแต่ละหน้าของ PDF) คือระดับของหน้า `GEMINI_MEDIA_PAGE` (`high` จนกว่าจะผ่าน calibration, §21.5) PDF ของนักเรียน**ไม่ใช้** `GEMINI_MEDIA_DOCUMENT` ซึ่งใช้กับเอกสารของครูเท่านั้น
   - ถ้าผลขาดบางข้อหรือไม่ผ่าน schema ให้ **retry รายข้อ** (หน้าเดิม ถามเฉพาะข้อนั้น) หนึ่งครั้ง
   - หลายหน้า: รวมผลทุกหน้า ข้อที่เจอในหลายหน้าให้ใช้หน้าที่ไม่ว่าง ถ้าไม่ว่างทั้งสองหน้าและต่างกัน ให้ `D = 1` (§11.8)
   - ข้อที่ Gemini **จับคู่คำตอบกับข้อไม่ได้** (ไม่เจอในทุกหน้าหลัง retry) ได้ `priority_band = check` ("ต้องตรวจ" ซึ่งเป็นความหมายของ "ต้องดู" ที่ตกลงไว้ เลือก band ที่เข้มที่สุดเพื่อไม่ให้หลุดไปกับการอนุมัติแบบกลุ่ม ไม่ใช่ `look` "ควรดู") พร้อมป้าย "หาคำตอบข้อนี้ในภาพไม่เจอ" และ `grading_state = manual`
@@ -1940,14 +1943,32 @@ ALTER TABLE scans
   3. **แนบไฟล์**: PDF, JPEG, PNG, HEIC, WebP หลายไฟล์และหลายหน้าได้ **ไม่รับ Word หรือ Google Docs** (422 `unsupported_file_type` ข้อความ "บันทึกเป็น PDF แล้วแนบใหม่")
 - Gemini อ่านรูปหรือไฟล์ **ครั้งเดียว** (prompt `answer_key_read`, thinking `medium`) ได้เฉลยรายข้อแบบมีโครงสร้าง: คำตอบสุดท้าย, คำตอบอื่นที่ยอมรับ, ขั้นตอนอ้างอิงของ `show_work`, ประเด็นสำคัญหรือคำตอบตัวอย่างของ `open` ผลเขียนลง `questions` ของการบ้านเป็นร่าง (สร้างข้อใหม่ถ้างานยังไม่มีข้อ หรือเติมเฉลยตาม `position` ถ้ามีข้ออยู่แล้ว) ครูแก้แล้วอนุมัติ
 - **ไม่มีเฉลยของครู**: Gemini ร่างเฉลยเองจากโจทย์ (prompt `answer_key_draft`) และติดป้าย **"AI ร่าง ไม่มีคำตอบของครู"** (`assignments.key_origin = 'ai_draft'`)
-- **ไม่เริ่มตรวจก่อนครูอนุมัติเฉลย** (`assignments.key_approved_at`) งานที่ส่งเข้ามาก่อนหน้านั้นเก็บไว้ในสถานะรอ แล้วเข้าคิวตรวจเมื่ออนุมัติ การบ้านแบบใบงานของแอปใช้กติกาเดิม: การเปลี่ยนเป็น `ready` (rubric ครบ, §2.2) ถือเป็นการอนุมัติเฉลยและตั้ง `key_approved_at` ไปด้วย migration ตั้งค่านี้ให้การบ้านเดิมที่ไม่ใช่ `draft` เพื่อไม่ให้การตรวจเดิมหยุด
+- **ไม่เริ่มตรวจก่อนครูอนุมัติเฉลย** (`assignments.key_approved_at`) การบ้านแบบใบงานของแอปใช้กติกาเดิม: สร้าง layout (`POST /assignments/{id}/layout`, ต้องอนุมัติ rubric ครบก่อนตาม §2.2) → `ready` ซึ่งถือเป็นการอนุมัติเฉลยและตั้ง `key_approved_at` ไปด้วย migration ตั้งค่านี้ให้การบ้านเดิมที่ไม่ใช่ `draft` เพื่อไม่ให้การตรวจเดิมหยุด
+- **สถานะของงาน `freeform`** (`status` ใช้ enum เดิม `draft`/`ready`/`closed` ไม่เพิ่มค่าใหม่) สำหรับงาน `freeform` ทั้ง `source = app` และ `source = classroom_web` กติกาคือ **`ready` ⇔ อนุมัติเฉลยแล้ว** (`key_approved_at` ไม่ว่าง)
+
+  | สถานะ | เข้าเมื่อ | สิ่งที่ทำได้ |
+  |---|---|---|
+  | `draft` | งาน `freeform` ที่ครูสร้างในแอป หรือ mirror ที่ `ImportCourseWorkJob` สร้างจากงานในเว็บ Classroom (§19.3) | ครูแก้ข้อ เฉลย และ rubric ได้ **ยังไม่ตรวจ** `google-post` ไม่ได้ (ต้อง `ready`) นักเรียนไม่เห็นในแอปและส่งในแอปไม่ได้ (409 `assignment_not_ready`, §19.6) งานที่ส่งใน Classroom ของ mirror รอเป็น `waiting_key` ด้านล่าง |
+  | `ready` | `POST /assignments/{id}/answer-key/approve` สำเร็จ: ตั้ง `key_approved_at`, `key_approved_by` **และ**เปลี่ยน `draft` → `ready` ในการทำงานเดียวกัน งาน `freeform` ต้องมี**อย่างน้อย 1 ข้อ** (ไม่มีข้อ 422) และทุกข้อมีเฉลยหรือ rubric ครบ | ตรวจได้ งาน `source = app` โพสต์ลง Classroom ได้ (`google-post`) นักเรียนเห็นและส่งในแอปได้ mirror ปล่อยงานที่รออยู่เข้าคิวตรวจ |
+  | `closed` | ครูปิดการบ้านเหมือนเดิม | เหมือนเดิม: รอบซิงก์ข้ามการบ้านที่ `closed` (§19.3) และนักเรียนส่งในแอปไม่ได้ |
+
+  การเปลี่ยน `draft` → `ready` ของ `answer-key/approve` ใช้กับงาน `freeform` เท่านั้น งาน `worksheet` เป็น `ready` ด้วยการสร้าง layout ตามกติกาเดิมด้านบน
+- **งานที่ส่งใน Classroom ก่อนอนุมัติเฉลย** (mirror `classroom_web` ที่ยัง `draft`) ใช้สถานะ `waiting_key` ของ `classroom_submission_imports`
+
+  | | กติกา |
+  |---|---|
+  | **เข้า** `waiting_key` | รอบซิงก์เจอ submission ที่ส่งแล้ว (แถว `new` รวมแถวที่ครูกด `accept-late`) ของการบ้านที่ `key_approved_at` ยังว่าง `FetchClassroomAttachmentsJob` ดาวน์โหลดและตรวจชนิด/ขนาด/จำนวนหน้าตามปกติ (ไม่ผ่านเป็น `unsupported` เหมือนเดิม) เก็บไฟล์เป็น `submission_pages` สถานะ `stored` ใต้แถว `submissions` ที่สร้างไว้แต่**ยังไม่ตรวจ** (ไม่ dispatch `GradeSubmissionPageJob` ไม่มี `responses` และไม่ขึ้นในคิวตรวจทาน) แล้วตั้งแถว import เป็น `waiting_key` |
+  | **ระหว่างรอ** | ถ้านักเรียนส่งใหม่ใน Classroom (`updateTime` เปลี่ยน) ดาวน์โหลดใหม่ หน้าเดิมเป็น `superseded` และแถวยังเป็น `waiting_key` |
+  | **ออก** จาก `waiting_key` | เมื่อครูอนุมัติเฉลย (`draft` → `ready`) `ReleaseWaitingSubmissionsJob(assignment)` ย้าย**ทุก**แถว `waiting_key` ของการบ้านนั้นเข้าทางรับงานปกติ: แถวเป็น `imported` แล้ว dispatch `GradeSubmissionPageJob` ของหน้าที่เก็บไว้ (ไม่ดาวน์โหลดซ้ำ) เมื่อตรวจเสร็จแถวเป็น `graded` ตามทางปกติ ไม่มีทางออกอื่น |
+
+  submission ที่เข้ามาหลังอนุมัติแล้วไม่ผ่าน `waiting_key` เลย
 - ข้อ `open` มี **คำตอบตัวอย่างของครู** (`questions.model_answer`) ได้ แต่คะแนนยังตัดสินด้วยเกณฑ์ของ rubric คำตอบตัวอย่างเป็นข้อมูลตั้งต้นให้ร่าง rubric (§10.4) และส่งให้ extract ในฐานะ reference
 - **เอกสารเกิน 30 หน้า**: ครูต้องเลือกช่วงหน้า (422 `document_too_long` ถ้าไม่ระบุ) server ตัดเฉพาะช่วงนั้นเป็น PDF ใหม่ด้วย mPDF + FPDI (`importPage`, งานเบา) ก่อนส่ง Gemini ถ้า FPDI อ่านไฟล์นั้นไม่ได้ (cross-reference stream, §19.4) ตัดไม่ได้ ตอบ 422 `document_split_unsupported` ข้อความ "ไฟล์นี้ตัดช่วงหน้าไม่ได้ บันทึกเฉพาะหน้าที่ต้องใช้เป็น PDF ใหม่ (ไม่เกิน 30 หน้า) แล้วแนบใหม่" และแอป**แสดงค่าใช้จ่ายโดยประมาณก่อนส่งทุกครั้ง** = `หน้า × 560 token (PDF medium) + ~1,500 token ของ prompt` ขาเข้า และ output ประมาณจากจำนวนข้อ คูณราคาใน `.env` (`GEMINI_PRICE_INPUT_PER_M`, `GEMINI_PRICE_OUTPUT_PER_M`, `USD_THB_RATE`) แสดงเป็นบาท
 - **แคชอ่านครั้งเดียว**: ผลการอ่านเก็บใน `document_extractions` ใช้ key = SHA-256 ของไฟล์ (หลายไฟล์ใช้ SHA-256 ของรายการ hash ที่เรียงแล้วรวมช่วงหน้า) + `school_id` + ชนิดงาน ครูคนอื่นในโรงเรียนเดียวกันอัปโหลดไฟล์เดิม**ได้ผลเดิมโดยไม่เรียก Gemini** (แอปแสดง "เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย") แต่ละครูได้**สำเนาของตัวเอง**ใน `questions` ไปแก้ ผลแคชไม่เปลี่ยน
 
 ### 19.6 E. นักเรียนส่งงานในแอป และอัปโหลดจากไฟล์
 
-- **ฝั่งนักเรียน**: หน้า "งานที่ต้องส่ง" แสดงการบ้านที่ `ready` และยังไม่ `closed` ในห้องของตัวเอง ส่งด้วยกล้องหรือเลือกรูป/PDF หลายไฟล์ (`file_picker`) ตัวตนคือนักเรียนที่ login อยู่ ตรวจด้วยทาง whole-page และใช้กติกาส่งช้าของการบ้านนั้น นักเรียนเห็นแค่ว่า "ส่งแล้ว" และเวลา จนกว่าครูเผยแพร่
+- **ฝั่งนักเรียน**: หน้า "งานที่ต้องส่ง" แสดง**เฉพาะ**การบ้านที่ `ready` ในห้องของตัวเอง (ไม่แสดง `draft` และ `closed` งาน `freeform` จึงขึ้นหลังครูอนุมัติเฉลยแล้วเท่านั้น §19.5) และส่งได้เฉพาะการบ้านที่ `ready` สถานะอื่นตอบ 409 `assignment_not_ready` ส่งด้วยกล้องหรือเลือกรูป/PDF หลายไฟล์ (`file_picker`) ตัวตนคือนักเรียนที่ login อยู่ ตรวจด้วยทาง whole-page และใช้กติกาส่งช้าของการบ้านนั้น นักเรียนเห็นแค่ว่า "ส่งแล้ว" และเวลา จนกว่าครูเผยแพร่
 - **ฝั่งครู**: อัปโหลดจากไฟล์ได้นอกจากกล้อง สำหรับรูปของการบ้านแบบ `worksheet` มือถือ**ลองทาง marker/QR ก่อน** (`detectPage` บนภาพจากไฟล์) ถ้าไม่เจอ marker หรือ QR ให้ถอยไปทาง whole-page โดยครูเลือกนักเรียนเอง บน**เว็บ (Chrome)** ใช้ได้เฉพาะทาง whole-page
 - มือถือย่อภาพก่อนอัปโหลด (ด้านยาวไม่เกิน 2,000 px, JPEG คุณภาพ 85) เพื่อลดเวลาและพื้นที่เท่านั้น จำนวน token ไม่เปลี่ยนเพราะคิดตามระดับ media resolution (§21)
 - dependency ใหม่ของแอป: **`file_picker`**
@@ -2107,7 +2128,7 @@ CREATE TABLE classroom_feedback_posts (
 -- §21 ข้อ 6: ใช้คำอธิบายซ้ำเมื่อคำตอบผิดแบบเดียวกัน
 CREATE TABLE explanation_cache (
   question_id   BIGINT UNSIGNED NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-  answer_hash   CHAR(64) NOT NULL,                    -- SHA-256 ของคำตอบที่ normalize แล้ว
+  answer_hash   CHAR(64) NOT NULL,                    -- SHA-256 ของ key ที่ normalize แล้วตาม §21.7
   explanation   TEXT NOT NULL,
   source        ENUM('ai','teacher') NOT NULL,        -- teacher ชนะ ai เสมอ
   response_id   BIGINT UNSIGNED NULL REFERENCES responses(id) ON DELETE SET NULL,
@@ -2135,7 +2156,7 @@ CREATE TABLE explanation_cache (
 | POST | `/assignments/{id}/answer-key/extract` | ครู | `{document_ids[], page_from?, page_to?}` แคชเจอตอบ `200` พร้อมข้อที่เติมแล้ว ไม่เจอตอบ `202` (queue `ExtractDocumentJob`) เกิน 30 หน้าไม่มีช่วง 422 `document_too_long` |
 | POST | `/assignments/{id}/answer-key/draft` | ครู | ให้ AI ร่างเฉลยเอง `202` (`key_origin = ai_draft`) |
 | GET | `/assignments/{id}/answer-key` | ครู | `{key_origin, key_approved_at, extraction_status, questions: [...]}` |
-| POST | `/assignments/{id}/answer-key/approve` | ครู | `{subject_id?, course_id?}` ทุกข้อต้องมีเฉลยหรือ rubric ครบ งานจากเว็บที่ยังไม่มีวิชาต้องส่ง `subject_id` (ก่อน Phase 9) หรือ `course_id` ของรายวิชาที่ผูกกับห้อง (หลัง Phase 9, ตั้ง `subject_id` ตามรายวิชา) ไม่ครบ 422 `course_required` งานที่รออยู่เข้าคิวตรวจ |
+| POST | `/assignments/{id}/answer-key/approve` | ครู | `{subject_id?, course_id?}` ตั้ง `key_approved_at` และเปลี่ยนงาน `freeform` จาก `draft` เป็น `ready` (§19.5) งาน `freeform` ต้องมีอย่างน้อย 1 ข้อ ทุกข้อต้องมีเฉลยหรือ rubric ครบ งานจากเว็บที่ยังไม่มีวิชาต้องส่ง `subject_id` (ก่อน Phase 9) หรือ `course_id` ของรายวิชาที่ผูกกับห้อง (หลัง Phase 9, ตั้ง `subject_id` ตามรายวิชา) ไม่ครบ 422 `course_required` แถว `waiting_key` ของ mirror เข้าคิวตรวจผ่าน `ReleaseWaitingSubmissionsJob` |
 | GET | `/document-extractions/{id}` | ครู | สถานะและผล (เฉพาะโรงเรียนของตัวเอง) |
 | POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` ทาง whole-page ตอบ `201 {submission_id, pages: [...]}` เกินหน้า 422 `too_many_pages` |
 | POST | `/submissions/{id}/grade` | ครู | ตรวจงานที่ส่งใหม่ (`regrade_pending`) ตอบ `202` |
@@ -2145,13 +2166,13 @@ CREATE TABLE explanation_cache (
 | POST | `/google-submissions/{id}/accept-late` | ครู | รับงานที่ส่งช้าซึ่งถูกปฏิเสธ (`rejected_late`) แถวเป็น `new` + `late = TRUE` ตอบ `202` สถานะอื่น 409 `import_not_rejected` |
 | GET | `/assignments/{id}/google-feedback` | ครู | สถานะประกาศรายคน |
 | POST | `/assignments/{id}/google-feedback/retry` | ครู | ส่งประกาศใหม่ให้แถว `failed` |
-| GET | `/student/assignments` | นักเรียน | งานที่ต้องส่ง `[{id, title, due_at, accept_late, submitted_at, late, status}]` |
-| POST | `/student/assignments/{id}/submission` | นักเรียน | multipart `files[]` ส่งเลย (whole-page) ปิดรับแล้ว 422 `submission_late` งานยังไม่อนุมัติเฉลยก็รับได้ (รอตรวจ) |
+| GET | `/student/assignments` | นักเรียน | งานที่ต้องส่ง เฉพาะการบ้าน `ready` `[{id, title, due_at, accept_late, submitted_at, late, status}]` |
+| POST | `/student/assignments/{id}/submission` | นักเรียน | multipart `files[]` ส่งเลย (whole-page) รับเฉพาะการบ้าน `ready` (`draft` ที่ยังไม่อนุมัติเฉลย และ `closed` ตอบ 409 `assignment_not_ready`) ปิดรับแล้ว 422 `submission_late` |
 | GET | `/r/{submission_id}` (web route) | สาธารณะ | หน้าไทย "เปิดผลในแอป EduVision" ไม่มีข้อมูลนักเรียน |
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`
+**error code ใหม่**: `course_already_linked`, `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`
 
 ### 19.10 Job, cron และ prompt
 
@@ -2164,6 +2185,7 @@ CREATE TABLE explanation_cache (
 | `GradeSubmissionPageJob(page)` | grading | หนึ่ง call ต่อหน้า + retry รายข้อ + Fuzzy เมื่อทุกหน้าของ submission เสร็จ รวมผลแล้วแจ้งครูแบบเดิม |
 | `ExtractDocumentJob(extraction)` | default | อ่านเอกสาร (เฉลย, รายวิชา, แผน) เก็บลง `document_extractions` |
 | `DraftAnswerKeyJob(assignment)` | default | ร่างเฉลยจากโจทย์/material |
+| `ReleaseWaitingSubmissionsJob(assignment)` | grading | หลังอนุมัติเฉลย ย้ายแถว `waiting_key` ทุกแถวเป็น `imported` แล้ว dispatch `GradeSubmissionPageJob` ของหน้าที่เก็บไว้ (§19.5) |
 | `PostClassroomFeedbackJob(post)` | default | ประกาศส่วนตัวหนึ่งคน |
 | `PushClassroomGradeJob` (เดิม) | default | เพิ่มการบันทึก `pushed_grade` |
 
@@ -2203,7 +2225,7 @@ scope รวมเป็นตาราง §18.5 บวก `classroom.announcem
   - import ห้อง: transaction rollback เมื่อ enroll ล้ม, > 100 คน, คอร์สผูกแล้ว 409, ignore list ไม่ถูกเพิ่มกลับ
   - ซิงก์รายชื่อ: เพิ่มต่อท้าย, ออกจากคอร์ส → unmatched + ป้าย, กลับเข้ามา → จับคู่คืน, ไม่เขียนทับชื่อ
   - cron: `eduvision:queue-work` dispatch sync เฉพาะเมื่อครบ 5 นาที, ข้ามบัญชี `needs_reconnect`, จำกัดต่อรอบ
-  - นำเข้างานจากเว็บ + ร่างเฉลย + ไม่ตรวจก่อนอนุมัติ, `ProjectPermissionDenied` → ไม่ push แต่ประกาศได้
+  - นำเข้างานจากเว็บ + ร่างเฉลย + ไม่ตรวจก่อนอนุมัติ (ส่งก่อนอนุมัติ → `waiting_key` พร้อมไฟล์, อนุมัติ → `imported` → `graded`), `freeform` ของแอป: อนุมัติ → `ready`, `google-post` ตอน `draft` ไม่ได้, นักเรียนส่งงาน `draft`/`closed` → 409 `assignment_not_ready`, `ProjectPermissionDenied` → ไม่ push แต่ประกาศได้
   - grade conflict: ตรวจจับ, `push_app`, `accept_classroom` (override + ไม่แตะ mastery), 409 กับงานจากเว็บ
   - `invalid_grant` → `needs_reconnect` + FCM ครั้งเดียว
   - ส่งช้า: รับ + ป้าย / ปฏิเสธ 422 และ `rejected_late`
@@ -2512,8 +2534,8 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 | ระดับ | token ต่อภาพ | ใช้กับ |
 |---|---|---|
 | `low` | 280 | crop ตอบสั้นและกรอบคำตอบสุดท้าย |
-| `medium` | 560 | crop แสดงวิธีทำและตอบอิสระ, **PDF (ค่าตั้งต้นต่อหน้า)** |
-| `high` | 1,120 | ภาพทั้งหน้า (ค่าตั้งต้นของภาพเมื่อไม่ระบุ) |
+| `medium` | 560 | crop แสดงวิธีทำและตอบอิสระ, **PDF เอกสารของครู** (Gemini ใช้ระดับนี้เป็นค่าตั้งต้นต่อหน้า PDF) |
+| `high` | 1,120 | ภาพทั้งหน้าและทุกหน้าของงานนักเรียน รวม PDF ของนักเรียน (ค่าตั้งต้นของภาพเมื่อไม่ระบุ) |
 | `ultra_high` | 2,240 | ไม่ใช้ |
 
 ค่าที่วัดได้จากการทดสอบจริง 27 ก.ย. (STATUS §3) ใช้ภาพที่ `high` ทุกภาพและหนึ่ง call ต่อข้อ
@@ -2554,9 +2576,10 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 |---|---|---|
 | crop `short` และกรอบคำตอบสุดท้าย | `low` | `GEMINI_MEDIA_SHORT=high` |
 | crop `show_work` และ `open` | `medium` | `GEMINI_MEDIA_WORK=high` |
-| ภาพทั้งหน้า | `high` | `GEMINI_MEDIA_PAGE=high` |
-| เอกสาร PDF | `medium` | `GEMINI_MEDIA_DOCUMENT=medium` |
+| หน้างานของนักเรียนทุกหน้า (ภาพทั้งหน้า และแต่ละหน้าของ PDF ที่นักเรียนส่ง) | `high` | `GEMINI_MEDIA_PAGE=high` |
+| เอกสารของครูเท่านั้น (เฉลยรวม material ที่ใช้ร่างเฉลย, รายวิชา, แผนการสอน) | `medium` | `GEMINI_MEDIA_DOCUMENT=medium` |
 
+- PDF ของนักเรียนใช้ระดับของหน้า (`GEMINI_MEDIA_PAGE`) ไม่ใช่ `GEMINI_MEDIA_DOCUMENT` เพราะเป็นลายมือที่ต้องอ่านละเอียดเท่ารูปทั้งหน้า (§19.4)
 - **เปิดระดับที่ต่ำลงได้หลังผ่าน calibration harness (§21.10) เท่านั้น** ถ้าไม่ผ่านให้ใช้ระดับที่สูงกว่าถัดไป (`low` ไม่ผ่าน → `medium`, `medium` ไม่ผ่าน → `high`)
 - ส่งเป็น `mediaResolution` ระดับ part ⚠️ ตรวจกับเอกสาร API ตอน implement ว่าต้องใช้ API version ไหน ถ้าตั้งระดับ part ไม่ได้ ให้ตั้ง `generationConfig.mediaResolution` ต่อ call โดยใช้ระดับ**สูงสุด**ของ part ใน call นั้น (หน้าที่มีทั้งตอบสั้นและแสดงวิธีทำจะได้ `medium`)
 - ทำพร้อมทางตรวจทั้งหน้า (build order ข้อ 2 ใน §15)
@@ -2580,8 +2603,10 @@ hook ใน `eduvision:queue-work` (ไม่มี `schedule:run`)
 
 ### 21.7 ข้อ 6–7: ใช้คำอธิบายซ้ำ และ "เฉพาะคะแนน"
 
-- **ข้อ 6**: คำตอบผิดที่ normalize แล้ว (§11.4) **เหมือนกันพอดี**ในข้อเดียวกัน (`short` และคำตอบสุดท้ายของ `show_work`) ใช้คำอธิบายที่เก็บไว้ใน `explanation_cache` แทนการเรียก Gemini โดย**ใช้ฉบับที่ครูแก้ก่อน**ฉบับ AI (`explanation_source = reused`) ข้อ `show_work` ที่ขั้นตอนต่างกันยังได้คำอธิบายของตัวเอง key ของ `show_work` จึงเป็น hash ของ (คำตอบสุดท้าย + บรรทัดแรกที่ผิด) ข้อ `open` ไม่ใช้ซ้ำ
-  - **ตีความโดยตั้งใจ** ของ "ขั้นตอนต่างกันได้คำอธิบายของตัวเอง": "ต่างกัน" นับเฉพาะจนถึงบรรทัดแรกที่ผิด เพราะคำอธิบายของ Gemini เขียนถึงจุดผิดแรกเป็นหลัก สองคำตอบที่คำตอบสุดท้ายและบรรทัดแรกที่ผิดเหมือนกันแต่ขั้นหลังจากนั้นต่างกันจึงใช้คำอธิบายเดียวกัน ถ้าทดสอบแล้วพบว่าคำอธิบายไม่ตรงกับงานจริง ให้เปลี่ยน key เป็น hash ของทุกบรรทัดที่ normalize แล้ว (แคชเจอน้อยลง)
+- **ข้อ 6**: ใช้คำอธิบายที่เก็บไว้ใน `explanation_cache` แทนการเรียก Gemini เมื่อคำตอบผิดที่ normalize แล้ว (§11.4) **เหมือนกันพอดี**ในข้อเดียวกัน โดย**ใช้ฉบับที่ครูแก้ก่อน**ฉบับ AI (`explanation_source = reused`) key แยกตามชนิดของคำอธิบาย (ใส่ prefix ใน hash เพื่อไม่ให้สองแบบชนกัน)
+  - **`short`** และ **คำตอบสุดท้ายของ `show_work`** (ทุกขั้นตอน `valid = true` ผิดเฉพาะคำตอบสุดท้าย คำอธิบายจึงพูดถึงคำตอบสุดท้ายเท่านั้น): key = hash ของคำตอบผิดที่ normalize แล้ว
+  - **`show_work` ที่คำอธิบายพูดถึงขั้นตอน** (มีขั้นตอน `valid = false` อย่างน้อยหนึ่งขั้น): ใช้ซ้ำ**เฉพาะเมื่อทุกบรรทัดที่ normalize แล้วเหมือนกันทั้งหมด** key = hash ของทุกบรรทัด (`steps[].text` เรียงตาม `line`) และคำตอบสุดท้าย ขั้นตอนที่ต่างกันแม้บรรทัดเดียวได้คำอธิบายของตัวเอง
+  - ข้อ `open` ไม่ใช้ซ้ำ
 - **ข้อ 7**: การบ้านที่ตั้ง **"เฉพาะคะแนน"** (`assignments.score_only`) ข้ามการเรียก `explanation` ทั้งหมด นักเรียนเห็นคะแนนและข้อความจาก template (§7.2 ข้อ 5)
 
 ### 21.8 ข้อ 8: บันทึก token แยกตามฟีเจอร์
