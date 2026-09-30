@@ -83,8 +83,16 @@ String? scoreProblem(double? value, double fullMarks) {
 }
 
 /// A typed score: "8", "8.5", or "8,5" from a Thai keyboard or Excel.
-double? parseScore(String text) =>
-    double.tryParse(text.trim().replaceAll(',', '.'));
+/// Only plain decimals count: double.tryParse also takes "NaN",
+/// "Infinity" and "1e2", which pass every range check (NaN compares false)
+/// and then fail in jsonEncode instead of showing 'ไม่ใช่ตัวเลข'.
+double? parseScore(String text) {
+  final t = text.trim().replaceAll(',', '.');
+  if (!_plainDecimal.hasMatch(t)) return null;
+  return double.tryParse(t);
+}
+
+final _plainDecimal = RegExp(r'^[+-]?(\d+(\.\d*)?|\.\d+)$');
 
 /// One line of "วางคะแนนจาก Excel" (§23.3): the first tab-separated field
 /// of a line; a blank line changes nothing.

@@ -373,6 +373,25 @@ void main() {
     );
   });
 
+  testWidgets('a category excused for the student is not "no score yet"', (
+    tester,
+  ) async {
+    final grid = gridJson(complete: false);
+    final first = (grid['rows'] as List).first as Map<String, dynamic>;
+    (first['cells'] as Map<String, dynamic>)['a54'] = cellJson('excused');
+    await _pump(
+      tester,
+      repo: FakeGradebookRepository(settings: settingsJson(), grid: grid),
+    );
+
+    await _tap(tester, _key('row_101'));
+    expect(
+      find.text('กลางภาค (20%): ไม่มีคะแนนในหมวดนี้ (ยกเว้นทุกรายการ)'),
+      findsOneWidget,
+    );
+    expect(find.text('ปลายภาค (30%): ยังไม่มีคะแนน'), findsOneWidget);
+  });
+
   testWidgets('a stale publication can be published again or withdrawn', (
     tester,
   ) async {

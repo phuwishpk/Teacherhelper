@@ -38,6 +38,22 @@ void main() {
     expect(scoreProblem(0, 10), isNull);
     expect(scoreProblem(8.25, 10), isNull);
     expect(scoreProblem(null, 10), 'ไม่ใช่ตัวเลข');
+    // double.tryParse takes these; a score must not.
+    for (final text in [
+      'NaN',
+      'nan',
+      'Infinity',
+      '-Infinity',
+      '1e2',
+      '0x10',
+      '',
+    ]) {
+      expect(parseScore(text), isNull, reason: text);
+    }
+    expect(parseScore(' 8,5 '), 8.5);
+    expect(parseScore('.5'), 0.5);
+    expect(parseScore('-1'), -1);
+    expect(parseScore('10.'), 10);
     expect(scoreProblem(-1, 10), 'ติดลบ');
     expect(scoreProblem(11, 10), contains('เกินคะแนนเต็ม'));
     expect(scoreProblem(8.125, 10), contains('ทศนิยม'));

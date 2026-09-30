@@ -490,6 +490,16 @@ class _StudentRowDialogState extends State<StudentRowDialog> {
     super.dispose();
   }
 
+  /// Every item of the category is excused for this student (§23.4):
+  /// the total leaves the category out, which is not "no score yet".
+  bool _allExcused(int categoryId) {
+    final columns = widget.grid.columns.where(
+      (c) => c.categoryId == categoryId,
+    );
+    return columns.isNotEmpty &&
+        columns.every((c) => widget.row.cell(c.key).state == CellState.excused);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -506,7 +516,7 @@ class _StudentRowDialogState extends State<StudentRowDialog> {
             for (final c in grid.categories)
               Text(
                 '${c.name} (${formatGbNumber(c.weight)}%): '
-                '${row.categories[c.id]?.percent == null ? 'ยังไม่มีคะแนน' : '${formatGbNumber(row.categories[c.id]!.percent)}% '
+                '${row.categories[c.id]?.percent == null ? (_allExcused(c.id) ? 'ไม่มีคะแนนในหมวดนี้ (ยกเว้นทุกรายการ)' : 'ยังไม่มีคะแนน') : '${formatGbNumber(row.categories[c.id]!.percent)}% '
                           '→ ${formatGbNumber(row.categories[c.id]!.points)} คะแนน'}',
               ),
             const SizedBox(height: 8),
