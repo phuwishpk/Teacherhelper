@@ -92,7 +92,7 @@ Websites & Domains > `teacherhelper.phuwish.com` > **PHP Settings**
 | `memory_limit` | ≥ 256M | mPDF ตอนสร้างใบงาน/บัตร QR และ worker (`queue:work --memory=128` เป็นเกณฑ์หยุดเองที่ต่ำกว่านี้) |
 | `max_execution_time` | ≥ 120 (อย่างน้อย 90) | POST /scans ที่มีไฟล์หลายสิบไฟล์, หน้า Filament import CSV และ **"วิเคราะห์ตอนนี้"** (`POST /students/{id}/analysis/run` เรียก Gemini ใน request เอง ถ้าผลแรกใช้ไม่ได้ถามซ้ำอีกครั้ง ต้องได้อย่างน้อย 90 วินาที DESIGN §20.5) |
 | `upload_max_filesize` | ≥ 10M | ไฟล์งานที่ส่งแบบรูปทั้งหน้าและไฟล์เฉลย/เอกสารของครูไฟล์ละไม่เกิน 10 MB (`SUBMISSION_MAX_FILE_MB`, `DOCUMENT_MAX_FILE_MB`, DESIGN §19.4–§19.6), หน้าเต็มของสแกน (`SCAN_MAX_PAGE_KB`) และการอัปโหลดโมเดลผ่าน Filament (§7) ถ้าต่ำกว่านี้ไฟล์ใหญ่ถูก PHP ทิ้งก่อนถึงแอป |
-| `post_max_size` | ≥ 55M | งานส่งหนึ่งครั้งมีได้ 5 ไฟล์ × 10 MB (`SUBMISSION_MAX_PAGES`) บวกส่วนหัวของ multipart และหน้า + crop ทุกข้อของ POST /scans ถ้า body ใหญ่เกิน API ตอบ `413 payload_too_large` |
+| `post_max_size` | ≥ 55M | งานส่งหนึ่งครั้งมีได้ 5 ไฟล์ × 10 MB (`SUBMISSION_MAX_PAGES`) บวกส่วนหัวของ multipart และหน้า + crop ทุกข้อของ POST /scans ถ้า body ใหญ่เกิน API ตอบ `413 file_too_large` |
 | `max_file_uploads` | ≥ 100 | 1 หน้า + 2 ไฟล์ต่อข้อ ถ้าต่ำกว่านี้ PHP ทิ้งไฟล์ที่เกินเงียบๆ และ API ตอบ `503 too_many_files` |
 | `open_basedir` | `{WEBSPACEROOT}{/}{:}{TMP}{/}` | ต้องครอบ `<home>/eduvision/` ทั้งก้อน ไม่ใช่แค่ docroot |
 | `display_errors` | off | production |
@@ -501,7 +501,7 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | แก้ `.env` แล้วค่าไม่เปลี่ยน | config cache จาก `optimize` | Run Now `optimize:clear` + `filament:optimize-clear` แล้ว `optimize` + `filament:optimize` |
 | Deploy แล้ว `.env`/`vendor` หาย | Plesk ล้าง deployment path | ย้าย `.env` ไป `<home>/eduvision-private/` แล้วบันทึกวิธี (§3) |
 | POST /scans ตอบ `503 too_many_files` | `max_file_uploads` ต่ำกว่า 1 + 2 × จำนวนข้อ | PHP Settings ตาม §4.1 (แอปจะลองส่งใหม่เอง) |
-| POST /scans ตอบ `413 payload_too_large` หรือ Plesk ตอบ 413 เอง | `post_max_size`/`upload_max_filesize` ต่ำ หรือ nginx `client_max_body_size` | PHP Settings §4.1; ถ้าเป็นหน้า error ของ nginx ขอ Hostatom เพิ่ม `client_max_body_size 32m` |
+| POST /scans หรือการส่งงานตอบ `413 file_too_large` หรือ Plesk ตอบ 413 เอง | `post_max_size`/`upload_max_filesize` ต่ำ หรือ nginx `client_max_body_size` | PHP Settings §4.1; ถ้าเป็นหน้า error ของ nginx ขอ Hostatom เพิ่ม `client_max_body_size 64m` (ต้องไม่น้อยกว่า `post_max_size` 55M) |
 | ครูโดน `429 too_many_requests` ตอน login | ผิดรหัสเกิน 10 ครั้ง/นาทีจาก IP เดียว (ทั้งโรงเรียนใช้ NAT เดียว) | รอตาม `Retry-After` (≤ 60 วินาที) ไม่ใช่การล็อกบัญชี |
 | นักเรียน `423 pin_locked` | ผิด PIN 5 ครั้ง | รอ 15 นาที หรือครูรีเซ็ต PIN จากแอป (สแกนบัตร QR ยังใช้ได้) |
 | ไม่มี `Strict-Transport-Security` ใน response ทั้งที่เรียกทาง https | PHP เห็น request เป็น http (proxy ภายในของ Plesk ไม่ส่ง `HTTPS=on`) | ⚠️ ต้องตรวจสอบ: ถ้าเกิดจริง เพิ่ม `$middleware->trustProxies(at: ['127.0.0.1'])` ใน `bootstrap/app.php` พร้อม test แล้ว deploy |
