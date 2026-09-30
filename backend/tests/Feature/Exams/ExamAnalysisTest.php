@@ -85,7 +85,7 @@ class ExamAnalysisTest extends TestCase
             Response::create([
                 'submission_id' => $row->id,
                 'question_id' => $question->id,
-                'grading_state' => 'done',
+                'grading_state' => Response::STATE_SCORED,
                 'ai_score' => $right ? 1 : 0,
                 'final_score' => $right ? 1 : 0,
                 'exam_answer' => $answer + ['sheet_no' => $question->position, 'version_no' => $student->id % 2 + 1, 'selected' => [], 'value' => null, 'doubts' => []],
