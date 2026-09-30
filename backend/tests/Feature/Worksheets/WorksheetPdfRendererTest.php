@@ -70,7 +70,7 @@ class WorksheetPdfRendererTest extends TestCase
     /** @return list<array{float, float, float, float}> every `re` operator in the page streams, in points */
     private function rectangles(string $pdf): array
     {
-        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+        preg_match_all('/stream\n(.*?)\nendstream/s', $pdf, $streams);
         $rects = [];
         foreach ($streams[1] as $stream) {
             $content = @gzuncompress($stream);

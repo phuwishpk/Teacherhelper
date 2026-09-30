@@ -120,8 +120,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.indicator-suggestions.index' => ['GET', 'assignments/{assignment}/indicator-suggestions', 404, 404],
         'api.assignments.indicator-mapping' => ['PUT', 'assignments/{assignment}/indicator-mapping', 404, 404],
         'api.documents.store' => ['POST', 'documents', self::OK, self::OK],
-        // The read-once cache is shared by the school (§19.5): a colleague may read it.
-        'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', self::OK, 404],
+        // An answer-key read (the fixture) is shown only to a teacher tied to it (§19.9, §22.17):
+        // a colleague who guesses the id gets 404. Course reads stay school-wide (CourseDocumentTest).
+        'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', 404, 404],
         'api.assignments.answer-key.show' => ['GET', 'assignments/{assignment}/answer-key', 404, 404],
         'api.assignments.answer-key.extract' => ['POST', 'assignments/{assignment}/answer-key/extract', 404, 404],
         'api.assignments.answer-key.draft' => ['POST', 'assignments/{assignment}/answer-key/draft', 404, 404],

@@ -86,7 +86,10 @@ class ExamSheetPdfTest extends TestCase
      */
     private function circleStarts(string $pdf): array
     {
-        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+        // mPDF writes "stream\n<data>\nendstream". The data is binary and may end
+        // in a \r, so the delimiters are matched exactly (a \r? there cut that
+        // byte off, the stream failed to inflate and its page went missing).
+        preg_match_all('/stream\n(.*?)\nendstream/s', $pdf, $streams);
         $pages = [];
         foreach ($streams[1] as $stream) {
             $content = @gzuncompress($stream);

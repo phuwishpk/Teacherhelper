@@ -248,7 +248,8 @@ Route::prefix('v1')->group(function () {
                 Route::post('question-options/{id}/image', [ExamImageController::class, 'storeOption'])->middleware('throttle:exam-images')->name('api.question-options.image.store');
                 Route::delete('question-options/{id}/image', [ExamImageController::class, 'destroyOption'])->name('api.question-options.image.destroy');
                 // Exams from files and earlier exams (§22.4): read once, crop figures, copy questions.
-                Route::post('exams/{id}/import', [ExamImportController::class, 'import'])->name('api.exams.import');
+                // The read costs a Gemini call (or a large write when cached), so it is throttled; the estimate is free.
+                Route::post('exams/{id}/import', [ExamImportController::class, 'import'])->middleware('throttle:exam-import')->name('api.exams.import');
                 Route::post('exams/{id}/import/estimate', [ExamImportController::class, 'estimate'])->name('api.exams.import.estimate');
                 Route::post('exams/{id}/page-images', [ExamImportController::class, 'storePageImage'])->middleware('throttle:exam-images')->name('api.exams.page-images.store');
                 Route::get('exam-page-images/{id}', [ExamImportController::class, 'showPageImage'])->name('api.exam-page-images.show');

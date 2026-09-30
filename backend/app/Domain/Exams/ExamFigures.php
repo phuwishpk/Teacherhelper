@@ -325,6 +325,9 @@ final class ExamFigures
             $path = self::pagePath($page);
             ExamImages::disk()->put($path, $bytes);
             $page->file_path = $path;
+            // A new file on an old (purged) row starts its retention again, or
+            // purge() would take it on the next run (created_at is the file's age).
+            $page->created_at = now();
             $page->save();
 
             return $page;
@@ -495,7 +498,8 @@ final class ExamFigures
         $scaled = ExamImages::scaled($image, self::PAGE_MAX_PX);
         $path = self::pagePath($page);
         ExamImages::writeJpeg($scaled, $path);
-        $page->forceFill(['file_path' => $path, 'width_px' => imagesx($scaled), 'height_px' => imagesy($scaled)])->save();
+        // created_at is the file's age for purge(): a purged row decoded again starts over.
+        $page->forceFill(['file_path' => $path, 'width_px' => imagesx($scaled), 'height_px' => imagesy($scaled), 'created_at' => now()])->save();
 
         return true;
     }

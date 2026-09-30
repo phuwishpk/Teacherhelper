@@ -19,9 +19,11 @@ use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\SourceDocument;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Reading a teacher's exam file once (DESIGN §22.4) with the document path
@@ -133,21 +135,34 @@ final class ExamDocuments
         if ($extraction === null) {
             return;
         }
+        $done = null;
         if (! $extraction->isDone()) {
-            if (! $this->read($extraction, $documentIds, $pageFrom, $pageTo, $teacherId, $assignmentId, $lastAttempt)) {
+            $done = $this->read($extraction, $documentIds, $pageFrom, $pageTo, $teacherId, $assignmentId, $lastAttempt);
+            if ($done === null) {
                 return;
             }
         }
 
-        $waiting = ExamImport::query()->where('extraction_id', $extraction->id)->whereNull('applied_at')->orderBy('id')->get();
-        foreach ($waiting as $import) {
-            try {
-                $this->apply($import);
-            } catch (ApiException $e) {
-                // Printed (structure locked) or closed meanwhile: the teacher asks again later (cached, free).
-                Log::info('exam_import.not_applied', ['import_id' => $import->id, 'code' => $e->errorCode]);
+        // `done` and the drafts it makes commit together: the app refreshes
+        // the exam once it polls `done`, so it must never see `done` before
+        // the questions exist. Each import rolls back on its own (savepoint).
+        DB::transaction(function () use ($extraction, $done) {
+            if ($done !== null) {
+                $extraction->forceFill($done)->save();
             }
-        }
+            $waiting = ExamImport::query()->where('extraction_id', $extraction->id)->whereNull('applied_at')->orderBy('id')->get();
+            foreach ($waiting as $import) {
+                try {
+                    $this->apply($import);
+                } catch (ApiException $e) {
+                    // Printed (structure locked) or closed meanwhile: the teacher asks again later (cached, free).
+                    Log::info('exam_import.not_applied', ['import_id' => $import->id, 'code' => $e->errorCode]);
+                } catch (Throwable $e) {
+                    // Never lose the paid read for one import: it waits for the teacher to ask again.
+                    report($e);
+                }
+            }
+        });
     }
 
     /** After the job ran out of tries. */
@@ -237,15 +252,19 @@ final class ExamDocuments
     }
 
     /**
+     * The Gemini read; the attributes that mark the extraction done (saved
+     * by process() with the imports), or null after it was marked failed.
+     *
      * @param  list<int>  $documentIds
+     * @return array<string, mixed>|null
      */
-    private function read(DocumentExtraction $extraction, array $documentIds, ?int $pageFrom, ?int $pageTo, int $teacherId, ?int $assignmentId, bool $lastAttempt): bool
+    private function read(DocumentExtraction $extraction, array $documentIds, ?int $pageFrom, ?int $pageTo, int $teacherId, ?int $assignmentId, bool $lastAttempt): ?array
     {
         $key = $this->keys->forTeacher($teacherId);
         if ($key === null) {
             $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง');
 
-            return false;
+            return null;
         }
 
         $documents = SourceDocument::query()->whereIn('id', $documentIds === [] ? [0] : $documentIds)->get()->keyBy('id');
@@ -259,7 +278,7 @@ final class ExamDocuments
         } catch (ApiException $e) {
             $this->fail($extraction, $e->getMessage());
 
-            return false;
+            return null;
         }
         $refs = [];
         foreach ($selection->documents as $i => $document) {
@@ -283,18 +302,16 @@ final class ExamDocuments
                 default => 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง',
             });
 
-            return false;
+            return null;
         }
 
-        $extraction->forceFill([
+        return [
             'status' => DocumentExtraction::STATUS_DONE,
             'result' => $result,
             'model' => Str::limit($this->gateway->client()->model(), 64, ''),
             'prompt_version' => $this->prompts->get(ExamDocumentReader::PURPOSE, 'general')->versionLabel(),
             'error' => null,
-        ])->save();
-
-        return true;
+        ];
     }
 
     private function record(Assignment $exam, User $teacher, DocumentExtraction $extraction, DocumentSelection $selection): ExamImport

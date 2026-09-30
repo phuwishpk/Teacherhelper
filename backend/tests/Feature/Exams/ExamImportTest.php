@@ -212,6 +212,36 @@ class ExamImportTest extends TestCase
         $this->asUser($this->teacher)->get("/api/v1/exam-page-images/{$page->id}")->assertOk()->assertHeader('Content-Type', 'image/jpeg');
     }
 
+    public function test_a_purged_page_image_that_gets_a_new_file_starts_its_retention_again(): void
+    {
+        [$exam, $ids] = $this->importPhoto();
+        $page = ExamPageImage::query()->sole();
+
+        // Day 31: the page image file is purged (the source photo too).
+        $this->travel(31)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNull($page->refresh()->file_path);
+
+        // The app uploads the page again: the row is reused and its file is new, so the next purge keeps it.
+        $this->asUser($this->teacher)->post("/api/v1/exams/{$exam->id}/page-images", ['source_document_id' => $ids[0], 'page_no' => 1, 'image' => self::renderedPage()], ['Accept' => 'application/json'])
+            ->assertCreated()->assertJsonPath('data.page_image.id', $page->id);
+        $this->travel(1)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNotNull($page->refresh()->file_path);
+        ExamImages::disk()->assertExists((string) $page->file_path);
+
+        // A photo page the server decodes again (the teacher uploaded the photo anew) starts over too.
+        $this->travel(31)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNull($page->refresh()->file_path);
+        $this->assertSame($ids, $this->upload([UploadedFile::fake()->createWithContent('exam.jpg', self::pagePhoto())]));
+        ExamFigures::cropPage($page->id);
+        $this->assertNotNull($page->refresh()->file_path);
+        $this->travel(1)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNotNull($page->refresh()->file_path);
+    }
+
     public function test_the_teacher_draws_a_new_box_and_the_server_crops_it_again(): void
     {
         [$exam] = $this->importPhoto();
@@ -409,8 +439,11 @@ class ExamImportTest extends TestCase
         $bytes = self::pagePhoto();
         [$exam] = $this->importPhoto();
         $this->assertCount(1, $this->sent());
+        $extractionId = ExamImport::query()->sole()->extraction_id;
 
+        // The read holds the owner's questions and answers: a colleague who guesses its id gets 404 (§22.17).
         $colleague = $this->makeTeacher($this->teacher->school);
+        $this->asUser($colleague)->getJson("/api/v1/document-extractions/{$extractionId}")->assertNotFound();
         $classroom = $this->makeClassroom($colleague);
         $course = $this->makeCourse($colleague, [$classroom]);
         $theirs = Assignment::query()->findOrFail($this->asUser($colleague)->postJson('/api/v1/assignments', [
@@ -429,6 +462,8 @@ class ExamImportTest extends TestCase
             ->assertJsonPath('data.applied.skipped.0.number', 8)
             ->assertJsonPath('data.figures_pending', []);
         $this->assertCount(1, $this->sent(), 'no second Gemini call');
+        // Having read the same file into their own exam, they may poll it.
+        $this->asUser($colleague)->getJson("/api/v1/document-extractions/{$extractionId}")->assertOk()->assertJsonPath('data.status', 'done');
         $this->assertSame(1, Question::query()->where('assignment_id', $theirs->id)->whereNotNull('prompt_image_path')->count(), 'figures cropped from their own page image');
         $this->assertSame(1, ExamPageImage::query()->where('assignment_id', $theirs->id)->count());
 
