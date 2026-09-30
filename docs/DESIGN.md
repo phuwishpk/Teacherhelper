@@ -1721,6 +1721,8 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 
 หมายเหตุ #45–#57 รายละเอียดที่เลือกตอนเขียนหัวข้อ 22–23 (ไม่ขัดกับที่ผู้ใช้ยืนยัน ถ้าต้องการแบบอื่นแก้ได้ก่อนถึง build ข้อนั้น): ชุด ก คือลำดับต้นฉบับ, วงชุดอยู่เฉพาะหน้า 1 ของกระดาษคำตอบ, คอลัมน์ตัวเลขแบบ SAT (วง "." ในทุกคอลัมน์ + หนึ่งคอลัมน์เพิ่มเมื่อมีทศนิยม), PDF และ HEIC ของข้อสอบถูก render เป็นภาพบนมือถือ Android ก่อน server ตัดภาพ (server ไม่มี CPU ให้ render PDF), คะแนนรายตอนแสดงให้นักเรียนพร้อมคะแนนรวม, ขอตรวจใหม่รายข้อได้เฉพาะข้อสอบที่เปิดให้ดูเฉลย, รายการที่ครูเพิ่มเป็นของแต่ละห้อง (สร้างให้หลายห้องพร้อมกันได้), งานที่ตรวจแล้วแต่ยังไม่เผยแพร่ไม่นับในสมุดคะแนน และประกาศเกรดแจ้งนักเรียนผ่าน FCM โดยไม่แสดงเกรดบนหน้าจอล็อก
 
+แก้หลังตรวจทานแบบ (30 ก.ย. 2569, ไม่เปลี่ยนสิ่งที่ผู้ใช้ยืนยัน): ช่องว่างในสมุดคะแนนเป็น 0 ต่อคนเมื่อเลยกำหนดเท่านั้น (`not_due` ก่อนกำหนด การบ้านไม่มี `due_at` นับเมื่อปิด ข้อสอบบังคับ `due_at`, §23.4), ไฟล์ต้นฉบับโหลดได้ผ่านข้อสอบของเจ้าของเท่านั้น (`exam_imports`, §22.4), คำตอบที่ครูอ่านรอยฝนเก็บใน `exam_answer.resolved` และถูกคิดกับเฉลยใหม่ตอนตรวจใหม่ทั้งห้อง (§22.3), กระดาษเฉลยใช้ layout จาก `/layouts` และการพิมพ์ครั้งแรกทุกชนิดล็อกโครงสร้าง (§22.6), ข้อสอบ `manual` ไม่มีประตูเฉลย (§22.1), เกณฑ์การฝนของกระดาษคำตอบแยกจากใบงาน (§22.9), สัญญาณสแกนใช้รูปแบบการสั่นแทนเสียงเตือน (§22.10) ข้อที่ต้องให้ผู้ใช้ยืนยันก่อน build ข้อ 2: คอลัมน์ทศนิยมแบบ SAT (ผู้ใช้พูดถึง "คอลัมน์จุดทศนิยม" แยก) และข้อสอบยังไม่มีตัวเลือกโพสต์ลง Classroom เลย (ผู้ใช้พูดว่า "ไม่โพสต์โดยค่าตั้งต้น")
+
 ---
 
 ## 18. การเชื่อม Google Classroom (Phase 7)
@@ -2942,6 +2944,9 @@ ALTER TABLE ai_calls
 - **วิธีตรวจเลือกต่อข้อสอบ** (`assignments.grading_method`)
   - `app` ("ตรวจด้วยแอป"): พิมพ์กระดาษคำตอบ ครูสแกนด้วยมือถือ แอปให้คะแนนทันทีในเครื่อง แล้ว server ตรวจซ้ำด้วยโค้ด
   - `manual` ("ครูตรวจเอง"): ครูตรวจนอกแอปแล้วกรอกคะแนนรวมในตารางของสมุดคะแนน (§23.3) ข้อสอบแบบนี้พิมพ์เล่มข้อสอบได้ แต่ไม่มีกระดาษคำตอบ ต้องมีคะแนนเต็ม (`manual_full_marks`)
+    - **ไม่มีประตูเฉลย**: แอปไม่ใช้เฉลยของข้อสอบ `manual` จึงเป็น `ready` ตั้งแต่สร้าง ไม่ต้องมีข้อเลย (ครูใช้แค่คอลัมน์ในสมุดคะแนนได้) `POST /assignments/{id}/answer-key/approve` ตอบ 422 `exam_manual_grading` ถ้ามีข้อในแอป ครูใส่เฉลยได้แต่ไม่บังคับ (ไว้คัดลอกไปใช้ในข้อสอบอื่น)
+    - พิมพ์เล่มข้อสอบ `manual` ได้เมื่อมีอย่างน้อย 1 ข้อและ**ทุกข้ออนุมัติแล้ว** (`approved_at`, ข้อร่างจากไฟล์ต้องผ่านครู) ไม่ดูเฉลย ไม่ครบตอบ 422 `answer_key_incomplete` พร้อม `errors.questions` ของข้อที่ยังไม่อนุมัติ (§22.6)
+    - เปลี่ยน `grading_method` ได้: `app` → `manual` ไม่ได้เมื่อมีกระดาษคำตอบสแกนแล้ว (409 `exam_sheets_scanned`) `manual` → `app` สถานะกลับไปตามเฉลย (`ready` ⇔ `key_approved_at`) คะแนนที่กรอกในตารางถูกลบพร้อมคำเตือนในแอป
 - **ทุกคำตอบเป็นการฝน** ไม่มีช่องเขียนตอบ Gemini ใช้**เฉพาะอ่านไฟล์ข้อสอบของครู** (§22.4) **ไม่เคยใช้ตรวจคำตอบ** และไม่เคยเห็นกระดาษคำตอบของนักเรียน
 - งานหนักยังอยู่บนมือถือ: วัดการฝนด้วย OpenCV ในเครื่อง server แค่เทียบตัวเลขกับเฉลย (เบากว่าการสร้าง PDF)
 - **ไม่โพสต์ลง Google Classroom โดยอัตโนมัติ** การ์ด Classroom ของข้อสอบซ่อนไว้ การส่งคะแนนข้อสอบไป Classroom เลื่อนไว้ (§16.1)
@@ -2959,9 +2964,9 @@ ALTER TABLE ai_calls
 
 - ข้อหนึ่งมีโจทย์เป็นข้อความ (`prompt_text`, สูตรพิมพ์เป็นข้อความ เช่น `x^2 + 3x = 10`) และภาพประกอบได้ 1 ภาพ (`prompt_image_path`) ตัวเลือกของ `mcq` แต่ละตัวมีข้อความและ/หรือภาพ (`question_options`) ข้อ `true_false` และ `numeric` ไม่มีตัวเลือกให้พิมพ์
 - คะแนนเต็ม**ข้อละ 1 คะแนน**เป็นค่าตั้งต้น (`exam_sections.default_points`) ครูแก้รายข้อได้ (`questions.max_points`)
-- ครู**แก้ทีละข้อได้เสมอ** (ข้อความ ภาพ คะแนน เฉลย) ส่วนการเปลี่ยน**โครงสร้าง** (เพิ่ม ลบ ย้ายข้อหรือตอน, จำนวนตัวเลือก, ค่าตัวเลขของตอน, "ห้ามสลับตัวเลือก", จำนวนชุด) ถูกล็อกเมื่อพิมพ์เล่มหรือกระดาษคำตอบครั้งแรก (`assignments.structure_locked_at`) ครูกด **"ปลดล็อกเพื่อแก้โครงสร้าง"** ได้เฉพาะเมื่อยังไม่มีกระดาษคำตอบที่สแกนเข้ามา (409 `exam_sheets_scanned`) การปลดล็อกทำให้ต้องพิมพ์ใหม่ทั้งหมด: layout ของกระดาษคำตอบได้เวอร์ชันใหม่ และชุดที่สลับไว้สุ่มใหม่ (§22.5)
+- ครู**แก้ทีละข้อได้เสมอ** (ข้อความ ภาพ คะแนน เฉลย) ส่วนการเปลี่ยน**โครงสร้าง** (เพิ่ม ลบ ย้ายข้อหรือตอน, จำนวนตัวเลือก, ค่าตัวเลขของตอน, "ห้ามสลับตัวเลือก", จำนวนชุด) ถูกล็อกเมื่อพิมพ์เล่ม กระดาษคำตอบ หรือกระดาษเฉลยครั้งแรก (`assignments.structure_locked_at`, §22.6) ครูกด **"ปลดล็อกเพื่อแก้โครงสร้าง"** ได้เฉพาะเมื่อยังไม่มีกระดาษคำตอบที่สแกนเข้ามา (409 `exam_sheets_scanned`) การปลดล็อกทำให้ต้องพิมพ์ใหม่ทั้งหมด: layout ของกระดาษคำตอบได้เวอร์ชันใหม่ และชุดที่สลับไว้สุ่มใหม่ (§22.5)
 - ขีดจำกัด (ตั้งใน `config('eduvision.exams')`): ไม่เกิน 200 ข้อ, 10 ตอน, กระดาษคำตอบไม่เกิน 2 หน้า (§22.7)
-- ข้อสอบต้องผูกรายวิชาเหมือนการบ้าน (§20.1) มี `due_at` เป็นวันสอบ และ `duration_minutes` (เวลาสอบ พิมพ์บนปก) ค่า `mode` ของข้อสอบคง `worksheet` ไว้ แต่ไม่ถูกใช้
+- ข้อสอบต้องผูกรายวิชาเหมือนการบ้าน (§20.1) มี `due_at` เป็นวันสอบ (**บังคับสำหรับข้อสอบ** 422 `errors.due_at` เพราะสมุดคะแนนใช้วันสอบตัดสินว่าช่องว่างนับ 0 หรือยัง §23.4) และ `duration_minutes` (เวลาสอบ พิมพ์บนปก) ค่า `mode` ของข้อสอบคง `worksheet` ไว้ แต่ไม่ถูกใช้
 
 ### 22.3 เฉลยและการให้คะแนน
 
@@ -2996,8 +3001,12 @@ ALTER TABLE ai_calls
 - **ประตูอนุมัติเฉลย** ใช้ `key_approved_at` เดิม: `POST /assignments/{id}/answer-key/approve` ของข้อสอบใช้กติกาเฉลยครบข้างบน ตั้ง `key_approved_at` และเปลี่ยน `draft` → `ready` **ต้องอนุมัติก่อนพิมพ์เล่มหรือกระดาษคำตอบให้นักเรียน** (409 `answer_key_not_approved`) ส่วน**กระดาษเฉลยของครู**พิมพ์ได้ก่อนอนุมัติ (ใช้กรอกเฉลย)
 - **กรอกเฉลยได้สองทาง**
   1. **ตารางเฉลย** ในแอป: หนึ่งแถวต่อข้อ แตะตัวเลือก (เลือกหลายตัวได้) หรือพิมพ์ค่าตัวเลข (หลายค่าคั่นด้วยจุลภาค) บันทึกด้วย `PUT /exams/{id}/answer-key` ทั้งชุด
-  2. **สแกนกระดาษเฉลย**: ครูพิมพ์กระดาษคำตอบแบบเฉลย (layout เดียวกัน หัวกระดาษ "กระดาษเฉลย (สำหรับครู)", QR ที่ `student_id = 0`) ฝนเฉลยของชุดใดชุดหนึ่ง (ฝนวงชุดด้วย) แล้วสแกนในหน้าเฉลย แอปส่งค่าที่อ่านได้ให้ `POST /exams/{id}/key-sheet-read` server แปลงกลับเป็นลำดับต้นฉบับแล้ว**ตอบเป็นข้อเสนอ ไม่บันทึก** แอปเติมตารางเฉลย ไฮไลต์ช่องที่ต่างจากเฉลยเดิมและช่องที่อ่านไม่ชัด ครูตรวจแล้วกดบันทึก กระดาษเฉลยตัวเลขใช้ได้ทีละค่า (ค่าที่ยอมรับเพิ่มพิมพ์ในตาราง)
-- แก้เฉลยหลังสแกนแล้ว: ใช้ "ตรวจใหม่ทั้งห้อง" เดิม (`POST /assignments/{id}/regrade`, §21.13) ข้อสอบคิดคะแนนใหม่**ด้วยโค้ดทุกข้อ**จากค่าการฝนที่เก็บไว้ (`exam_sheet_reads`) ไม่ต้องมี Gemini key และ estimate เป็น 0 บาทเสมอ ข้อที่ครูตัดสินเองข้ามตามกติกาเดิม (เว้นแต่ `include_overridden`)
+  2. **สแกนกระดาษเฉลย**: ครูพิมพ์กระดาษคำตอบแบบเฉลย (layout เดียวกัน หัวกระดาษ "กระดาษเฉลย (สำหรับครู)", QR ที่ `student_id = 0`) ฝนเฉลยของชุดใดชุดหนึ่ง (ฝนวงชุดด้วย) แล้วสแกนในหน้าเฉลย เฉลยยังไม่อนุมัติจึงยังโหลด scan-kit ไม่ได้ แอปใช้ layout จาก `GET /assignments/{id}/layouts?version=` เดิม (ตาม `layout_version` ใน QR, ไม่มีประตูเฉลย) แอปส่งค่าที่อ่านได้ให้ `POST /exams/{id}/key-sheet-read` server แปลงกลับเป็นลำดับต้นฉบับแล้ว**ตอบเป็นข้อเสนอ ไม่บันทึก** แอปเติมตารางเฉลย ไฮไลต์ช่องที่ต่างจากเฉลยเดิมและช่องที่อ่านไม่ชัด ครูตรวจแล้วกดบันทึก กระดาษเฉลยตัวเลขใช้ได้ทีละค่า (ค่าที่ยอมรับเพิ่มพิมพ์ในตาราง)
+- แก้เฉลยหลังสแกนแล้ว: ใช้ "ตรวจใหม่ทั้งห้อง" เดิม (`POST /assignments/{id}/regrade`, §21.13) ข้อสอบคิดคะแนนใหม่**ด้วยโค้ดทุกข้อ** ไม่ต้องมี Gemini key และ estimate เป็น 0 บาทเสมอ คำตอบที่ใช้คิดกับเฉลยใหม่ของแต่ละข้อ
+  - ข้อที่**ครูอ่านรอยฝนเอง** (`resolve`, §22.11): ใช้คำตอบที่ครูเลือกซึ่งเก็บใน `responses.exam_answer.resolved` ไม่ย้อนกลับไปใช้ค่าการฝนดิบ (ไม่อย่างนั้นข้อที่ฝนซ้ำจะกลับเป็น 0 `double_mark`) ข้อนี้**ไม่ถือเป็นข้อที่ครูแก้คะแนนเอง** จึงถูกคิดใหม่เสมอและยังนับว่าตรวจทานแล้ว
+  - ข้ออื่น: คิดจากค่าการฝนดิบใน `exam_sheet_reads`
+  - **ข้ามเฉพาะข้อที่ครูแก้คะแนนตรง** (`PATCH /responses/{id}` ที่คะแนนต่างจากโค้ด หรือคำขอตรวจใหม่ที่ครูรับ) ตามกติกาเดิม เว้นแต่ `include_overridden` ซึ่งคิดใหม่ตามสองข้อบน
+  - งานที่เผยแพร่แล้วและคะแนนเปลี่ยนถูกเปิดกลับมาตรวจทานตามกติกาเดิมของ §21.13
 
 ### 22.4 เพิ่มข้อ: พิมพ์ อ่านจากไฟล์ และคัดลอกจากข้อสอบเดิม
 
@@ -3013,7 +3022,7 @@ ALTER TABLE ai_calls
          "numeric": { "digits": 3, "allow_negative": false, "allow_decimal": true },  // numeric เท่านั้น
          "questions": [{
            "number": 1, "text": "…",
-           "figure": { "page": 2, "box_2d": [120, 80, 410, 520] },   // ไม่บังคับ พิกัด 0–1000 แบบ box_2d
+           "figure": { "file": 1, "page": 2, "box_2d": [120, 80, 410, 520] },   // ไม่บังคับ file = ลำดับไฟล์ที่ส่ง (1-based) page = หน้าในไฟล์นั้น พิกัด 0–1000 แบบ box_2d
            "options": [{ "label": "ก", "text": "…", "figure": null }],
            "answer": { "options": ["ค"] } | { "values": ["0.5"] } | null,  // มีเมื่อไฟล์พิมพ์เฉลยไว้
            "lock_options": false
@@ -3022,11 +3031,12 @@ ALTER TABLE ai_calls
        "skipped": [{ "number": 31, "reason_th": "ข้อเขียนตอบ ฝนไม่ได้" }]
      }
      ```
+   - ทุกครั้งที่ครูสั่งอ่าน server บันทึกแถว `exam_imports` (ข้อสอบ, extraction, รายการไฟล์ตามลำดับที่ส่งพร้อมช่วงหน้า, ผู้สั่ง) ใช้แปลง `figure.file` เป็น `source_document_id` และเป็น**หลักฐานสิทธิ์**ของการโหลดไฟล์ต้นฉบับด้านล่าง
    - ข้อที่ฝนไม่ได้ (อัตนัย เขียนตอบ) ไม่ถูกสร้าง และแสดงใน `skipped` ให้ครูเห็น ข้อความและภาพของนักเรียนไม่เกี่ยวกับทางนี้เลย
    - ผลเขียนเป็นตอนและข้อ**ร่าง** (`origin = document`, `approved_at = NULL`) ต่อท้ายตอนที่มีอยู่ ครู**ต้องตรวจและอนุมัติทุกข้อและทุกเฉลย** (ปุ่ม "อนุมัติข้อนี้" หรือ "อนุมัติที่เลือก") ก่อนพิมพ์ ข้อที่ยังไม่อนุมัติทำให้เฉลยไม่ครบ (§22.3)
    - **ตัดภาพประกอบ**: server ตัดด้วย GD เบาๆ จากภาพหน้าเอกสาร (`exam_page_images`) ตาม `box_2d` ขยายขอบ 2% ย่อด้านยาวไม่เกิน 1,600 px บันทึก JPEG คุณภาพ 85 ที่ `exams/{school}/{assignment}/figures/{id}.jpg` ภาพหน้าเอกสารได้มาจาก
      - ไฟล์ JPEG/PNG/WebP: server ถอดด้วย GD เอง (ไฟล์ไม่เกิน 10 MB, ด้านยาวไม่เกิน 6,000 px ไม่อย่างนั้นไม่ตัดและแจ้ง)
-     - PDF และ HEIC (GD อ่านไม่ได้ และ server ไม่มี CPU ให้ render PDF): **แอป Android render หน้าที่มีภาพประกอบ** ด้วย `PdfRenderer`/`BitmapFactory` ของ Android ผ่าน Pigeon (`renderDocumentPage`, ด้านยาวไม่เกิน 2,000 px, JPEG จาก Kotlin) แล้วอัปโหลดทีละหน้า (`POST /exams/{id}/page-images`) ถ้าในเครื่องไม่มีไฟล์ แอปโหลดจาก `GET /documents/{id}/file` (เฉพาะโรงเรียนเดียวกัน ก่อนถูกลบตามรอบ 30 วัน) บนเว็บ (Chrome) render ไม่ได้ ข้อจะมีป้าย "ยังไม่มีภาพประกอบ" ให้ครูแนบรูปเอง
+     - PDF และ HEIC (GD อ่านไม่ได้ และ server ไม่มี CPU ให้ render PDF): **แอป Android render หน้าที่มีภาพประกอบ** ด้วย `PdfRenderer`/`BitmapFactory` ของ Android ผ่าน Pigeon (`renderDocumentPage`, ด้านยาวไม่เกิน 2,000 px, JPEG จาก Kotlin) แล้วอัปโหลดทีละหน้า (`POST /exams/{id}/page-images`) ถ้าในเครื่องไม่มีไฟล์ แอปโหลดจาก `GET /exams/{id}/documents/{document_id}/file` ได้**เฉพาะไฟล์ที่อยู่ใน `exam_imports` ของข้อสอบนั้น และข้อสอบเป็นของครูผู้เรียก** (policy ของการบ้าน) นอกนั้น 404 แม้อยู่โรงเรียนเดียวกัน (`source_documents` ใช้ร่วมกันทั้งโรงเรียนด้วย SHA-256 และ id เรียงลำดับ การเปิดตาม "โรงเรียนเดียวกัน" จะให้ครูโหลดไฟล์ของครูคนอื่น เช่นข้อสอบที่มีเฉลยหรือแผนการสอนได้) ไฟล์ถูกลบตามรอบ 30 วันแล้วตอบ 404 `document_missing` บนเว็บ (Chrome) render ไม่ได้ ข้อจะมีป้าย "ยังไม่มีภาพประกอบ" ให้ครูแนบรูปเอง
    - ครู**ลากกรอบใหม่บนภาพหน้าเอกสาร**ได้ทุกภาพ (`PUT /questions/{id}/figure`, `PUT /question-options/{id}/figure`) server ตัดใหม่จากภาพหน้าเดิม ที่มาของภาพเก็บใน `figure_source` (`{page_image_id, box_2d}`) ภาพที่ครูแนบเองมี `figure_source = NULL`
 3. **คัดลอกจากข้อสอบเดิมของครู**: ค้นข้อจากข้อสอบที่ครูคนนี้สร้าง (`created_by` = ครู, โรงเรียนเดียวกัน) กรองด้วยรายวิชา คำค้น หรือข้อสอบ แล้วเลือกข้อหรือทั้งตอน ระบบคัดลอกข้อความ ตัวเลือก ภาพ (คัดลอกไฟล์) เฉลย "ห้ามสลับตัวเลือก" และตัวชี้วัดที่โรงเรียนยังเห็น ข้อที่คัดลอกคงการอนุมัติของต้นฉบับ (`origin = copied`, `copied_from_question_id`) ข้อ `mcq` ที่จำนวนตัวเลือกไม่ตรงกับตอนปลายทางถูกข้ามและรายงาน (`skipped`) คัดลอกไปตอนใหม่จะสร้างตอนด้วยค่าของตอนต้นทาง
 
@@ -3054,7 +3064,8 @@ ALTER TABLE ai_calls
 2. **กระดาษคำตอบ** (`answer_sheet`) หนึ่งชุดต่อนักเรียนตาม roster ของห้อง (หรือเฉพาะนักเรียนที่เลือก เช่นพิมพ์แทนแผ่นที่หาย) 1–2 หน้าต่อคน วาดทีละ 20 คนต่อ job แล้วรวมด้วย `MergeWorksheetsJob` เดิม (ต้องวัดเวลาบน hosting เหมือน §5.5) เรขาคณิตอยู่ใน §22.7
 3. **กระดาษเฉลยของครู** (`key_sheet`) layout เดียวกับกระดาษคำตอบ หัวกระดาษ "กระดาษเฉลย (สำหรับครู)" QR `student_id = 0`
 
-- เล่มและกระดาษคำตอบของนักเรียนพิมพ์ได้เมื่อ**อนุมัติเฉลยแล้ว**และทุกข้ออนุมัติแล้ว (409 `answer_key_not_approved`) และข้อสอบต้องเป็น `grading_method = app` สำหรับกระดาษคำตอบ (422 `exam_manual_grading`) การพิมพ์ครั้งแรกตั้ง `structure_locked_at`
+- เล่มและกระดาษคำตอบของนักเรียนพิมพ์ได้เมื่อ**อนุมัติเฉลยแล้ว**และทุกข้ออนุมัติแล้ว (409 `answer_key_not_approved`) และข้อสอบต้องเป็น `grading_method = app` สำหรับกระดาษคำตอบ (422 `exam_manual_grading`) ข้อสอบ `manual` พิมพ์ได้เฉพาะเล่ม ไม่ดูเฉลย ใช้กติกาข้ออนุมัติครบของ §22.1
+- **การพิมพ์ครั้งแรกทุกชนิด รวมกระดาษเฉลยของครู ตั้ง `structure_locked_at`** เพราะกระดาษเฉลยใช้ layout และ permutation ของชุดเดียวกัน ถ้าโครงสร้างหรือการสุ่มเปลี่ยนหลังพิมพ์ กระดาษเฉลยที่ฝนไว้จะแปลงกลับผิด ครูปลดล็อกได้ตามกติกา §22.2 (กระดาษเฉลยไม่นับเป็นกระดาษคำตอบที่สแกน) หลังปลดล็อก layout ได้เวอร์ชันใหม่ กระดาษเฉลยเก่าส่งเข้า `key-sheet-read` ตอบ 422 `layout_unknown` ("พิมพ์กระดาษเฉลยใหม่") เพราะ `key-sheet-read` รับเฉพาะ `layout_version` ปัจจุบัน
 - ไฟล์ที่ `worksheets/{assignment}/{print}.pdf` ลบ 30 วันหลังสร้างตาม §7.3
 
 ### 22.7 เรขาคณิตของกระดาษคำตอบ
@@ -3145,7 +3156,7 @@ ALTER TABLE ai_calls
      "layouts": [ … ], "roster": [ … ] }
    ```
 2. **Native (Kotlin ผ่าน Pigeon)** ใช้ `detectPage` เดิม (marker, QR, blur) แล้ว method ใหม่ `readAnswerSheet(imagePath, detection, layoutJson) → String` (JSON) ทำ warp แบบเดิม แล้ววัดทุกวงของ region ชนิดใหม่
-   - threshold ด้วย **Otsu ของ `answer_area` ทั้งพื้นที่** (ไม่ใช่รายวง) แล้ว**จำกัดไม่เกิน 140** จาก 0–255 ป้ายสีเทา 35% (ประมาณ 166) จึงไม่ถูกนับเป็นรอยฝนแม้ทั้งแผ่นว่าง
+   - threshold ด้วย **Otsu ของ `answer_area` ทั้งพื้นที่** (ไม่ใช่รายวง) แล้ว**จำกัดไม่เกิน 140** จาก 0–255 ป้ายสีเทา 35% (ประมาณ 166) จึงไม่ถูกนับเป็นรอยฝนแม้ทั้งแผ่นว่าง **ต่างจากเกณฑ์ของใบงาน** `min(Otsu, กระดาษ − 25)` ใน `ScanPipelineImpl.kt` ซึ่งจะนับป้ายสีเทาเป็นรอยฝน ใช้เฉพาะ `readAnswerSheet` ใบงานใช้เกณฑ์เดิม ค่า 140 และการหักค่าพื้นฐานต้องจูนจากกระดาษจริงตามข้อค้างของ §16.2
    - fill ของวง = สัดส่วนพิกเซลดำในวงใน 70% ของรัศมี (§6.2 ข้อ 6) แล้ว**หักค่าพื้นฐาน** `fill' = clamp((fill − b) / (1 − b), 0, 1)` เมื่อ `b` = มัธยฐานของ fill ทุกวงในหน้า (วงส่วนใหญ่ว่าง จึงได้ค่าของกระดาษและป้าย)
    - คืน `{warped_page_path, blur_score, version_fill: {1: 0.03, 2: 0.91}, rows: {"12": {"1": 0.02, "2": 0.88, …}}, digits: {"101": {"sign": 0.01, "columns": [{".": 0.02, "0": 0.9, …}]}}}` ภาพหน้า warp เป็น WebP คุณภาพ 80 ตามเดิม
 3. **ให้คะแนนในเครื่อง** (`ExamSheetScorer` ของ Dart) ตามตาราง §22.3 ด้วยเฉลยของชุดที่อ่านได้ ชุด: ฝนชัดวงเดียว = ชุดนั้น, ไม่ฝนหรือฝนหลายวง = "ไม่ทราบชุด" (ไม่แสดงคะแนน แสดง "ให้ครูเลือกชุด"), ชุดเดียว = ชุด ก หน้า 2 ใช้ชุดของหน้า 1 ของนักเรียนคนเดียวกัน (จากรอบสแกนนี้หรือจาก server) ถ้ายังไม่มีแสดง "รอหน้า 1"
@@ -3156,7 +3167,8 @@ ALTER TABLE ai_calls
 
 - สวิตช์ **"สแกนต่อเนื่อง"** ในหน้าสแกนของข้อสอบ แอปอ่าน image stream ของ `camera` (plane Y) ส่งเฟรมย่อทุกประมาณ 300 ms ให้ Kotlin `detectFrame(yPlane, width, height, bytesPerRow, rotation) → FrameDetection {markers_found, qr_payload, blur_score}` (ย่อภาพ หา ArUco และ QR ไม่ warp)
 - **ถ่ายอัตโนมัติ** เมื่อ**สองเฟรมติดกัน**เจอ marker ครบ 4 ตัว, QR `EVX1` ของข้อสอบนี้ และ blur ผ่านเกณฑ์ของ §6.2 แล้วแอปเรียก `takePicture` ความละเอียดเต็ม และเข้าขั้นตอน §22.9
-- หลังอ่านเสร็จ: **เสียงสั้น** (`SystemSound.play`) และ**สั่น** (`HapticFeedback.mediumImpact`) ไม่ใช้ package ใหม่ แสดงการ์ดทันที: ชื่อ เลขที่ หน้า ชุด **คะแนน x/y** และ "ต้องตรวจ n ข้อ" ถ้ามีรอยฝนน่าสงสัย ใบที่อ่านไม่ได้เล่นเสียงเตือนและบอกเหตุผล (มุมหลุด เบลอ QR ไม่ใช่ของข้อสอบนี้)
+- หลังอ่านเสร็จ: **สั่น** (`HapticFeedback.mediumImpact`) และเสียงคลิก (`SystemSound.play(SystemSoundType.click)`) ไม่ใช้ package ใหม่ แสดงการ์ดทันที: ชื่อ เลขที่ หน้า ชุด **คะแนน x/y** และ "ต้องตรวจ n ข้อ" ถ้ามีรอยฝนน่าสงสัย
+- ใบที่อ่านไม่ได้: **สั่นแรงสองครั้ง** (`HapticFeedback.heavyImpact` ห่างกันประมาณ 150 ms) การ์ดสีเตือนพร้อมเหตุผล (มุมหลุด เบลอ QR ไม่ใช่ของข้อสอบนี้) บน Android `SystemSound` ของ Flutter มีแค่เสียงคลิกและขึ้นกับการตั้งค่าเสียงสัมผัสของเครื่อง จึงไม่มีเสียงเตือนแยก **รูปแบบการสั่นและสีการ์ดคือสัญญาณหลัก** เสียงคลิกเป็นเพียงส่วนเสริม
 - **กันถ่ายซ้ำ**: QR เดิม (นักเรียน + หน้า) ในรอบนี้ภายใน 5 วินาทีถูกข้ามเงียบๆ หลังจากนั้นแสดง "สแกนใบนี้แล้ว" พร้อมปุ่ม "สแกนแทนใบเดิม" (§22.11)
 - **แถบสรุป**: "สแกนแล้ว x/y คน ยังขาด เลขที่ 3, 7, 12" (นับนักเรียนที่ครบทุกหน้า จาก roster + คิวในเครื่อง + `GET /exams/{id}/sheet-status` ล่าสุดเมื่อออนไลน์) แตะเพื่อดูรายชื่อที่ขาดพร้อมหน้าที่ขาด
 - ปิดสวิตช์ = ถ่ายทีละใบด้วยปุ่มชัตเตอร์แบบเดิม บนเว็บ (Chrome) ไม่มีการสแกนกระดาษคำตอบ (ไม่มี native pipeline)
@@ -3167,7 +3179,7 @@ ALTER TABLE ai_calls
 - ทำใน request เลย (ไม่เข้าคิว, ไม่มี Gemini) ใช้ `scans` เดิมหนึ่งแถวต่อหน้า (idempotent ด้วย `client_scan_id`, ภาพหน้าลบหลังเผยแพร่ตาม §7.3) เก็บค่าการฝนดิบใน `exam_sheet_reads` และเขียน `responses` หนึ่งแถวต่อ**ข้อต้นฉบับ** (`question_id` ต้นฉบับ, `exam_answer` เก็บเลขบนกระดาษ ชุด ตัวเลือกที่ฝนเป็นตำแหน่งต้นฉบับ หรือค่าตัวเลข และข้อสงสัย) `ai_score` คือคะแนนจากโค้ด (เหมือนปรนัยเดิม) `score_events` เป็น `ai_scored` โดย actor `system` (ใช้ค่า enum เดิม)
 - **สแกนซ้ำ** ใช้กติกา §9.4 เดิมด้วย key (ข้อสอบ, นักเรียน, หน้า): ยังไม่เผยแพร่ ใบใหม่แทนใบเดิมทันที (`superseded`) ข้อของหน้านั้นคิดใหม่ เผยแพร่แล้วเป็น `pending_confirm` จนครูกด `confirm-replace`
 - **ชุดไม่ทราบ** (วงชุดว่าง หรือฝนหลายวง, หรือหน้า 2 ที่ไม่มีหน้า 1): เก็บค่าการฝนไว้ ยังไม่สร้าง `responses` ของหน้านั้น submission เป็น `needs_review` พร้อมป้าย "ให้ครูเลือกชุด" ครูดูภาพหน้าแล้วเลือกชุด (`POST /exam-sheets/{scan_id}/version`) server คิดคะแนนต่อทันที วงชุดไม่ชัดแต่มีวงชัดวงเดียวใช้ชุดนั้นและติดป้าย `version_doubtful`
-- **ตรวจทานอัตโนมัติ**: ข้อที่ไม่มีข้อสงสัยได้ `final_score = ai_score` และ `reviewed_at` ทันที (`reviewed_by = NULL`, `priority_band = confident`) ข้อที่มี `double_mark`, `ambiguous_mark` หรือ `invalid_number` ได้ `priority_band = check` และเข้าคิวตรวจทาน หน้าตรวจทานแสดงภาพหน้า warp ไฮไลต์วงของข้อนั้นจากพิกัดใน layout ครูเลือกคำตอบที่ตั้งใจ (`POST /exam-responses/{id}/resolve {options[] | value}` คิดคะแนนด้วยโค้ดแล้วตรวจทานแล้ว) หรือแก้คะแนนตรงด้วย `PATCH /responses/{id}` เดิม (ต้องมีเหตุผลตาม §13)
+- **ตรวจทานอัตโนมัติ**: ข้อที่ไม่มีข้อสงสัยได้ `final_score = ai_score` และ `reviewed_at` ทันที (`reviewed_by = NULL`, `priority_band = confident`) ข้อที่มี `double_mark`, `ambiguous_mark` หรือ `invalid_number` ได้ `priority_band = check` และเข้าคิวตรวจทาน หน้าตรวจทานแสดงภาพหน้า warp ไฮไลต์วงของข้อนั้นจากพิกัดใน layout ครูเลือกคำตอบที่ตั้งใจ (`POST /exam-responses/{id}/resolve {options[] | value}` เก็บคำตอบของครูใน `responses.exam_answer.resolved` คิดคะแนนด้วยโค้ดแล้วตรวจทานแล้ว "ตรวจใหม่ทั้งห้อง" ภายหลังคิดคำตอบนี้กับเฉลยใหม่ §22.3) หรือแก้คะแนนตรงด้วย `PATCH /responses/{id}` เดิม (ต้องมีเหตุผลตาม §13)
 - submission เป็น `reviewed` เมื่อได้ครบทุกหน้าและทุกข้อตรวจทานแล้ว หน้าไม่ครบแสดง "ยังขาดหน้า 2"
 - **"ประกาศผลทั้งห้อง"** คือ `POST /assignments/{id}/publish` เดิม (เผยแพร่ทุก submission ที่ตรวจทานครบ) แอปแสดงก่อนกดว่ามีกี่คนที่ยังไม่ครบหรือยังรอตรวจทาน FCM และ mastery ทำงานตามเดิม
 - นักเรียนที่ไม่มีกระดาษคำตอบถือว่าไม่มี submission (สมุดคะแนนคิดตาม §23.4)
@@ -3268,6 +3280,19 @@ CREATE TABLE exam_page_images (
   UNIQUE KEY uq_exam_page (assignment_id, source_document_id, page_no)
 );
 
+-- การสั่งอ่านไฟล์ข้อสอบแต่ละครั้ง (build 5): แปลง figure.file เป็นไฟล์ และเป็นสิทธิ์โหลดไฟล์ต้นฉบับ (§22.4)
+CREATE TABLE exam_imports (
+  id             BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  assignment_id  BIGINT UNSIGNED NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+  extraction_id  BIGINT UNSIGNED NULL REFERENCES document_extractions(id) ON DELETE SET NULL,
+  documents      JSON NOT NULL,                     -- [{"source_document_id": 88, "page_from": 1, "page_to": 12}] ตามลำดับที่ส่ง
+  requested_by   BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  applied_at     TIMESTAMP NULL,                    -- สร้างตอนและข้อร่างแล้ว
+  created_at     TIMESTAMP NULL,
+  updated_at     TIMESTAMP NULL,
+  INDEX idx_exam_imports (assignment_id)
+);
+
 -- ค่าที่อ่านได้จากกระดาษคำตอบหนึ่งหน้า (หนึ่งแถวต่อ scans ของข้อสอบ)
 CREATE TABLE exam_sheet_reads (
   scan_id          BIGINT UNSIGNED PRIMARY KEY REFERENCES scans(id) ON DELETE CASCADE,
@@ -3288,6 +3313,8 @@ ALTER TABLE responses
   ADD COLUMN exam_answer JSON NULL;
   -- {"sheet_no": 2, "version_no": 2, "selected": [3], "value": null, "doubts": ["ambiguous_mark"]}
   -- selected = ตำแหน่งต้นฉบับ (ใช้ทำสถิติตัวเลือก §22.13) value = ตัวเลขรูปมาตรฐาน
+  -- เมื่อครูอ่านรอยฝน (§22.11) เพิ่ม "resolved": {"selected": [2], "value": null, "by": 7, "at": "2026-10-05T03:00:00Z"}
+  -- (selected เป็นตำแหน่งต้นฉบับ) resolved ใช้แทน selected/value ทั้งตอนคิดคะแนน สถิติตัวเลือก และตรวจใหม่ทั้งห้อง
 
 ALTER TABLE worksheet_prints
   ADD COLUMN kind        ENUM('worksheet','exam_booklet','answer_sheet','key_sheet') NOT NULL DEFAULT 'worksheet',
@@ -3323,26 +3350,26 @@ ALTER TABLE skill_observations
 | POST / DELETE | `/questions/{id}/image`, `/question-options/{id}/image` | ครู | multipart รูป (JPEG/PNG/WebP ไม่เกิน 5 MB) server ย่อด้านยาวไม่เกิน 1,600 px ด้วย GD |
 | POST | `/exams/{id}/questions/approve` | ครู | `{question_ids[]}` อนุมัติหลายข้อ |
 | PUT | `/exams/{id}/answer-key` | ครู | ตารางเฉลย `{answers: [{question_id, accepted_options?[], accepted_values?[]}]}` ข้อผิดพลาดบอกตำแหน่ง (`answers.3.accepted_values.0`) ค่าที่ไม่พอดีช่อง 422 |
-| POST | `/exams/{id}/key-sheet-read` | ครู | `{qr, version_fill, rows, digits}` จากกระดาษเฉลย ตอบ `{version_no, proposal: [{question_id, accepted_options\|accepted_values, doubtful, differs}]}` ไม่บันทึก QR ต้องเป็นกระดาษเฉลยของข้อสอบนี้ (422 `qr_invalid`) ชุดอ่านไม่ได้ 422 `version_unknown` |
-| POST | `/assignments/{id}/answer-key/approve` | ครู | เดิม ข้อสอบใช้กติกาเฉลยครบของ §22.3 |
+| POST | `/exams/{id}/key-sheet-read` | ครู | `{qr, version_fill, rows, digits}` จากกระดาษเฉลย ตอบ `{version_no, proposal: [{question_id, accepted_options\|accepted_values, doubtful, differs}]}` ไม่บันทึก ไม่ต้องอนุมัติเฉลยก่อน (layout มาจาก `GET /assignments/{id}/layouts` เดิม) QR ต้องเป็นกระดาษเฉลยของข้อสอบนี้ (422 `qr_invalid`) `layout_version` ไม่ใช่ปัจจุบัน 422 `layout_unknown` ชุดอ่านไม่ได้ 422 `version_unknown` |
+| POST | `/assignments/{id}/answer-key/approve` | ครู | เดิม ข้อสอบใช้กติกาเฉลยครบของ §22.3 ข้อสอบ `manual` 422 `exam_manual_grading` (§22.1) |
 | GET | `/exams/{id}/versions` | ครู | ลำดับข้อและตัวเลือกของทุกชุด และเฉลยตามชุด (ไว้ให้ครูตรวจ) |
 | POST | `/exams/{id}/versions/reshuffle` | ครู | สุ่มใหม่ (`shuffle_nonce + 1`) ล็อกแล้ว 409 `exam_structure_locked` |
 | POST | `/exams/{id}/unlock-structure` | ครู | ปลดล็อก มีกระดาษคำตอบสแกนแล้ว 409 `exam_sheets_scanned` |
-| POST | `/exams/{id}/prints` | ครู | `{kind: exam_booklet\|answer_sheet\|key_sheet, version_no?, student_ids?[]}` ตอบ `202` print job ของ `worksheet_prints` (`GET /worksheet-prints/{id}` เดิม) ยังไม่อนุมัติ 409 `answer_key_not_approved` เกิน 2 หน้า 422 `exam_sheet_overflow` ข้อสอบ `manual` ขอกระดาษคำตอบ 422 `exam_manual_grading` ไม่มี `QR_SIGNING_KEY` 503 ตามเดิม |
+| POST | `/exams/{id}/prints` | ครู | `{kind: exam_booklet\|answer_sheet\|key_sheet, version_no?, student_ids?[]}` ตอบ `202` print job ของ `worksheet_prints` (`GET /worksheet-prints/{id}` เดิม) ทุกชนิดล็อกโครงสร้างเมื่อพิมพ์ครั้งแรก (§22.6) `key_sheet` ไม่ต้องอนุมัติเฉลย ข้อสอบ `app` ที่ยังไม่อนุมัติ 409 `answer_key_not_approved` เล่มของข้อสอบ `manual` ที่มีข้อยังไม่อนุมัติหรือไม่มีข้อ 422 `answer_key_incomplete` เกิน 2 หน้า 422 `exam_sheet_overflow` ข้อสอบ `manual` ขอกระดาษคำตอบ 422 `exam_manual_grading` ไม่มี `QR_SIGNING_KEY` 503 ตามเดิม |
 | GET | `/exams/{id}/scan-kit` | ครู | §22.9 ข้อ 1 ยังไม่อนุมัติเฉลย 409 `answer_key_not_approved` |
 | POST | `/exam-sheets` | ครู | multipart `meta` `{client_scan_id, qr, scanned_at, blur_score, version_fill?, rows, digits?, device_score?}` + `page` ตอบ `201 {scan_id, submission_id, state, page_no, page_count, version_no\|null, score, max_score, doubts[], needs_version}` `client_scan_id` ซ้ำ `200` เผยแพร่แล้ว `202 pending_confirm` ถูกปฏิเสธ 422 `qr_invalid` \| `layout_unknown` \| `page_mismatch` \| `exam_manual_grading` \| `validation_failed` |
 | GET | `/exams/{id}/sheet-status` | ครู | `{data: [{student_id, student_number, name, pages_received[], page_count, version_no, score, status, doubt_count, needs_version}], summary: {scanned, total, missing_numbers[]}}` |
 | POST | `/exam-sheets/{scan_id}/version` | ครู | `{version_no}` เลือกชุดแล้วคิดคะแนน (หน้า 2 ที่รออยู่คิดด้วย) ชุดนอกช่วง 422 |
-| POST | `/exam-responses/{id}/resolve` | ครู | `{options?[], value?}` คำตอบที่ครูเห็นว่านักเรียนตั้งใจ คิดคะแนนด้วยโค้ด ตรวจทานแล้ว บันทึก `score_events.override` พร้อมเหตุผล "ครูอ่านรอยฝน" |
+| POST | `/exam-responses/{id}/resolve` | ครู | `{options?[], value?}` คำตอบที่ครูเห็นว่านักเรียนตั้งใจ เก็บใน `exam_answer.resolved` คิดคะแนนด้วยโค้ด ตรวจทานแล้ว บันทึก `score_events.override` พร้อมเหตุผล "ครูอ่านรอยฝน" ตรวจใหม่ทั้งห้องคิดคำตอบนี้กับเฉลยใหม่และไม่ข้าม (§22.3) |
 | POST | `/assignments/{id}/publish` | ครู | เดิม = "ประกาศผลทั้งห้อง" |
-| POST | `/assignments/{id}/regrade` · `/regrade/estimate` | ครู | เดิม (§21.13) ข้อสอบคิดใหม่ด้วยโค้ดทั้งหมด ไม่ต้องมี key |
+| POST | `/assignments/{id}/regrade` · `/regrade/estimate` | ครู | เดิม (§21.13) ข้อสอบคิดใหม่ด้วยโค้ดทั้งหมด ไม่ต้องมี key ข้อที่ `resolve` ใช้คำตอบของครู ข้ามเฉพาะข้อที่แก้คะแนนตรง (§22.3) |
 | GET | `/exams/{id}/option-analysis` | ครู | `{published_count, groups_ready, questions: [{question_id, position, p, r, options: [{position, label, correct, count, pct, top, bottom, flags[]}], blank, multiple}]}` (build 6) |
 | POST | `/exams/{id}/import` | ครู | `{document_ids[], page_from?, page_to?, guidance?}` อ่านไฟล์ข้อสอบ (§22.4) แคชเจอ `200` พร้อม `{applied: {sections, questions, skipped[]}, figures_pending}` ไม่เจอ `202` (build 5) ข้อผิดพลาดเดียวกับ `answer-key/extract` (`document_too_long`, `ai_key_missing`, `document_missing`) |
 | POST | `/exams/{id}/import/estimate` | ครู | ค่าใช้จ่ายโดยประมาณเหมือน `answer-key/estimate` |
 | POST | `/exams/{id}/page-images` | ครู | multipart `{source_document_id, page_no, image}` (JPEG ไม่เกิน 10 MB) ตัดภาพประกอบที่รอหน้านี้ทันที |
 | GET | `/exam-page-images/{id}` | ครู | stream ภาพหน้า (ใช้ลากกรอบ) |
 | PUT | `/questions/{id}/figure`, `/question-options/{id}/figure` | ครู | `{page_image_id, box_2d: [ymin, xmin, ymax, xmax]}` (0–1000) ตัดใหม่ด้วย GD |
-| GET | `/documents/{id}/file` | ครู (โรงเรียนเดียวกัน) | ไฟล์ต้นฉบับให้แอป render (ลบแล้ว 404 `document_missing`) |
+| GET | `/exams/{id}/documents/{document_id}/file` | ครู (เจ้าของข้อสอบ) | ไฟล์ต้นฉบับให้แอป render เฉพาะไฟล์ที่อยู่ใน `exam_imports.documents` ของข้อสอบนี้ นอกนั้น 404 (รวมไฟล์ของครูคนอื่นในโรงเรียนเดียวกัน) ลบแล้ว 404 `document_missing` |
 | GET | `/teacher/exam-questions?course_id=&exam_id=&q=&exclude_exam=` | ครู | ข้อจากข้อสอบของครูคนนี้เท่านั้น cursor pagination |
 | POST | `/exams/{id}/copy-questions` | ครู | `{question_ids[], section_id?}` (ไม่ส่ง `section_id` = สร้างตอนตามต้นทาง) ตอบ `{created, skipped: [{question_id, reason}]}` ข้อของครูคนอื่น 422 |
 | GET | `/student/results/{submission_id}` | นักเรียน | เดิม ข้อสอบตอบ `{kind: exam, version_label, total, max, sections: [{title, score, max}], items: [...] \| null}` `items` มีเฉพาะเมื่อ `show_key_to_students` |
@@ -3357,7 +3384,7 @@ ALTER TABLE skill_observations
 | `RenderAnswerSheetsJob(print, chunk)` | pdf | กระดาษคำตอบทีละ 20 คน (หรือกระดาษเฉลย) แล้วต่อด้วย `MergeWorksheetsJob` เดิม |
 | `ReadExamDocumentJob(extraction)` | default | อ่านไฟล์ข้อสอบด้วย `exam_read` เขียนผลลง `document_extractions` แล้วสร้างตอนและข้อร่างของข้อสอบที่รอผลนั้น (แบบ `key_extraction_id` ของ §19.5) |
 | `CropExamFiguresJob(page_image)` | default | ตัดภาพประกอบที่อ้างหน้านั้นด้วย GD (งานเบา แยก job ไว้เพื่อไม่ให้ request อัปโหลดช้า) |
-| `RescoreExamJob(assignment)` | grading | "ตรวจใหม่ทั้งห้อง" ของข้อสอบ คิดใหม่จาก `exam_sheet_reads` ทั้งห้อง |
+| `RescoreExamJob(assignment)` | grading | "ตรวจใหม่ทั้งห้อง" ของข้อสอบ ทุกข้อคิดกับเฉลยใหม่จาก `exam_answer.resolved` เมื่อครูอ่านรอยฝนไว้ ไม่อย่างนั้นจาก `exam_sheet_reads` ข้ามเฉพาะข้อที่ครูแก้คะแนนตรง (เว้นแต่ `include_overridden`) |
 
 - การรับกระดาษคำตอบ (`POST /exam-sheets`) คิดคะแนนใน request ไม่เข้าคิว ไม่มีงานตามรอบใหม่ใน `eduvision:queue-work`
 
@@ -3368,6 +3395,7 @@ ALTER TABLE skill_observations
 - QR ไม่มีชื่อ มีลายเซ็นที่ server ตรวจ ปลอมเพื่อยื่นกระดาษเข้าบัญชีคนอื่นไม่ได้ (§5.4) กระดาษเฉลย (`student_id = 0`) ส่งเข้า `POST /exam-sheets` ไม่ได้ (422 `qr_invalid`)
 - Gemini เห็นเฉพาะไฟล์ข้อสอบที่ครูแนบ (ไม่ใช่งานนักเรียน) ผลอ่านใช้ร่วมกันทั้งโรงเรียนตามแคช §19.5 หน้าแนบไฟล์เตือน "อย่าแนบไฟล์ที่มีชื่อหรือคำตอบของนักเรียน"
 - คลังข้อสำหรับคัดลอกเห็นเฉพาะข้อสอบของครูคนนั้นเอง ไม่ข้ามครู
+- ไฟล์ต้นฉบับที่แนบ (`source_documents`) โหลดคืนได้เฉพาะผ่านข้อสอบของครูที่มีไฟล์นั้นใน `exam_imports` ไม่มี endpoint ที่เปิดไฟล์ตาม "โรงเรียนเดียวกัน" (แคชผลอ่านใช้ร่วมทั้งโรงเรียน แต่ตัวไฟล์ไม่)
 - ภาพหน้ากระดาษคำตอบลบหลังเผยแพร่ตาม §7.3 ภาพหน้าเอกสารข้อสอบ (`exam_page_images`) ลบพร้อมไฟล์เอกสาร (30 วัน) ภาพประกอบที่ตัดแล้วอยู่ตลอดอายุข้อสอบ ทุกไฟล์ผ่าน controller ที่ตรวจสิทธิ์
 
 ### 22.18 การทดสอบ
@@ -3379,9 +3407,9 @@ ALTER TABLE skill_observations
   - `ExamSheetLayoutTest`: ความจุ 100 ข้อต่อหน้า, แถบตัวเลข 0–2 แถบ, 200 ข้อใน 2 หน้า, เกิน 422 `exam_sheet_overflow`, พิกัดใน layout ตรงกับที่วาด (อ่านจาก mPDF)
   - QR `EVX1`: ลงชื่อ/ตรวจ, ปลอม sig, ใช้ QR ของใบงานกับข้อสอบไม่ได้, กระดาษเฉลยเข้า `exam-sheets` ไม่ได้
   - `ExamSheetUploadTest`: idempotent, สแกนซ้ำแทนใบเดิม, หลังเผยแพร่ `pending_confirm`, ตรวจทานอัตโนมัติเฉพาะข้อไม่สงสัย, ชุดไม่ทราบ → เลือกชุด → คิดคะแนน, `resolve`, คะแนนของ server ชนะ `device_score`, ประกาศทั้งห้อง
-  - เฉลยและการอนุมัติ: เฉลยครบ, ข้อที่ยังไม่อนุมัติบล็อกการพิมพ์, กระดาษเฉลย → ข้อเสนอไม่บันทึก, ตรวจใหม่ทั้งห้องด้วยโค้ด (ไม่มี key ก็ได้)
-  - พิมพ์: เล่มต่อชุดมีรหัสชุดทุกหน้าและไม่ตัดข้อข้ามหน้า, กระดาษคำตอบแบ่ง chunk, ล็อกโครงสร้าง
-  - อ่านไฟล์ (build 5): `exam_read` ผ่าน fake, แคชในโรงเรียน, ข้อร่างต้องอนุมัติ, `skipped`, ตัดภาพด้วย GD ตาม `box_2d` (ภาพทดสอบสังเคราะห์), ลากกรอบใหม่, คัดลอกข้อเฉพาะของครูตัวเอง
+  - เฉลยและการอนุมัติ: เฉลยครบ, ข้อที่ยังไม่อนุมัติบล็อกการพิมพ์, กระดาษเฉลย → ข้อเสนอไม่บันทึก (ก่อนอนุมัติได้, layout เก่าหลังปลดล็อก 422 `layout_unknown`), ตรวจใหม่ทั้งห้องด้วยโค้ด (ไม่มี key ก็ได้, ข้อที่ `resolve` คิดคำตอบของครูกับเฉลยใหม่ ไม่กลับเป็น `double_mark`, ข้อที่ PATCH คะแนนตรงถูกข้าม), ข้อสอบ `manual`: `ready` ตั้งแต่สร้าง, approve 422, เล่มต้องมีข้อที่อนุมัติครบ, ไม่มี `due_at` 422
+  - พิมพ์: เล่มต่อชุดมีรหัสชุดทุกหน้าและไม่ตัดข้อข้ามหน้า, กระดาษคำตอบแบ่ง chunk, ล็อกโครงสร้าง (รวมการพิมพ์กระดาษเฉลย)
+  - อ่านไฟล์ (build 5): `exam_read` ผ่าน fake, แคชในโรงเรียน, ข้อร่างต้องอนุมัติ, `skipped`, ตัดภาพด้วย GD ตาม `box_2d` (ภาพทดสอบสังเคราะห์), ลากกรอบใหม่, คัดลอกข้อเฉพาะของครูตัวเอง, `exam_imports` แปลง `figure.file`, ไฟล์ต้นฉบับโหลดได้เฉพาะผ่านข้อสอบของเจ้าของ (ครูอื่นในโรงเรียนเดียวกันที่เดา id ได้ 404)
   - วิเคราะห์ (build 6): นับตัวเลือกข้ามชุด, ป้ายตัวลวง, กลุ่ม 27% ใช้ `effectiveTotal()` (รวม `ItemAnalysisTest` ของการบ้าน), observation `source = exam`
   - สิทธิ์: `AuthorizationMatrixTest` ทุก route ใหม่, นักเรียนไม่เห็นเฉลยเมื่อปิด, ไม่เห็นของเพื่อน
 - app: repository test (Dio ปลอม) ของทุก endpoint ใหม่, `ExamSheetScorer` ของ Dart กับ golden fixture ชุดเดียวกัน, widget test ของหน้าตอนและข้อ, ตารางเฉลย, หน้าชุดข้อสอบ, หน้าสแกนต่อเนื่องด้วย pipeline และกล้องปลอม (ถ่ายอัตโนมัติเมื่อเฟรมผ่านสองครั้ง, กันถ่ายซ้ำ, แถบสรุป "ยังขาด"), หน้าตรวจทานรอยฝน, หน้าเลือกชุด และหน้าผลของนักเรียนทั้งแบบเห็นและไม่เห็นเฉลย
@@ -3442,12 +3470,20 @@ ALTER TABLE skill_observations
     ข้อสอบตรวจเอง:            due_at ผ่านแล้ว หรือกรอกคะแนนในห้องแล้วอย่างน้อยหนึ่งคน
     รายการที่ครูเพิ่ม:          กรอกคะแนนในห้องแล้วอย่างน้อยหนึ่งคน
 
-ช่องของนักเรียน s กับรายการ i ที่นับแล้ว:
-  ยกเว้น                                   → ไม่เข้าค่าเฉลี่ยของ s
+เลยกำหนด(i)  ⇔  (due_at ไม่ว่าง และ now > due_at) หรือ status = closed
+  (การบ้านที่ไม่มี due_at เลยกำหนดเมื่อครูปิดการบ้านเท่านั้น ข้อสอบต้องมี due_at เสมอ §22.2)
+
+ช่องของนักเรียน s กับรายการ i ที่นับแล้ว (ตรวจตามลำดับ ข้อแรกที่ตรง):
+  ยกเว้น                                   → ไม่เข้าค่าเฉลี่ยของ s ("ยกเว้น")
   ตรวจด้วยแอป: submission เผยแพร่แล้ว      → pct = 100 × effectiveTotal / คะแนนเต็ม
                มี submission แต่ยังไม่เผยแพร่ → "รอประกาศผล" ไม่เข้าค่าเฉลี่ย
-               ไม่มี submission              → pct = 0 ("ไม่ส่ง")
-  กรอกคะแนน:   มีคะแนน → pct = 100 × score / คะแนนเต็ม,  ว่าง → pct = 0
+               ไม่มี submission และเลยกำหนด  → pct = 0 ("ไม่ส่ง")
+               ไม่มี submission ยังไม่เลยกำหนด → "ยังไม่ถึงกำหนด" ไม่เข้าค่าเฉลี่ย
+  ข้อสอบตรวจเอง: มีคะแนน → pct = 100 × score / คะแนนเต็ม
+               ว่างและเลยกำหนด → pct = 0 ("ไม่มีคะแนน")
+               ว่างยังไม่เลยกำหนด → "ยังไม่ถึงกำหนด" ไม่เข้าค่าเฉลี่ย
+  รายการที่ครูเพิ่ม: มีคะแนน → pct = 100 × score / คะแนนเต็ม,  ว่าง → pct = 0
+               (ไม่มีกำหนดส่ง รายการนับเมื่อครูเริ่มกรอก ครูใช้ "ให้เต็มทั้งห้อง" แล้วแก้รายคน)
   pct ถูกจำกัดในช่วง 0–100
 
 หมวด c ของ s:
@@ -3466,6 +3502,7 @@ ALTER TABLE skill_observations
         เกรด = 4 ถ้า rounded ≥ cutoff[0], 3.5 ถ้า ≥ cutoff[1], …, 1 ถ้า ≥ cutoff[6], ไม่เช่นนั้น 0
 ```
 
+- **กติกาต่อคนของ "ยังไม่ถึงกำหนด"**: การบ้านที่นับแล้วในห้องเพราะเผยแพร่ submission ของบางคนก่อนกำหนด ไม่ทำให้คนที่ยังไม่ส่งได้ 0 ก่อน `due_at` (ช่องของคนนั้นไม่เข้าค่าเฉลี่ย) พอเลยกำหนดหรือครูปิดการบ้าน ช่องนั้นเป็น "ไม่ส่ง" = 0 เอง ไม่มีงานตามรอบ (คำนวณตอนอ่านด้วย `now`)
 - นักเรียนที่ทุกรายการในหมวดหนึ่งถูกยกเว้น (ห้องครบแล้ว) คิดคะแนนรวมจากหมวดที่เหลือตามสูตรเดียวกัน มีเกรดได้ และติดป้าย "ไม่มีคะแนนในหมวด …"
 - **อาจติด มส**: รวมทุกรายการ `is_attendance` ของห้อง ถ้า `Σ score / Σ คะแนนเต็ม < 0.80` (ช่องว่างนับ 0 ช่องยกเว้นไม่นับ) แสดงคำเตือน "อาจติด มส" เป็นคำเตือนเท่านั้น ไม่เปลี่ยนเกรดเอง
 - ร/มส: ครูตั้งรายคน (`gradebook_special_grades`) **แทนเกรดตัวเลข**ทั้งในตาราง ฉบับประกาศ และ CSV คะแนนรวมยังแสดงให้ครูเห็น
@@ -3495,7 +3532,7 @@ ALTER TABLE skill_observations
 
 ### 23.7 ประกาศเกรด
 
-- ครูกด **"ประกาศเกรด"** ต่อห้อง (`POST /courses/{id}/gradebook/publish`) ได้เมื่อสมุดคะแนนตั้งค่าแล้ว (409 `gradebook_not_configured`) และห้อง**ครบทุกหมวด** (422 `gradebook_incomplete`, `errors.categories` บอกหมวดที่ยังไม่มีรายการ) แอปเตือนก่อนยืนยันถ้ามีช่อง "รอประกาศผล" หรือรายการที่ยังไม่ระบุหมวด (ไม่บล็อก)
+- ครูกด **"ประกาศเกรด"** ต่อห้อง (`POST /courses/{id}/gradebook/publish`) ได้เมื่อสมุดคะแนนตั้งค่าแล้ว (409 `gradebook_not_configured`) และห้อง**ครบทุกหมวด** (422 `gradebook_incomplete`, `errors.categories` บอกหมวดที่ยังไม่มีรายการ) แอปเตือนก่อนยืนยันถ้ามีช่อง "รอประกาศผล" หรือ "ยังไม่ถึงกำหนด" หรือรายการที่ยังไม่ระบุหมวด (ไม่บล็อก)
 - server เก็บ **snapshot** ใน `gradebook_publications` (หัว: หมวด น้ำหนัก เกณฑ์ ผู้ประกาศ เวลา) และ `gradebook_published_grades` (หนึ่งแถวต่อนักเรียน: คะแนนรายหมวด รายการที่ใช้ รวม ปัดแล้ว เกรด ร/มส คำเตือน)
 - นักเรียนเห็น**ฉบับล่าสุดที่ไม่ถูกถอน**ของตัวเอง: เกรด คะแนนรวม และคะแนนรายหมวด (ร้อยละและคะแนนตามน้ำหนัก) พร้อมรายการในหมวด (ชื่อ คะแนน/เต็ม ยกเว้น ตัดออก) **ไม่มีค่าเฉลี่ยห้องหรืออันดับ** (ตาม §20.9)
 - ครูแก้คะแนนหลังประกาศได้ ค่าสดเปลี่ยนแต่ฉบับของนักเรียนไม่เปลี่ยน ตารางของครูแสดง "มีการเปลี่ยนแปลงหลังประกาศ" เมื่อค่าสดต่างจาก snapshot แล้วครูประกาศใหม่ (แถวใหม่) หรือ**ถอนประกาศ** (`withdrawn_at`, นักเรียนกลับไปเห็นฉบับก่อนหน้าที่ไม่ถูกถอน หรือไม่เห็นอะไร)
@@ -3513,7 +3550,7 @@ ALTER TABLE skill_observations
 - หน้ารายวิชามีแท็บ **"สมุดคะแนน"**
   - ยังไม่ตั้งค่า: เลือก template (สองแบบข้างบน) แล้วไปหน้าตั้งค่า
   - **ตั้งค่า**: รายการหมวด (ชื่อ, น้ำหนัก, ตัดต่ำสุด k, หมวดตั้งต้นของการบ้าน) ลากเพื่อเรียง แถบ "รวม x%" เป็นสีเตือนจนกว่าจะเท่ากับ 100 ปุ่มบันทึกกดได้เมื่อรวม 100 และเกณฑ์เกรด 7 ช่อง (ปุ่ม "ใช้ค่าตั้งต้น")
-  - **ตารางของห้อง** (เลือกห้องของรายวิชา): หัวคอลัมน์จัดกลุ่มตามหมวด คอลัมน์ต่อท้ายคือร้อยละรายหมวด รวม และเกรด ตรึงคอลัมน์เลขที่และชื่อ เลื่อนแนวนอนได้ ใช้บนแท็บเล็ตได้ แตะช่องเพื่อแก้ (แป้นตัวเลข) เมนูคอลัมน์ "ให้เต็มทั้งห้อง" "วางคะแนนจาก Excel" และแก้/ลบรายการ ป้ายช่อง "ไม่ส่ง" "รอประกาศผล" "ยกเว้น" "ตัดออก" ป้ายแถว "อาจติด มส" "ร" "มส" แถบบนบอก "คะแนนระหว่างภาค" เมื่อยังไม่ครบ ปุ่ม **"เพิ่มรายการคะแนน"**, **"ประกาศเกรด"** (ถามยืนยัน), **"ส่งออก CSV"** ช่องของการบ้านที่ตรวจด้วยแอปแตะแล้วไปหน้าผลของ submission นั้น
+  - **ตารางของห้อง** (เลือกห้องของรายวิชา): หัวคอลัมน์จัดกลุ่มตามหมวด คอลัมน์ต่อท้ายคือร้อยละรายหมวด รวม และเกรด ตรึงคอลัมน์เลขที่และชื่อ เลื่อนแนวนอนได้ ใช้บนแท็บเล็ตได้ แตะช่องเพื่อแก้ (แป้นตัวเลข) เมนูคอลัมน์ "ให้เต็มทั้งห้อง" "วางคะแนนจาก Excel" และแก้/ลบรายการ ป้ายช่อง "ไม่ส่ง" "ไม่มีคะแนน" "ยังไม่ถึงกำหนด" "รอประกาศผล" "ยกเว้น" "ตัดออก" ป้ายแถว "อาจติด มส" "ร" "มส" แถบบนบอก "คะแนนระหว่างภาค" เมื่อยังไม่ครบ ปุ่ม **"เพิ่มรายการคะแนน"**, **"ประกาศเกรด"** (ถามยืนยัน), **"ส่งออก CSV"** ช่องของการบ้านที่ตรวจด้วยแอปแตะแล้วไปหน้าผลของ submission นั้น
 - ฟอร์มการบ้าน/ข้อสอบมีช่อง "หมวดคะแนน" (ข้อสอบบังคับเมื่อรายวิชาตั้งค่าแล้ว) และสวิตช์ "ไม่นับเกรด"
 - ข้อสอบ `manual`: หน้าข้อสอบมีปุ่ม "กรอกคะแนน" ไปที่คอลัมน์ของข้อสอบนั้นในตาราง
 - **นักเรียน**: หน้า "เกรดของฉัน" (รายวิชาที่ประกาศแล้ว) และรายละเอียดรายหมวด
@@ -3625,7 +3662,7 @@ CREATE TABLE gradebook_published_grades (
 | GET | `/courses/{id}/gradebook/settings` | ครู | `{configured, template, categories: [{id, position, name, weight, drop_lowest, is_homework_default, item_count}], cutoffs, default_cutoffs}` |
 | PUT | `/courses/{id}/gradebook/categories` | ครู | `{template}` (ตั้งจาก template ใช้ได้เมื่อยังไม่มีหมวด ไม่อย่างนั้น 409 `gradebook_configured`) หรือ `{categories: [{id?, name, weight, drop_lowest?, is_homework_default?}]}` แทนทั้งชุดตามลำดับที่ส่ง (ไม่มี `id` = หมวดใหม่ ไม่ส่งหมวดเดิม = ลบ) รวมไม่เท่ากับ 100 422 `weights_not_100` ชื่อซ้ำ 422 ตอบ settings พร้อม `uncategorised_count` |
 | PUT | `/courses/{id}/gradebook/cutoffs` | ครู | `{cutoffs: [7 ค่า] \| null}` ไม่ลดหลั่นหรือนอกช่วง 422 `errors.cutoffs` |
-| GET | `/courses/{id}/gradebook?classroom_id=` | ครู | ตาราง `{course, classroom, configured, complete, missing_categories[], counted_weight, categories: [{id, name, weight, drop_lowest, has_items}], columns: [{key, type: assignment\|manual_exam\|custom, id, name, category_id, full_marks, counted, due_at, excluded_from_grade, is_attendance, editable}], rows: [{student_id, student_number, name, left_course, cells: {key: {score, percent, state: scored\|missing\|pending\|not_counted\|excused, dropped}}, categories: {id: {percent, points}}, total, total_rounded, grade, special, special_note, attendance_warning, in_progress}], publication: {id, published_at, stale} \| null}` ยังไม่ตั้งค่า `configured = false` และไม่มีค่าคำนวณ |
+| GET | `/courses/{id}/gradebook?classroom_id=` | ครู | ตาราง `{course, classroom, configured, complete, missing_categories[], counted_weight, categories: [{id, name, weight, drop_lowest, has_items}], columns: [{key, type: assignment\|manual_exam\|custom, id, name, category_id, full_marks, counted, due_at, excluded_from_grade, is_attendance, editable}], rows: [{student_id, student_number, name, left_course, cells: {key: {score, percent, state: scored\|missing\|not_due\|pending\|not_counted\|excused, dropped}}, categories: {id: {percent, points}}, total, total_rounded, grade, special, special_note, attendance_warning, in_progress}], publication: {id, published_at, stale} \| null}` ยังไม่ตั้งค่า `configured = false` และไม่มีค่าคำนวณ |
 | POST | `/courses/{id}/gradebook-items` | ครู | `{classroom_ids[], category_id, name, max_points, is_attendance?}` หนึ่งรายการต่อห้อง |
 | PATCH / DELETE | `/gradebook-items/{id}` | ครู | ลดคะแนนเต็มต่ำกว่าคะแนนที่กรอกไว้ 422 `errors.max_points` |
 | PUT | `/gradebook-items/{id}/scores` | ครู | `{scores: [{student_id, score?: number\|null, excused?: bool}]}` (ไม่เกิน 100 แถว) นักเรียนไม่อยู่ในห้อง 422 ตำแหน่ง ค่าเกินเต็ม 422 |
@@ -3651,7 +3688,7 @@ CREATE TABLE gradebook_published_grades (
 ### 23.13 การทดสอบ
 
 - backend
-  - `GradebookCalculatorTest` (golden): ตัวอย่างทั้งหมดของ §23.5, ตัดต่ำสุดเหลืออย่างน้อยหนึ่ง, ยกเว้นไม่เข้าค่าเฉลี่ย, ไม่ส่งหลังกำหนด = 0 ก่อนกำหนดไม่นับ, "รอประกาศผล" ไม่นับ, `total_override` ถูกใช้ (`effectiveTotal()`), "ไม่นับเกรด", ระหว่างภาค renormalize, ปัดครึ่งขึ้นที่ขอบ (79.5, 79.4999), เกณฑ์ที่ครูแก้, ร/มส แทนเกรด, อาจติด มส (< 80%, หลายรายการ)
+  - `GradebookCalculatorTest` (golden): ตัวอย่างทั้งหมดของ §23.5, ตัดต่ำสุดเหลืออย่างน้อยหนึ่ง, ยกเว้นไม่เข้าค่าเฉลี่ย, ไม่ส่งหลังกำหนด = 0 ก่อนกำหนดไม่นับ (รวมกรณีเผยแพร่ของบางคนก่อนกำหนด: คนที่ยังไม่ส่งเป็น `not_due` ไม่ใช่ 0), การบ้านไม่มี `due_at` เป็น 0 หลัง `closed` เท่านั้น, ข้อสอบตรวจเองที่ว่างก่อน/หลังวันสอบ, "รอประกาศผล" ไม่นับ, `total_override` ถูกใช้ (`effectiveTotal()`), "ไม่นับเกรด", ระหว่างภาค renormalize, ปัดครึ่งขึ้นที่ขอบ (79.5, 79.4999), เกณฑ์ที่ครูแก้, ร/มส แทนเกรด, อาจติด มส (< 80%, หลายรายการ)
   - หมวดและ template: รวมไม่เท่า 100 → 422, ลบหมวด → รายการเป็นไม่ระบุหมวด, การบ้านใหม่ได้หมวดตั้งต้น, ข้อสอบใหม่ต้องมีหมวด, หมวดของรายวิชาอื่น 422
   - ตาราง: กรอก/ล้าง/ยกเว้น, ให้เต็มทั้งห้องไม่ทับค่าเดิม, ข้อสอบ manual กรอกได้ แต่งานที่ตรวจด้วยแอปได้ 422 `score_from_app`, ค่าเกินเต็ม 422
   - ประกาศ: ไม่ครบ 422, snapshot ไม่เปลี่ยนเมื่อแก้คะแนน, `stale`, ประกาศใหม่, ถอน, FCM ไม่มีเกรดในข้อความ
