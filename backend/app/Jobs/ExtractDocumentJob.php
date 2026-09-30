@@ -28,15 +28,19 @@ class ExtractDocumentJob implements ShouldQueue
     public int $timeout = 240;
 
     /**
+     * Not readonly, unlike the other jobs: DraftAnswerKeyJob extends this
+     * class, and PHP 8.3 (the server) refuses to unserialize a parent's
+     * readonly property from the child's scope.
+     *
      * @param  list<int>  $documentIds
      */
     public function __construct(
-        public readonly int $extractionId,
-        public readonly int $assignmentId,
-        public readonly array $documentIds,
-        public readonly ?int $pageFrom = null,
-        public readonly ?int $pageTo = null,
-        public readonly string $coursework = '',
+        public int $extractionId,
+        public int $assignmentId,
+        public array $documentIds,
+        public ?int $pageFrom = null,
+        public ?int $pageTo = null,
+        public string $coursework = '',
     ) {
         $this->onQueue('default');
     }
