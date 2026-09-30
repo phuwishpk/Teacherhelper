@@ -11,10 +11,36 @@
 # analytics -> practice generate/approve/attempt -> ml model -> Google
 # endpoints without credentials (503 google_not_configured).
 #
+# Phase 8/9 (DESIGN §19, §20): a course with a unit and a lesson plan bound
+# to the classroom (every assignment needs one) -> freeform assignment whose
+# key is read once from a photo (cache on the second estimate) -> drafted
+# rubrics approved -> indicator suggestions from the plan -> mapping -> key
+# approved -> teacher whole-page upload + student in-app hand-in (a draft
+# assignment answers 409) -> one Gemini call per page -> review -> publish ->
+# page image for the student -> chart endpoints (teacher and student) ->
+# "analyse now" -> edit -> approve -> the student's shared text.
+#
+# Google Classroom with Google faked: tools/smoke-google.php runs those
+# requests and their worker passes in its own PHP process with Http::fake
+# (OAuth, Classroom, Drive) read from a JSON state file, because the server
+# started here has no Google client. Connect -> course list -> import
+# preview -> import (409 when imported again) -> roster sync adds a new
+# student -> "sync now" mirrors coursework created on the Classroom website
+# with an AI-drafted key -> a hand-in synced before approval waits
+# (waiting_key) -> approve -> graded -> publish -> private announcement
+# posted (INDIVIDUAL_STUDENTS), no grade pushed to website coursework.
+#
+# The general limit is 120 requests/minute per user; a 429 is waited out once.
+# Every run creates new rows in the dev database (a new teacher each time).
+#
 # Prerequisites: MariaDB container running, `php artisan migrate --seed`
 # done (the demo school with SEED_TEACHER_JOIN_CODE), QR_SIGNING_KEY set in
-# .env and a model registered with eduvision:register-model (else the ml step
-# expects 404). Run from anywhere:  bash backend/tools/smoke.sh
+# .env, the PHP gd extension (test pages are real JPEGs), sub-indicators of
+# grade 5 imported (eduvision:import-skills, the seeder's demo rows do) and a
+# model registered with eduvision:register-model (else the ml step expects
+# 404). Run from anywhere:  bash backend/tools/smoke.sh
+# With a dev server already on port 8000, pick another port:
+#   SMOKE_PORT=8010 bash backend/tools/smoke.sh
 #
 # The server is started here with `php artisan serve --no-reload` so the
 # overrides below reach it (without --no-reload artisan serve removes every
@@ -70,6 +96,13 @@ api() {
   [ -n "$data" ] && args+=(-H 'Content-Type: application/json' --data-binary "$data")
   STATUS=$(curl "${args[@]}" "$BASE$path")
   BODY=$(cat "$WORK/body")
+  if [ "$STATUS" = "429" ] && [ "${API_RETRY:-1}" = "1" ]; then
+    # The run sends more than the general 120 requests/minute per user (DESIGN §7.4): wait it out once.
+    local wait; wait=$(tr -d '\r' <"$WORK/headers" | awk 'tolower($1) == "retry-after:" {print $2}')
+    printf '   (429, waiting %ss for the rate limit)\n' "${wait:-60}"
+    sleep "${wait:-60}"
+    API_RETRY=0 api "$@"
+  fi
 }
 expect() {
   local s
@@ -85,6 +118,32 @@ work() {
     || fail "queue worker failed, see log: $(tail -20 "$WORK/worker.log")"
 }
 tinker() { perl -e 'alarm 60; exec @ARGV' php artisan tinker --execute "$1"; }
+# upload PATH FILE...  -> multipart files[] (uses $TOKEN)
+upload() {
+  local path=$1 f type
+  shift
+  local args=(-s -o "$WORK/body" -w '%{http_code}' -H 'Accept: application/json')
+  [ -n "$TOKEN" ] && args+=(-H "Authorization: Bearer $TOKEN")
+  for f in "$@"; do
+    case "$f" in *.jpg) type=image/jpeg ;; *.pdf) type=application/pdf ;; *) type=text/plain ;; esac
+    args+=(-F "files[]=@$f;type=$type")
+  done
+  STATUS=$(curl "${args[@]}" -D "$WORK/headers" "$BASE$path")
+  BODY=$(cat "$WORK/body")
+  if [ "$STATUS" = "429" ] && [ "${API_RETRY:-1}" = "1" ]; then
+    local wait; wait=$(tr -d '\r' <"$WORK/headers" | awk 'tolower($1) == "retry-after:" {print $2}')
+    printf '   (429, waiting %ss for the rate limit)\n' "${wait:-60}"
+    sleep "${wait:-60}"
+    API_RETRY=0 upload "$path" "$@"
+  fi
+}
+# jpeg FILE LABEL -> a real JPEG of a handwritten-looking page (GD); the label makes each file unique
+jpeg() {
+  php -r '$i = imagecreatetruecolor(900, 1200); imagefill($i, 0, 0, imagecolorallocate($i, 255, 255, 255));
+    $k = imagecolorallocate($i, 20, 20, 60);
+    foreach ([$argv[2], "1) 42", "2) 4 x 15 = 60", "3) 60"] as $n => $line) { imagestring($i, 5, 60, 80 + 60 * $n, $line, $k); }
+    imagejpeg($i, $argv[1], 80);' "$1" "$2"
+}
 
 # ---------------------------------------------------------------- server
 if [ "${SMOKE_START_SERVER:-1}" = "1" ]; then
@@ -153,17 +212,45 @@ api GET "/classrooms/$CLASSROOM_ID/roster"
 expect 200
 ok "classroom #$CLASSROOM_ID ($CLASS_CODE), students ${STUDENTS[*]}"
 
-# ---------------------------------------------------------------- assignment
-step "assignment with mcq, numeric short, show_work, open"
+# ---------------------------------------------------------------- course (Phase 9)
+step "course, unit and lesson plan bound to the classroom"
 api GET /subjects
 expect 200
-SUBJECT_ID=$(j '.data[0].id')
-api GET "/skills?subject=$SUBJECT_ID"
+api GET "/skills?level=sub_indicator&grade=5"
 expect 200
+check '(.data | length) >= 2'
+SUBJECT_ID=$(j '.data[0].subject_id')
 SKILL1=$(j '.data[0].id')
-SKILL2=$(j '.data[1].id // .data[0].id')
-api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson s "$SUBJECT_ID" '{classroom_id:$c, subject_id:$s, title:"แบบฝึกหัด smoke การคูณ"}')"
+SKILL2=$(jq -r --argjson s "$SUBJECT_ID" '[.data[] | select(.subject_id == $s)][1].id // .data[0].id' <<<"$BODY")
+api POST /courses "$(jq -nc --argjson s "$SUBJECT_ID" --argjson c "$CLASSROOM_ID" --argjson k1 "$SKILL1" --argjson k2 "$SKILL2" \
+  '{code:"ค15101", name:"คณิตศาสตร์ 5 (smoke)", subject_id:$s, grade_level:5, semester:1, academic_year:2569, hours:160, classroom_ids:[$c], skill_ids:[$k1,$k2]}')"
 expect 201
+COURSE_ID=$(j '.data.id')
+api POST /courses "$(jq -nc --argjson s "$SUBJECT_ID" '{code:"ค15101", name:"ซ้ำ", subject_id:$s, grade_level:5, semester:1, academic_year:2569}')"
+expect 422
+api POST "/courses/$COURSE_ID/units" "$(jq -nc --argjson k1 "$SKILL1" --argjson k2 "$SKILL2" '{title:"การคูณ", hours:12, skill_ids:[$k1,$k2]}')"
+expect 201
+UNIT_ID=$(j '.data.id')
+api POST "/courses/$COURSE_ID/lesson-plans" "$(jq -nc --argjson u "$UNIT_ID" --argjson k1 "$SKILL1" --argjson k2 "$SKILL2" \
+  '{unit_id:$u, title:"การคูณจำนวนสองหลัก", hours:2, objectives:"คูณจำนวนสองหลักได้", content:"การคูณ", activities:"ใบงาน", assessment:"การบ้าน", skill_ids:[$k1,$k2]}')"
+expect 201
+PLAN_ID=$(j '.data.id')
+api PATCH "/lesson-plans/$PLAN_ID" "$(jq -nc --arg d "$(date +%F)" '{taught_on:$d}')"
+expect 200
+api GET "/courses?classroom_id=$CLASSROOM_ID"
+expect 200
+check "any(.data[]; .id == $COURSE_ID)"
+api GET "/courses/$COURSE_ID"
+expect 200
+ok "course #$COURSE_ID, unit #$UNIT_ID, lesson plan #$PLAN_ID (skills $SKILL1, $SKILL2); duplicate code -> 422"
+
+# ---------------------------------------------------------------- assignment
+step "assignment with mcq, numeric short, show_work, open"
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" '{classroom_id:$c, title:"ไม่มีรายวิชา"}')"
+expect 422
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" --argjson p "$PLAN_ID" '{classroom_id:$c, course_id:$k, lesson_plan_id:$p, title:"แบบฝึกหัด smoke การคูณ"}')"
+expect 201
+check ".data.subject.id == $SUBJECT_ID or .data.subject_id == $SUBJECT_ID"
 ASSIGNMENT_ID=$(j '.data.id')
 
 api POST "/assignments/$ASSIGNMENT_ID/questions" "$(jq -nc --argjson k "$SKILL1" \
@@ -459,6 +546,195 @@ expect 409
 check '.code == "practice_already_attempted"'
 ok "item #$ITEM attempted; repeat -> 409"
 
+# ---------------------------------------------------------------- Phase 8: freeform + whole page
+step "freeform assignment: the answer key is read once from a photo (fake Gemini)"
+TOKEN=$TEACHER_TOKEN
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" --argjson p "$PLAN_ID" \
+  '{classroom_id:$c, course_id:$k, lesson_plan_id:$p, title:"การบ้านจากหนังสือ smoke", mode:"freeform", accept_late:true}')"
+expect 201
+check '.data.mode == "freeform" and .data.status == "draft"'
+FREE_ID=$(j '.data.id')
+jpeg "$WORK/key.jpg" "answer key ${RUN}"
+upload /documents "$WORK/key.jpg"
+expect 201
+check '(.data | length) == 1 and .data[0].page_count == 1 and .data[0].estimate.input_tokens > 0'
+DOC_ID=$(j '.data[0].id')
+printf 'not a picture' >"$WORK/notes.txt"
+upload /documents "$WORK/notes.txt"
+expect 422
+check '.code == "unsupported_file_type"'
+api POST "/assignments/$FREE_ID/answer-key/estimate" "$(jq -nc --argjson d "$DOC_ID" '{document_ids:[$d]}')"
+expect 200
+check '.data.cached == false and .data.pages == 1'
+api POST "/assignments/$FREE_ID/answer-key/approve"
+expect 422
+api POST "/assignments/$FREE_ID/answer-key/extract" "$(jq -nc --argjson d "$DOC_ID" '{document_ids:[$d]}')"
+expect 202 200
+work
+api GET "/assignments/$FREE_ID/answer-key"
+expect 200
+check '.data.extraction_status == "done" and .data.key_origin == "document" and (.data.questions | length) >= 1'
+jq '.' <<<"$BODY" >"$WORK/answer-key.json"
+ok "$(j '[.data.questions[] | .type] | join(", ")') read from document #$DOC_ID; incomplete: $(j '.data.incomplete_questions | map(tostring) | join(",")')"
+
+step "approve drafted rubrics, map indicators from the lesson plan, approve the key"
+for row in $(jq -r '.data.questions[] | select(.key_complete != true) | @base64' "$WORK/answer-key.json"); do
+  q=$(base64 --decode <<<"$row")
+  qid=$(jq -r '.id' <<<"$q")
+  api PUT "/questions/$qid/rubric" "$(jq -c '{criteria: [(.rubric_criteria // [])[] | {description, points, is_core}]} + (if .type == "show_work" then {reference_steps: (.answer_key.reference_steps // ["ตั้งโจทย์", "คำนวณ", "ตอบ"])} else {} end)' <<<"$q")"
+  expect 200
+done
+api POST "/assignments/$FREE_ID/indicator-suggestions"
+expect 202
+work
+api GET "/assignments/$FREE_ID/indicator-suggestions"
+expect 200
+jq '.' <<<"$BODY" >"$WORK/suggestions.json"
+MAPPING=$(jq -c --argjson k "$SKILL1" '{questions: [.data.questions[] | {question_id: (.question_id // .id), skill_ids: ([.suggestions[]?.skill.id] | if length == 0 then [$k] else . end)}]}' "$WORK/suggestions.json")
+api PUT "/assignments/$FREE_ID/indicator-mapping" "$MAPPING"
+expect 200
+check '.data.unmapped_question_count == 0'
+api POST "/assignments/$FREE_ID/answer-key/approve"
+expect 200
+api GET "/assignments/$FREE_ID"
+expect 200
+check '.data.status == "ready" and .data.key_approved_at != null'
+api POST "/assignments/$FREE_ID/answer-key/estimate" "$(jq -nc --argjson d "$DOC_ID" '{document_ids:[$d]}')"
+expect 200
+check '.data.cached == true'
+ok "key approved, indicators mapped: $(jq -c '[.questions[].skill_ids | length]' <<<"$MAPPING"); the same file now reads from the cache"
+
+step "teacher uploads a whole page for student 2 (no marker, no QR)"
+jpeg "$WORK/page-s2.jpg" "student 2 page 1 ${RUN}"
+upload "/assignments/$FREE_ID/students/${STUDENTS[1]}/pages" "$WORK/page-s2.jpg"
+expect 201
+check '(.data.pages | length) == 1 and .data.waiting_key == false and .data.grading == true'
+S2_SUB=$(j '.data.submission_id')
+upload "/assignments/$FREE_ID/students/${STUDENTS[1]}/pages" "$WORK/notes.txt"
+expect 422
+check '.code == "unsupported_file_type"'
+ok "submission #$S2_SUB queued for grading; a text file -> 422"
+
+step "student 1 hands in two pages in the app; a draft assignment is refused"
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" '{classroom_id:$c, course_id:$k, title:"ยังไม่อนุมัติเฉลย", mode:"freeform"}')"
+expect 201
+DRAFT_ID=$(j '.data.id')
+TOKEN=$STUDENT_TOKEN
+api GET /student/assignments
+expect 200
+check "any(.data[]; .id == $FREE_ID and .can_submit == true and .status == \"not_submitted\")"
+check "all(.data[]; .id != $DRAFT_ID)"
+jpeg "$WORK/page-s1a.jpg" "student 1 page 1 ${RUN}"
+jpeg "$WORK/page-s1b.jpg" "student 1 page 2 ${RUN}"
+upload "/student/assignments/$FREE_ID/submission" "$WORK/page-s1a.jpg" "$WORK/page-s1b.jpg"
+expect 201
+check '.data.status == "submitted" and (.data.pages | length) == 2'
+upload "/student/assignments/$DRAFT_ID/submission" "$WORK/page-s1a.jpg"
+expect 409
+check '.code == "assignment_not_ready"'
+api GET /student/assignments
+check "any(.data[]; .id == $FREE_ID and .status == \"submitted\")"
+ok "handed in at $(j ".data[] | select(.id == $FREE_ID) | .submitted_at"); draft -> 409 assignment_not_ready"
+
+step "worker grades each page in one call; review, publish"
+TOKEN=$TEACHER_TOKEN
+work
+api GET "/assignments/$FREE_ID/review-queue?per_page=50"
+expect 200
+jq '.' <<<"$BODY" >"$WORK/free-queue.json"
+QCOUNT=$(jq '.data.questions | length' "$WORK/answer-key.json")
+check "(.data | length) == $((2 * QCOUNT)) and all(.data[]; .ai_score != null or .grading_state == \"manual\")"
+RID=$(j '.data[0].id')
+api GET "/responses/$RID"
+expect 200
+check '.data.submission_page_id != null and .data.page_image_url != null and .data.extraction != null'
+curl -s -f -o "$WORK/teacher-page.img" -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:${PORT}$(j '.data.page_image_url')" || fail "teacher page image download failed"
+api POST "/assignments/$FREE_ID/approve-confident"
+expect 200
+api GET "/assignments/$FREE_ID/review-queue?per_page=50"
+for row in $(j '.data[] | select(.reviewed_at == null) | @base64'); do
+  r=$(base64 --decode <<<"$row")
+  api PATCH "/responses/$(jq -r '.id' <<<"$r")" "$(jq -c '{final_score:(.ai_score // 0), final_understanding:(.ai_understanding // "partial"), reason:"smoke: ตรวจทานแล้ว"}' <<<"$r")"
+  expect 200
+done
+api POST "/assignments/$FREE_ID/publish"
+expect 200
+check '.data.published == 2'
+work
+ok "$(jq -r '[.data[] | "\(.question_type):\(.ai_score)/\(.max_points)"] | join(", ")' "$WORK/free-queue.json")"
+
+step "student sees the whole-page result and the page image"
+TOKEN=$STUDENT_TOKEN
+api GET /student/results
+expect 200
+FREE_SUB=$(j "[.data[] | select(.assignment_id == $FREE_ID or .assignment.id == $FREE_ID)][0].submission_id // empty")
+[ -n "$FREE_SUB" ] || fail "no published result for the freeform assignment: $(head -c 600 <<<"$BODY")"
+api GET "/student/results/$FREE_SUB"
+expect 200
+jq '.' <<<"$BODY" >"$WORK/free-result.json"
+SPAGE=$(j '[.data.responses[].page_image_url // empty][0] // empty')
+[ -n "$SPAGE" ] || fail "the whole-page result has no page_image_url"
+curl -s -f -o "$WORK/page.img" -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:${PORT}$SPAGE" || fail "student page image download failed"
+cmp -s "$WORK/page.img" "$WORK/page-s1a.jpg" || cmp -s "$WORK/page.img" "$WORK/page-s1b.jpg" || fail "the page image is not the file the student handed in"
+ok "result $(j '.data.total_score')/$(j '.data.max_score'); page image = the handed-in file"
+
+# ---------------------------------------------------------------- Phase 9: charts + analysis
+step "charts (teacher)"
+TOKEN=$TEACHER_TOKEN
+for path in \
+  "/courses/$COURSE_ID/mastery-summary?classroom_id=$CLASSROOM_ID&axis=standard" \
+  "/courses/$COURSE_ID/mastery-summary?classroom_id=$CLASSROOM_ID&axis=unit" \
+  "/courses/$COURSE_ID/mastery-summary?classroom_id=$CLASSROOM_ID&student_id=${STUDENTS[0]}" \
+  "/classrooms/$CLASSROOM_ID/indicator-pass-rate?course_id=$COURSE_ID" \
+  "/classrooms/$CLASSROOM_ID/mastery?course_id=$COURSE_ID&unit_id=$UNIT_ID" \
+  "/students/${STUDENTS[0]}/indicator-progress?skill_ids=$SKILL1,$SKILL2" \
+  "/assignments/$FREE_ID/score-distribution" \
+  "/courses/$COURSE_ID/plan-progress?classroom_id=$CLASSROOM_ID"; do
+  api GET "$path"
+  expect 200
+  printf '   GET %-80s %s %s bytes\n' "$path" "$STATUS" "${#BODY}"
+done
+api GET "/assignments/$FREE_ID/score-distribution"
+check '[.. | numbers] | length > 0'
+api GET /teacher/attention
+expect 200
+ok "8 chart endpoints; attention $(j -c '.data')"
+
+step "charts (student, own data only)"
+TOKEN=$STUDENT_TOKEN
+api GET /student/courses
+expect 200
+check "any(.data[]; .id == $COURSE_ID)"
+api GET "/student/courses/$COURSE_ID/mastery-summary?axis=standard"
+expect 200
+api GET "/student/indicator-progress?skill_ids=$SKILL1,$SKILL2"
+expect 200
+api GET "/courses/$COURSE_ID/mastery-summary?classroom_id=$CLASSROOM_ID"
+expect 403 404
+ok "student charts; teacher chart -> $STATUS"
+
+step "AI analysis: run now, edit, approve, student sees the shared text"
+TOKEN=$TEACHER_TOKEN
+api POST "/students/${STUDENTS[0]}/analysis/run" "$(jq -nc --argjson c "$CLASSROOM_ID" '{classroom_id:$c}')"
+expect 200
+check '.data.id != null and (.data.student_text // "" | length) > 0'
+ANALYSIS_ID=$(j '.data.id')
+api GET "/students/${STUDENTS[0]}/analysis?classroom_id=$CLASSROOM_ID"
+expect 200
+check ".data.id == $ANALYSIS_ID"
+api PATCH "/analyses/$ANALYSIS_ID" '{"student_text":"หนูทำโจทย์การคูณได้ดีขึ้นมาก ลองฝึกแสดงวิธีทำให้ครบทุกขั้นนะ (smoke)"}'
+expect 200
+api POST "/analyses/$ANALYSIS_ID/approve"
+expect 200
+api GET "/classrooms/$CLASSROOM_ID/analyses"
+expect 200
+TOKEN=$STUDENT_TOKEN
+api GET /student/analysis
+expect 200
+check 'tostring | contains("(smoke)")'
+grep -q '"teacher_text"' <<<"$BODY" && fail "student analysis exposes the teacher text"
+ok "analysis #$ANALYSIS_ID approved and shared"
+
 # ---------------------------------------------------------------- ml
 step "ml model (student and teacher)"
 api GET "/ml/models/active?name=digit_crnn"
@@ -507,6 +783,12 @@ probe POST "/assignments/$ASSIGNMENT_ID/google-post" '{}'
 probe GET "/assignments/$ASSIGNMENT_ID/google-submissions" ''
 probe POST "/assignments/$ASSIGNMENT_ID/google-grades/retry" ''
 probe POST /google-submissions/999999/return '{"reason":"ถ่ายใหม่"}'
+probe GET /google/courses/123456/import-preview ''
+probe POST /classrooms/import-google '{"course_id":"123456","name":"x","grade_level":5,"academic_year":2569,"students":[]}'
+probe POST "/classrooms/$CLASSROOM_ID/google-roster/sync" ''
+probe POST "/classrooms/$CLASSROOM_ID/google-sync" ''
+probe POST /google-submissions/999999/accept-late ''
+probe POST "/assignments/$ASSIGNMENT_ID/google-feedback/retry" ''
 TOKEN=""
 api GET /google/status
 expect 401
@@ -514,6 +796,167 @@ TOKEN=$STUDENT_TOKEN
 api GET /google/status
 expect 403
 ok "503 google_not_configured / 401 guest / 403 student"
+
+# ---------------------------------------------------------------- google (faked, in process)
+# tools/smoke-google.php runs the request (or a worker pass) inside its own
+# PHP process with Google's OAuth, Classroom and Drive answered by Http::fake
+# from the JSON state below; nothing reaches Google. Its worker pass is a
+# plain queue:work, so no cron-wide sync round touches other linked
+# classrooms of the dev database.
+GSTATE="$WORK/google.json"
+GCOURSE="61${RUN}"
+jq -n --arg c "$GCOURSE" --arg r "$RUN" '{
+  course: {id: $c, name: "คณิตศาสตร์", section: "ป.5/2"},
+  students: [
+    {id: ("g1-" + $r), name: "ด.ญ. ขวัญใจ ทดสอบ", email: "kwan@example.com"},
+    {id: ("g2-" + $r), name: "ด.ช. กล้า ทดสอบ", email: "kla@example.com"},
+    {id: ("g3-" + $r), name: "Teacher Assistant", email: "ta@example.com"}
+  ],
+  course_work: [], submissions: {}, drive: {}, recorded: []}' >"$GSTATE"
+gapi() { # METHOD PATH [JSON] -> STATUS, BODY (Google faked, uses $TOKEN)
+  STATUS=$(SMOKE_TOKEN="$TOKEN" SMOKE_BODY="$WORK/body" perl -e 'alarm 120; exec @ARGV' \
+    php tools/smoke-google.php "$GSTATE" request "$1" "$2" "${3:-}" 2>>"$WORK/google.log") \
+    || fail "smoke-google.php request failed: $(tail -20 "$WORK/google.log")"
+  BODY=$(cat "$WORK/body")
+}
+gwork() {
+  perl -e 'alarm 180; exec @ARGV' php tools/smoke-google.php "$GSTATE" work >>"$WORK/worker.log" 2>&1 \
+    || fail "smoke-google.php worker failed, see log: $(tail -20 "$WORK/worker.log")"
+}
+gstate() { jq "$@" "$GSTATE" >"$GSTATE.tmp" && mv "$GSTATE.tmp" "$GSTATE"; }
+grecorded() { jq -r "$1" "$GSTATE"; }
+
+step "Google (faked): connect, course list, import preview"
+TOKEN=$TEACHER_TOKEN
+gapi POST /google/connect '{"server_auth_code":"4/smoke-one-time-code"}'
+expect 200
+check '(.data // .) | .connected == true'
+gapi GET /google/status
+expect 200
+check '(.data // .) | .connected == true and .needs_reconnect == false'
+gapi GET /google/courses
+expect 200
+check "any(.data[]; .course_id == \"$GCOURSE\" and .linked_classroom == null)"
+gapi GET "/google/courses/$GCOURSE/import-preview"
+expect 200
+check '.data.grade_level_guess == 5 and (.data.students | length) == 3'
+jq '.data' <<<"$BODY" >"$WORK/preview.json"
+ok "$(j '.data.suggested_name'), $(j '.data.students | length') students, grade guess $(j '.data.grade_level_guess')"
+
+step "import the classroom from Google Classroom (the assistant is left out)"
+IMPORT=$(jq -c --arg ta "g3-$RUN" '{course_id, name: .suggested_name, grade_level: .grade_level_guess, academic_year,
+  students: [.students[] | select(.google_user_id != $ta) | {google_user_id, student_number: .proposed_number}], removed: [$ta]}' "$WORK/preview.json")
+gapi POST /classrooms/import-google "$IMPORT"
+expect 201
+check '(.data.students | length) == 2 and all(.data.students[]; (.pin | tostring | length) == 6)'
+GCLASS_ID=$(j '.data.classroom.id')
+gapi POST /classrooms/import-google "$IMPORT"
+expect 409
+check '.code == "course_already_linked"'
+gapi GET /google/courses
+check "any(.data[]; .course_id == \"$GCOURSE\" and .linked_classroom.id == $GCLASS_ID)"
+ok "classroom #$GCLASS_ID; importing again -> 409 course_already_linked"
+
+step "roster sync: a new student joins, the left-out assistant stays out"
+gstate --arg r "$RUN" '.students += [{id: ("g4-" + $r), name: "ด.ญ. ใหม่ ทดสอบ", email: "mai@example.com"}]'
+gapi POST "/classrooms/$GCLASS_ID/google-roster/sync"
+expect 200
+check '(.data.added | length) == 1 and (.data.added[0].pin | tostring | length) == 6 and (.data.left | length) == 0'
+ADDED=$(j '.data.added[0] | "\(.name) (เลขที่ \(.student_number))"')
+gapi GET "/classrooms/$GCLASS_ID/roster"
+expect 200
+check '(.data | length) == 3'
+ok "added $ADDED"
+
+step "bind the course to the imported classroom too"
+api PUT "/courses/$COURSE_ID/classrooms" "$(jq -nc --argjson a "$CLASSROOM_ID" --argjson b "$GCLASS_ID" '{classroom_ids:[$a,$b]}')"
+expect 200
+ok "course #$COURSE_ID -> classrooms $CLASSROOM_ID, $GCLASS_ID"
+
+step "sync now: coursework created on the Classroom website is mirrored, key drafted by AI"
+CW="cw-$RUN"
+jpeg "$WORK/sheet.jpg" "worksheet chapter 2 ${RUN}"
+gstate --arg cw "$CW" --arg c "$GCOURSE" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg p "$WORK/sheet.jpg" '
+  .drive["f-sheet"] = {name: "ใบงานบทที่2.jpg", mime: "image/jpeg", path: $p}
+  | .course_work = [{courseId: $c, id: $cw, title: "แบบฝึกหัดบทที่ 2 (smoke)", description: "ทำข้อ 1-4 แสดงวิธีทำ",
+      state: "PUBLISHED", workType: "ASSIGNMENT", creationTime: $now, maxPoints: 10, associatedWithDeveloper: false,
+      alternateLink: ("https://classroom.google.com/c/smoke/a/" + $cw),
+      materials: [{driveFile: {driveFile: {id: "f-sheet", title: "ใบงานบทที่2.jpg"}, shareMode: "VIEW"}}]}]'
+gapi POST "/classrooms/$GCLASS_ID/google-sync"
+expect 202
+gwork
+gapi GET "/assignments?classroom_id=$GCLASS_ID"
+expect 200
+MIRROR_ID=$(j '[.data[] | select(.source == "classroom_web")][0].id // empty')
+[ -n "$MIRROR_ID" ] || fail "no mirrored assignment: $(head -c 800 <<<"$BODY")"
+gapi GET "/assignments/$MIRROR_ID/answer-key"
+expect 200
+check '.data.key_origin == "ai_draft" and .data.key_approved_at == null and (.data.questions | length) >= 1'
+jq '.' <<<"$BODY" >"$WORK/mirror-key.json"
+gapi GET /teacher/attention
+check '.data.keys_pending >= 1'
+ok "mirror #$MIRROR_ID with $(jq '.data.questions | length' "$WORK/mirror-key.json") AI-drafted question(s), waiting for approval"
+
+step "a hand-in synced before the key is approved waits (waiting_key)"
+jpeg "$WORK/hw-g1.jpg" "classroom hand-in ${RUN}"
+gstate --arg cw "$CW" --arg c "$GCOURSE" --arg u "g1-$RUN" --arg p "$WORK/hw-g1.jpg" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+  .drive["f-hw1"] = {name: "การบ้าน.jpg", mime: "image/jpeg", path: $p}
+  | .submissions[$cw] = [{courseId: $c, courseWorkId: $cw, id: ("sub-" + $cw), userId: $u, state: "TURNED_IN", updateTime: $now,
+      alternateLink: ("https://classroom.google.com/c/smoke/sub-" + $cw),
+      assignmentSubmission: {attachments: [{driveFile: {id: "f-hw1", title: "การบ้าน.jpg"}}]}}]'
+gapi POST "/classrooms/$GCLASS_ID/google-sync"
+expect 202
+gwork
+gapi GET "/assignments/$MIRROR_ID/google-submissions"
+expect 200
+check 'any(.data[]; .state == "waiting_key")'
+gapi GET "/assignments/$MIRROR_ID/review-queue?per_page=50"
+check '(.data | length) == 0'
+ok "hand-in stored, not graded before approval"
+
+step "approve the mirror's key (course of the classroom) -> graded -> publish -> private announcement"
+for row in $(jq -r '.data.questions[] | select(.key_complete != true) | @base64' "$WORK/mirror-key.json"); do
+  q=$(base64 --decode <<<"$row")
+  gapi PUT "/questions/$(jq -r '.id' <<<"$q")/rubric" "$(jq -c '{criteria: [(.rubric_criteria // [])[] | {description, points, is_core}]} + (if .type == "show_work" then {reference_steps: (.answer_key.reference_steps // ["ตั้งโจทย์", "คำนวณ", "ตอบ"])} else {} end)' <<<"$q")"
+  expect 200
+done
+# The imported classroom has exactly one course, so the mirror took it (§20.1);
+# with none or several the approval would answer 422 course_required.
+gapi GET "/assignments/$MIRROR_ID"
+check ".data.course_id == $COURSE_ID and .data.subject_id == $SUBJECT_ID"
+gapi POST "/assignments/$MIRROR_ID/answer-key/approve" '{}'
+expect 200
+check '.data.status == "ready" and .data.key_approved_at != null'
+gwork
+gapi GET "/assignments/$MIRROR_ID/google-submissions"
+check 'all(.data[]; .state != "waiting_key")'
+gapi GET "/assignments/$MIRROR_ID/review-queue?per_page=50"
+expect 200
+check '(.data | length) >= 1 and all(.data[]; .ai_score != null or .grading_state == "manual")'
+gapi POST "/assignments/$MIRROR_ID/approve-confident"
+expect 200
+gapi GET "/assignments/$MIRROR_ID/review-queue?per_page=50"
+for row in $(j '.data[] | select(.reviewed_at == null) | @base64'); do
+  r=$(base64 --decode <<<"$row")
+  gapi PATCH "/responses/$(jq -r '.id' <<<"$r")" "$(jq -c '{final_score:(.ai_score // 0), final_understanding:(.ai_understanding // "partial"), reason:"smoke: ตรวจทานแล้ว"}' <<<"$r")"
+  expect 200
+done
+gapi POST "/assignments/$MIRROR_ID/publish"
+expect 200
+check '.data.published == 1'
+gapi GET "/assignments/$MIRROR_ID/google-feedback"
+expect 200
+check 'any(.data[]; .state == "queued")'
+gwork
+gapi GET "/assignments/$MIRROR_ID/google-feedback"
+expect 200
+check '(.data | length) == 1 and .data[0].state == "posted" and .data[0].announcement_id != null'
+ANN=$(grecorded '[.recorded[] | select(.method == "POST" and (.url | test("/announcements$")))] | last | .body')
+jq -e --arg u "g1-$RUN" '.assigneeMode == "INDIVIDUAL_STUDENTS" and .individualStudentsOptions.studentIds == [$u] and (.text | length) > 0' <<<"$ANN" >/dev/null \
+  || fail "announcement body: $ANN"
+[ "$(grecorded '[.recorded[] | select(.method == "PATCH" and (.url | test("studentSubmissions")))] | length')" = "0" ] \
+  || fail "a grade was pushed to coursework the app does not own"
+ok "announcement to g1-$RUN only; no grade pushed to website coursework"
 
 # ---------------------------------------------------------------- wrap up
 step "health heartbeat and logout"
