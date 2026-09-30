@@ -306,4 +306,17 @@ class IndicatorSuggestionTest extends TestCase
         $this->assertCount(1, $this->gemini->requests);
         $this->assertNull(app(IndicatorSuggestions::class)->state($other->id)['status']);
     }
+
+    public function test_approving_again_after_a_round_that_found_nothing_does_not_pay_again(): void
+    {
+        Question::query()->where('assignment_id', $this->work->id)->update(['prompt_text' => 'ข้อที่ไม่เข้าตัวชี้วัดไหนเลย [fake:no-indicator]']);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->work->id}/answer-key/approve")->assertOk();
+        $this->assertSame('done', app(IndicatorSuggestions::class)->state($this->work->id)['status']);
+        $this->assertSame(0, IndicatorSuggestion::query()->count());
+        $calls = count($this->gemini->requests);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->work->id}/answer-key/approve")->assertOk();
+        $this->assertCount($calls, $this->gemini->requests);
+    }
 }

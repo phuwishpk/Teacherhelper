@@ -39,8 +39,9 @@ use Illuminate\Support\Str;
  * /answer-key reports.
  *
  * process(): the job's work: one Gemini call (AnswerKeyReader), the result
- * cached, then written into the questions (AnswerKeyApplier) of the
- * assignment still waiting for it.
+ * cached, then written into the questions (AnswerKeyApplier) of every
+ * assignment still waiting for it. A read has one job at a time: asking
+ * again while it is queued only points the assignment at it.
  *
  * estimate(): POST /answer-key/estimate, the same lookup without queueing
  * anything: pages, cost estimate and whether the cache already has it.
@@ -52,6 +53,9 @@ use Illuminate\Support\Str;
  */
 final class AnswerKeyService
 {
+    /** A job queued longer than this was lost (3 tries of 240 s plus backoff is about 16 min): a new request queues another. */
+    private const LOST_JOB_MINUTES = 20;
+
     public function __construct(
         private readonly GeminiKeyResolver $keys,
         private readonly AnswerKeyApplier $applier,
@@ -109,17 +113,27 @@ final class AnswerKeyService
         if ($extraction->isDone()) {
             return ['extraction' => $extraction, 'cached' => true, 'applied' => $this->applyTo($assignment, $extraction), 'estimate' => $estimate];
         }
-        if ($extraction->status === DocumentExtraction::STATUS_FAILED) {
-            $extraction->forceFill(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'requested_by' => $teacher->id])->save();
-        }
 
         AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($extraction) {
             $locked->key_extraction_id = $extraction->id;
             $locked->save();
         });
 
-        $args = [$extraction->id, $assignment->id, $selection->ids(), $selection->pageFrom, $selection->pageTo];
-        $read ? ExtractDocumentJob::dispatch(...$args) : DraftAnswerKeyJob::dispatch(...$args, coursework: $coursework);
+        // One job per read: a double tap, or a second assignment asking for the
+        // same files, waits for the job already queued (process() fills every
+        // assignment waiting on the extraction). Only a new row, a failed one
+        // asked again, or a queued one whose job was lost gets a job. Each claim
+        // is one conditional UPDATE, so two requests never both win it.
+        $dispatch = $extraction->wasRecentlyCreated
+            || DocumentExtraction::query()->whereKey($extraction->id)->where('status', DocumentExtraction::STATUS_FAILED)
+                ->update(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'requested_by' => $teacher->id, 'updated_at' => now()]) === 1
+            || DocumentExtraction::query()->whereKey($extraction->id)->where('status', DocumentExtraction::STATUS_QUEUED)
+                ->where('updated_at', '<', now()->subMinutes(self::LOST_JOB_MINUTES))
+                ->update(['updated_at' => now()]) === 1;
+        if ($dispatch) {
+            $args = [$extraction->id, $assignment->id, $selection->ids(), $selection->pageFrom, $selection->pageTo];
+            $read ? ExtractDocumentJob::dispatch(...$args) : DraftAnswerKeyJob::dispatch(...$args, coursework: $coursework);
+        }
 
         return ['extraction' => $extraction->refresh(), 'cached' => false, 'applied' => null, 'estimate' => $estimate];
     }
@@ -231,7 +245,7 @@ final class AnswerKeyService
             'error' => null,
         ])->save();
 
-        $this->applyIfWaiting($assignment, $extraction);
+        $this->applyToWaiting($extraction);
     }
 
     /** After the job ran out of tries. */
@@ -315,6 +329,15 @@ final class AnswerKeyService
         });
 
         return $this->applier->apply($assignment, AnswerKeyResult::fromArray((array) $extraction->result));
+    }
+
+    /** Every assignment that asked for this extraction and still waits for it (several share one job). */
+    private function applyToWaiting(DocumentExtraction $extraction): void
+    {
+        $waiting = Assignment::query()->where('key_extraction_id', $extraction->id)->with(['classroom', 'subject'])->orderBy('id')->get();
+        foreach ($waiting as $assignment) {
+            $this->applyIfWaiting($assignment, $extraction);
+        }
     }
 
     private function applyIfWaiting(Assignment $assignment, DocumentExtraction $extraction): void

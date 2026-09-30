@@ -100,7 +100,10 @@ final class IndicatorSuggestions
                 return;
             }
             $unmapped = Question::query()->where('assignment_id', $assignment->id)->whereDoesntHave('skills')->exists();
-            $suggested = IndicatorSuggestion::query()->whereIn('question_id', Question::query()->select('id')->where('assignment_id', $assignment->id))->exists();
+            // Suggested before: rows, or a finished round that found nothing fitting (no
+            // rows, cache status done): approving again must not pay for the same call.
+            $suggested = $this->state($assignment->id)['status'] === self::STATUS_DONE
+                || IndicatorSuggestion::query()->whereIn('question_id', Question::query()->select('id')->where('assignment_id', $assignment->id))->exists();
             if (! $unmapped || $suggested || $this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
                 return;
             }

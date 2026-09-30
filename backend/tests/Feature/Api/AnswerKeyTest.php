@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Api;
 
+use App\Domain\AnswerKeys\AnswerKeyService;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Pages\PdfPageCounter;
+use App\Jobs\ExtractDocumentJob;
 use App\Models\AiCall;
 use App\Models\Assignment;
 use App\Models\Classroom;
@@ -16,6 +18,7 @@ use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Mpdf\Mpdf;
@@ -244,6 +247,35 @@ class AnswerKeyTest extends TestCase
         $this->asUser($other)->getJson('/api/v1/document-extractions/'.DocumentExtraction::query()->orderBy('id')->first()->id)->assertNotFound();
         $this->asUser($colleague)->getJson('/api/v1/document-extractions/'.DocumentExtraction::query()->orderBy('id')->first()->id)
             ->assertOk()->assertJsonPath('data.status', 'done')->assertJsonPath('data.result.kind', 'answer_key_read');
+    }
+
+    public function test_asking_again_while_a_read_is_queued_does_not_queue_a_second_paid_call(): void
+    {
+        Queue::fake();
+        $ids = $this->documents([self::photo()]);
+        $url = "/api/v1/assignments/{$this->assignment->id}/answer-key/extract";
+
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => $ids])->assertStatus(202);
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => $ids])->assertStatus(202); // a double tap
+        $second = $this->freeform($this->classroom);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$second->id}/answer-key/extract", ['document_ids' => $ids])->assertStatus(202);
+        Queue::assertPushed(ExtractDocumentJob::class, 1);
+
+        // The one job fills every assignment that waits for the read.
+        $job = Queue::pushed(ExtractDocumentJob::class)->first();
+        $job->handle(app(AnswerKeyService::class));
+        $this->assertCount(1, $this->sent('answer_key_read'));
+        $this->assertSame(4, $this->assignment->questions()->count());
+        $this->assertSame(4, $second->questions()->count());
+
+        // A queued read whose job was lost is queued again by the next request.
+        $lost = $this->documents([self::photo('lost')]);
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => $lost])->assertStatus(202);
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => $lost])->assertStatus(202);
+        Queue::assertPushed(ExtractDocumentJob::class, 2);
+        $this->travel(21)->minutes();
+        $this->asUser($this->teacher)->postJson($url, ['document_ids' => $lost])->assertStatus(202);
+        Queue::assertPushed(ExtractDocumentJob::class, 3);
     }
 
     public function test_a_read_fills_the_existing_questions_by_position(): void
