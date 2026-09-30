@@ -89,18 +89,6 @@ class PageCrops {
   List<RegionCrop> regions;
 }
 
-/// The pages [ScanPipelineApi.rasterize] made from one attachment.
-class RasterizedAttachment {
-  RasterizedAttachment({required this.pagePaths, required this.totalPages});
-
-  /// JPEG paths, one per rendered page, in the pipeline's cache folder.
-  List<String> pagePaths;
-
-  /// Pages in the file: 1 for a picture, the PDF's page count otherwise.
-  /// More than `pagePaths.length` when a PDF was cut at the page limit.
-  int totalPages;
-}
-
 @HostApi()
 abstract class ScanPipelineApi {
   /// Finds the markers, reads the QR and measures blur on a full photo.
@@ -115,16 +103,4 @@ abstract class ScanPipelineApi {
     PageDetection detection,
     String layoutJson,
   );
-
-  /// Turns a file a student attached in Google Classroom (DESIGN §18.2)
-  /// into JPEG pages [detectPage] can read: the pages of a PDF (rendered
-  /// with PdfRenderer at about 200 DPI, the first 20 only; `totalPages`
-  /// tells the caller when more were skipped) or the one picture of an
-  /// image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
-  /// ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
-  /// mimeType, used as a hint; the file's own header decides.
-  /// Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
-  /// `storage_failed`.
-  @async
-  RasterizedAttachment rasterize(String inputPath, String mimeType);
 }

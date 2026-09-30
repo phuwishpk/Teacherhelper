@@ -392,56 +392,6 @@ data class PageCrops (
     return "PageCrops(warpedPagePath=$warpedPagePath, regions=$regions)"
   }
 }
-
-/**
- * The pages [ScanPipelineApi.rasterize] made from one attachment.
- *
- * Generated class from Pigeon that represents data sent in messages.
- */
-data class RasterizedAttachment (
-  /** JPEG paths, one per rendered page, in the pipeline's cache folder. */
-  val pagePaths: List<String>,
-  /**
-   * Pages in the file: 1 for a picture, the PDF's page count otherwise.
-   * More than `pagePaths.length` when a PDF was cut at the page limit.
-   */
-  val totalPages: Long
-)
- {
-  companion object {
-    fun fromList(pigeonVar_list: List<Any?>): RasterizedAttachment {
-      val pagePaths = pigeonVar_list[0] as List<String>
-      val totalPages = pigeonVar_list[1] as Long
-      return RasterizedAttachment(pagePaths, totalPages)
-    }
-  }
-  fun toList(): List<Any?> {
-    return listOf(
-      pagePaths,
-      totalPages,
-    )
-  }
-  override fun equals(other: Any?): Boolean {
-    if (other == null || other.javaClass != javaClass) {
-      return false
-    }
-    if (this === other) {
-      return true
-    }
-    val other = other as RasterizedAttachment
-    return ScanApiPigeonUtils.deepEquals(this.pagePaths, other.pagePaths) && ScanApiPigeonUtils.deepEquals(this.totalPages, other.totalPages)
-  }
-
-  override fun hashCode(): Int {
-    var result = javaClass.hashCode()
-    result = 31 * result + ScanApiPigeonUtils.deepHash(this.pagePaths)
-    result = 31 * result + ScanApiPigeonUtils.deepHash(this.totalPages)
-    return result
-  }
-  override fun toString(): String {
-    return "RasterizedAttachment(pagePaths=$pagePaths, totalPages=$totalPages)"
-  }
-}
 private open class ScanApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -458,11 +408,6 @@ private open class ScanApiPigeonCodec : StandardMessageCodec() {
       131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           PageCrops.fromList(it)
-        }
-      }
-      132.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          RasterizedAttachment.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -482,10 +427,6 @@ private open class ScanApiPigeonCodec : StandardMessageCodec() {
         stream.write(131)
         writeValue(stream, value.toList())
       }
-      is RasterizedAttachment -> {
-        stream.write(132)
-        writeValue(stream, value.toList())
-      }
       else -> super.writeValue(stream, value)
     }
   }
@@ -501,18 +442,6 @@ interface ScanPipelineApi {
    * [layoutJson] (one page of the layout JSON, DESIGN §5.3).
    */
   suspend fun cropPage(imagePath: String, detection: PageDetection, layoutJson: String): PageCrops
-  /**
-   * Turns a file a student attached in Google Classroom (DESIGN §18.2)
-   * into JPEG pages [detectPage] can read: the pages of a PDF (rendered
-   * with PdfRenderer at about 200 DPI, the first 20 only; `totalPages`
-   * tells the caller when more were skipped) or the one picture of an
-   * image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
-   * ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
-   * mimeType, used as a hint; the file's own header decides.
-   * Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
-   * `storage_failed`.
-   */
-  suspend fun rasterize(inputPath: String, mimeType: String): RasterizedAttachment
 
   companion object {
     /** The codec used by ScanPipelineApi. */
@@ -553,26 +482,6 @@ interface ScanPipelineApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.cropPage(imagePathArg, detectionArg, layoutJsonArg))
-              } catch (exception: Throwable) {
-                ScanApiPigeonUtils.wrapError(exception)
-              }
-              reply.reply(wrapped)
-            }
-          }
-        } else {
-          channel.setMessageHandler(null)
-        }
-      }
-      run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.eduvision.ScanPipelineApi.rasterize$separatedMessageChannelSuffix", codec)
-        if (api != null) {
-          channel.setMessageHandler { message, reply ->
-            val args = message as List<Any?>
-            val inputPathArg = args[0] as String
-            val mimeTypeArg = args[1] as String
-            CoroutineScope(Dispatchers.Main).launch {
-              val wrapped: List<Any?> = try {
-                listOf(api.rasterize(inputPathArg, mimeTypeArg))
               } catch (exception: Throwable) {
                 ScanApiPigeonUtils.wrapError(exception)
               }
