@@ -19,8 +19,8 @@ use App\Models\Submission;
  * (ExamAnswerScore::effective). Every published student lands in exactly one
  * bucket of an mcq / true_false question: one option (that option's count),
  * no mark (blank) or several marks (multiple), so the percentages add up to
- * 100. A published student without an answer row for the question counts as
- * blank. Numeric questions have no options: only blank (no readable value).
+ * 100. A published student without an answer row for the question, or whose
+ * one mark is on an option the section no longer has, counts as blank. Numeric questions have no options: only blank (no readable value).
  *
  * top / bottom: how many of the top and bottom 27 % by the total that counts
  * (ItemAnalysis::groups, effectiveTotal()) chose the option; null below
@@ -106,6 +106,9 @@ final class ExamOptionAnalysis
                     $counts[$position]++;
                     $topCounts[$position] += isset($topIds[$submission->id]) ? 1 : 0;
                     $bottomCounts[$position] += isset($bottomIds[$submission->id]) ? 1 : 0;
+                } else {
+                    // A mark on an option the section no longer has (option_count cut after scanning): no answer.
+                    $blank++;
                 }
             }
 

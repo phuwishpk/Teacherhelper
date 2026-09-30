@@ -5,6 +5,7 @@ namespace Tests\Feature\Exams;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Models\Assignment;
+use App\Models\ExamSection;
 use App\Models\LessonPlan;
 use App\Models\Mastery;
 use App\Models\Question;
@@ -201,6 +202,24 @@ class ExamAnalysisTest extends TestCase
         }
         // Students 1–19 on Q1: six ก, thirteen ข.
         $this->assertSame([6, 13, 0, 0], array_column($data['questions'][0]['options'], 'count'));
+    }
+
+    public function test_a_mark_on_an_option_that_is_gone_counts_as_blank(): void
+    {
+        $exam = $this->createExam(['version_count' => 2]);
+        $questions = $this->examQuestions($exam);
+        $this->publishClass($exam, $questions);
+        // The first section was cut to two options after the sheets were read.
+        ExamSection::query()->whereKey($questions[0]->section_id)->update(['option_count' => 2]);
+
+        $data = $this->asUser($this->teacher)->getJson("/api/v1/exams/{$exam->id}/option-analysis")->assertOk()->json('data');
+        // Q2: 17–22 ก; ค (1–6) and ง (7–16) are gone, so those ten and six are blank.
+        $q2 = $data['questions'][1];
+        $this->assertSame([6, 0], array_column($q2['options'], 'count'));
+        $this->assertSame(16, $q2['blank']['count']);
+        foreach (array_slice($data['questions'], 0, 3) as $question) {
+            $this->assertSame(22, array_sum(array_column($question['options'], 'count')) + $question['blank']['count'] + $question['multiple']['count']);
+        }
     }
 
     public function test_an_exam_nobody_was_published_for_and_who_may_read_it(): void
