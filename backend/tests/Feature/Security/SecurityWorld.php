@@ -26,6 +26,7 @@ use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
 use App\Models\Skill;
+use App\Models\StudentAnalysis;
 use App\Models\Subject;
 use App\Models\Submission;
 use App\Models\SubmissionPage;
@@ -72,6 +73,8 @@ trait SecurityWorld
     protected User $studentB;
 
     protected Classroom $classroomA;
+
+    protected StudentAnalysis $analysisA;
 
     protected Classroom $classroomB;
 
@@ -243,6 +246,13 @@ trait SecurityWorld
         $this->conflictA = GradeConflict::create([
             'submission_id' => $this->submissionA->id, 'import_id' => $this->importA->id,
             'app_score' => 5, 'classroom_score' => 4, 'detected_at' => now(),
+        ]);
+
+        // The analysis of student A in classroom A (§20.5), with a draft for the student.
+        $this->analysisA = StudentAnalysis::create([
+            'student_id' => $this->studentA->id, 'classroom_id' => $this->classroomA->id,
+            'computed_input_hash' => str_repeat('c', 64), 'strengths' => [], 'areas' => [],
+            'status' => StudentAnalysis::STATUS_DRAFTED, 'teacher_text' => 'ครู', 'student_text' => 'นักเรียน',
         ]);
     }
 

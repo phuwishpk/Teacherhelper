@@ -141,6 +141,12 @@ class AuthorizationMatrixTest extends TestCase
         // Chart data of §20.4: the teacher's own classrooms, students and assignments only.
         'api.classrooms.indicator-pass-rate' => ['GET', 'classrooms/{classroom}/indicator-pass-rate', 404, 404],
         'api.students.indicator-progress' => ['GET', 'students/{student}/indicator-progress', 404, 404],
+        // The per-student analysis of the teacher's own classrooms only (§20.5, §20.9).
+        'api.classrooms.analyses' => ['GET', 'classrooms/{classroom}/analyses', 404, 404],
+        'api.students.analysis' => ['GET', 'students/{student}/analysis', 404, 404],
+        'api.students.analysis.run' => ['POST', 'students/{student}/analysis/run', 404, 404],
+        'api.analyses.update' => ['PATCH', 'analyses/{analysis}', 404, 404],
+        'api.analyses.approve' => ['POST', 'analyses/{analysis}/approve', 404, 404],
         'api.assignments.score-distribution' => ['GET', 'assignments/{assignment}/score-distribution', 404, 404],
         'api.google.status' => ['GET', 'google/status', self::OK, self::OK],
         'api.google.disconnect' => ['DELETE', 'google/disconnect', self::OK, self::OK],
@@ -181,6 +187,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
         // Always the signed-in student's own lines (§20.9).
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
+        // Always the signed-in student's own shared texts (§20.5).
+        'api.student.analysis' => ['GET', 'student/analysis', self::OK, self::OK],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
         'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
         // A classmate hands in to the same assignment as themself (their own work).
@@ -388,6 +396,7 @@ class AuthorizationMatrixTest extends TestCase
             '{own_course}' => $this->courseA->id,
             '{unit}' => $this->unitA->id,
             '{lesson_plan}' => $this->lessonPlanA->id,
+            '{analysis}' => $this->analysisA->id,
         ]);
 
         if ($uri === 'scans') {

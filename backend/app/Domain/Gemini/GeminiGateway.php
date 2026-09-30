@@ -36,14 +36,17 @@ final class GeminiGateway
     }
 
     /**
+     * passes = 1 skips the retry of invalid output (the caller already had
+     * its first try, e.g. in a batch).
+     *
      * @param  array<array-key, GeminiCall>  $calls
      * @return array<array-key, CallOutcome> same keys
      */
-    public function run(array $calls, GeminiKey $key): array
+    public function run(array $calls, GeminiKey $key, int $passes = 2): array
     {
         $outcomes = [];
         $pending = $calls;
-        for ($pass = 1; $pass <= 2 && $pending !== []; $pass++) {
+        for ($pass = 1; $pass <= $passes && $pending !== []; $pass++) {
             $replies = $this->client->generate(
                 array_map(fn (GeminiCall $call) => $call->request, $pending),
                 $key->apiKey,
@@ -55,7 +58,7 @@ final class GeminiGateway
                 $outcome = self::judge($call, $reply);
                 $this->log($call, $reply, $outcome, $key);
 
-                if ($outcome->status === CallOutcome::INVALID_OUTPUT && $pass === 1) {
+                if ($outcome->status === CallOutcome::INVALID_OUTPUT && $pass < $passes) {
                     $retry[$id] = $call;
 
                     continue;
@@ -66,6 +69,20 @@ final class GeminiGateway
         }
 
         return $outcomes;
+    }
+
+    /**
+     * One reply that came back from the Batch API (DESIGN §20.8): judged
+     * like any call and logged to ai_calls with batch = TRUE. No retry here:
+     * the caller decides (StudentAnalyses retries invalid output once as an
+     * ordinary call).
+     */
+    public function judgeBatchReply(GeminiCall $call, GeminiReply $reply, GeminiKey $key): CallOutcome
+    {
+        $outcome = self::judge($call, $reply);
+        $this->log($call, $reply, $outcome, $key, batch: true);
+
+        return $outcome;
     }
 
     /** One call; throws unless the outcome is ok. */
@@ -135,7 +152,7 @@ final class GeminiGateway
         return $text;
     }
 
-    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key): void
+    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key, bool $batch = false): void
     {
         AiCall::create([
             'purpose' => $call->request->purpose,
@@ -161,6 +178,7 @@ final class GeminiGateway
             'image_count' => $call->request->images === [] ? null : min(255, count($call->request->images)),
             'question_count' => $call->questionCount === null ? null : min(255, $call->questionCount),
             'assignment_id' => $call->assignmentId,
+            'batch' => $batch,
         ]);
     }
 

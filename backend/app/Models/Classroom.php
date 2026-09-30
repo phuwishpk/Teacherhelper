@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $grade_level
  * @property int $academic_year
  * @property string $class_code
+ * @property bool $auto_share_analysis new analysis texts go to students without approval (§20.5)
  */
 class Classroom extends Model
 {
@@ -33,6 +34,7 @@ class Classroom extends Model
         'grade_level',
         'academic_year',
         'class_code',
+        'auto_share_analysis',
     ];
 
     /**
@@ -43,6 +45,7 @@ class Classroom extends Model
         return [
             'grade_level' => 'integer',
             'academic_year' => 'integer',
+            'auto_share_analysis' => 'boolean',
         ];
     }
 

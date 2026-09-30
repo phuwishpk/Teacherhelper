@@ -3,6 +3,8 @@
 namespace App\Domain\Gemini;
 
 use App\Models\Question;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Offline stand-in for Gemini (GEMINI_FAKE=true and every test): no network,
@@ -41,6 +43,12 @@ use App\Models\Question;
  * indicators whose code the question text mentions, else the first one;
  * see indicatorSuggestions() for its markers.
  *
+ * `student_analysis` (DESIGN §20.5) writes a teacher and a student text
+ * from hints.indicators; see analysis() for its markers. Batches
+ * (GeminiBatchClient) are answered at once: submitBatch() answers every
+ * request like generate() and keeps the replies in the cache, and
+ * batchStatus() returns them as succeeded.
+ *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
@@ -49,7 +57,7 @@ use App\Models\Question;
  * listModels() refuses keys containing "invalid" and fails for keys
  * containing "unavailable".
  */
-class FakeGeminiClient implements GeminiClient
+class FakeGeminiClient implements GeminiBatchClient, GeminiClient
 {
     /** @var array<string, int> request signature => times seen (for [fake:invalid-once]) */
     private array $seen = [];
@@ -92,6 +100,34 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return [$this->model, 'gemini-3.5-flash-lite', 'text-embedding-004'];
+    }
+
+    /** How long a fake batch stays readable (the cache of the queue worker or the test). */
+    private const BATCH_TTL_SECONDS = 172800;
+
+    public function submitBatch(array $requests, string $displayName, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        if (stripos($apiKey, 'rejected') !== false) {
+            throw new GeminiException('HTTP 400: API key not valid. Please pass a valid API key.', GeminiException::KEY_INVALID);
+        }
+        $name = 'batches/fake-'.Str::lower(Str::random(16));
+        $replies = [];
+        foreach ($this->generate($requests, $apiKey) as $key => $reply) {
+            $replies[(string) $key] = $reply;
+        }
+        Cache::put('fake-gemini-batch:'.$name, $replies, self::BATCH_TTL_SECONDS);
+
+        return new GeminiBatch($name, GeminiBatch::PENDING);
+    }
+
+    public function batchStatus(string $name, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        $replies = Cache::get('fake-gemini-batch:'.$name);
+        if (! is_array($replies)) {
+            throw new GeminiException('HTTP 404: batch not found');
+        }
+
+        return new GeminiBatch($name, GeminiBatch::SUCCEEDED, $replies);
     }
 
     private function answer(GeminiRequest $request, string $apiKey): GeminiReply
@@ -142,6 +178,11 @@ class FakeGeminiClient implements GeminiClient
                 $has('invalid') => 'not json at all {',
                 $has('practice-bad-key') => ['items' => [['prompt_th' => 'x', 'answer_type' => 'mcq', 'options' => ['ก', 'ข'], 'accepted_answers' => ['ค'], 'explanation_th' => 'y']]],
                 default => self::practice($request),
+            },
+            'student_analysis' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('invalid') => 'not json at all {',
+                default => self::analysis($request, $has('weak-word') || ($has('weak-word-once') && $this->seen[$signature] === 1)),
             },
             'check' => ['ok' => true, 'word_th' => 'สวัสดี'], // eduvision:gemini-check --generate
             default => GeminiReply::error("the fake does not answer {$request->purpose}", 0, 501),
@@ -588,6 +629,40 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return ['questions' => $out];
+    }
+
+    /**
+     * `student_analysis` (DESIGN §20.5): hints.indicators is the input
+     * ({code, name, mastery, n_obs, practice_items}); the strengths and
+     * areas are the codes of hints.strength_codes / hints.area_codes, and
+     * the next steps the areas that have approved practice. Markers (in the
+     * subject or an indicator name): [fake:weak-word] the student text says
+     * "อ่อน" every time, [fake:weak-word-once] only the first time,
+     * [fake:error] HTTP 503, [fake:invalid] not JSON.
+     *
+     * @return array<string, mixed>
+     */
+    private static function analysis(GeminiRequest $request, bool $weakWord): array
+    {
+        $indicators = array_values(array_filter((array) ($request->hints['indicators'] ?? []), 'is_array'));
+        $strengths = array_values(array_map('strval', (array) ($request->hints['strength_codes'] ?? [])));
+        $areas = array_values(array_map('strval', (array) ($request->hints['area_codes'] ?? [])));
+        $practice = [];
+        foreach ($indicators as $indicator) {
+            if ((int) ($indicator['practice_items'] ?? 0) > 0) {
+                $practice[] = (string) ($indicator['code'] ?? '');
+            }
+        }
+        $next = array_values(array_slice(array_intersect($areas, $practice), 0, 3));
+
+        $teacher = 'จุดเด่น: '.($strengths === [] ? 'ยังไม่มี' : implode(', ', $strengths))
+            .' จุดที่ควรพัฒนา: '.($areas === [] ? 'ไม่มี' : implode(', ', $areas))
+            .' ขั้นต่อไป: '.($next === [] ? 'ทบทวนตามแผน' : 'ทำแบบฝึกซ่อม '.implode(', ', $next));
+        $student = $weakWord
+            ? 'เรื่องนี้หนูยังอ่อนอยู่ ลองฝึกเพิ่มนะ'
+            : 'ทำได้ดีมาก '.($strengths === [] ? 'ตั้งใจต่อไปนะ' : 'โดยเฉพาะ '.implode(', ', $strengths)).($next === [] ? '' : ' ลองทำแบบฝึก '.implode(', ', $next).' เพิ่มอีกนิดนะ');
+
+        return ['teacher_text' => $teacher, 'student_text' => $student, 'next_step_skill_codes' => $next];
     }
 
     private function rubric(GeminiRequest $request, bool $invalid): array

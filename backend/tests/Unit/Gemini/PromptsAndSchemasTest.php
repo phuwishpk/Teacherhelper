@@ -34,6 +34,7 @@ class PromptsAndSchemasTest extends TestCase
             'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 2, 'medium', 4096],
             'document_read' => ['document_read', 'general', 0.0, 1, 'medium', 16384],
             'indicator_suggest' => ['indicator_suggest', 'general', 0.0, 1, 'low', 1024],
+            'student_analysis' => ['student_analysis', 'general', 0.4, 1, 'low', 1536],
         ];
     }
 

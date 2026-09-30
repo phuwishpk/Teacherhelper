@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Domain\Gemini\FakeGeminiClient;
+use App\Domain\Gemini\GeminiBatchClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\HttpGeminiClient;
 use App\Domain\Gemini\PromptRepository;
@@ -38,6 +39,14 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return HttpGeminiClient::fromConfig();
+        });
+        // The Batch API (DESIGN §20.8) goes through the same transport, so the
+        // fake answers batches too. Resolved on every use: a test that swaps
+        // GeminiClient swaps the batches with it.
+        $this->app->bind(GeminiBatchClient::class, function ($app) {
+            $client = $app->make(GeminiClient::class);
+
+            return $client instanceof GeminiBatchClient ? $client : HttpGeminiClient::fromConfig();
         });
         $this->app->singleton(PromptRepository::class);
 
@@ -125,6 +134,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('course-extract', fn (Request $request) => self::perUser($request, 10));
         // Indicator suggestions of an assignment (§20.3): one Gemini job per request.
         RateLimiter::for('indicator-suggest', fn (Request $request) => self::perUser($request, 10));
+        // "วิเคราะห์ตอนนี้" calls Gemini synchronously in the request (§20.5).
+        RateLimiter::for('analysis-now', fn (Request $request) => self::perUser($request, 10));
         RateLimiter::for('documents', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));

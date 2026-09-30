@@ -33,8 +33,11 @@ use Throwable;
  * The key travels only in the header, so it never appears in a URL, a log
  * line or an exception message. Requests run through Http::pool with at most
  * `concurrency` in flight; each has its own timeout (30 s).
+ *
+ * The Batch API (GeminiBatchClient, DESIGN §20.8) sends the same
+ * generateContent bodies as inline requests.
  */
-final class HttpGeminiClient implements GeminiClient
+final class HttpGeminiClient implements GeminiBatchClient, GeminiClient
 {
     private const ERROR_LIMIT = 300;
 
@@ -222,6 +225,18 @@ final class HttpGeminiClient implements GeminiClient
         if (! is_array($json)) {
             return GeminiReply::error('the response body is not JSON', $latency, $result->status());
         }
+
+        return self::replyFromBody($json, $latency, $result->status());
+    }
+
+    /**
+     * A GenerateContentResponse body (of a call, or of one inline request of
+     * a batch) as a reply.
+     *
+     * @param  array<mixed>  $json
+     */
+    private static function replyFromBody(array $json, ?int $latency, int $httpStatus = 200): GeminiReply
+    {
         $usage = (array) ($json['usageMetadata'] ?? []);
         $input = isset($usage['promptTokenCount']) ? (int) $usage['promptTokenCount'] : null;
         $cached = isset($usage['cachedContentTokenCount']) ? (int) $usage['cachedContentTokenCount'] : null;
@@ -231,7 +246,7 @@ final class HttpGeminiClient implements GeminiClient
             : null;
 
         if (isset($json['promptFeedback']['blockReason'])) {
-            return new GeminiReply(GeminiReply::ERROR, null, $input, $output, $latency, 'prompt blocked: '.$json['promptFeedback']['blockReason'], 200);
+            return new GeminiReply(GeminiReply::ERROR, null, $input, $output, $latency, 'prompt blocked: '.$json['promptFeedback']['blockReason'], $httpStatus);
         }
 
         // The answer is the text of the non-thought parts of the first candidate;
@@ -246,6 +261,123 @@ final class HttpGeminiClient implements GeminiClient
         $finish = $json['candidates'][0]['finishReason'] ?? null;
 
         return GeminiReply::ok($text, $input, $output, $latency, $cached, $thinking, is_string($finish) ? $finish : null);
+    }
+
+    public function submitBatch(array $requests, string $displayName, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        $inline = [];
+        foreach ($requests as $key => $request) {
+            $inline[] = ['request' => $this->payload($request), 'metadata' => ['key' => (string) $key]];
+        }
+        $body = ['batch' => [
+            'display_name' => Str::limit($displayName, 120, ''),
+            'input_config' => ['requests' => ['requests' => $inline]],
+        ]];
+
+        $json = $this->batchCall(fn () => Http::withHeaders(['x-goog-api-key' => $apiKey])
+            ->acceptJson()
+            ->asJson()
+            ->connectTimeout(10)
+            ->timeout(max($this->timeout, 60))
+            ->post($this->baseUrl.'/models/'.$this->model.':batchGenerateContent', $body));
+
+        $name = $json['name'] ?? ($json['metadata']['name'] ?? null);
+        if (! is_string($name) || ! self::isBatchName($name)) {
+            throw new GeminiException('the batch was created without a usable name');
+        }
+
+        return self::batchFromBody($json, $name);
+    }
+
+    public function batchStatus(string $name, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        if (! self::isBatchName($name)) {
+            throw new GeminiException('not a batch name: '.Str::limit($name, 60));
+        }
+        $json = $this->batchCall(fn () => Http::withHeaders(['x-goog-api-key' => $apiKey])
+            ->acceptJson()
+            ->connectTimeout(10)
+            ->timeout(max($this->timeout, 60))
+            ->get($this->baseUrl.'/'.$name));
+
+        return self::batchFromBody($json, $name);
+    }
+
+    /**
+     * @param  callable(): Response  $send
+     * @return array<mixed>
+     */
+    private function batchCall(callable $send): array
+    {
+        try {
+            $response = $send();
+        } catch (ConnectionException $e) {
+            throw new GeminiException('Gemini is unreachable: '.Str::limit($e->getMessage(), self::ERROR_LIMIT));
+        }
+        if (! $response->successful()) {
+            $message = 'HTTP '.$response->status().': '.self::errorMessage($response);
+            throw new GeminiException($message, self::keyRejected($response) ? GeminiException::KEY_INVALID : GeminiException::ERROR);
+        }
+        $json = $response->json();
+        if (! is_array($json)) {
+            throw new GeminiException('the batch response is not JSON');
+        }
+
+        return $json;
+    }
+
+    private static function isBatchName(string $name): bool
+    {
+        return preg_match('#^batches/[A-Za-z0-9_-]{1,100}$#', $name) === 1;
+    }
+
+    /**
+     * The batch operation (or the batch resource itself): the state is at
+     * metadata.state (or state); the results of inline requests at
+     * response.inlinedResponses, either a list or {inlinedResponses: [...]}
+     * (both shapes seen in Google's documentation), each with the request's
+     * metadata.key and a response or an error. A result without a key takes
+     * its position.
+     *
+     * @param  array<mixed>  $json
+     */
+    private static function batchFromBody(array $json, string $name): GeminiBatch
+    {
+        $state = GeminiBatch::normaliseState($json['metadata']['state'] ?? $json['state'] ?? null);
+        $error = isset($json['error']['message']) && is_string($json['error']['message'])
+            ? Str::limit($json['error']['message'], self::ERROR_LIMIT)
+            : null;
+        if ($error !== null && $state === GeminiBatch::UNKNOWN) {
+            $state = GeminiBatch::FAILED;
+        }
+
+        $replies = [];
+        if ($state === GeminiBatch::SUCCEEDED) {
+            $inlined = $json['response']['inlinedResponses']
+                ?? $json['metadata']['output']['inlinedResponses']
+                ?? $json['output']['inlinedResponses']
+                ?? [];
+            if (is_array($inlined) && isset($inlined['inlinedResponses']) && is_array($inlined['inlinedResponses'])) {
+                $inlined = $inlined['inlinedResponses'];
+            }
+            foreach (array_values(is_array($inlined) ? $inlined : []) as $i => $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $key = $item['metadata']['key'] ?? null;
+                $key = is_string($key) || is_int($key) ? (string) $key : (string) $i;
+                if (isset($item['error'])) {
+                    $message = is_array($item['error']) ? (string) ($item['error']['message'] ?? 'error') : 'error';
+                    $replies[$key] = GeminiReply::error('batch request failed: '.Str::limit($message, self::ERROR_LIMIT));
+                } elseif (is_array($item['response'] ?? null)) {
+                    $replies[$key] = self::replyFromBody($item['response'], null);
+                } else {
+                    $replies[$key] = GeminiReply::error('batch request without a response');
+                }
+            }
+        }
+
+        return new GeminiBatch($name, $state, $replies, $error);
     }
 
     private static function latency(Response $response): ?int

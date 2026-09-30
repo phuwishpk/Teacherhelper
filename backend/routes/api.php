@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AiKeyController;
+use App\Http\Controllers\Api\V1\AnalysisController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AnswerKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
@@ -148,6 +149,14 @@ Route::prefix('v1')->group(function () {
                 Route::get('classrooms/{id}/indicator-pass-rate', [ChartController::class, 'passRate'])->name('api.classrooms.indicator-pass-rate');
                 Route::get('students/{id}/indicator-progress', [ChartController::class, 'studentProgress'])->name('api.students.indicator-progress');
                 Route::get('assignments/{id}/score-distribution', [ChartController::class, 'scoreDistribution'])->name('api.assignments.score-distribution');
+                // The per-student analysis (§20.5): code-computed strengths and areas, Gemini's texts
+                // (nightly batch, or "วิเคราะห์ตอนนี้" which calls Gemini in the request, so it is
+                // throttled), the teacher's edits and approval.
+                Route::get('classrooms/{id}/analyses', [AnalysisController::class, 'classroom'])->name('api.classrooms.analyses');
+                Route::get('students/{id}/analysis', [AnalysisController::class, 'show'])->name('api.students.analysis');
+                Route::post('students/{id}/analysis/run', [AnalysisController::class, 'run'])->middleware('throttle:analysis-now')->name('api.students.analysis.run');
+                Route::patch('analyses/{id}', [AnalysisController::class, 'update'])->name('api.analyses.update');
+                Route::post('analyses/{id}/approve', [AnalysisController::class, 'approve'])->name('api.analyses.approve');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');
@@ -264,6 +273,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('courses', [StudentCourseController::class, 'index'])->name('api.student.courses.index');
                 Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
+                // Only the analysis texts the teacher shared, never the teacher's version (§20.5).
+                Route::get('analysis', [AnalysisController::class, 'mine'])->name('api.student.analysis');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Hand in from the app (§19.6): open assignments and a whole-page submission.
                 Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');

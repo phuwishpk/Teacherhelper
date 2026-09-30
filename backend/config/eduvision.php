@@ -99,6 +99,12 @@ return [
         'pass_threshold' => min(1.0, max(0.0, (float) env('MASTERY_PASS_THRESHOLD', 0.5))),
     ],
 
+    // The nightly student analysis through the Gemini Batch API (DESIGN §20.8):
+    // at most batch_max inline requests per batch (one batch per key).
+    'analysis' => [
+        'batch_max' => max(1, (int) env('ANALYSIS_BATCH_MAX', 200)),
+    ],
+
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 
