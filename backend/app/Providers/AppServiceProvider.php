@@ -145,6 +145,8 @@ class AppServiceProvider extends ServiceProvider
         // A student hands in a few times at most; a teacher uploads a class one student at a time.
         RateLimiter::for('student-submission', fn (Request $request) => self::perUser($request, 10));
         RateLimiter::for('page-upload', fn (Request $request) => self::perUser($request, 60));
+        // Exam question and option images (§22.15): GD scales each one in the request.
+        RateLimiter::for('exam-images', fn (Request $request) => self::perUser($request, 60));
     }
 
     /** A per-user limit (per address before login; these routes all need a token). */

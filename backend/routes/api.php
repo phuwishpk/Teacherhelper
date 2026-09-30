@@ -15,6 +15,9 @@ use App\Http\Controllers\Api\V1\CourseController;
 use App\Http\Controllers\Api\V1\CourseDocumentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\ExamController;
+use App\Http\Controllers\Api\V1\ExamImageController;
+use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
@@ -190,6 +193,24 @@ Route::prefix('v1')->group(function () {
                 // Free: what extract/draft would cost for the picked files and range, and whether it is cached.
                 Route::post('assignments/{id}/answer-key/estimate', [AnswerKeyController::class, 'estimate'])->name('api.assignments.answer-key.estimate');
                 Route::post('assignments/{id}/answer-key/approve', [AnswerKeyController::class, 'approve'])->name('api.assignments.answer-key.approve');
+
+                // Exams: sections, questions, images, the answer key and the shuffled versions (§22.15).
+                Route::get('exams/{id}', [ExamController::class, 'show'])->name('api.exams.show');
+                Route::post('exams/{id}/sections', [ExamController::class, 'storeSection'])->name('api.exams.sections.store');
+                Route::post('exams/{id}/questions/approve', [ExamController::class, 'approveQuestions'])->name('api.exams.questions.approve');
+                Route::put('exams/{id}/answer-key', [ExamController::class, 'answerKey'])->name('api.exams.answer-key');
+                Route::get('exams/{id}/versions', [ExamController::class, 'versions'])->name('api.exams.versions');
+                Route::post('exams/{id}/versions/reshuffle', [ExamController::class, 'reshuffle'])->name('api.exams.versions.reshuffle');
+                Route::post('exams/{id}/unlock-structure', [ExamController::class, 'unlockStructure'])->name('api.exams.unlock-structure');
+                Route::patch('exam-sections/{id}', [ExamSectionController::class, 'update'])->name('api.exam-sections.update');
+                Route::delete('exam-sections/{id}', [ExamSectionController::class, 'destroy'])->name('api.exam-sections.destroy');
+                Route::post('exam-sections/{id}/questions', [ExamSectionController::class, 'storeQuestion'])->name('api.exam-sections.questions.store');
+                Route::get('questions/{id}/image', [ExamImageController::class, 'showQuestion'])->name('api.questions.image.show');
+                Route::post('questions/{id}/image', [ExamImageController::class, 'storeQuestion'])->middleware('throttle:exam-images')->name('api.questions.image.store');
+                Route::delete('questions/{id}/image', [ExamImageController::class, 'destroyQuestion'])->name('api.questions.image.destroy');
+                Route::get('question-options/{id}/image', [ExamImageController::class, 'showOption'])->name('api.question-options.image.show');
+                Route::post('question-options/{id}/image', [ExamImageController::class, 'storeOption'])->middleware('throttle:exam-images')->name('api.question-options.image.store');
+                Route::delete('question-options/{id}/image', [ExamImageController::class, 'destroyOption'])->name('api.question-options.image.destroy');
 
                 Route::patch('questions/{id}', [QuestionController::class, 'update'])->name('api.questions.update');
                 Route::delete('questions/{id}', [QuestionController::class, 'destroy'])->name('api.questions.destroy');

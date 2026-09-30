@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\QuestionData;
 use App\Domain\Assignments\QuestionEditor;
+use App\Domain\Exams\ExamEditor;
+use App\Domain\Exams\ExamGuard;
+use App\Domain\Exams\ExamPayload;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\QuestionResource;
 use App\Models\Question;
@@ -19,24 +22,40 @@ use Illuminate\Support\Facades\Gate;
  */
 class QuestionController extends Controller
 {
-    public function __construct(private readonly QuestionEditor $editor) {}
+    public function __construct(
+        private readonly QuestionEditor $editor,
+        private readonly ExamEditor $exams,
+    ) {}
 
     /** POST /api/v1/assignments/{id}/questions -> 201 {data: question} */
     public function store(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
+        // Exam questions are added through POST /exam-sections/{id}/questions.
+        ExamGuard::homeworkOnly($assignment);
 
         $question = $this->editor->create($assignment, $request->only(QuestionData::FIELDS));
 
         return (new QuestionResource(self::loadDetail($question)))->response()->setStatusCode(201);
     }
 
-    /** PATCH /api/v1/questions/{id} -> {data: question}; absent fields keep their value */
-    public function update(Request $request, int $id): QuestionResource
+    /**
+     * PATCH /api/v1/questions/{id} -> {data: question}; absent fields keep
+     * their value. An exam question takes the exam fields (DESIGN §22.15:
+     * prompt_text, options, max_points, answer_key in the exam shape,
+     * lock_options, approve, position within its section, skill_ids) and
+     * answers with the exam question payload.
+     */
+    public function update(Request $request, int $id): QuestionResource|JsonResponse
     {
         $question = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $question);
+        if ($question->isExamQuestion()) {
+            $question = $this->exams->updateQuestion($question, $request->only(ExamEditor::QUESTION_FIELDS));
+
+            return response()->json(['data' => ExamPayload::question($question)]);
+        }
 
         $question = $this->editor->update($question, $request->only(QuestionData::FIELDS));
 
@@ -49,7 +68,11 @@ class QuestionController extends Controller
         $question = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('delete', $question);
 
-        $this->editor->delete($question);
+        if ($question->isExamQuestion()) {
+            $this->exams->deleteQuestion($question);
+        } else {
+            $this->editor->delete($question);
+        }
 
         return response()->noContent();
     }

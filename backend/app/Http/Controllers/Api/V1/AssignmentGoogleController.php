@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Google\ClassroomFeedback;
 use App\Domain\Google\CourseWorkPoster;
 use App\Domain\Google\GoogleSubmissionSync;
@@ -167,6 +168,7 @@ class AssignmentGoogleController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('manageGoogle', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         return $assignment;
     }

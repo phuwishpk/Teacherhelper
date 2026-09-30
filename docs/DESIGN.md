@@ -2999,6 +2999,7 @@ ALTER TABLE ai_calls
 
 - เกณฑ์การฝนใช้ค่าเดิมของ §11.6: `fill ≥ 0.45` = ฝน, `0.20 ≤ fill < 0.45` = ไม่ชัด (หลังปรับค่าพื้นฐานตาม §22.9)
 - **รูปมาตรฐานของตัวเลข** (`NumericAnswer::canonical`, ต้องเขียนเหมือนกันใน Dart): ตัดศูนย์นำหน้าของส่วนจำนวนเต็ม (เหลือ `0` อย่างน้อยหนึ่งตัว), ตัดศูนย์ท้ายของทศนิยมและจุดที่ไม่มีทศนิยมตาม, `.5` → `0.5`, `-0` → `0` เทียบแบบข้อความหลังทำรูปมาตรฐาน ไม่มีค่าความคลาดเคลื่อน (ครูใส่ค่าที่ยอมรับหลายค่าแทน)
+- **"ใส่ลงช่องได้"** (`NumericAnswer::fits`, build 1): ค่าติดลบต้องมีช่องเครื่องหมาย ค่าทศนิยมต้องมีช่องจุด และจำนวนหลักรวมจุดต้องไม่เกินจำนวนคอลัมน์ของบล็อก = `numeric_digits` + 1 เมื่อมีทศนิยม (ทุกคอลัมน์มีวง 0–9 ตาม §22.7 จึงเขียนจำนวนเต็มได้เต็มทุกคอลัมน์) ค่าที่น้อยกว่า 1 ละ `0` นำหน้าได้ (`.5` ใช้ 2 คอลัมน์)
 - **เฉลยครบ** (ใช้ตอนอนุมัติ): ทุกข้อได้รับการอนุมัติของครู (`questions.approved_at`, §22.4) และมีคำตอบที่ยอมรับอย่างน้อย 1 ค่า ค่าที่ยอมรับของ `numeric` ต้องใส่ลงช่องของตอนได้ (จำนวนหลัก เครื่องหมาย ทศนิยม) ไม่อย่างนั้น 422 `answer_key_incomplete` (`errors.questions` บอกเลขข้อ) ตามรหัสเดิมของ §19.9
 - **ประตูอนุมัติเฉลย** ใช้ `key_approved_at` เดิม: `POST /assignments/{id}/answer-key/approve` ของข้อสอบใช้กติกาเฉลยครบข้างบน ตั้ง `key_approved_at` และเปลี่ยน `draft` → `ready` **ต้องอนุมัติก่อนพิมพ์เล่มหรือกระดาษคำตอบให้นักเรียน** (409 `answer_key_not_approved`) ส่วน**กระดาษเฉลยของครู**พิมพ์ได้ก่อนอนุมัติ (ใช้กรอกเฉลย)
 - **กรอกเฉลยได้สองทาง**
@@ -3055,7 +3056,7 @@ ALTER TABLE ai_calls
    - ทุกครั้งที่ครูสั่งอ่าน server บันทึกแถว `exam_imports` (ข้อสอบ, extraction, รายการไฟล์ตามลำดับที่ส่งพร้อมช่วงหน้า, ผู้สั่ง) ใช้แปลง `figure.file` เป็น `source_document_id` และเป็น**หลักฐานสิทธิ์**ของการโหลดไฟล์ต้นฉบับด้านล่าง
    - ข้อที่ฝนไม่ได้ (อัตนัย เขียนตอบ) ไม่ถูกสร้าง และแสดงใน `skipped` ให้ครูเห็น ข้อความและภาพของนักเรียนไม่เกี่ยวกับทางนี้เลย
    - ผลเขียนเป็นตอนและข้อ**ร่าง** (`origin = document`, `approved_at = NULL`) ต่อท้ายตอนที่มีอยู่ ครู**ต้องตรวจและอนุมัติทุกข้อและทุกเฉลย** (ปุ่ม "อนุมัติข้อนี้" หรือ "อนุมัติที่เลือก") ก่อนพิมพ์ ข้อที่ยังไม่อนุมัติทำให้เฉลยไม่ครบ (§22.3)
-   - **ตัดภาพประกอบ**: server ตัดด้วย GD เบาๆ จากภาพหน้าเอกสาร (`exam_page_images`) ตาม `box_2d` ขยายขอบ 2% ย่อด้านยาวไม่เกิน 1,600 px บันทึก JPEG คุณภาพ 85 ที่ `exams/{school}/{assignment}/figures/{id}.jpg` ภาพหน้าเอกสารได้มาจาก
+   - **ตัดภาพประกอบ**: server ตัดด้วย GD เบาๆ จากภาพหน้าเอกสาร (`exam_page_images`) ตาม `box_2d` ขยายขอบ 2% ย่อด้านยาวไม่เกิน 1,600 px บันทึก JPEG คุณภาพ 85 ที่ `exams/{school}/{assignment}/figures/q{question_id}.jpg` (ภาพโจทย์) หรือ `o{option_id}.jpg` (ภาพตัวเลือก) คำนำหน้า q/o กัน id ของข้อและตัวเลือกชนกัน (build 1) ภาพหน้าเอกสารได้มาจาก
      - ไฟล์ JPEG/PNG/WebP: server ถอดด้วย GD เอง (ไฟล์ไม่เกิน 10 MB, ด้านยาวไม่เกิน 6,000 px ไม่อย่างนั้นไม่ตัดและแจ้ง)
      - PDF และ HEIC (GD อ่านไม่ได้ และ server ไม่มี CPU ให้ render PDF): **แอป Android render หน้าที่มีภาพประกอบ** ด้วย `PdfRenderer`/`BitmapFactory` ของ Android ผ่าน Pigeon (`renderDocumentPage`, ด้านยาวไม่เกิน 2,000 px, JPEG จาก Kotlin) แล้วอัปโหลดทีละหน้า (`POST /exams/{id}/page-images`) ถ้าในเครื่องไม่มีไฟล์ แอปโหลดจาก `GET /exams/{id}/documents/{document_id}/file` ได้**เฉพาะไฟล์ที่อยู่ใน `exam_imports` ของข้อสอบนั้น และข้อสอบเป็นของครูผู้เรียก** (policy ของการบ้าน) นอกนั้น 404 แม้อยู่โรงเรียนเดียวกัน (`source_documents` ใช้ร่วมกันทั้งโรงเรียนด้วย SHA-256 และ id เรียงลำดับ การเปิดตาม "โรงเรียนเดียวกัน" จะให้ครูโหลดไฟล์ของครูคนอื่น เช่นข้อสอบที่มีเฉลยหรือแผนการสอนได้) ไฟล์ถูกลบตามรอบ 30 วันแล้วตอบ 404 `document_missing` บนเว็บ (Chrome) render ไม่ได้ ข้อจะมีป้าย "ยังไม่มีภาพประกอบ" ให้ครูแนบรูปเอง
    - ครู**ลากกรอบใหม่บนภาพหน้าเอกสาร**ได้ทุกภาพ (`PUT /questions/{id}/figure`, `PUT /question-options/{id}/figure`) server ตัดใหม่จากภาพหน้าเดิม ที่มาของภาพเก็บใน `figure_source` (`{page_image_id, box_2d}`) ภาพที่ครูแนบเองมี `figure_source = NULL`
@@ -3266,7 +3267,7 @@ CREATE TABLE question_options (
   question_id    BIGINT UNSIGNED NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
   position       TINYINT UNSIGNED NOT NULL,          -- 1–6 = ก–ฉ ในลำดับต้นฉบับ
   text           TEXT NULL,
-  image_path     VARCHAR(255) NULL,                  -- exams/{school}/{assignment}/figures/{id}.jpg
+  image_path     VARCHAR(255) NULL,                  -- exams/{school}/{assignment}/figures/o{id}.jpg (ภาพโจทย์ q{id}.jpg)
   figure_source  JSON NULL,
   created_at     TIMESTAMP NULL,
   updated_at     TIMESTAMP NULL,
@@ -3364,14 +3365,15 @@ ALTER TABLE skill_observations
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
 | POST / PATCH | `/assignments`, `/assignments/{id}` | ครู | รับ field ใหม่ `kind` (ตั้งได้ตอนสร้างเท่านั้น), `grading_method`, `version_count`, `duration_minutes`, `show_key_to_students`, `manual_full_marks` (บังคับเมื่อ `manual`) และ `gradebook_category_id`, `excluded_from_grade` (§23) `GET /assignments` กรองด้วย `kind` ได้ |
-| GET | `/exams/{id}` | ครู | โครงสร้างเต็ม `{exam, sections: [{…, questions: [{…, options[], answer_key, approved_at, lock_options, lock_options_suggested, skill_ids}]}], key_complete, incomplete_questions, versions_ready, structure_locked_at, sheet: {pages, overflow}}` |
+| GET | `/exams/{id}` | ครู | โครงสร้างเต็ม `{exam, sections: [{…, questions: [{…, options[], answer_key, approved_at, blank, lock_options, lock_options_suggested, skill_ids}]}], key_complete, incomplete_questions, booklet_incomplete_questions, versions_ready, structure_locked_at, sheet: {pages, overflow}}` รายการข้อที่ยังไม่ครบเป็น `{question_id, position, reasons[]}` เหตุคือ `not_approved`, `no_key` (กติกาเฉลยครบ) หรือ `no_prompt` (กติกาของเล่ม §22.4) |
 | POST | `/exams/{id}/sections` | ครู | `{title?, instructions?, type, option_count?, numeric?: {digits, allow_negative, allow_decimal}, default_points?, question_count?}` (สร้างข้อว่างได้ทีละไม่เกิน 100 ข้อว่าง `approved_at = NULL` จนกว่าจะกรอกตาม §22.4) |
-| PATCH / DELETE | `/exam-sections/{id}` | ครู | ย้ายตำแหน่งด้วย `position` เลขข้อทั้งฉบับเรียงใหม่ โครงสร้างล็อกอยู่ 409 `exam_structure_locked` |
+| PATCH / DELETE | `/exam-sections/{id}` | ครู | ย้ายตำแหน่งด้วย `position` เลขข้อทั้งฉบับเรียงใหม่ โครงสร้างล็อกอยู่ 409 `exam_structure_locked` ชนิดของตอนเปลี่ยนไม่ได้ (422 ลบแล้วสร้างใหม่) ลด `option_count` ลบตัวเลือกท้ายและตัดตัวเลือกนั้นออกจากเฉลย เปลี่ยน `default_points` ใช้กับข้อที่ยังเป็นคะแนนตั้งต้นเดิม ตอนเกิน 10 ตอน 422 `validation_failed` ข้อรวมเกิน 200 ข้อ 422 `too_many_questions` (รหัสเดิม) |
 | POST | `/exam-sections/{id}/questions` | ครู | `{prompt_text, options?: [{text}], max_points?, answer_key?, lock_options?, position?}` |
-| PATCH / DELETE | `/questions/{id}` | ครู | เดิม + `options`, `lock_options`, `approve: true`, `answer_key` ของข้อสอบ (§22.3) แก้ข้อความ คะแนน เฉลยได้เสมอ ส่วนที่เป็นโครงสร้างตอนล็อก 409 `exam_structure_locked` |
-| POST / DELETE | `/questions/{id}/image`, `/question-options/{id}/image` | ครู | multipart รูป (JPEG/PNG/WebP ไม่เกิน 5 MB) server ย่อด้านยาวไม่เกิน 1,600 px ด้วย GD |
+| PATCH / DELETE | `/questions/{id}` | ครู | เดิม + `options`, `lock_options`, `approve: true`, `answer_key` ของข้อสอบ (§22.3) แก้ข้อความ คะแนน เฉลยได้เสมอ ส่วนที่เป็นโครงสร้างตอนล็อก 409 `exam_structure_locked` ข้อของข้อสอบ: `position` คือลำดับ**ภายในตอน** |
+| POST / DELETE | `/questions/{id}/image`, `/question-options/{id}/image` | ครู | multipart รูป (JPEG/PNG/WebP ไม่เกิน 5 MB) server ย่อด้านยาวไม่เกิน 1,600 px ด้วย GD (throttle `exam-images` 60 ครั้งต่อนาที) ตอบข้อนั้นทั้งข้อ |
+| GET | `/questions/{id}/image`, `/question-options/{id}/image` | ครู | stream ภาพ JPEG ให้แอปแสดง (เพิ่มใน build 1 ตาม §22.17 "ทุกไฟล์ผ่าน controller ที่ตรวจสิทธิ์") ข้อของการบ้านหรือของครูคนอื่น 404 |
 | POST | `/exams/{id}/questions/approve` | ครู | `{question_ids[]}` อนุมัติหลายข้อ |
-| PUT | `/exams/{id}/answer-key` | ครู | ตารางเฉลย `{answers: [{question_id, accepted_options?[], accepted_values?[]}]}` ข้อผิดพลาดบอกตำแหน่ง (`answers.3.accepted_values.0`) ค่าที่ไม่พอดีช่อง 422 |
+| PUT | `/exams/{id}/answer-key` | ครู | ตารางเฉลย `{answers: [{question_id, accepted_options?[], accepted_values?[]}]}` ข้อผิดพลาดบอกตำแหน่ง (`answers.3.accepted_values.0`) ค่าที่ไม่พอดีช่อง 422 บันทึกเฉพาะข้อที่ส่งมา รายการว่างล้างเฉลยของข้อนั้น มีข้อผิดพลาดข้อใดข้อหนึ่งไม่บันทึกเลย |
 | POST | `/exams/{id}/key-sheet-read` | ครู | `{qr, version_fill, rows, digits}` จากกระดาษเฉลย ตอบ `{version_no, proposal: [{question_id, accepted_options\|accepted_values, doubtful, differs}]}` ไม่บันทึก ไม่ต้องอนุมัติเฉลยก่อน (layout มาจาก `GET /assignments/{id}/layouts` เดิม) QR ต้องเป็นกระดาษเฉลยของข้อสอบนี้ (422 `qr_invalid`) `layout_version` ไม่ใช่ปัจจุบัน 422 `layout_unknown` ชุดอ่านไม่ได้ 422 `version_unknown` |
 | POST | `/assignments/{id}/answer-key/approve` | ครู | เดิม ข้อสอบใช้กติกาเฉลยครบของ §22.3 ข้อสอบ `manual` 422 `exam_manual_grading` เสมอ (§22.1) |
 | GET | `/exams/{id}/versions` | ครู | ลำดับข้อและตัวเลือกของทุกชุด และเฉลยตามชุด (ไว้ให้ครูตรวจ) |

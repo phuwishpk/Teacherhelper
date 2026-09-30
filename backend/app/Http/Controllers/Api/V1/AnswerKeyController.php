@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\AnswerKeys\AnswerKeyResult;
 use App\Domain\AnswerKeys\AnswerKeyService;
 use App\Domain\AnswerKeys\KeyCompleteness;
+use App\Domain\Exams\ExamGuard;
+use App\Domain\Exams\ExamPayload;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\QuestionResource;
@@ -33,6 +35,7 @@ class AnswerKeyController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('view', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         return response()->json(['data' => self::payload($assignment)]);
     }
@@ -78,6 +81,7 @@ class AnswerKeyController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('view', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         $kind = $request->input('kind', 'read');
         if (! in_array($kind, ['read', 'draft'], true)) {
@@ -98,7 +102,9 @@ class AnswerKeyController extends Controller
      * courseWork created on the Classroom website has none (422
      * course_required, §19.3); an older assignment without a course may
      * take one here too. 422 assignment_empty / answer_key_incomplete
-     * (errors.questions), 409 assignment_closed.
+     * (errors.questions), 409 assignment_closed. An exam uses its own
+     * "เฉลยครบ" rule and answers with the exam payload (GET /exams/{id});
+     * an exam graded by hand is always 422 exam_manual_grading (§22.1).
      */
     public function approve(Request $request, int $id): JsonResponse
     {
@@ -110,6 +116,9 @@ class AnswerKeyController extends Controller
             throw new ApiException('รหัสรายวิชาไม่ถูกต้อง', 'validation_failed', 422, ['course_id' => ['รหัสรายวิชาไม่ถูกต้อง']]);
         }
         $assignment = $this->keys->approve($request->user(), $assignment, $courseId === null ? null : (int) $courseId);
+        if ($assignment->isExam()) {
+            return response()->json(['data' => ExamPayload::of($assignment->refresh())]);
+        }
 
         return response()->json(['data' => self::payload($assignment->refresh())]);
     }
@@ -118,6 +127,7 @@ class AnswerKeyController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         $outcome = $this->keys->request($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to', 'guidance']));
 

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §8.3 `questions`. answer_key shapes:
@@ -33,6 +34,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * A freeform assignment (DESIGN §19.5) may hold questions whose answer_key is
  * still null until the key is typed, read from a document or drafted by AI;
  * approval (KeyCompleteness) requires it.
+ *
+ * Exam questions (DESIGN §22.2, §22.3) belong to a section (section_id) and
+ * use the types mcq, true_false and numeric with their own key shape:
+ *   mcq, true_false  {"accepted_options": [3]}      original positions (1 = ก / ถูก)
+ *   numeric          {"accepted_values": ["0.5"]}   canonical (NumericAnswer)
+ * position is the question number across the whole exam.
+ * @property int|null $section_id
+ * @property bool $lock_options "ห้ามสลับตัวเลือก"
+ * @property Carbon|null $approved_at
+ * @property string|null $origin teacher|document|copied
+ * @property int|null $copied_from_question_id
+ * @property array<string, mixed>|null $figure_source
  */
 class Question extends Model
 {
@@ -47,7 +60,21 @@ class Question extends Model
 
     public const TYPE_OPEN = 'open';
 
+    /** Types of homework questions. */
     public const TYPES = [self::TYPE_MCQ, self::TYPE_SHORT, self::TYPE_SHOW_WORK, self::TYPE_OPEN];
+
+    public const TYPE_TRUE_FALSE = 'true_false';
+
+    public const TYPE_NUMERIC = 'numeric';
+
+    /** Types of exam questions (the type of their section, DESIGN §22.2). */
+    public const EXAM_TYPES = [self::TYPE_MCQ, self::TYPE_TRUE_FALSE, self::TYPE_NUMERIC];
+
+    public const ORIGIN_TEACHER = 'teacher';
+
+    public const ORIGIN_DOCUMENT = 'document';
+
+    public const ORIGIN_COPIED = 'copied';
 
     public const RUBRIC_NOT_NEEDED = 'not_needed';
 
@@ -73,12 +100,19 @@ class Question extends Model
         'answer_key',
         'rubric_status',
         'model_answer',
+        'section_id',
+        'lock_options',
+        'approved_at',
+        'origin',
+        'copied_from_question_id',
+        'figure_source',
     ];
 
     protected $attributes = [
         'is_numeric' => false,
         'match_mode' => 'flexible',
         'rubric_status' => self::RUBRIC_NOT_NEEDED,
+        'lock_options' => false,
     ];
 
     /**
@@ -92,6 +126,11 @@ class Question extends Model
             'answer_lines' => 'integer',
             'is_numeric' => 'boolean',
             'answer_key' => 'array',
+            'section_id' => 'integer',
+            'lock_options' => 'boolean',
+            'approved_at' => 'datetime',
+            'copied_from_question_id' => 'integer',
+            'figure_source' => 'array',
         ];
     }
 
@@ -115,6 +154,23 @@ class Question extends Model
     public function assignment(): BelongsTo
     {
         return $this->belongsTo(Assignment::class);
+    }
+
+    /** The exam section of an exam question (DESIGN §22.2). @return BelongsTo<ExamSection, $this> */
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(ExamSection::class, 'section_id');
+    }
+
+    /** Options of an exam mcq question in the original order. @return HasMany<QuestionOption, $this> */
+    public function options(): HasMany
+    {
+        return $this->hasMany(QuestionOption::class)->orderBy('position');
+    }
+
+    public function isExamQuestion(): bool
+    {
+        return $this->section_id !== null;
     }
 
     /** @return HasMany<RubricCriterion, $this> */

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Domain\Exams\ExamVersions;
 use App\Models\Assignment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -9,7 +10,11 @@ use Illuminate\Validation\Rule;
 /**
  * POST /api/v1/assignments — {classroom_id, course_id, lesson_plan_id?,
  * title, strictness?, due_at?, mode?: worksheet|freeform, accept_late?,
- * score_only?} (DESIGN §8.3, §19.5, §20.1). The classroom must be one the
+ * score_only?, kind?: homework|exam, grading_method?: app|manual,
+ * version_count?, duration_minutes?, show_key_to_students?,
+ * manual_full_marks?} (DESIGN §8.3, §19.5, §20.1, §22.15). The exam fields
+ * are refused on homework; an exam needs due_at (the exam date) and a
+ * manual exam manual_full_marks. The classroom must be one the
  * teacher teaches; the course must be bound to it and the lesson plan be
  * one of the course (checked in the controller). The subject comes from
  * the course (a subject_id sent by an older app is ignored).
@@ -40,10 +45,18 @@ class StoreAssignmentRequest extends FormRequest
             'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'title' => ['required', 'string', 'max:255'],
             'strictness' => ['sometimes', 'nullable', Rule::in(Assignment::STRICTNESS)],
-            'due_at' => ['sometimes', 'nullable', 'date'],
+            // The exam date decides when a missing score counts as 0 (DESIGN §22.2, §23.4).
+            'due_at' => ['required_if:kind,exam', 'nullable', 'date'],
             'mode' => ['sometimes', 'nullable', Rule::in(Assignment::MODES)],
             'accept_late' => ['sometimes', 'nullable', 'boolean'],
             'score_only' => ['sometimes', 'nullable', 'boolean'],
+            // Exams (DESIGN §22.1, §22.15): kind is set at creation only.
+            'kind' => ['sometimes', 'nullable', Rule::in(Assignment::KINDS)],
+            'grading_method' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', Rule::in(Assignment::GRADING_METHODS)],
+            'version_count' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.ExamVersions::maxVersions()],
+            'duration_minutes' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
+            'show_key_to_students' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'boolean'],
+            'manual_full_marks' => ['nullable', 'prohibited_unless:kind,exam', 'required_if:grading_method,manual', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
         ];
     }
 

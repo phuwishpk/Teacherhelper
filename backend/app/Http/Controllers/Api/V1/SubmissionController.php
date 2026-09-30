@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Pages\WholePageSubmissions;
 use App\Domain\Review\Publisher;
 use App\Http\Controllers\Controller;
@@ -30,6 +31,7 @@ class SubmissionController extends Controller
     {
         $submission = $this->find($request, $id);
         Gate::authorize('grade', $submission);
+        ExamGuard::homeworkOnly($submission->assignment);
 
         $pages = $this->wholePage->start($submission);
         $submission->refresh();

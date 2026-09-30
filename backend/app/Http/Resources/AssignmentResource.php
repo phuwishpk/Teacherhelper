@@ -9,7 +9,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * {id, classroom_id, subject_id, course_id, lesson_plan_id, title, strictness, status,
  *  current_layout_version, due_at, mode, source, accept_late, score_only,
- *  key_origin, key_approved_at, questions_count?, submissions_count? (list
+ *  key_origin, key_approved_at, kind, grading_method, version_count,
+ *  duration_minutes, show_key_to_students, manual_full_marks, shuffle_nonce,
+ *  structure_locked_at, questions_count?, submissions_count? (list
  *  only: students with a submission row), missing_ai_key_count?,
  *  classroom?: {id, name},
  *  subject?: {id, code, name}, course?: {id, code, name}|null,
@@ -57,6 +59,15 @@ class AssignmentResource extends JsonResource
             'score_only' => (bool) $this->score_only,
             'key_origin' => $this->key_origin,
             'key_approved_at' => $this->key_approved_at?->toIso8601String(),
+            // Exams (DESIGN §22.1, §22.14); homework has kind homework and the defaults.
+            'kind' => $this->kind,
+            'grading_method' => $this->grading_method,
+            'version_count' => $this->version_count,
+            'duration_minutes' => $this->duration_minutes,
+            'show_key_to_students' => (bool) $this->show_key_to_students,
+            'manual_full_marks' => $this->manual_full_marks === null ? null : (float) $this->manual_full_marks,
+            'shuffle_nonce' => $this->shuffle_nonce,
+            'structure_locked_at' => $this->structure_locked_at?->toIso8601String(),
             'questions_count' => $this->whenCounted('questions'),
             'submissions_count' => $this->whenCounted('submissions'),
             'missing_ai_key_count' => $this->whenCounted('missing_ai_key_count'),

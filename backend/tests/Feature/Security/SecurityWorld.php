@@ -13,6 +13,7 @@ use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\Course;
 use App\Models\DocumentExtraction;
+use App\Models\ExamSection;
 use App\Models\GoogleAccount;
 use App\Models\GradeConflict;
 use App\Models\Layout;
@@ -22,6 +23,7 @@ use App\Models\LoginCardPrint;
 use App\Models\ModelVersion;
 use App\Models\PracticeItem;
 use App\Models\Question;
+use App\Models\QuestionOption;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
@@ -90,6 +92,15 @@ trait SecurityWorld
     protected Skill $teacherSkillA;
 
     protected Assignment $assignmentA;
+
+    /** An exam of classroom A (DESIGN §22) with one mcq section, one question and images. */
+    protected Assignment $examA;
+
+    protected ExamSection $examSectionA;
+
+    protected Question $examQuestionA;
+
+    protected QuestionOption $examOptionA;
 
     protected Question $shortA;
 
@@ -247,6 +258,26 @@ trait SecurityWorld
             'submission_id' => $this->submissionA->id, 'import_id' => $this->importA->id,
             'app_score' => 5, 'classroom_score' => 4, 'detected_at' => now(),
         ]);
+
+        // An exam of classroom A with a figure on its question and on its first option (§22.15).
+        $this->examA = Assignment::factory()->for_classroom($this->classroomA)->create([
+            'subject_id' => $this->subject->id, 'course_id' => $this->courseA->id, 'kind' => Assignment::KIND_EXAM,
+            'grading_method' => Assignment::GRADING_APP, 'due_at' => now()->addWeek(), 'title' => 'สอบกลางภาค',
+        ]);
+        $this->examSectionA = ExamSection::create(['assignment_id' => $this->examA->id, 'position' => 1, 'type' => ExamSection::TYPE_MCQ, 'option_count' => 4]);
+        $this->examQuestionA = Question::create([
+            'assignment_id' => $this->examA->id, 'section_id' => $this->examSectionA->id, 'position' => 1, 'type' => Question::TYPE_MCQ,
+            'prompt_text' => '2 + 2 = ?', 'max_points' => 1, 'answer_key' => ['accepted_options' => [2]],
+            'origin' => Question::ORIGIN_TEACHER, 'approved_at' => now(),
+        ]);
+        foreach (['3', '4', '5', '6'] as $i => $text) {
+            $option = QuestionOption::create(['question_id' => $this->examQuestionA->id, 'position' => $i + 1, 'text' => $text]);
+            $this->examOptionA ??= $option;
+        }
+        $this->examQuestionA->forceFill(['prompt_image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/q{$this->examQuestionA->id}.jpg"])->save();
+        $this->examOptionA->forceFill(['image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/o{$this->examOptionA->id}.jpg"])->save();
+        $disk->put($this->examQuestionA->prompt_image_path, 'jpeg-bytes');
+        $disk->put($this->examOptionA->image_path, 'jpeg-bytes');
 
         // The analysis of student A in classroom A (§20.5), with a draft for the student.
         $this->analysisA = StudentAnalysis::create([

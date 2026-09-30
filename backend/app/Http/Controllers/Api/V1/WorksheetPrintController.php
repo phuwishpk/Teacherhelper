@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Worksheets\WorksheetPrintService;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -26,6 +27,7 @@ class WorksheetPrintController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('print', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         $print = $this->prints->queue($assignment, $request->user());
 

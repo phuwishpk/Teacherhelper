@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Courses\AssignmentCourses;
+use App\Domain\Exams\ExamImages;
+use App\Domain\Exams\ExamSettings;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AssignmentIndexRequest;
@@ -30,7 +32,7 @@ class AssignmentController extends Controller
 {
     public const PER_PAGE = 50;
 
-    /** GET /api/v1/assignments?classroom_id=&course_id=&lesson_plan_id=&status= -> cursor-paginated */
+    /** GET /api/v1/assignments?classroom_id=&course_id=&lesson_plan_id=&status=&kind= -> cursor-paginated */
     public function index(AssignmentIndexRequest $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Assignment::class);
@@ -52,11 +54,14 @@ class AssignmentController extends Controller
         if ($request->filled('status')) {
             $query->where('status', $request->validated('status'));
         }
+        if ($request->filled('kind')) {
+            $query->where('kind', $request->validated('kind'));
+        }
 
         return AssignmentResource::collection($query->cursorPaginate(self::PER_PAGE));
     }
 
-    /** POST /api/v1/assignments -> 201 {data: assignment} */
+    /** POST /api/v1/assignments -> 201 {data: assignment}; kind = exam creates an exam (DESIGN §22.1) */
     public function store(StoreAssignmentRequest $request): JsonResponse
     {
         Gate::authorize('create', Assignment::class);
@@ -65,6 +70,12 @@ class AssignmentController extends Controller
         // Every new assignment belongs to a course of its classroom (§20.1).
         $course = AssignmentCourses::courseFor($teacher, $classroom->id, $request->validated('course_id'));
         $plan = AssignmentCourses::planFor($course, $request->validated('lesson_plan_id'));
+
+        $exam = $request->validated('kind') === Assignment::KIND_EXAM;
+        $grading = $exam ? ($request->validated('grading_method') ?? Assignment::GRADING_APP) : null;
+        if ($exam && ($request->validated('mode') ?? Assignment::MODE_WORKSHEET) !== Assignment::MODE_WORKSHEET) {
+            throw ValidationException::withMessages(['mode' => 'ข้อสอบไม่ใช้โหมด freeform']);
+        }
 
         $assignment = Assignment::create([
             'school_id' => $classroom->school_id,
@@ -80,7 +91,18 @@ class AssignmentController extends Controller
             'mode' => $request->validated('mode') ?? Assignment::MODE_WORKSHEET,
             'accept_late' => (bool) ($request->validated('accept_late') ?? true),
             'score_only' => (bool) ($request->validated('score_only') ?? false),
+            'kind' => $exam ? Assignment::KIND_EXAM : Assignment::KIND_HOMEWORK,
+            'grading_method' => $grading,
+            'version_count' => $exam ? (int) ($request->validated('version_count') ?? 1) : 1,
+            'duration_minutes' => $exam ? $request->validated('duration_minutes') : null,
+            'show_key_to_students' => $exam && (bool) ($request->validated('show_key_to_students') ?? false),
+            'manual_full_marks' => $exam ? $request->validated('manual_full_marks') : null,
         ]);
+        if ($grading === Assignment::GRADING_MANUAL) {
+            // No key gate for an exam graded by hand: ready from the start (DESIGN §22.1).
+            $assignment->status = Assignment::STATUS_READY;
+            $assignment->save();
+        }
 
         return (new AssignmentResource(self::loadDetail($assignment)))->response()->setStatusCode(201);
     }
@@ -101,7 +123,9 @@ class AssignmentController extends Controller
      * a plan of the assignment's course, or null. mode changes only on a draft that
      * never had a layout or a submission (422 errors.mode). A freeform
      * assignment sent back to draft loses its key approval (ready ⇔
-     * approved, DESIGN §19.5).
+     * approved, DESIGN §19.5). Exam fields: see ExamSettings (DESIGN §22.1,
+     * §22.5); an exam keeps its due_at and its worksheet mode, a manual exam
+     * reopened with status draft is ready again (no key gate).
      */
     public function update(UpdateAssignmentRequest $request, int $id): AssignmentResource
     {
@@ -130,9 +154,16 @@ class AssignmentController extends Controller
                 $assignment->strictness = $data['strictness'];
             }
             if (array_key_exists('due_at', $data)) {
+                if ($data['due_at'] === null && $assignment->isExam()) {
+                    throw ValidationException::withMessages(['due_at' => 'ข้อสอบต้องกำหนดวันสอบ']);
+                }
                 $assignment->due_at = self::utc($data['due_at']);
             }
+            ExamSettings::apply($assignment, $data);
             if (array_key_exists('mode', $data) && $data['mode'] !== $assignment->mode) {
+                if ($assignment->isExam()) {
+                    throw ValidationException::withMessages(['mode' => 'ข้อสอบไม่ใช้โหมด freeform']);
+                }
                 if (! $assignment->isDraft() || $assignment->current_layout_version !== null
                     || $assignment->layouts()->exists() || $assignment->submissions()->exists()) {
                     throw ValidationException::withMessages([
@@ -149,7 +180,9 @@ class AssignmentController extends Controller
             if (array_key_exists('status', $data)) {
                 // closed: stop edits and printing; draft: reopen (rebuild the layout to print again).
                 $assignment->status = $data['status'];
-                if ($data['status'] === Assignment::STATUS_DRAFT && $assignment->isFreeform()) {
+                if ($data['status'] === Assignment::STATUS_DRAFT && $assignment->isManualExam()) {
+                    $assignment->status = Assignment::STATUS_READY; // reopened: no key gate (§22.1)
+                } elseif ($data['status'] === Assignment::STATUS_DRAFT && ($assignment->isFreeform() || $assignment->isExam())) {
                     $assignment->key_approved_at = null;
                     $assignment->key_approved_by = null;
                 }
@@ -179,6 +212,9 @@ class AssignmentController extends Controller
                 throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_posted', 409);
             }
             $assignment->delete();
+            if ($assignment->isExam()) {
+                ExamImages::deleteExam($assignment);
+            }
         });
 
         return response()->noContent();

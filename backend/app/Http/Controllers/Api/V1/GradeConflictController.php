@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Google\GradeConflicts;
 use App\Http\Controllers\Controller;
 use App\Models\AssignmentGoogleLink;
@@ -33,6 +34,7 @@ class GradeConflictController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('review', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         $rows = GradeConflict::query()
             ->with(['submission.student', 'import'])

@@ -108,6 +108,20 @@ return [
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 
+    // Exams (DESIGN §22.2, §22.5): at most max_questions questions in
+    // max_sections sections, 1..max_versions shuffled versions (ก ข ค ง),
+    // at most max_blank_questions blank questions per section request, and
+    // question/option images up to image_max_kb, stored as JPEG with the
+    // long side at most image_max_px.
+    'exams' => [
+        'max_questions' => 200,
+        'max_sections' => 10,
+        'max_versions' => max(1, min(10, (int) env('EXAM_MAX_VERSIONS', 4))),
+        'max_blank_questions' => 100,
+        'image_max_kb' => 5120,
+        'image_max_px' => 1600,
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,
