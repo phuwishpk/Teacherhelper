@@ -28,6 +28,20 @@ class HeatmapColumn {
   final String tooltip;
 }
 
+/// A labelled run of adjacent columns (e.g. the indicators of one
+/// standard, DESIGN §20.4 chart 3).
+class HeatmapColumnGroup {
+  const HeatmapColumnGroup({
+    required this.label,
+    required this.span,
+    this.tooltip,
+  });
+
+  final String label;
+  final int span;
+  final String? tooltip;
+}
+
 /// A row x column grid of colored cells with a fixed row-header column and
 /// horizontally scrolling cells, so it stays readable on a phone (DESIGN
 /// §14.3 heatmaps). Cells are separated by a 2px surface gap.
@@ -43,6 +57,7 @@ class HeatmapGrid extends StatelessWidget {
     this.headerHeight = 44,
     this.onRowTap,
     this.corner,
+    this.columnGroups = const [],
   });
 
   /// Row headers (e.g. student number + name, or a skill code).
@@ -58,7 +73,13 @@ class HeatmapGrid extends StatelessWidget {
   /// Top-left label above the row headers.
   final Widget? corner;
 
+  /// Optional band above the column headers; spans must add up to the
+  /// number of columns.
+  final List<HeatmapColumnGroup> columnGroups;
+
   static const gap = 2.0;
+
+  static const groupHeight = 28.0;
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +151,10 @@ class HeatmapGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                height: headerHeight + gap,
+                height:
+                    headerHeight +
+                    gap +
+                    (columnGroups.isEmpty ? 0 : groupHeight + gap),
                 child: Align(
                   alignment: Alignment.bottomLeft,
                   child: DefaultTextStyle.merge(
@@ -151,6 +175,37 @@ class HeatmapGrid extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (columnGroups.isNotEmpty)
+                    Row(
+                      children: [
+                        for (final g in columnGroups)
+                          Tooltip(
+                            message: g.tooltip ?? g.label,
+                            child: Container(
+                              width: g.span * (cellWidth + gap) - gap,
+                              height: groupHeight,
+                              margin: const EdgeInsets.only(
+                                right: gap,
+                                bottom: gap,
+                              ),
+                              alignment: Alignment.bottomLeft,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                g.label,
+                                style: theme.textTheme.labelMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   Row(
                     children: [
                       for (final col in columns)

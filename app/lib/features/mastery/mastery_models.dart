@@ -153,17 +153,41 @@ class MasteryCell {
   MasteryLevel get level => MasteryLevel.of(value, nObs);
 }
 
-/// `GET /classrooms/{id}/mastery` (DESIGN §9.6, §14.3 "Heatmap นักเรียน ×
-/// ทักษะ"): `{skills: [...], students: [...], cells: [{student_id,
+/// Heatmap columns under one standard (null: no standard above them).
+class MasteryColumnGroup {
+  const MasteryColumnGroup({
+    required this.skillIds,
+    this.standardCode,
+    this.standardName,
+  });
+
+  final String? standardCode;
+  final String? standardName;
+  final List<int> skillIds;
+
+  String get label => standardCode ?? 'ไม่มีมาตรฐาน';
+}
+
+/// `GET /classrooms/{id}/mastery?course_id=&unit_id=` (DESIGN §9.6, §14.3
+/// "Heatmap นักเรียน × ทักษะ", §20.4 chart 3): `{skills: [...], groups:
+/// [{standard, skill_ids}], students: [...], cells: [{student_id,
 /// skill_id, value, n_obs}]}`.
 class ClassroomMastery {
   const ClassroomMastery({
     required this.skills,
     required this.students,
     required this.cells,
+    this.groups = const [],
+    this.courseId,
+    this.unitId,
   });
 
   final List<Skill> skills;
+
+  /// Columns grouped by standard, in [skills] order.
+  final List<MasteryColumnGroup> groups;
+  final int? courseId;
+  final int? unitId;
   final List<MasteryStudent> students;
 
   /// (student id, skill id) -> cell; a missing key = no observation yet.
@@ -208,7 +232,25 @@ class ClassroomMastery {
         nObs: _int(c['n_obs']) ?? 0,
       );
     }
-    return ClassroomMastery(skills: skills, students: students, cells: cells);
+    final groups = [
+      for (final g in (json['groups'] as List? ?? const []))
+        if (g is Map)
+          MasteryColumnGroup(
+            standardCode: (g['standard'] as Map?)?['code'] as String?,
+            standardName: (g['standard'] as Map?)?['name'] as String?,
+            skillIds: [
+              for (final id in (g['skill_ids'] as List? ?? const [])) ?_int(id),
+            ],
+          ),
+    ];
+    return ClassroomMastery(
+      skills: skills,
+      students: students,
+      cells: cells,
+      groups: groups,
+      courseId: _int(json['course_id']),
+      unitId: _int(json['unit_id']),
+    );
   }
 }
 

@@ -16,6 +16,7 @@ import '../../features/auth/register_screen.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/auth/student_login_screen.dart';
 import '../../features/auth/student_qr_scan_screen.dart';
+import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
@@ -157,8 +158,29 @@ abstract final class AppRoutes {
   /// Question → indicator mapping with AI suggestions (DESIGN §20.3).
   static String indicatorMapping(int id) => '/assignments/$id/indicators';
 
-  /// Student x skill mastery heatmap of a classroom (§14.3).
-  static String classroomMastery(int id) => '/classrooms/$id/mastery';
+  /// Student x skill mastery heatmap of a classroom (§14.3), optionally
+  /// opened on a course's indicators (§20.4 chart 3).
+  static String classroomMastery(int id, {int? courseId}) => courseId == null
+      ? '/classrooms/$id/mastery'
+      : '/classrooms/$id/mastery?course=$courseId';
+
+  /// The charts of a course in a classroom (DESIGN §20.4).
+  static String courseCharts(int courseId, {int? classroomId}) =>
+      classroomId == null
+      ? '/courses/$courseId/charts'
+      : '/courses/$courseId/charts?classroom=$classroomId';
+
+  /// One student's spider and progress in a course, seen by the teacher.
+  static String studentCourseCharts(
+    int courseId,
+    int studentId, {
+    int? classroomId,
+  }) =>
+      '/courses/$courseId/students/$studentId/charts'
+      '${classroomId == null ? '' : '?classroom=$classroomId'}';
+
+  /// Student: their own charts of one course (§20.4, §20.9).
+  static String myCourseCharts(int courseId) => '/student/courses/$courseId';
 
   /// One student's skills and weaknesses, seen by the teacher.
   static String studentMastery(int classroomId, int studentId) =>
@@ -186,7 +208,8 @@ abstract final class AppRoutes {
       location == student ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/assignments/') ||
-      location.startsWith('$student/practice/');
+      location.startsWith('$student/practice/') ||
+      location.startsWith('$student/courses/');
 
   /// The app location of a result link from a Classroom announcement
   /// (DESIGN §19.7): `eduvision://r/{submission_id}` (what the server's
@@ -316,6 +339,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/student/courses/:id',
+        builder: (context, state) =>
+            MyCourseChartsScreen(courseId: _id(state, 'id')),
+      ),
+      GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const TeacherShell(),
       ),
@@ -367,8 +395,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'mastery',
-            builder: (context, state) =>
-                ClassroomMasteryScreen(classroomId: _id(state, 'id')),
+            builder: (context, state) => ClassroomMasteryScreen(
+              classroomId: _id(state, 'id'),
+              initialCourseId: int.tryParse(
+                state.uri.queryParameters['course'] ?? '',
+              ),
+            ),
           ),
           GoRoute(
             path: 'students/:sid/mastery',
@@ -398,6 +430,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             CourseDetailScreen(courseId: _id(state, 'id')),
         routes: [
+          GoRoute(
+            path: 'charts',
+            builder: (context, state) => CourseChartsScreen(
+              courseId: _id(state, 'id'),
+              initialClassroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: 'students/:sid/charts',
+            builder: (context, state) => StudentCourseChartsScreen(
+              courseId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+              classroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
+          ),
           GoRoute(
             path: 'edit',
             builder: (context, state) => CourseEditScreen(

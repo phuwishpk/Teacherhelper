@@ -1,5 +1,6 @@
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
+import 'package:eduvision/features/charts/charts_repository.dart';
 import 'package:eduvision/features/dashboard/analytics_models.dart';
 import 'package:eduvision/features/dashboard/analytics_repository.dart';
 import 'package:eduvision/features/dashboard/assignment_analytics_screen.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/fake_charts.dart';
 import '../helpers/fake_http_adapter.dart';
 
 Map<String, dynamic> analyticsJson({int published = 23}) => {
@@ -99,6 +101,7 @@ Future<void> _pump(WidgetTester tester, Map<String, dynamic> json) async {
       overrides: [
         analyticsRepositoryProvider.overrideWithValue(_FakeAnalytics(json)),
         assignmentsRepositoryProvider.overrideWithValue(_FakeAssignments()),
+        chartsRepositoryProvider.overrideWithValue(FakeChartsRepository()),
       ],
       child: const MaterialApp(
         home: AssignmentAnalyticsScreen(assignmentId: 5),
@@ -167,6 +170,12 @@ void main() {
       findsWidgets,
     );
     expect(find.text('มาก (สูงสุด 6)'), findsOneWidget);
+    // The score distribution (DESIGN §20.4 chart 4) with mean and median.
+    expect(find.byKey(const ValueKey('score_histogram')), findsOneWidget);
+    expect(find.text('6.5/10 (65%)'), findsOneWidget);
+    expect(find.text('7.5/10 (75%)'), findsOneWidget);
+    expect(find.text('70\nมัธยฐาน'), findsOneWidget);
+    expect(find.text('มีคะแนน 5 จาก 6 คนที่เผยแพร่แล้ว'), findsOneWidget);
   });
 
   testWidgets('fewer than 20 students: r shows "น้อย"', (tester) async {

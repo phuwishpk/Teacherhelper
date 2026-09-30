@@ -243,6 +243,13 @@ class CourseDetailScreen extends ConsumerWidget {
                       icon: const Icon(Icons.add),
                       label: const Text('เพิ่มแผนการสอน'),
                     ),
+                    FilledButton.icon(
+                      key: const ValueKey('course_charts'),
+                      onPressed: () =>
+                          context.push(AppRoutes.courseCharts(c.id)),
+                      icon: const Icon(Icons.insights_outlined),
+                      label: const Text('กราฟและความคืบหน้า'),
+                    ),
                     OutlinedButton.icon(
                       key: const ValueKey('course_import_plans'),
                       onPressed: () => _importPlans(context, ref, c),

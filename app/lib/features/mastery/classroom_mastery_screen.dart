@@ -6,63 +6,142 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../courses/course_models.dart';
+import '../courses/courses_providers.dart';
 import '../dashboard/heatmap.dart';
 import 'mastery_models.dart';
 import 'mastery_repository.dart';
 import 'mastery_widgets.dart';
 
-/// Student x skill mastery heatmap of a classroom (DESIGN §9.6, §14.3).
-/// Tapping a student opens their weaknesses.
-class ClassroomMasteryScreen extends ConsumerWidget {
-  const ClassroomMasteryScreen({super.key, required this.classroomId});
+/// Student x skill mastery heatmap of a classroom (DESIGN §9.6, §14.3),
+/// filtered to a course or one of its units and grouped by standard
+/// (§20.4 chart 3). Tapping a student opens their weaknesses.
+class ClassroomMasteryScreen extends ConsumerStatefulWidget {
+  const ClassroomMasteryScreen({
+    super.key,
+    required this.classroomId,
+    this.initialCourseId,
+  });
 
   final int classroomId;
 
+  /// Opens with this course's indicators (e.g. from the course charts).
+  final int? initialCourseId;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mastery = ref.watch(classroomMasteryProvider(classroomId));
+  ConsumerState<ClassroomMasteryScreen> createState() =>
+      _ClassroomMasteryScreenState();
+}
+
+class _ClassroomMasteryScreenState
+    extends ConsumerState<ClassroomMasteryScreen> {
+  late int? _courseId = widget.initialCourseId;
+  int? _unitId;
+
+  ClassroomMasteryQuery get _query =>
+      (classroomId: widget.classroomId, courseId: _courseId, unitId: _unitId);
+
+  @override
+  Widget build(BuildContext context) {
+    final classroomId = widget.classroomId;
+    final mastery = ref.watch(classroomMasteryProvider(_query));
     final name = ref.watch(classroomProvider(classroomId)).value?.name;
+    final courses =
+        ref.watch(classroomCoursesProvider(classroomId)).value ?? const [];
+    final units = _courseId == null
+        ? const <CourseUnit>[]
+        : ref.watch(courseDetailProvider(_courseId!)).value?.units ??
+              const <CourseUnit>[];
+    final filters = Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<int?>(
+            key: const ValueKey('heatmap_course'),
+            initialValue: courses.any((c) => c.id == _courseId)
+                ? _courseId
+                : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'รายวิชา'),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('ทุกทักษะ')),
+              for (final c in courses)
+                DropdownMenuItem(value: c.id, child: Text(c.title)),
+            ],
+            onChanged: (v) => setState(() {
+              _courseId = v;
+              _unitId = null;
+            }),
+          ),
+        ),
+        if (_courseId != null && units.isNotEmpty)
+          SizedBox(
+            width: 220,
+            child: DropdownButtonFormField<int?>(
+              key: ValueKey('heatmap_unit_$_courseId'),
+              initialValue: _unitId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'หน่วย'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('ทุกหน่วย')),
+                for (final u in units)
+                  DropdownMenuItem(
+                    value: u.id,
+                    child: Text('หน่วย ${u.position} ${u.title}'),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _unitId = v),
+            ),
+          ),
+      ],
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(name == null ? 'ทักษะของห้อง' : 'ทักษะของห้อง $name'),
       ),
       body: AsyncView(
         value: mastery,
-        onRetry: () => ref.invalidate(classroomMasteryProvider(classroomId)),
+        onRetry: () => ref.invalidate(classroomMasteryProvider(_query)),
         data: (m) => RefreshIndicator(
-          onRefresh: () =>
-              ref.refresh(classroomMasteryProvider(classroomId).future),
-          child: m.skills.isEmpty || m.students.isEmpty
-              ? ListView(
-                  children: const [
-                    SizedBox(height: 48),
-                    EmptyView(
-                      icon: Icons.grid_on_outlined,
-                      title: 'ยังไม่มีข้อมูลทักษะ',
-                      message:
-                          'heatmap จะแสดงหลังเผยแพร่ผลการบ้านที่ติดตัวชี้วัดไว้ '
-                          'หรือหลังนักเรียนทำแบบฝึก',
+          onRefresh: () => ref.refresh(classroomMasteryProvider(_query).future),
+          child: ContentColumn(
+            maxWidth: 1100,
+            child: ListView(
+              children: [
+                if (courses.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  filters,
+                  const SizedBox(height: 12),
+                ],
+                if (m.skills.isEmpty || m.students.isEmpty)
+                  EmptyView(
+                    icon: Icons.grid_on_outlined,
+                    title: _courseId == null
+                        ? 'ยังไม่มีข้อมูลทักษะ'
+                        : 'ยังไม่มีตัวชี้วัดในส่วนนี้',
+                    message: _courseId == null
+                        ? 'heatmap จะแสดงหลังเผยแพร่ผลการบ้านที่ติดตัวชี้วัดไว้ '
+                              'หรือหลังนักเรียนทำแบบฝึก'
+                        : 'เพิ่มตัวชี้วัดให้รายวิชา หน่วย หรือแผนการสอนก่อน',
+                  )
+                else ...[
+                  _WeakSkillsCard(mastery: m),
+                  const SizedBox(height: 12),
+                  const MasteryLegend(),
+                  const SizedBox(height: 12),
+                  MasteryHeatmap(
+                    mastery: m,
+                    onStudent: (s) => context.push(
+                      AppRoutes.studentMastery(classroomId, s.id),
                     ),
-                  ],
-                )
-              : ContentColumn(
-                  maxWidth: 1100,
-                  child: ListView(
-                    children: [
-                      _WeakSkillsCard(mastery: m),
-                      const SizedBox(height: 12),
-                      const MasteryLegend(),
-                      const SizedBox(height: 12),
-                      MasteryHeatmap(
-                        mastery: m,
-                        onStudent: (s) => context.push(
-                          AppRoutes.studentMastery(classroomId, s.id),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
                   ),
-                ),
+                ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -141,8 +220,22 @@ class MasteryHeatmap extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final m = mastery;
+    final spans = m.groups.fold(0, (n, g) => n + g.skillIds.length);
     return HeatmapGrid(
       key: const ValueKey('mastery_heatmap'),
+      // Standards as a band over their indicators (§20.4 chart 3).
+      columnGroups: spans == m.skills.length && m.groups.length > 1
+          ? [
+              for (final g in m.groups)
+                HeatmapColumnGroup(
+                  label: g.label,
+                  span: g.skillIds.length,
+                  tooltip: g.standardName == null
+                      ? g.label
+                      : '${g.label} ${g.standardName}',
+                ),
+            ]
+          : const [],
       corner: const Text('นักเรียน'),
       cellWidth: 68,
       rows: [
