@@ -29,7 +29,8 @@ use App\Models\User;
  * forStudent(): one student's values (MasteryRollup::student).
  * forClassroom(): the classroom's values (MasteryRollup::classroom) plus
  * each student's course value, for the teacher only (§20.9: a student
- * never sees a class average).
+ * never sees a class average). Students whose Google account left the
+ * linked course are left out (Classroom::currentStudents).
  */
 final class CourseMasterySummary
 {
@@ -87,7 +88,7 @@ final class CourseMasterySummary
     {
         $plan = $this->plan($course, $axis);
         $threshold = self::passThreshold();
-        $students = $classroom->students()->get(['users.id', 'users.name']);
+        $students = $classroom->currentStudents()->get(['users.id', 'users.name']);
         $byStudent = [];
         foreach ($students as $student) {
             $byStudent[$student->id] = [];

@@ -10,6 +10,7 @@ use App\Models\ClassroomStudent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -233,6 +234,27 @@ class ClassroomImportTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath('code', 'course_already_linked');
         $this->assertCount(0, $this->sentTo('classroom.googleapis.com'));
+        $this->assertDatabaseCount('classrooms', 1);
+    }
+
+    public function test_a_second_import_of_the_same_course_waits_for_the_first_and_then_is_409(): void
+    {
+        $this->fakeCourseRoster(self::roster());
+        config(['eduvision.classroom_sync.link_lock_wait_seconds' => 0]);
+
+        // Another request holds the course: this one gives up instead of deadlocking.
+        $other = Cache::lock('google-course-link:'.self::COURSE_ID, 60);
+        $this->assertTrue($other->get());
+        $this->asUser($this->teacher)->postJson('/api/v1/classrooms/import-google', $this->body())
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'course_link_busy');
+        $this->assertDatabaseCount('classrooms', 0);
+        $other->release();
+
+        $this->asUser($this->teacher)->postJson('/api/v1/classrooms/import-google', $this->body())->assertCreated();
+        $this->asUser($this->teacher)->postJson('/api/v1/classrooms/import-google', $this->body())
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'course_already_linked');
         $this->assertDatabaseCount('classrooms', 1);
     }
 

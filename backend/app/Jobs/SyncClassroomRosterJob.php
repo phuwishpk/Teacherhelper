@@ -63,7 +63,8 @@ class SyncClassroomRosterJob implements ShouldQueue
         }
 
         try {
-            $sync->sync($teacher, $classroom);
+            // Nobody sees the PINs of new students here: they wait as pin_pending_at.
+            $sync->sync($teacher, $classroom, background: true);
         } catch (ApiException|ValidationException $e) {
             Log::warning('google.roster_sync_failed', [
                 'classroom_id' => $classroom->id,

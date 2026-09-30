@@ -106,6 +106,7 @@ Route::prefix('v1')->group(function () {
                 Route::patch('classrooms/{id}', [ClassroomController::class, 'update'])->name('api.classrooms.update');
                 Route::post('classrooms/{id}/students', [ClassroomStudentController::class, 'store'])->name('api.classrooms.students.store');
                 Route::get('classrooms/{id}/roster', [ClassroomStudentController::class, 'index'])->name('api.classrooms.roster');
+                Route::post('classrooms/{id}/students/pending-pins', [ClassroomStudentController::class, 'pendingPins'])->name('api.classrooms.students.pending-pins');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
 
                 Route::post('students/{id}/login-card', [LoginCardController::class, 'storeForStudent'])->name('api.students.login-card');

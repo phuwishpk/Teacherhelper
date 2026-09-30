@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $google_user_id the matched Google Classroom account (DESIGN §18.4)
  * @property string|null $google_email
  * @property Carbon|null $left_course_at the account left the linked course (DESIGN §19.2)
+ * @property Carbon|null $pin_pending_at added by the background roster sync; the PIN was never shown (DESIGN §19.2)
  */
 class ClassroomStudent extends Pivot
 {
@@ -29,6 +30,7 @@ class ClassroomStudent extends Pivot
         return [
             'student_number' => 'integer',
             'left_course_at' => 'datetime',
+            'pin_pending_at' => 'datetime',
         ];
     }
 }

@@ -329,5 +329,9 @@ class GradeConflictTest extends TestCase
         $this->resolve($conflict, 'accept_classroom')->assertStatus(409)->assertJsonPath('code', 'conflict_resolved');
         $this->assertNull($this->submission->refresh()->total_override);
         $this->assertSame(GradeConflict::STATUS_OPEN, $conflict->refresh()->status);
+
+        // The next sync drops it (app courseWork too): the refreshed list does not show it again.
+        $this->sync();
+        $this->assertSame(0, GradeConflict::query()->count());
     }
 }

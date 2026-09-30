@@ -54,6 +54,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.update' => ['PATCH', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.students.store' => ['POST', 'classrooms/{classroom}/students', 404, 404],
         'api.classrooms.roster' => ['GET', 'classrooms/{classroom}/roster', 404, 404],
+        'api.classrooms.students.pending-pins' => ['POST', 'classrooms/{classroom}/students/pending-pins', 404, 404],
         'api.classrooms.login-cards' => ['POST', 'classrooms/{classroom}/login-cards', 404, 404],
         'api.students.login-card' => ['POST', 'students/{student}/login-card', 403, 404],
         'api.students.pin' => ['POST', 'students/{student}/pin', 403, 404],

@@ -22,12 +22,12 @@ final class AnalysisInputs
     public function __construct(private readonly CourseMasterySummary $summary) {}
 
     /**
-     * @param  list<int>|null  $studentIds  null = every student of the classroom
+     * @param  list<int>|null  $studentIds  null = every student still in the class (not the ones whose Google account left the course: no paid analysis for them)
      * @return array<int, AnalysisInput> by student id (students without any assessed indicator have an empty input)
      */
     public function forClassroom(Classroom $classroom, ?array $studentIds = null): array
     {
-        $studentIds ??= array_map('intval', $classroom->students()->pluck('users.id')->all());
+        $studentIds ??= array_map('intval', $classroom->currentStudents()->pluck('users.id')->all());
         if ($studentIds === []) {
             return [];
         }

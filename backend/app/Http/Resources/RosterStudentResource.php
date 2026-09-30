@@ -7,8 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One roster row: {student_id, student_number, name, status, left_course_at}
- * (left_course_at: the Google account left the linked course, DESIGN §19.2). The student is a
+ * One roster row: {student_id, student_number, name, status, left_course_at,
+ * pin_pending} (left_course_at: the Google account left the linked course;
+ * pin_pending: added by the background roster sync, PIN never shown; DESIGN
+ * §19.2). The student is a
  * User loaded through Classroom::students(), so student_number is on the pivot.
  *
  * @mixin User
@@ -26,6 +28,7 @@ class RosterStudentResource extends JsonResource
             'name' => $this->name,
             'status' => $this->status,
             'left_course_at' => $this->pivot->left_course_at?->toIso8601String(),
+            'pin_pending' => $this->pivot->pin_pending_at !== null,
         ];
     }
 }

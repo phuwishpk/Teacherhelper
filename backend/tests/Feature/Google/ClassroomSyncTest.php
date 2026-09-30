@@ -543,6 +543,7 @@ class ClassroomSyncTest extends TestCase
                 'grade_failed' => 1,
                 'feedback_failed' => 0,
                 'regrade_pending' => 1,
+                'pins_pending' => 0,
                 'needs_reconnect' => false,
             ]]);
 

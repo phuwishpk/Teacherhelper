@@ -12,6 +12,7 @@ use App\Jobs\BuildAnalysisBatchesJob;
 use App\Jobs\PollAnalysisBatchJob;
 use App\Models\AiCall;
 use App\Models\AnalysisBatch;
+use App\Models\ClassroomStudent;
 use App\Models\StudentAnalysis;
 use App\Models\TeacherApiKey;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -113,6 +114,14 @@ class NightlyAnalysisTest extends TestCase
 
         // The next night: nothing changed, nothing is sent.
         $this->assertSame(['recorded' => 2, 'queued' => 0, 'batches' => 0, 'skipped_no_key' => 0], $this->batches()->build());
+    }
+
+    public function test_a_student_whose_google_account_left_the_course_is_not_analysed(): void
+    {
+        ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_id', $this->students['B']->id)->update(['left_course_at' => now()]);
+
+        $this->assertSame(['recorded' => 1, 'queued' => 1, 'batches' => 1, 'skipped_no_key' => 0], $this->batches()->build());
+        $this->assertSame([$this->students['A']->id], StudentAnalysis::query()->pluck('student_id')->all());
     }
 
     public function test_publishing_changes_the_hash_and_the_next_night_writes_again(): void

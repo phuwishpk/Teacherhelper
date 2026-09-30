@@ -4,6 +4,7 @@ namespace Tests\Feature\Mastery;
 
 use App\Models\Assignment;
 use App\Models\Classroom;
+use App\Models\ClassroomStudent;
 use App\Models\Course;
 use App\Models\LessonPlan;
 use App\Models\Mastery;
@@ -174,6 +175,15 @@ class ChartsTest extends TestCase
         $all = $this->asUser($this->teacher)->getJson("/api/v1/classrooms/{$this->room->id}/indicator-pass-rate")->assertOk()->json('data');
         $this->assertNull($all['course_id']);
         $this->assertSame(['ค 1.1 ป.5/1', 'ค 1.1 ป.5/2', 'ค 1.2 ป.5/1', 'ค 3.1 ป.5/1'], array_map(fn ($r) => $r['skill']['code'], $all['indicators']));
+
+        // B's Google account left the linked course: B stays in the room but not in the class figures.
+        ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_id', $this->students['B']->id)->update(['left_course_at' => now()]);
+        $left = $this->asUser($this->teacher)->getJson("/api/v1/classrooms/{$this->room->id}/indicator-pass-rate?course_id={$this->course->id}")->assertOk()->json('data');
+        $this->assertSame(2, $left['student_count']);
+        $this->assertSame([[1, 1, 1], [0, 0, null], [1, 0, 0], [0, 0, null]], array_map(fn ($r) => [$r['assessed_students'], $r['passed_students'], $r['pass_rate']], $left['indicators']));
+        $summary = $this->asUser($this->teacher)->getJson("/api/v1/courses/{$this->course->id}/mastery-summary?classroom_id={$this->room->id}")->assertOk()->json('data');
+        $this->assertSame(['นักเรียน A', 'นักเรียน C'], array_column($summary['students'], 'name'));
+        ClassroomStudent::query()->where('classroom_id', $this->room->id)->update(['left_course_at' => null]);
 
         // A course the classroom does not study: 422.
         $elsewhere = $this->makeCourse($this->teacher, [], ['code' => 'ค15102']);

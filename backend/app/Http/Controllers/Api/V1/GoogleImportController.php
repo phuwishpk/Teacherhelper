@@ -37,7 +37,8 @@ class GoogleImportController extends Controller
      * POST /api/v1/classrooms/import-google -> 201 {data: {classroom,
      * students: [{student_id, student_number, name, pin}]}}: the PINs are
      * shown once, like POST /classrooms/{id}/students.
-     * 409 course_already_linked; 422 duplicate student numbers, an account
+     * 409 course_already_linked, course_link_busy (another import or link of
+     * the course is running); 422 duplicate student numbers, an account
      * both kept and removed, course_id not an ACTIVE course of the teacher.
      */
     public function import(ImportGoogleClassroomRequest $request, ClassroomImporter $importer): JsonResponse

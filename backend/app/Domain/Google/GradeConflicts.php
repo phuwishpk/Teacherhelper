@@ -65,19 +65,19 @@ final class GradeConflicts
             if ($open !== null) {
                 // The two sides agree again (fixed on either side), or one side is gone
                 // (grade cleared in Classroom, work not published any more): nothing is
-                // left to resolve. A later difference opens a new row.
-                $open->delete();
+                // left to resolve. A later difference opens a new row. Only while it is
+                // still open: a teacher's resolve() that committed meanwhile stays.
+                GradeConflict::query()->whereKey($open->id)->where('status', GradeConflict::STATUS_OPEN)->delete();
             }
 
             return null;
         }
 
         if ($open !== null) {
-            $open->app_score = $app;
-            $open->classroom_score = $classroom;
-            $open->save();
+            $updated = GradeConflict::query()->whereKey($open->id)->where('status', GradeConflict::STATUS_OPEN)
+                ->update(['app_score' => $app, 'classroom_score' => $classroom]);
 
-            return $open;
+            return $updated === 1 ? $open->fresh() : null;
         }
 
         $latest = GradeConflict::query()->where('import_id', $import->id)->orderByDesc('id')->first();
@@ -177,11 +177,19 @@ final class GradeConflicts
         );
     }
 
-    /** The app's side of the comparison, or null when there is nothing to compare yet. */
+    /**
+     * The app's side of the comparison, or null when there is nothing to
+     * compare: a submission not published (being graded again, say) has no
+     * app total to stand by, whoever made the courseWork, and publishing it
+     * again sends its grade anew.
+     */
     private static function base(ClassroomSubmissionImport $import, Submission $submission, AssignmentGoogleLink $posted): ?float
     {
+        if (! $submission->isPublished()) {
+            return null;
+        }
         if ($posted->isFromClassroomWeb()) {
-            return $submission->isPublished() ? $submission->effectiveTotal() : null;
+            return $submission->effectiveTotal();
         }
 
         return $import->pushed_grade === null ? null : round((float) $import->pushed_grade, 2);

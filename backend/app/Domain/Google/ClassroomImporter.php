@@ -12,6 +12,9 @@ use App\Models\ClassroomGoogleIgnoredUser;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\User;
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +39,9 @@ final class ClassroomImporter
 
     /** classroom_students.student_number is a TINYINT UNSIGNED. */
     public const MAX_STUDENT_NUMBER = 255;
+
+    /** An import of 255 students (bcrypt PINs included) ends well within this. */
+    private const COURSE_LOCK_SECONDS = 60;
 
     public function __construct(
         private readonly GoogleAccounts $accounts,
@@ -115,9 +121,8 @@ final class ClassroomImporter
             throw ValidationException::withMessages(['students' => ['เลขที่ต้องไม่เกิน '.self::MAX_STUDENT_NUMBER]]);
         }
 
-        $result = DB::transaction(function () use ($teacher, $input, $course, $rows, $byId) {
+        $result = self::underCourseLock($course['course_id'], fn () => DB::transaction(function () use ($teacher, $input, $course, $rows, $byId) {
             // The check above ran before the Google calls; run it again under the lock.
-            ClassroomGoogleLink::query()->where('course_id', $course['course_id'])->lockForUpdate()->get();
             self::assertNotLinked($course['course_id']);
 
             $classroom = Classroom::create([
@@ -164,7 +169,7 @@ final class ClassroomImporter
             }
 
             return ['classroom' => $classroom, 'students' => $created];
-        });
+        }));
 
         Log::info('google.classroom_imported', [
             'classroom_id' => $result['classroom']->id,
@@ -193,6 +198,29 @@ final class ClassroomImporter
         }
 
         return mb_substr($name !== '' ? $name : $course['course_id'], 0, 100);
+    }
+
+    /**
+     * Runs $fn while no other import or link of the same course runs. A row
+     * lock cannot do this: before the first link there is no row to lock,
+     * and on MariaDB two FOR UPDATE reads of the missing course_id take gap
+     * locks that do not block each other, so both inserts deadlock (a 500).
+     * The cache lock (database driver) is shared by every web request.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $fn
+     * @return T
+     *
+     * @throws ApiException 409 course_link_busy when the other one takes too long
+     */
+    public static function underCourseLock(string $courseId, Closure $fn): mixed
+    {
+        try {
+            return Cache::lock('google-course-link:'.$courseId, self::COURSE_LOCK_SECONDS)->block((int) config('eduvision.classroom_sync.link_lock_wait_seconds', 20), $fn);
+        } catch (LockTimeoutException) {
+            throw new ApiException('กำลังผูกคอร์สนี้กับห้องเรียนอยู่ รอสักครู่แล้วลองอีกครั้ง', 'course_link_busy', 409);
+        }
     }
 
     /**

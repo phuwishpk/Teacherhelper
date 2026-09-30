@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Google\ClassroomImporter;
 use App\Domain\Google\GoogleAccounts;
 use App\Domain\Google\GoogleApi;
 use App\Domain\Google\GoogleErrors;
@@ -38,7 +39,8 @@ class ClassroomGoogleController extends Controller
      * POST /api/v1/classrooms/{id}/google-link {course_id} -> 201 (200 when
      * it replaced a link) {data: {course_id, course_name, linked_at}}.
      * The course must be ACTIVE and taught by the teacher (422 course_id).
-     * 409 course_already_linked (another classroom has it),
+     * 409 course_already_linked (another classroom has it), course_link_busy
+     * (another import or link of the course is running),
      * classroom_has_google_posts (moving a room whose assignments are posted
      * to another course would strand their courseWork).
      */
@@ -53,7 +55,7 @@ class ClassroomGoogleController extends Controller
             throw ValidationException::withMessages(['course_id' => ['ไม่พบคอร์สนี้ในคอร์สที่คุณสอนอยู่ (ACTIVE) ใน Google Classroom']]);
         }
 
-        $link = DB::transaction(function () use ($request, $classroom, $course) {
+        $link = ClassroomImporter::underCourseLock($course['course_id'], fn () => DB::transaction(function () use ($request, $classroom, $course) {
             $current = ClassroomGoogleLink::query()->lockForUpdate()->find($classroom->id);
             if ($current !== null && $current->course_id !== $course['course_id'] && $this->hasPosts($classroom)) {
                 throw new ApiException(
@@ -76,7 +78,7 @@ class ClassroomGoogleController extends Controller
                 'owner_user_id' => $request->user()->id,
                 'linked_at' => now(),
             ]);
-        });
+        }));
 
         return response()->json(['data' => $link->toApi()], $link->wasRecentlyCreated ? 201 : 200);
     }

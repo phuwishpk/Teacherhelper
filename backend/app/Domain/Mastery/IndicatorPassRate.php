@@ -15,7 +15,8 @@ use App\Models\Skill;
  *
  * With a course: every indicator planned in it (I(course) of §20.3, the
  * unassessed ones with pass_rate null). Without: every skill some student
- * of the classroom has mastery for.
+ * of the classroom has mastery for. Students whose Google account left the
+ * linked course are not counted (Classroom::currentStudents).
  */
 final class IndicatorPassRate
 {
@@ -27,7 +28,7 @@ final class IndicatorPassRate
     public function forClassroom(Classroom $classroom, ?Course $course): array
     {
         $threshold = CourseMasterySummary::passThreshold();
-        $studentIds = $classroom->students()->pluck('users.id')->all();
+        $studentIds = $classroom->currentStudents()->pluck('users.id')->all();
 
         $rows = Mastery::query()
             ->whereIn('student_id', $studentIds === [] ? [0] : $studentIds)

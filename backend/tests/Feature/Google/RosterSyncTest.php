@@ -12,8 +12,10 @@ use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
+use App\Models\StudentCredential;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -208,6 +210,63 @@ class RosterSyncTest extends TestCase
         $this->assertSame('g-a', $this->member(1)->google_user_id);
         $this->assertSame('g-b', $this->member(2)->google_user_id);
         $this->assertNull($this->member(5)->google_user_id);
+    }
+
+    public function test_a_namesake_of_a_student_who_left_is_someone_new(): void
+    {
+        // No. 2 left in an earlier round (their e-mail stays); no. 5 leaves in this one.
+        $this->matchMember(2, null, 'g-2@student.example');
+        ClassroomStudent::query()->where('classroom_id', $this->classroom->id)->where('student_number', 2)->update(['left_course_at' => now()->subDay()]);
+        $this->roster([
+            self::current()[0],
+            self::courseStudent('g-other-2', 'สอง มีสุข', 'other-2@student.example'),
+            self::courseStudent('g-other-5', 'ห้า รักเรียน', 'other-5@student.example'),
+        ]);
+
+        $data = $this->sync();
+
+        $this->assertSame([], $data['rematched'], 'who left only comes back by e-mail');
+        $this->assertSame([5], array_column($data['left'], 'student_number'));
+        $this->assertEqualsCanonicalizing([6, 7], array_column($data['added'], 'student_number'));
+        $this->assertNull($this->member(2)->google_user_id);
+        $this->assertNull($this->member(5)->google_user_id);
+    }
+
+    public function test_students_the_background_sync_adds_wait_for_their_pins(): void
+    {
+        $this->roster([...self::current(), self::courseStudent('g-new', 'ใหม่ มาเรียน', null), self::courseStudent('g-new-2', 'อีก คน', null)]);
+
+        SyncClassroomRosterJob::dispatchSync($this->classroom->id);
+
+        $roster = collect($this->asUser($this->teacher)->getJson("/api/v1/classrooms/{$this->classroom->id}/roster")->assertOk()->json('data'))->keyBy('student_number');
+        $this->assertSame([false, true, true], [$roster[1]['pin_pending'], $roster[6]['pin_pending'], $roster[7]['pin_pending']]);
+        $this->asUser($this->teacher)->getJson('/api/v1/teacher/attention')->assertOk()->assertJsonPath('data.pins_pending', 2);
+
+        // The button in the room issues their PINs, shown once.
+        $colleague = $this->makeTeacher($this->teacher->school);
+        $this->asUser($colleague)->postJson("/api/v1/classrooms/{$this->classroom->id}/students/pending-pins")->assertNotFound();
+        $pins = $this->asUser($this->teacher)->postJson("/api/v1/classrooms/{$this->classroom->id}/students/pending-pins")->assertOk()->json('data');
+        $this->assertSame([6, 7], array_column($pins, 'student_number'));
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $pins[0]['pin']);
+        $this->assertTrue(Hash::check($pins[0]['pin'], StudentCredential::query()->findOrFail($pins[0]['student_id'])->pin_hash));
+        $this->assertSame([], $this->asUser($this->teacher)->postJson("/api/v1/classrooms/{$this->classroom->id}/students/pending-pins")->assertOk()->json('data'));
+        $this->asUser($this->teacher)->getJson('/api/v1/teacher/attention')->assertJsonPath('data.pins_pending', 0);
+
+        // The button sync shows the PINs itself: nothing waits.
+        $this->roster([...self::current(), self::courseStudent('g-new', 'ใหม่ มาเรียน', null), self::courseStudent('g-new-2', 'อีก คน', null), self::courseStudent('g-3', 'สาม', null)]);
+        $this->sync();
+        $this->assertNull($this->member(8)->pin_pending_at);
+    }
+
+    public function test_a_single_pin_reset_settles_a_pending_student(): void
+    {
+        $this->roster([...self::current(), self::courseStudent('g-new', 'ใหม่ มาเรียน', null)]);
+        SyncClassroomRosterJob::dispatchSync($this->classroom->id);
+        $this->assertNotNull($this->member(6)->pin_pending_at);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/students/{$this->member(6)->student_id}/pin")->assertOk();
+
+        $this->assertNull($this->member(6)->pin_pending_at);
     }
 
     public function test_submissions_not_scanned_yet_follow_the_new_matches(): void
