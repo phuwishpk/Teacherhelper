@@ -78,7 +78,17 @@ class Assignment {
     this.lessonPlanId,
     this.lessonPlanTitle,
     this.unmappedQuestionCount = 0,
+    this.kind = kindHomework,
+    this.gradingMethod,
+    this.versionCount = 1,
+    this.durationMinutes,
+    this.showKeyToStudents = false,
+    this.manualFullMarks,
+    this.structureLockedAt,
   });
+
+  static const kindHomework = 'homework';
+  static const kindExam = 'exam';
 
   final int id;
   final int classroomId;
@@ -153,6 +163,32 @@ class Assignment {
   /// Null until the teacher approves the key; nothing is graded before.
   final DateTime? keyApprovedAt;
 
+  /// `homework`, or `exam` for a paper exam with answer sheets (DESIGN
+  /// §22.1): exams open the exam screens, not the homework ones.
+  final String kind;
+
+  /// Exams only: `app` ("ตรวจด้วยแอป") or `manual` ("ครูตรวจเอง").
+  final String? gradingMethod;
+
+  /// Exams only: shuffled versions ก ข ค ง (§22.5), 1 for homework.
+  final int versionCount;
+
+  /// Exams only: the exam's length printed on the cover.
+  final int? durationMinutes;
+
+  /// Exams only: students see the key with their published result.
+  final bool showKeyToStudents;
+
+  /// Exams graded by hand: their full marks (§22.1).
+  final double? manualFullMarks;
+
+  /// Exams only: set by the first print; structural edits need an unlock.
+  final DateTime? structureLockedAt;
+
+  bool get isExam => kind == kindExam;
+
+  bool get isManualExam => isExam && gradingMethod == 'manual';
+
   bool get isDraft => status == 'draft';
 
   bool get isFreeform => mode == AssignmentMode.freeform;
@@ -185,6 +221,13 @@ class Assignment {
     lessonPlanId: lessonPlanId,
     lessonPlanTitle: lessonPlanTitle,
     unmappedQuestionCount: unmappedQuestionCount,
+    kind: kind,
+    gradingMethod: gradingMethod,
+    versionCount: versionCount,
+    durationMinutes: durationMinutes,
+    showKeyToStudents: showKeyToStudents,
+    manualFullMarks: manualFullMarks,
+    structureLockedAt: structureLockedAt,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -200,6 +243,7 @@ class Assignment {
     final approved = json['key_approved_at'];
     final course = json['course'];
     final plan = json['lesson_plan'];
+    final locked = json['structure_locked_at'];
     final questions =
         ((json['questions'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
@@ -244,6 +288,13 @@ class Assignment {
       unmappedQuestionCount:
           (json['unmapped_question_count'] as num?)?.toInt() ??
           questions.where((q) => q.skills.isEmpty).length,
+      kind: json['kind'] as String? ?? kindHomework,
+      gradingMethod: json['grading_method'] as String?,
+      versionCount: (json['version_count'] as num?)?.toInt() ?? 1,
+      durationMinutes: (json['duration_minutes'] as num?)?.toInt(),
+      showKeyToStudents: json['show_key_to_students'] == true,
+      manualFullMarks: (json['manual_full_marks'] as num?)?.toDouble(),
+      structureLockedAt: locked is String ? DateTime.tryParse(locked) : null,
     );
   }
 }

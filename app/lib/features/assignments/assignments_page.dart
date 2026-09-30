@@ -52,7 +52,9 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
           return const EmptyView(
             icon: Icons.assignment_outlined,
             title: 'ยังไม่มีการบ้าน',
-            message: 'สร้างการบ้าน เลือกตัวชี้วัด แล้วพิมพ์ใบงานแยกรายนักเรียน',
+            message:
+                'สร้างการบ้าน เลือกตัวชี้วัด แล้วพิมพ์ใบงานแยกรายนักเรียน '
+                'หรือสร้างข้อสอบแบบฝนกระดาษคำตอบ',
           );
         }
         final visible = _classroomFilter == null
@@ -103,17 +105,34 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
   }
 }
 
-/// "สร้างการบ้าน" button the shell shows while this tab is selected.
+/// "สร้างการบ้าน" and "สร้างข้อสอบ" (DESIGN §22) buttons the shell shows
+/// while this tab is selected.
 class AssignmentsFab extends StatelessWidget {
   const AssignmentsFab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
-      heroTag: 'assignment_new',
-      onPressed: () => context.push(AppRoutes.assignmentNew),
-      icon: const Icon(Icons.add),
-      label: const Text('สร้างการบ้าน'),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FloatingActionButton.extended(
+          key: const ValueKey('exam_new_fab'),
+          heroTag: 'exam_new',
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+          onPressed: () => context.push(AppRoutes.examNew),
+          icon: const Icon(Icons.quiz_outlined),
+          label: const Text('สร้างข้อสอบ'),
+        ),
+        const SizedBox(height: 12),
+        FloatingActionButton.extended(
+          heroTag: 'assignment_new',
+          onPressed: () => context.push(AppRoutes.assignmentNew),
+          icon: const Icon(Icons.add),
+          label: const Text('สร้างการบ้าน'),
+        ),
+      ],
     );
   }
 }
@@ -131,10 +150,14 @@ class _AssignmentCard extends StatelessWidget {
     final parts = [
       ?classroomName,
       ?(a.courseLabel ?? a.subjectName),
-      if (a.dueAt != null) 'ส่ง ${formatThaiDate(a.dueAt!)}',
+      if (a.dueAt != null)
+        '${a.isExam ? 'สอบ' : 'ส่ง'} ${formatThaiDate(a.dueAt!)}',
       if (a.currentLayoutVersion != null) 'layout v${a.currentLayoutVersion}',
     ];
     final chips = [
+      if (a.isExam) StatusChip(label: 'ข้อสอบ', color: scheme.primary),
+      if (a.isExam && !a.isManualExam && !a.keyApproved && a.status != 'closed')
+        StatusChip(label: 'รออนุมัติเฉลย', color: scheme.error),
       if (a.fromClassroomWeb)
         StatusChip(label: 'สร้างในเว็บ Classroom', color: scheme.tertiary),
       if (a.isFreeform && !a.keyApproved && a.status != 'closed')
@@ -160,7 +183,9 @@ class _AssignmentCard extends StatelessWidget {
           label: assignmentStatusLabel(a.status),
           color: assignmentStatusColor(context, a.status),
         ),
-        onTap: () => context.push(AppRoutes.assignment(a.id)),
+        onTap: () => context.push(
+          a.isExam ? AppRoutes.exam(a.id) : AppRoutes.assignment(a.id),
+        ),
       ),
     );
   }
