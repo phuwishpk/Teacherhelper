@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamSheetIngestor;
 use App\Domain\Scans\ScanFiles;
 use App\Domain\Scans\ScanIngestor;
+use App\Domain\Scans\ScanOutcome;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
@@ -35,11 +37,19 @@ class ScanController extends Controller
 
     /**
      * POST /api/v1/scans/{id}/confirm-replace -> 200 {scan_id, submission_id,
-     * state: "active"}; 409 scan_superseded / scan_files_missing.
+     * state: "active"}; 409 scan_superseded / scan_files_missing. A page of
+     * an exam answer sheet is confirmed by ExamSheetIngestor (§22.11).
      */
-    public function confirmReplace(Request $request, int $id): JsonResponse
+    public function confirmReplace(Request $request, int $id, ExamSheetIngestor $exams): JsonResponse
     {
-        $outcome = $this->ingestor->confirmReplace($request->user(), self::find($request, $id));
+        $scan = self::find($request, $id);
+        if ($scan->submission->assignment->isExam()) {
+            Gate::authorize('confirmReplace', $scan);
+            $outcome = new ScanOutcome($exams->confirmReplace($request->user(), $scan), 200);
+
+            return response()->json($outcome->body(), $outcome->status);
+        }
+        $outcome = $this->ingestor->confirmReplace($request->user(), $scan);
 
         return response()->json($outcome->body(), $outcome->status);
     }

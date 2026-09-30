@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Exams\ExamEditor;
+use App\Domain\Exams\ExamKeySheetReader;
 use App\Domain\Exams\ExamPayload;
 use App\Domain\Exams\ExamPrintService;
+use App\Domain\Exams\ExamScanKit;
+use App\Domain\Exams\ExamSheetStatus;
 use App\Domain\Exams\ExamVersions;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WorksheetPrintResource;
@@ -134,6 +137,47 @@ class ExamController extends Controller
         $print = $prints->queue($exam, $request->user(), $request->only(['kind', 'version_no', 'student_ids']));
 
         return (new WorksheetPrintResource($print->refresh()))->response()->setStatusCode(202);
+    }
+
+    /**
+     * GET /api/v1/exams/{id}/scan-kit -> {data: kit} (ExamScanKit): layouts,
+     * the key of every version by sheet number, the roster and kit_hash, for
+     * reading and scoring answer sheets offline (§22.9). 409
+     * answer_key_not_approved, 422 exam_manual_grading.
+     */
+    public function scanKit(Request $request, int $id): JsonResponse
+    {
+        $exam = self::ownQuery($request)->with('classroom')->findOrFail($id);
+        Gate::authorize('scan', $exam);
+        ExamScanKit::assertScannable($exam);
+
+        return response()->json(['data' => ExamScanKit::payload($exam)]);
+    }
+
+    /**
+     * GET /api/v1/exams/{id}/sheet-status -> {data: [student rows], summary:
+     * {scanned, total, missing_numbers, page_count, max_score}} (ExamSheetStatus).
+     */
+    public function sheetStatus(Request $request, int $id): JsonResponse
+    {
+        $exam = self::ownQuery($request)->with('classroom')->findOrFail($id);
+        Gate::authorize('scan', $exam);
+
+        return response()->json(ExamSheetStatus::of($exam));
+    }
+
+    /**
+     * POST /api/v1/exams/{id}/key-sheet-read {qr, version_no?, version_fill?,
+     * rows, digits?} -> {data: {version_no, page, proposal[]}}; saves nothing
+     * (ExamKeySheetReader). 422 qr_invalid / layout_unknown / page_mismatch /
+     * version_unknown / exam_manual_grading.
+     */
+    public function keySheetRead(Request $request, int $id): JsonResponse
+    {
+        $exam = self::ownQuery($request)->findOrFail($id);
+        Gate::authorize('update', $exam);
+
+        return response()->json(['data' => ExamKeySheetReader::read($exam, $request->all())]);
     }
 
     /**

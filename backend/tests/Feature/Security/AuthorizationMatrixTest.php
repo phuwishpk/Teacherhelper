@@ -119,6 +119,11 @@ class AuthorizationMatrixTest extends TestCase
         'api.exams.versions.reshuffle' => ['POST', 'exams/{exam}/versions/reshuffle', 404, 404],
         'api.exams.unlock-structure' => ['POST', 'exams/{exam}/unlock-structure', 404, 404],
         'api.exams.prints.store' => ['POST', 'exams/{exam}/prints', 404, 404],
+        'api.exams.scan-kit' => ['GET', 'exams/{exam}/scan-kit', 404, 404],
+        'api.exams.sheet-status' => ['GET', 'exams/{exam}/sheet-status', 404, 404],
+        'api.exams.key-sheet-read' => ['POST', 'exams/{exam}/key-sheet-read', 404, 404],
+        // The QR names the exam; the scan policy answers 403 like POST /scans.
+        'api.exam-sheets.store' => ['POST', 'exam-sheets', 403, 403],
         'api.exam-sections.update' => ['PATCH', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.destroy' => ['DELETE', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.questions.store' => ['POST', 'exam-sections/{exam_section}/questions', 404, 404],
@@ -426,6 +431,9 @@ class AuthorizationMatrixTest extends TestCase
 
         if ($uri === 'scans') {
             return $request->post($path, $this->scanBody(), ['Accept' => 'application/json']);
+        }
+        if ($uri === 'exam-sheets') {
+            return $request->post($path, $this->examSheetBody(), ['Accept' => 'application/json']);
         }
 
         return $request->json($method, $path, []);

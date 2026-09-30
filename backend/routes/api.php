@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExamController;
 use App\Http\Controllers\Api\V1\ExamImageController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
+use App\Http\Controllers\Api\V1\ExamSheetController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
@@ -203,6 +204,11 @@ Route::prefix('v1')->group(function () {
                 Route::post('exams/{id}/versions/reshuffle', [ExamController::class, 'reshuffle'])->name('api.exams.versions.reshuffle');
                 Route::post('exams/{id}/unlock-structure', [ExamController::class, 'unlockStructure'])->name('api.exams.unlock-structure');
                 Route::post('exams/{id}/prints', [ExamController::class, 'prints'])->name('api.exams.prints.store');
+                // Scanning answer sheets (§22.9-§22.11).
+                Route::get('exams/{id}/scan-kit', [ExamController::class, 'scanKit'])->name('api.exams.scan-kit');
+                Route::get('exams/{id}/sheet-status', [ExamController::class, 'sheetStatus'])->name('api.exams.sheet-status');
+                Route::post('exams/{id}/key-sheet-read', [ExamController::class, 'keySheetRead'])->name('api.exams.key-sheet-read');
+                Route::post('exam-sheets', [ExamSheetController::class, 'store'])->name('api.exam-sheets.store');
                 Route::patch('exam-sections/{id}', [ExamSectionController::class, 'update'])->name('api.exam-sections.update');
                 Route::delete('exam-sections/{id}', [ExamSectionController::class, 'destroy'])->name('api.exam-sections.destroy');
                 Route::post('exam-sections/{id}/questions', [ExamSectionController::class, 'storeQuestion'])->name('api.exam-sections.questions.store');

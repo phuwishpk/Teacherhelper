@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -94,6 +95,12 @@ class Scan extends Model
     public function responses(): HasMany
     {
         return $this->hasMany(Response::class);
+    }
+
+    /** @return HasOne<ExamSheetRead, $this> the bubble fill of an exam answer-sheet page (§22.14) */
+    public function examSheetRead(): HasOne
+    {
+        return $this->hasOne(ExamSheetRead::class);
     }
 
     public function isActive(): bool

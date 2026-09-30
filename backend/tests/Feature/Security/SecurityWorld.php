@@ -348,4 +348,25 @@ trait SecurityWorld
             'crop_open' => UploadedFile::fake()->createWithContent('crop.webp', $this->scanFixture('crop.webp')),
         ];
     }
+
+    /**
+     * A validly signed answer-sheet page of examA (POST /exam-sheets, §22.11).
+     *
+     * @return array<string, mixed>
+     */
+    protected function examSheetBody(): array
+    {
+        $meta = [
+            'client_scan_id' => (string) Str::uuid(),
+            'qr' => app(QrSigner::class)->signExamSheet($this->examA->id, $this->studentA->id, 1, 1),
+            'scanned_at' => '2026-09-20T09:15:00+07:00',
+            'blur_score' => 182.4,
+            'rows' => ['1' => ['1' => 0.9, '2' => 0.02, '3' => 0.02, '4' => 0.02]],
+        ];
+
+        return [
+            'meta' => json_encode($meta),
+            'page' => UploadedFile::fake()->createWithContent('page.webp', $this->scanFixture('page.webp')),
+        ];
+    }
 }
