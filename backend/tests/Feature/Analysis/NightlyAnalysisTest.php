@@ -174,7 +174,8 @@ class NightlyAnalysisTest extends TestCase
         foreach (AnalysisBatch::query()->pluck('id') as $id) {
             $this->batches()->poll($id);
         }
-        $this->assertSame(['teacher', 'server', 'server'], AiCall::query()->orderBy('key_source', 'desc')->pluck('key_source')->all());
+        // Sorted in PHP: MariaDB orders an ENUM column by its index, not alphabetically.
+        $this->assertSame(['server', 'server', 'teacher'], AiCall::query()->pluck('key_source')->sort()->values()->all());
 
         // Without any key the rows stay computed until a key exists.
         StudentAnalysis::query()->delete();
