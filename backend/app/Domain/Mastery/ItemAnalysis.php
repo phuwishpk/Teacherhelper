@@ -15,8 +15,10 @@ use Illuminate\Support\Collection;
  *
  * - p (difficulty) = mean(final_score / max_points) per question;
  * - r (discrimination) = mean ratio of the top 27 % minus the bottom 27 %
- *   of students by total score, shown from MIN_FOR_R published students up,
- *   null ("ข้อมูลน้อย") below that;
+ *   of students by the total that counts (Submission::effectiveTotal(),
+ *   COALESCE(total_override, total_score), §22.13, so a total taken from
+ *   Classroom ranks the student correctly), shown from MIN_FOR_R published
+ *   students up, null ("ข้อมูลน้อย") below that;
  * - most missed = questions by p ascending;
  * - skill × error type heatmap = counts of final_error_types over the
  *   skills of each question.
@@ -42,7 +44,7 @@ final class ItemAnalysis
         $submissions = Submission::query()
             ->where('assignment_id', $assignment->id)
             ->where('status', Submission::STATUS_PUBLISHED)
-            ->get(['id', 'total_score']);
+            ->get(['id', 'total_score', 'total_override']);
         $published = $submissions->count();
 
         $responses = $published === 0
@@ -61,7 +63,7 @@ final class ItemAnalysis
             $ratios[$response->question_id][$response->submission_id] = max(0.0, min(1.0, $score / $max));
         }
 
-        [$top, $bottom] = self::groups($submissions, $published);
+        [$top, $bottom] = self::groups($submissions);
 
         $items = [];
         foreach ($questions as $question) {
@@ -91,20 +93,24 @@ final class ItemAnalysis
     }
 
     /**
-     * Top and bottom 27 % of the published submissions by total score (ties
-     * broken by id so the groups are stable), or [null, null] below MIN_FOR_R.
+     * Top and bottom 27 % of the published submissions by the total that
+     * counts (effectiveTotal(), ties broken by id so the groups are stable),
+     * or [null, null] below MIN_FOR_R. The submissions need id, total_score
+     * and total_override. Also the groups of the option analysis of an exam
+     * (ExamOptionAnalysis, §22.13).
      *
      * @param  Collection<int, Submission>  $submissions
      * @return array{0: list<int>|null, 1: list<int>|null}
      */
-    private static function groups($submissions, int $published): array
+    public static function groups(Collection $submissions): array
     {
+        $published = $submissions->count();
         if ($published < self::MIN_FOR_R) {
             return [null, null];
         }
         $size = max(1, (int) round(self::GROUP_FRACTION * $published));
         $ordered = $submissions
-            ->sortBy(fn (Submission $s) => [-(float) ($s->total_score ?? 0), $s->id])
+            ->sortBy(fn (Submission $s) => [-($s->effectiveTotal() ?? 0.0), $s->id])
             ->pluck('id')
             ->values()
             ->all();

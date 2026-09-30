@@ -3,6 +3,7 @@
 namespace App\Domain\Mastery;
 
 use App\Domain\Grading\Understanding;
+use App\Models\Assignment;
 use App\Models\Mastery;
 use App\Models\PracticeAttempt;
 use App\Models\PracticeItem;
@@ -14,12 +15,13 @@ use Illuminate\Support\Facades\DB;
 /**
  * EWMA mastery (DESIGN §14.2):
  *
- *   m1 = s1,  mt = αt · st + (1 − αt) · mt−1,  α = 0.30 homework / 0.15 practice
+ *   m1 = s1,  mt = αt · st + (1 − αt) · mt−1,  α = 0.30 homework and exam / 0.15 practice
  *
  * over the student's skill_observations ordered by observed_at. Only
  * published answers count (§14.2): recordSubmission() writes one
  * observation per (response, skill) with score_ratio = final_score /
- * max_points at publish time, and replaces the rows when the submission is
+ * max_points at publish time (source exam for an exam answer sheet,
+ * §22.13; an exam graded by hand has no answers, so no observations), and replaces the rows when the submission is
  * published again (rescan) or an accepted appeal changed a score. Every
  * change recomputes the whole (student, skill) series, which is cheap
  * because the series are short.
@@ -154,6 +156,9 @@ final class MasteryCalculator
                 return 0;
             }
             $responses = Response::query()->where('submission_id', $submission->id)->with('question.skills')->get();
+            $source = Assignment::query()->whereKey($submission->assignment_id)->value('kind') === Assignment::KIND_EXAM
+                ? SkillObservation::SOURCE_EXAM
+                : SkillObservation::SOURCE_HOMEWORK;
             $responseIds = $responses->modelKeys();
 
             $touched = SkillObservation::query()->whereIn('response_id', $responseIds)->distinct()->pluck('skill_id')->all();
@@ -173,7 +178,7 @@ final class MasteryCalculator
                         $rows[] = [
                             'student_id' => $submission->student_id,
                             'skill_id' => $skill->id,
-                            'source' => SkillObservation::SOURCE_HOMEWORK,
+                            'source' => $source,
                             'response_id' => $response->id,
                             'practice_attempt_id' => null,
                             'score_ratio' => $ratio,

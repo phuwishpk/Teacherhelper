@@ -234,6 +234,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('exams/{id}/scan-kit', [ExamController::class, 'scanKit'])->name('api.exams.scan-kit');
                 Route::get('exams/{id}/sheet-status', [ExamController::class, 'sheetStatus'])->name('api.exams.sheet-status');
                 Route::post('exams/{id}/key-sheet-read', [ExamController::class, 'keySheetRead'])->name('api.exams.key-sheet-read');
+                Route::get('exams/{id}/option-analysis', [ExamController::class, 'optionAnalysis'])->name('api.exams.option-analysis');
                 Route::post('exam-sheets', [ExamSheetController::class, 'store'])->name('api.exam-sheets.store');
                 // Review of scanned answer sheets by code (§22.11): pick a page's version, read a doubtful mark.
                 Route::post('exam-sheets/{id}/version', [ExamSheetController::class, 'version'])->name('api.exam-sheets.version');

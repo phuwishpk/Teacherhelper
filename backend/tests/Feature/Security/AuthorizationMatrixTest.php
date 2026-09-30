@@ -140,6 +140,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.exams.scan-kit' => ['GET', 'exams/{exam}/scan-kit', 404, 404],
         'api.exams.sheet-status' => ['GET', 'exams/{exam}/sheet-status', 404, 404],
         'api.exams.key-sheet-read' => ['POST', 'exams/{exam}/key-sheet-read', 404, 404],
+        'api.exams.option-analysis' => ['GET', 'exams/{exam}/option-analysis', 404, 404],
         // The QR names the exam; the scan policy answers 403 like POST /scans.
         'api.exam-sheets.store' => ['POST', 'exam-sheets', 403, 403],
         // Review of a scanned page (§22.11): looked up among the owner's exams only.

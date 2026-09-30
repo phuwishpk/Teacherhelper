@@ -314,11 +314,12 @@ final class AnswerKeyService
         });
 
         Log::info('answer_key.approved', ['assignment_id' => $assignment->id, 'mode' => $assignment->mode, 'kind' => $assignment->kind]);
-        if ($assignment->isExam()) {
-            return $assignment; // answer sheets are scored by code on upload, nothing waits (§22.11)
+        // Answer sheets of an exam are scored by code on upload, nothing waits (§22.11).
+        if (! $assignment->isExam()) {
+            ReleaseWaitingSubmissionsJob::dispatch($assignment->id);
         }
-        ReleaseWaitingSubmissionsJob::dispatch($assignment->id);
-        // Linked to a lesson plan with questions still without an indicator: suggest them now (§20.3).
+        // Indicators to pick from (a lesson plan, or an exam's course) and questions still
+        // without one: suggest them now (§20.3, §22.13).
         $this->indicatorSuggestions->autoOnApproval($assignment->loadMissing('classroom'));
 
         return $assignment;

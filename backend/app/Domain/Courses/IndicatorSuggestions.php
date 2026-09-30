@@ -9,7 +9,6 @@ use App\Http\Resources\SkillResource;
 use App\Jobs\SuggestIndicatorsJob;
 use App\Models\Assignment;
 use App\Models\IndicatorSuggestion;
-use App\Models\LessonPlan;
 use App\Models\Question;
 use App\Models\Skill;
 use Illuminate\Support\Carbon;
@@ -21,19 +20,22 @@ use Throwable;
 /**
  * Indicator suggestions of an assignment (DESIGN §20.3, §20.7):
  *
- * - request(): POST /assignments/{id}/indicator-suggestions. The assignment
- *   must be linked to a lesson plan (422 lesson_plan_required) that has
- *   indicators (422 lesson_plan_no_indicators) and have questions (422
+ * - request(): POST /assignments/{id}/indicator-suggestions. The indicators
+ *   come from IndicatorScope: the linked lesson plan's, or for an exam
+ *   without a plan the course's (§22.13). Homework must be linked to a
+ *   lesson plan (422 lesson_plan_required); the list must not be empty
+ *   (422 lesson_plan_no_indicators) and there must be questions (422
  *   no_questions); the classroom owner's key is needed (422
  *   ai_key_missing). Queues SuggestIndicatorsJob (202) unless one is
  *   already queued for less than STALE_MINUTES.
  * - autoOnApproval(): the same, silently, when the teacher approves the
- *   answer key of an assignment linked to a plan and some question has no
- *   indicator yet ("หรือระบบเสนอให้ตอนอนุมัติเฉลย").
+ *   answer key of an assignment with indicators to pick from (a plan, or
+ *   an exam's course) and some question has no indicator yet ("หรือระบบเสนอให้ตอนอนุมัติเฉลย").
  * - process(): the job's work: IndicatorSuggester, then the rows of
  *   indicator_suggestions for every question are replaced.
  * - payload(): GET …/indicator-suggestions: per question its confirmed
- *   indicators (question_skill) and the suggestions still in the plan,
+ *   indicators (question_skill) and the suggestions still in the plan (or
+ *   the exam's course: indicator_source, course),
  *   plus unmapped_question_count and the warning of §20.3 (never a block).
  *
  * The state of the latest request (queued, done, failed) lives in the
@@ -71,8 +73,8 @@ final class IndicatorSuggestions
      */
     public function request(Assignment $assignment, ?string $guidance = null, ?int $guidanceBy = null): array
     {
-        $plan = $this->planOf($assignment);
-        if ($plan === null) {
+        $scope = IndicatorScope::of($assignment);
+        if ($scope === null) {
             throw new ApiException(
                 'ผูกการบ้านนี้กับแผนการสอนก่อน แล้วจึงให้ AI เสนอตัวชี้วัด',
                 'lesson_plan_required',
@@ -80,11 +82,17 @@ final class IndicatorSuggestions
                 ['lesson_plan_id' => ['กรุณาเลือกแผนการสอน']],
             );
         }
-        if ($plan->indicators->isEmpty()) {
-            throw new ApiException('แผนการสอนนี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของแผนก่อน', 'lesson_plan_no_indicators', 422);
+        if ($scope->isEmpty()) {
+            throw new ApiException(
+                $scope->plan !== null
+                    ? 'แผนการสอนนี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของแผนก่อน'
+                    : 'รายวิชานี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของรายวิชา หน่วย หรือแผนการสอนก่อน',
+                'lesson_plan_no_indicators',
+                422,
+            );
         }
         if (! Question::query()->where('assignment_id', $assignment->id)->exists()) {
-            throw new ApiException('การบ้านนี้ยังไม่มีข้อ', 'no_questions', 422);
+            throw new ApiException($assignment->isExam() ? 'ข้อสอบนี้ยังไม่มีข้อ' : 'การบ้านนี้ยังไม่มีข้อ', 'no_questions', 422);
         }
         if ($this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
@@ -101,8 +109,8 @@ final class IndicatorSuggestions
     public function autoOnApproval(Assignment $assignment): void
     {
         try {
-            $plan = $this->planOf($assignment);
-            if ($plan === null || $plan->indicators->isEmpty() || $this->isRunning($assignment->id)) {
+            $scope = IndicatorScope::of($assignment);
+            if ($scope === null || $scope->isEmpty() || $this->isRunning($assignment->id)) {
                 return;
             }
             $unmapped = Question::query()->where('assignment_id', $assignment->id)->whereDoesntHave('skills')->exists();
@@ -133,9 +141,11 @@ final class IndicatorSuggestions
 
             return;
         }
-        $plan = $this->planOf($assignment);
-        if ($plan === null || $plan->indicators->isEmpty()) {
-            $this->fail($assignmentId, 'lesson_plan_required', 'การบ้านนี้ไม่ได้ผูกแผนการสอนที่มีตัวชี้วัดแล้ว');
+        $scope = IndicatorScope::of($assignment);
+        if ($scope === null || $scope->isEmpty()) {
+            $this->fail($assignmentId, 'lesson_plan_required', $assignment->isExam()
+                ? 'ข้อสอบนี้ไม่มีตัวชี้วัดของแผนหรือรายวิชาให้เลือกแล้ว'
+                : 'การบ้านนี้ไม่ได้ผูกแผนการสอนที่มีตัวชี้วัดแล้ว');
 
             return;
         }
@@ -146,10 +156,9 @@ final class IndicatorSuggestions
             return;
         }
 
-        $questions = Question::query()->where('assignment_id', $assignment->id)->orderBy('position')->get()->all();
-        $indicators = self::sortedIndicators($plan);
+        $questions = Question::query()->where('assignment_id', $assignment->id)->orderBy('position')->with('options')->get()->all();
         try {
-            $result = $this->suggester->suggest($assignment, $plan, $questions, $indicators, $key, $guidance, $guidanceBy);
+            $result = $this->suggester->suggest($assignment, $scope, $questions, $key, $guidance, $guidanceBy);
         } catch (GeminiException $e) {
             if ($e->status === GeminiException::ERROR && ! $lastAttempt) {
                 throw $e;
@@ -227,8 +236,9 @@ final class IndicatorSuggestions
      */
     public function payload(Assignment $assignment): array
     {
-        $plan = $this->planOf($assignment);
-        $planSkillIds = $plan === null ? [] : $plan->indicators->modelKeys();
+        $scope = IndicatorScope::of($assignment);
+        $plan = $scope?->plan;
+        $planSkillIds = $scope === null ? [] : $scope->skillIds();
         $questions = Question::query()
             ->where('assignment_id', $assignment->id)
             ->orderBy('position')
@@ -240,7 +250,12 @@ final class IndicatorSuggestions
         return [
             'assignment_id' => $assignment->id,
             'lesson_plan' => $plan === null ? null : ['id' => $plan->id, 'title' => $plan->title, 'unit_id' => $plan->unit_id],
-            'plan_indicators' => $plan === null ? [] : array_map(fn (Skill $s) => SkillResource::indicator($s), self::sortedIndicators($plan)),
+            // lesson_plan | course (an exam without a plan, §22.13) | null; plan_indicators holds that list.
+            'indicator_source' => $scope?->source,
+            'course' => $scope?->source === IndicatorScope::SOURCE_COURSE && $scope->course !== null
+                ? ['id' => $scope->course->id, 'code' => $scope->course->code, 'name' => $scope->course->name]
+                : null,
+            'plan_indicators' => $scope === null ? [] : array_map(fn (Skill $s) => SkillResource::indicator($s), $scope->indicators),
             ...$this->state($assignment->id),
             'questions' => $questions->map(fn (Question $q) => [
                 'question_id' => $q->id,
@@ -249,7 +264,7 @@ final class IndicatorSuggestions
                 'prompt_text' => $q->prompt_text,
                 'skill_ids' => $q->skills->modelKeys(),
                 'skills' => $q->skills->map(fn (Skill $s) => SkillResource::indicator($s))->values()->all(),
-                // Only suggestions still in the plan (the plan's indicators may have changed since).
+                // Only suggestions still in the plan (or the exam's course; its indicators may have changed since).
                 'suggestions' => $q->indicatorSuggestions
                     ->filter(fn (IndicatorSuggestion $s) => $s->skill !== null && in_array($s->skill_id, $planSkillIds, true))
                     ->sortBy(fn (IndicatorSuggestion $s) => $s->skill->code, SORT_NATURAL)
@@ -267,21 +282,6 @@ final class IndicatorSuggestions
     public static function unmappedWarning(int $unmapped): ?string
     {
         return $unmapped > 0 ? "มี {$unmapped} ข้อยังไม่ผูกตัวชี้วัด คะแนนข้อเหล่านี้จะไม่นับในกราฟ" : null;
-    }
-
-    private function planOf(Assignment $assignment): ?LessonPlan
-    {
-        if ($assignment->lesson_plan_id === null) {
-            return null;
-        }
-
-        return LessonPlan::query()->with(['indicators', 'course.subject'])->find($assignment->lesson_plan_id);
-    }
-
-    /** @return list<Skill> */
-    private static function sortedIndicators(LessonPlan $plan): array
-    {
-        return $plan->indicators->sortBy('code', SORT_NATURAL)->values()->all();
     }
 
     private function isRunning(int $assignmentId): bool

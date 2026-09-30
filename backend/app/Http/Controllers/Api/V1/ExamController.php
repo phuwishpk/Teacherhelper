@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Exams\ExamEditor;
 use App\Domain\Exams\ExamKeySheetReader;
+use App\Domain\Exams\ExamOptionAnalysis;
 use App\Domain\Exams\ExamPayload;
 use App\Domain\Exams\ExamPrintService;
 use App\Domain\Exams\ExamScanKit;
@@ -178,6 +179,21 @@ class ExamController extends Controller
         Gate::authorize('update', $exam);
 
         return response()->json(['data' => ExamKeySheetReader::read($exam, $request->all())]);
+    }
+
+    /**
+     * GET /api/v1/exams/{id}/option-analysis -> {data: {published_count,
+     * groups_ready, min_count_for_r, group_size, questions: [{question_id,
+     * position, section_id, type, prompt_text, p, r, options: [{position,
+     * label, correct, count, pct, top, bottom, flags[]}], blank: {count, pct},
+     * multiple: {count, pct}, flag_count}]}} (ExamOptionAnalysis, §22.13).
+     */
+    public function optionAnalysis(Request $request, int $id): JsonResponse
+    {
+        $exam = self::ownQuery($request)->findOrFail($id);
+        Gate::authorize('view', $exam);
+
+        return response()->json(['data' => ['exam_id' => $exam->id, ...ExamOptionAnalysis::of($exam)]]);
     }
 
     /**
