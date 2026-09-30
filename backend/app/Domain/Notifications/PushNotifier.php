@@ -5,6 +5,8 @@ namespace App\Domain\Notifications;
 use App\Models\Appeal;
 use App\Models\Assignment;
 use App\Models\ClassroomSubmissionImport;
+use App\Models\GradebookPublication;
+use App\Models\GradebookPublishedGrade;
 use App\Models\Submission;
 
 /**
@@ -82,6 +84,20 @@ abstract class PushNotifier implements Notifier
             PushMessage::CLASSROOM_WORK_IMPORTED,
             NoticeTexts::classroomWorkImported((string) $assignment->title),
             ['assignment_id' => $assignment->id],
+        ));
+    }
+
+    public function gradesPublished(GradebookPublication $publication): void
+    {
+        $studentIds = GradebookPublishedGrade::query()->where('publication_id', $publication->id)
+            ->orderBy('student_id')->pluck('student_id')->map(fn ($id) => (int) $id)->all();
+        if ($studentIds === []) {
+            return;
+        }
+        $this->push($studentIds, new PushMessage(
+            PushMessage::GRADES_PUBLISHED,
+            NoticeTexts::gradesPublished((string) $publication->course?->code),
+            ['course_id' => $publication->course_id],
         ));
     }
 

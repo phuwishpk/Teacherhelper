@@ -5,6 +5,7 @@ namespace App\Domain\Notifications;
 use App\Models\Appeal;
 use App\Models\Assignment;
 use App\Models\ClassroomSubmissionImport;
+use App\Models\GradebookPublication;
 use App\Models\Submission;
 
 /**
@@ -45,6 +46,12 @@ interface Notifier
      * website (DESIGN §19.3): its answer key waits for the teacher's approval.
      */
     public function classroomWorkImported(Assignment $assignment): void;
+
+    /**
+     * The teacher published the grades of a classroom (DESIGN §23.7): tell
+     * each student in the publication, never the grade.
+     */
+    public function gradesPublished(GradebookPublication $publication): void;
 
     /**
      * The teacher's Google grant stopped working (invalid_grant, a scope

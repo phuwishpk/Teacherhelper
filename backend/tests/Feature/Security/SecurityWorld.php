@@ -16,6 +16,10 @@ use App\Models\DocumentExtraction;
 use App\Models\ExamSection;
 use App\Models\ExamSheetRead;
 use App\Models\GoogleAccount;
+use App\Models\GradebookCategory;
+use App\Models\GradebookItem;
+use App\Models\GradebookPublication;
+use App\Models\GradebookPublishedGrade;
 use App\Models\GradeConflict;
 use App\Models\Layout;
 use App\Models\LearningResource;
@@ -153,6 +157,12 @@ trait SecurityWorld
 
     protected LessonPlan $lessonPlanA;
 
+    /** A gradebook item of course A in classroom A (DESIGN §23.3). */
+    protected GradebookItem $gradebookItemA;
+
+    /** Published grades of classroom A in course A: rows of student A and A2 (§23.7). */
+    protected GradebookPublication $publicationA;
+
     protected function makeSecurityWorld(): void
     {
         Storage::fake('local');
@@ -235,6 +245,23 @@ trait SecurityWorld
         $this->courseA->indicators()->attach($this->curriculumSkill->id);
         $this->unitA = Unit::create(['course_id' => $this->courseA->id, 'position' => 1, 'title' => 'จำนวนนับ']);
         $this->lessonPlanA = LessonPlan::create(['course_id' => $this->courseA->id, 'unit_id' => $this->unitA->id, 'position' => 1, 'title' => 'การอ่านจำนวน']);
+
+        // The gradebook of course A (§23): one category, an item of classroom A and a publication.
+        $categoryA = GradebookCategory::create(['course_id' => $this->courseA->id, 'position' => 1, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'is_homework_default' => true]);
+        $this->gradebookItemA = GradebookItem::create([
+            'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'category_id' => $categoryA->id,
+            'name' => 'การแต่งกาย', 'max_points' => 10, 'position' => 1, 'created_by' => $this->teacherA->id,
+        ]);
+        $this->publicationA = GradebookPublication::create([
+            'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'categories' => [['id' => $categoryA->id, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'drop_lowest' => 0]],
+            'cutoffs' => [80, 75, 70, 65, 60, 55, 50], 'published_by' => $this->teacherA->id, 'published_at' => now(),
+        ]);
+        foreach ([$this->studentA, $this->studentA2] as $student) {
+            GradebookPublishedGrade::create([
+                'publication_id' => $this->publicationA->id, 'student_id' => $student->id, 'breakdown' => [],
+                'total' => 80, 'total_rounded' => 80, 'grade' => 4, 'attendance_warning' => false,
+            ]);
+        }
 
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',

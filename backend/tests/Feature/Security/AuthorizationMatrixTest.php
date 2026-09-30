@@ -87,6 +87,23 @@ class AuthorizationMatrixTest extends TestCase
         'api.courses.import' => ['POST', 'courses/import', self::OK, self::OK],
         'api.courses.mastery-summary' => ['GET', 'courses/{own_course}/mastery-summary', 404, 404],
         'api.courses.plan-progress' => ['GET', 'courses/{own_course}/plan-progress', 404, 404],
+        // The gradebook (§23.11, §23.12): the owner's courses and items only; another teacher gets 404.
+        'api.gradebook.templates' => ['GET', 'gradebook/templates', self::OK, self::OK],
+        'api.courses.gradebook.settings' => ['GET', 'courses/{own_course}/gradebook/settings', 404, 404],
+        'api.courses.gradebook.categories' => ['PUT', 'courses/{own_course}/gradebook/categories', 404, 404],
+        'api.courses.gradebook.cutoffs' => ['PUT', 'courses/{own_course}/gradebook/cutoffs', 404, 404],
+        'api.courses.gradebook.show' => ['GET', 'courses/{own_course}/gradebook', 404, 404],
+        'api.courses.gradebook.special-grades' => ['PUT', 'courses/{own_course}/gradebook/special-grades', 404, 404],
+        'api.courses.gradebook.publish' => ['POST', 'courses/{own_course}/gradebook/publish', 404, 404],
+        'api.courses.gradebook.withdraw' => ['DELETE', 'courses/{own_course}/gradebook/publish', 404, 404],
+        'api.courses.gradebook.export' => ['GET', 'courses/{own_course}/gradebook/export', 404, 404],
+        'api.courses.gradebook-items.store' => ['POST', 'courses/{own_course}/gradebook-items', 404, 404],
+        'api.gradebook-items.update' => ['PATCH', 'gradebook-items/{gradebook_item}', 404, 404],
+        'api.gradebook-items.destroy' => ['DELETE', 'gradebook-items/{gradebook_item}', 404, 404],
+        'api.gradebook-items.scores' => ['PUT', 'gradebook-items/{gradebook_item}/scores', 404, 404],
+        'api.gradebook-items.fill-full' => ['POST', 'gradebook-items/{gradebook_item}/fill-full', 404, 404],
+        'api.assignments.gradebook-scores' => ['PUT', 'assignments/{assignment}/gradebook-scores', 404, 404],
+        'api.assignments.gradebook-scores.fill-full' => ['POST', 'assignments/{assignment}/gradebook-scores/fill-full', 404, 404],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
         'api.assignments.show' => ['GET', 'assignments/{assignment}', 404, 404],
@@ -214,6 +231,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.courses.index' => ['GET', 'student/courses', self::OK, self::OK],
         // A classmate reads the same course (their own values only); another school's student does not see it.
         'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
+        // Their own row of the latest publication only (§23.12): a classmate reads their own row, another school's student nothing.
+        'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
+        'api.student.courses.grade' => ['GET', 'student/courses/{own_course}/grade', self::OK, 404],
         // Always the signed-in student's own lines (§20.9).
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
         // Always the signed-in student's own shared texts (§20.5).
@@ -432,6 +452,7 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_option}' => $this->examOptionA->id,
             '{exam_scan}' => $this->examScanA->id,
             '{exam_response}' => $this->examResponseA->id,
+            '{gradebook_item}' => $this->gradebookItemA->id,
         ]);
 
         if ($uri === 'scans') {

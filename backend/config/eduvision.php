@@ -124,6 +124,31 @@ return [
         'sheet_batch_size' => max(1, (int) env('EXAM_SHEET_BATCH_SIZE', 20)),
     ],
 
+    // Gradebook (DESIGN §23.2): the templates a teacher starts a course's
+    // categories from (then edits freely; no table), and the default cutoffs
+    // of grades 4, 3.5, 3, 2.5, 2, 1.5 and 1 (below the last one: 0).
+    'gradebook' => [
+        'default_cutoffs' => [80, 75, 70, 65, 60, 55, 50],
+        'templates' => [
+            'collect_final' => [
+                'name' => 'คะแนนเก็บ 70 : ปลายภาค 30',
+                'categories' => [
+                    ['name' => 'คะแนนเก็บ', 'weight' => 70, 'is_homework_default' => true],
+                    ['name' => 'ปลายภาค', 'weight' => 30, 'is_homework_default' => false],
+                ],
+            ],
+            'hw_mid_final_affective' => [
+                'name' => 'การบ้าน 30, กลางภาค 20, ปลายภาค 30, จิตพิสัย 20',
+                'categories' => [
+                    ['name' => 'การบ้าน', 'weight' => 30, 'is_homework_default' => true],
+                    ['name' => 'กลางภาค', 'weight' => 20, 'is_homework_default' => false],
+                    ['name' => 'ปลายภาค', 'weight' => 30, 'is_homework_default' => false],
+                    ['name' => 'จิตพิสัย', 'weight' => 20, 'is_homework_default' => false],
+                ],
+            ],
+        ],
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,

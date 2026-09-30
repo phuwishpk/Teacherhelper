@@ -1029,6 +1029,7 @@ CREATE TABLE training_samples (
 | เผยแพร่ | นักเรียน | "ผลการบ้าน {title} ออกแล้ว" (**ไม่แสดงคะแนนบนหน้าจอล็อก**) |
 | มีคำขอตรวจใหม่ | ครู | "มีคำขอให้ตรวจใหม่ {n} รายการ" |
 | ตอบคำขอตรวจใหม่แล้ว | นักเรียน | "ครูตอบคำขอตรวจใหม่แล้ว" |
+| ประกาศเกรดของห้อง (§23.7) | นักเรียน | "ประกาศเกรด {รหัสวิชา} แล้ว" (ไม่แสดงเกรด) |
 
 ### 9.10 Google Classroom, Phase 8 และ Phase 9
 
@@ -3720,8 +3721,8 @@ CREATE TABLE gradebook_published_grades (
   publication_id      BIGINT UNSIGNED NOT NULL REFERENCES gradebook_publications(id) ON DELETE CASCADE,
   student_id          BIGINT UNSIGNED NOT NULL REFERENCES users(id),
   breakdown           JSON NOT NULL,   -- [{category_id, name, weight, percent, points, items: [{name, score, max, percent, state}]}]
-  total               DECIMAL(7,4) NOT NULL,
-  total_rounded       TINYINT UNSIGNED NOT NULL,
+  total               DECIMAL(7,4) NULL,                -- NULL เมื่อนักเรียนไม่มีค่าในหมวดใดเลย (เช่น ยกเว้นทุกรายการ)
+  total_rounded       TINYINT UNSIGNED NULL,
   grade               DECIMAL(2,1) NULL,                -- NULL เมื่อเป็น ร/มส
   special             ENUM('r','ms') NULL,
   attendance_warning  BOOLEAN NOT NULL DEFAULT FALSE,
@@ -3755,6 +3756,16 @@ CREATE TABLE gradebook_published_grades (
 | GET | `/student/courses/{id}/grade` | นักเรียน | แถวของตัวเองในฉบับล่าสุด (`breakdown`) ยังไม่ประกาศ 404 |
 
 **error code ใหม่**: `weights_not_100` (422), `gradebook_not_configured` (409), `gradebook_configured` (409), `gradebook_incomplete` (422), `score_from_app` (422)
+
+รายละเอียดที่กำหนดตอน build (1 ต.ค. 2569):
+
+- ทุกคำตอบ JSON ห่อด้วย `{data: ...}` ตามแบบ endpoint อื่นของระบบ เช่น settings ตอบ `{data: {configured, template, categories, cutoffs, default_cutoffs, uncategorised_count}}` ประกาศตอบ `201 {data: {publication_id, published_at, student_count}}` ถอนประกาศตอบ `204`
+- `POST /courses/{id}/gradebook-items` ตอบ `201 {data: [item]}` (หนึ่งรายการต่อห้อง) `PATCH` ตอบ `{data: item}` item คือ `{id, course_id, classroom_id, category_id, name, max_points, is_attendance, position, created_at}`
+- `PUT .../scores` และ `PUT /assignments/{id}/gradebook-scores` ตอบ `{data: {entries: [{student_id, score, excused}]}}` (ทุกช่องที่มีค่าของคอลัมน์นั้น) ช่องที่ไม่มีคะแนนและไม่ยกเว้นไม่เก็บแถว (ลบแถวเมื่อล้าง) `fill-full` ตอบ `{data: {filled}}`
+- ตาราง: คอลัมน์มี `kind` (homework|exam) เพิ่ม ช่องของการบ้านที่ตรวจด้วยแอปมี `submission_id` (ให้แอปเปิดหน้าผล) แถวมี `counted_weight` (น้ำหนักรวมของหมวดที่คนนั้นมีค่า ใช้กับป้าย "คิดจาก x จาก y หมวด") `total_rounded` และ `grade` เป็น `null` เมื่อห้องยังไม่ครบ `missing_categories` เป็นชื่อหมวด ช่องที่ไม่นับยังแสดง `score` ถ้ามี
+- `GET .../export` ของรายวิชาที่ยังไม่ตั้งค่า 409 `gradebook_not_configured` ร/มส แสดงในคอลัมน์เกรดแม้ห้องยังไม่ครบ
+- `GET /student/courses/{id}/grade` ตอบ `{data: {course, classroom_id, published_at, grade, special, total, total_rounded, breakdown}}` ไม่มี `attendance_warning` (คำเตือนสำหรับครู) และไม่มีหมายเหตุของครู
+- FCM: ชนิด `grades_published` ข้อมูล `course_id` ส่งจาก queued listener ของ event `GradesPublished` (ไม่ใช่ job ตามรอบ) ถ้าถอนประกาศก่อน worker ทำงานจะไม่ส่ง
 
 ### 23.12 ความเป็นส่วนตัวและสิทธิ์
 

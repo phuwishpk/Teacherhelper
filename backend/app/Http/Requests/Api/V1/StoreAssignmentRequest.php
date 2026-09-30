@@ -12,7 +12,8 @@ use Illuminate\Validation\Rule;
  * title, strictness?, due_at?, mode?: worksheet|freeform, accept_late?,
  * score_only?, kind?: homework|exam, grading_method?: app|manual,
  * version_count?, duration_minutes?, show_key_to_students?,
- * manual_full_marks?} (DESIGN §8.3, §19.5, §20.1, §22.15). The exam fields
+ * manual_full_marks?, gradebook_category_id?, excluded_from_grade?} (DESIGN
+ * §8.3, §19.5, §20.1, §22.15, §23.3). The exam fields
  * are refused on homework; an exam needs due_at (the exam date) and a
  * manual exam manual_full_marks. The classroom must be one the
  * teacher teaches; the course must be bound to it and the lesson plan be
@@ -57,6 +58,9 @@ class StoreAssignmentRequest extends FormRequest
             'duration_minutes' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
             'show_key_to_students' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'boolean'],
             'manual_full_marks' => ['nullable', 'prohibited_unless:kind,exam', 'required_if:grading_method,manual', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
+            // Gradebook (DESIGN §23.3): checked against the course in AssignmentCategories.
+            'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'excluded_from_grade' => ['sometimes', 'nullable', 'boolean'],
         ];
     }
 

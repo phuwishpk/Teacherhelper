@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Exams\ExamImages;
 use App\Domain\Exams\ExamSettings;
+use App\Domain\Gradebook\AssignmentCategories;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AssignmentIndexRequest;
@@ -77,6 +78,8 @@ class AssignmentController extends Controller
             throw ValidationException::withMessages(['mode' => 'ข้อสอบไม่ใช้โหมด freeform']);
         }
 
+        $categoryId = AssignmentCategories::forNew($course->id, $exam, $request->has('gradebook_category_id'), $request->validated('gradebook_category_id'));
+
         $assignment = Assignment::create([
             'school_id' => $classroom->school_id,
             'classroom_id' => $classroom->id,
@@ -97,6 +100,8 @@ class AssignmentController extends Controller
             'duration_minutes' => $exam ? $request->validated('duration_minutes') : null,
             'show_key_to_students' => $exam && (bool) ($request->validated('show_key_to_students') ?? false),
             'manual_full_marks' => $exam ? $request->validated('manual_full_marks') : null,
+            'gradebook_category_id' => $categoryId,
+            'excluded_from_grade' => (bool) ($request->validated('excluded_from_grade') ?? false),
         ]);
         if ($grading === Assignment::GRADING_MANUAL) {
             // No key gate for an exam graded by hand: ready from the start (DESIGN §22.1).
@@ -118,7 +123,8 @@ class AssignmentController extends Controller
 
     /**
      * PATCH /api/v1/assignments/{id} {title?, strictness?, due_at?, status?: draft|closed,
-     * mode?, accept_late?, score_only?, course_id?, lesson_plan_id?}. course_id:
+     * mode?, accept_late?, score_only?, course_id?, lesson_plan_id?,
+     * gradebook_category_id?, excluded_from_grade?}. course_id:
      * a course bound to the classroom (the subject follows it); lesson_plan_id:
      * a plan of the assignment's course, or null. mode changes only on a draft that
      * never had a layout or a submission (422 errors.mode). A freeform
@@ -146,6 +152,12 @@ class AssignmentController extends Controller
                 $assignment->lesson_plan_id = $data['lesson_plan_id'] === null
                     ? null
                     : AssignmentCourses::planFor($assignment->course()->firstOrFail(), $data['lesson_plan_id'])?->id;
+            }
+            if (array_key_exists('gradebook_category_id', $data)) {
+                AssignmentCategories::set($assignment, $data['gradebook_category_id']);
+            }
+            if (array_key_exists('excluded_from_grade', $data)) {
+                $assignment->excluded_from_grade = (bool) $data['excluded_from_grade'];
             }
             if (array_key_exists('title', $data)) {
                 $assignment->title = trim($data['title']);

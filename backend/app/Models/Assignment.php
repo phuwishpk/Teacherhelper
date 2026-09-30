@@ -56,6 +56,8 @@ use Illuminate\Support\Carbon;
  * @property float|null $manual_full_marks full marks of a grading_method = manual exam
  * @property int $shuffle_nonce
  * @property Carbon|null $structure_locked_at set by the first print of an exam (§22.2)
+ * @property int|null $gradebook_category_id the gradebook category of the course (DESIGN §23.3); NULL = not counted
+ * @property bool $excluded_from_grade "ไม่นับเกรด": shown in the gradebook, never in the formula
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -130,6 +132,8 @@ class Assignment extends Model
         'manual_full_marks',
         'shuffle_nonce',
         'structure_locked_at',
+        'gradebook_category_id',
+        'excluded_from_grade',
     ];
 
     protected $attributes = [
@@ -143,6 +147,7 @@ class Assignment extends Model
         'version_count' => 1,
         'show_key_to_students' => false,
         'shuffle_nonce' => 0,
+        'excluded_from_grade' => false,
     ];
 
     /**
@@ -168,6 +173,8 @@ class Assignment extends Model
             'manual_full_marks' => 'float',
             'shuffle_nonce' => 'integer',
             'structure_locked_at' => 'datetime',
+            'gradebook_category_id' => 'integer',
+            'excluded_from_grade' => 'boolean',
         ];
     }
 
@@ -193,6 +200,12 @@ class Assignment extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    /** @return BelongsTo<GradebookCategory, $this> */
+    public function gradebookCategory(): BelongsTo
+    {
+        return $this->belongsTo(GradebookCategory::class);
     }
 
     /** @return BelongsTo<LessonPlan, $this> */

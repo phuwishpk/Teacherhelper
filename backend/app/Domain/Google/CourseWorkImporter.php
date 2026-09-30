@@ -6,6 +6,7 @@ use App\Domain\AnswerKeys\AnswerKeyResult;
 use App\Domain\AnswerKeys\AnswerKeyService;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Documents\SourceDocuments;
+use App\Domain\Gradebook\GradebookSettings;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Pages\PageFiles;
 use App\Exceptions\ApiException;
@@ -134,6 +135,7 @@ final class CourseWorkImporter
                 'classroom_id' => $classroom->id,
                 'subject_id' => $course?->subject_id,
                 'course_id' => $course?->id,
+                'gradebook_category_id' => GradebookSettings::homeworkDefaultId($course?->id),
                 'created_by' => $owner->id,
                 'title' => Str::limit($title !== '' ? $title : self::DEFAULT_TITLE, 250, ''),
                 'status' => Assignment::STATUS_DRAFT,

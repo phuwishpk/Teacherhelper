@@ -63,6 +63,14 @@ final class NoticeTexts
         return $title !== '' ? "มีงานใหม่จาก Classroom รออนุมัติเฉลย: {$title}" : 'มีงานใหม่จาก Classroom รออนุมัติเฉลย';
     }
 
+    /** To the students when the teacher publishes a classroom's grades (§23.7): never the grade. */
+    public static function gradesPublished(string $courseCode): string
+    {
+        $courseCode = trim($courseCode);
+
+        return $courseCode !== '' ? "ประกาศเกรด {$courseCode} แล้ว" : 'ประกาศเกรดแล้ว';
+    }
+
     /** To the teacher once per drop of the Google grant (§19.3). */
     public static function googleReconnectNeeded(): string
     {

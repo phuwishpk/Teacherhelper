@@ -22,6 +22,9 @@ use App\Http\Controllers\Api\V1\ExamSheetController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
+use App\Http\Controllers\Api\V1\GradebookController;
+use App\Http\Controllers\Api\V1\GradebookItemController;
+use App\Http\Controllers\Api\V1\GradebookScoreController;
 use App\Http\Controllers\Api\V1\GradeConflictController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -44,6 +47,7 @@ use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
+use App\Http\Controllers\Api\V1\StudentGradeController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
@@ -162,6 +166,25 @@ Route::prefix('v1')->group(function () {
                 Route::post('students/{id}/analysis/run', [AnalysisController::class, 'run'])->middleware('throttle:analysis-now')->name('api.students.analysis.run');
                 Route::patch('analyses/{id}', [AnalysisController::class, 'update'])->name('api.analyses.update');
                 Route::post('analyses/{id}/approve', [AnalysisController::class, 'approve'])->name('api.analyses.approve');
+
+                // The gradebook of a course (§23.11): settings shared by its classrooms, and per
+                // classroom the live grid, typed scores, ร/มส, publishing and the CSV export.
+                Route::get('gradebook/templates', [GradebookController::class, 'templates'])->name('api.gradebook.templates');
+                Route::get('courses/{id}/gradebook/settings', [GradebookController::class, 'settings'])->name('api.courses.gradebook.settings');
+                Route::put('courses/{id}/gradebook/categories', [GradebookController::class, 'categories'])->name('api.courses.gradebook.categories');
+                Route::put('courses/{id}/gradebook/cutoffs', [GradebookController::class, 'cutoffs'])->name('api.courses.gradebook.cutoffs');
+                Route::get('courses/{id}/gradebook', [GradebookController::class, 'show'])->name('api.courses.gradebook.show');
+                Route::put('courses/{id}/gradebook/special-grades', [GradebookController::class, 'specialGrade'])->name('api.courses.gradebook.special-grades');
+                Route::post('courses/{id}/gradebook/publish', [GradebookController::class, 'publish'])->name('api.courses.gradebook.publish');
+                Route::delete('courses/{id}/gradebook/publish', [GradebookController::class, 'withdraw'])->name('api.courses.gradebook.withdraw');
+                Route::get('courses/{id}/gradebook/export', [GradebookController::class, 'export'])->name('api.courses.gradebook.export');
+                Route::post('courses/{id}/gradebook-items', [GradebookItemController::class, 'store'])->name('api.courses.gradebook-items.store');
+                Route::patch('gradebook-items/{id}', [GradebookItemController::class, 'update'])->name('api.gradebook-items.update');
+                Route::delete('gradebook-items/{id}', [GradebookItemController::class, 'destroy'])->name('api.gradebook-items.destroy');
+                Route::put('gradebook-items/{id}/scores', [GradebookItemController::class, 'scores'])->name('api.gradebook-items.scores');
+                Route::post('gradebook-items/{id}/fill-full', [GradebookItemController::class, 'fillFull'])->name('api.gradebook-items.fill-full');
+                Route::put('assignments/{id}/gradebook-scores', [GradebookScoreController::class, 'update'])->name('api.assignments.gradebook-scores');
+                Route::post('assignments/{id}/gradebook-scores/fill-full', [GradebookScoreController::class, 'fillFull'])->name('api.assignments.gradebook-scores.fill-full');
 
                 // Assignments, rubric and worksheets (§9.3).
                 Route::get('assignments', [AssignmentController::class, 'index'])->name('api.assignments.index');
@@ -308,6 +331,9 @@ Route::prefix('v1')->group(function () {
                 // Their own courses and roll-up only (§20.4, §20.9).
                 Route::get('courses', [StudentCourseController::class, 'index'])->name('api.student.courses.index');
                 Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
+                // Their own row of the latest published grades only (§23.7, §23.12).
+                Route::get('grades', [StudentGradeController::class, 'index'])->name('api.student.grades.index');
+                Route::get('courses/{id}/grade', [StudentGradeController::class, 'show'])->name('api.student.courses.grade');
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 // Only the analysis texts the teacher shared, never the teacher's version (§20.5).
                 Route::get('analysis', [AnalysisController::class, 'mine'])->name('api.student.analysis');
