@@ -93,7 +93,8 @@ class DocumentController extends Controller
      * Course and lesson-plan reads are the school's shared curriculum
      * (§20.1). An exam read: the teacher has an exam_imports row for it (every
      * import request writes one). An answer-key read: the teacher asked for
-     * it last, or one of their own assignments uses it as its key.
+     * it last, or one of their own assignments uses it as its key. Any other
+     * purpose (none is created today): only the teacher who asked for it.
      */
     private static function visibleTo(Request $request, DocumentExtraction $extraction): bool
     {
@@ -106,7 +107,10 @@ class DocumentController extends Controller
                 ->exists(),
             DocumentExtraction::PURPOSE_ANSWER_KEY => (int) $extraction->requested_by === $teacherId
                 || AssignmentController::ownQuery($request)->where('key_extraction_id', $extraction->id)->exists(),
-            default => true,
+            // Course and lesson-plan reads are school-wide (§19.9); any other
+            // purpose only to the teacher who asked for it.
+            CourseDocumentResult::KIND_COURSE, CourseDocumentResult::KIND_LESSON_PLAN => true,
+            default => (int) $extraction->requested_by === $teacherId,
         };
     }
 }
