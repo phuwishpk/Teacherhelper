@@ -20,6 +20,14 @@
 # page image for the student -> chart endpoints (teacher and student) ->
 # "analyse now" -> edit -> approve -> the student's shared text.
 #
+# Phase 10/11 (DESIGN §22, §23): the course's gradebook from a template ->
+# an app-graded exam with two versions (sections, key, indicators, approval)
+# -> key sheet, booklet and answer sheets printed -> scan kit -> answer
+# sheets read "by the phone" (tools/smoke-exam-sheet.php) -> a double mark
+# resolved -> publish -> option analysis and exam observations -> the
+# student's exam result -> a manual exam and a custom item with scores ->
+# gradebook table, CSV, publish -> the student's grade.
+#
 # Google Classroom with Google faked: tools/smoke-google.php runs those
 # requests and their worker passes in its own PHP process with Http::fake
 # (OAuth, Classroom, Drive) read from a JSON state file, because the server
@@ -35,8 +43,8 @@
 #
 # Prerequisites: MariaDB container running, `php artisan migrate --seed`
 # done (the demo school with SEED_TEACHER_JOIN_CODE), QR_SIGNING_KEY set in
-# .env, the PHP gd extension (test pages are real JPEGs), sub-indicators of
-# grade 5 imported (eduvision:import-skills, the seeder's demo rows do) and a
+# .env, the PHP gd extension (test pages are real JPEGs), indicators of
+# grade 5 (the seeder's demo rows, or eduvision:import-skills) and a
 # model registered with eduvision:register-model (else the ml step expects
 # 404). Run from anywhere:  bash backend/tools/smoke.sh
 # With a dev server already on port 8000, pick another port:
@@ -216,7 +224,8 @@ ok "classroom #$CLASSROOM_ID ($CLASS_CODE), students ${STUDENTS[*]}"
 step "course, unit and lesson plan bound to the classroom"
 api GET /subjects
 expect 200
-api GET "/skills?level=sub_indicator&grade=5"
+# Any assessable level (§20.2): the seeder's demo rows are indicators, an imported curriculum may add sub-indicators.
+api GET "/skills?level=indicator,sub_indicator&grade=5"
 expect 200
 check '(.data | length) >= 2'
 SUBJECT_ID=$(j '.data[0].subject_id')
@@ -734,6 +743,242 @@ expect 200
 check 'tostring | contains("(smoke)")'
 grep -q '"teacher_text"' <<<"$BODY" && fail "student analysis exposes the teacher text"
 ok "analysis #$ANALYSIS_ID approved and shared"
+
+# ---------------------------------------------------------------- Phase 10/11: gradebook + exams
+# DESIGN §22, §23: the course's gradebook from a template -> an app-graded
+# exam (two versions, mcq + numeric, indicators, key, approval) -> key sheet,
+# booklet and answer sheets printed -> scan kit -> answer sheets read "by the
+# phone" (tools/smoke-exam-sheet.php signs the EVX1 QR and writes the fills)
+# -> a double mark resolved by the teacher -> publish -> option analysis,
+# exam observations in mastery, the student's exam result -> a manual exam
+# and a custom item with scores -> the gradebook table, CSV, publish -> the
+# student's grade. The exam never calls Gemini for grading (§22.1).
+step "gradebook: categories from a template, cutoffs"
+TOKEN=$TEACHER_TOKEN
+api GET /gradebook/templates
+expect 200
+check 'any(.data[]; .key == "collect_final")'
+api GET "/courses/$COURSE_ID/gradebook/settings"
+expect 200
+check '.data.configured == false'
+api PUT "/courses/$COURSE_ID/gradebook/categories" '{"template":"collect_final"}'
+expect 200
+check '.data.configured == true and (.data.categories | length) == 2'
+COLLECT_CAT=$(j '.data.categories[] | select(.is_homework_default == true) | .id')
+FINAL_CAT=$(j '.data.categories[] | select(.is_homework_default == false) | .id')
+api PUT "/courses/$COURSE_ID/gradebook/categories" '{"template":"collect_final"}'
+expect 409
+check '.code == "gradebook_configured"'
+api PUT "/courses/$COURSE_ID/gradebook/cutoffs" '{"cutoffs":[80,75,70,65,60,55,50]}'
+expect 200
+ok "categories คะแนนเก็บ #$COLLECT_CAT (homework default), ปลายภาค #$FINAL_CAT; template again -> 409"
+
+step "exam: create (two versions), sections, questions, key, indicators, approve"
+EXAM_DUE="$(date -u -v+1d +%Y-%m-%dT02:00:00Z 2>/dev/null || date -u -d '+1 day' +%Y-%m-%dT02:00:00Z)"
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" --arg d "$EXAM_DUE" \
+  '{classroom_id:$c, course_id:$k, title:"สอบย่อย smoke", kind:"exam", grading_method:"app", version_count:2, due_at:$d, duration_minutes:30}')"
+expect 422
+check '.errors.gradebook_category_id != null'
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" --arg d "$EXAM_DUE" --argjson g "$FINAL_CAT" \
+  '{classroom_id:$c, course_id:$k, title:"สอบย่อย smoke", kind:"exam", grading_method:"app", version_count:2, due_at:$d, duration_minutes:30, gradebook_category_id:$g}')"
+expect 201
+EXAM_ID=$(j '.data.id')
+api POST "/exams/$EXAM_ID/sections" '{"title":"ตอนที่ 1 ปรนัย","type":"mcq","option_count":4,"question_count":4}'
+expect 201
+api POST "/exams/$EXAM_ID/sections" '{"title":"ตอนที่ 2 เติมตัวเลข","type":"numeric","numeric":{"digits":2},"question_count":1}'
+expect 201
+api GET "/exams/$EXAM_ID"
+expect 200
+check '.data.key_complete == false and ([.data.sections[].questions[]] | length) == 5'
+EXAM_QS=($(j '[.data.sections[].questions[]] | sort_by(.position) | .[].id'))
+KEYS=(1 2 3 1)
+for n in 0 1 2 3; do
+  api PATCH "/questions/${EXAM_QS[$n]}" "$(jq -nc --arg p "ข้อ $((n + 1)): 1$((n + 2)) × $((n + 3)) เท่ากับเท่าไร" --argjson a "${KEYS[$n]}" \
+    '{prompt_text:$p, options:[{text:"ตัวเลือกแรก"},{text:"ตัวเลือกที่สอง"},{text:"ตัวเลือกที่สาม"},{text:"ตัวเลือกที่สี่"}], answer_key:{accepted_options:[$a]}, approve:true}')"
+  expect 200
+done
+api PATCH "/questions/${EXAM_QS[4]}" '{"prompt_text":"3 × 4 เท่ากับเท่าไร","approve":true}'
+expect 200
+api PUT "/exams/$EXAM_ID/answer-key" "$(jq -nc --argjson q "${EXAM_QS[4]}" '{answers:[{question_id:$q, accepted_values:["12"]}]}')"
+expect 200
+check '.data.key_complete == true and .data.incomplete_questions == []'
+api GET "/assignments/$EXAM_ID/indicator-suggestions"
+expect 200
+check '.data.indicator_source == "course" and (.data.plan_indicators | length) >= 1 and .data.unmapped_question_count == 5'
+api PUT "/assignments/$EXAM_ID/indicator-mapping" "$(jq -nc --argjson a "${EXAM_QS[0]}" --argjson b "${EXAM_QS[1]}" --argjson s1 "$SKILL1" --argjson s2 "$SKILL2" \
+  '{questions:[{question_id:$a, skill_ids:[$s1]}, {question_id:$b, skill_ids:[$s2]}]}')"
+expect 200
+check '.data.changed_question_count == 2 and .data.unmapped_question_count == 3'
+api POST "/assignments/$EXAM_ID/answer-key/approve"
+expect 200
+work # the suggestion queued on approval (fake Gemini) for the three unmapped questions
+api GET "/assignments/$EXAM_ID/indicator-suggestions"
+expect 200
+check '.data.status == "done"'
+SUGGESTED=$(j '.data.suggested_question_count')
+api GET "/exams/$EXAM_ID/versions"
+expect 200
+check '(.data.versions | length) == 2'
+ok "exam #$EXAM_ID: 5 questions, key approved, 2 mapped; AI suggested for $SUGGESTED question(s) on approval"
+
+step "exam: print key sheet, booklet and answer sheets (structure locks)"
+EXAM_PRINTS=()
+for body in '{"kind":"key_sheet"}' '{"kind":"exam_booklet","version_no":2}' '{"kind":"answer_sheet"}'; do
+  api POST "/exams/$EXAM_ID/prints" "$body"
+  expect 202
+  EXAM_PRINTS+=("$(j '.data.id')")
+done
+work
+for id in "${EXAM_PRINTS[@]}"; do
+  api GET "/worksheet-prints/$id"
+  expect 200
+  check '.data.status == "ready"'
+done
+api GET "/exams/$EXAM_ID"
+expect 200
+check '.data.structure_locked_at != null'
+api POST "/exams/$EXAM_ID/versions/reshuffle"
+expect 409
+check '.code == "exam_structure_locked"'
+ok "prints ${EXAM_PRINTS[*]} done; reshuffle after printing -> 409"
+
+step "exam: scan kit, answer sheets read on the phone (version ก right, ข one wrong, ข a double mark)"
+api GET "/exams/$EXAM_ID/scan-kit"
+expect 200
+jq '.data' <<<"$BODY" >"$WORK/exam-kit.json"
+check '.data.version_count == 2 and (.data.versions | length) == 2 and (.data.roster | length) == 3'
+# marks.json of a version: every sheet row right; $2 = sheet_no answered wrong, $3 = sheet_no double-marked
+exam_marks() {
+  jq -c --argjson v "$1" --argjson wrong "$2" --argjson dbl "$3" '
+    [.versions[] | select(.version_no == $v) | .key[] |
+      {key: (.sheet_no | tostring), value: (
+        if .type == "numeric" then .accepted_values[0]
+        elif .sheet_no == $wrong then (.accepted_options[0] % 4 + 1)
+        elif .sheet_no == $dbl then [.accepted_options[0], (.accepted_options[0] % 4 + 1)]
+        else .accepted_options[0] end)}] | from_entries' "$WORK/exam-kit.json"
+}
+upload_exam_sheet() { # $1 student id, $2 version, $3 marks json
+  local dir="$WORK/exam-$1" page
+  echo "$3" >"$WORK/exam-marks-$1.json"
+  php tools/smoke-exam-sheet.php "$WORK/exam-kit.json" "$1" "$2" "$WORK/exam-marks-$1.json" "$dir" >"$WORK/exam-pages-$1"
+  while read -r page; do
+    STATUS=$(curl -s -o "$WORK/body" -w '%{http_code}' -H 'Accept: application/json' -H "Authorization: Bearer $TOKEN" \
+      -F "meta=<$page/meta.json" -F "page=@$page/page.webp;type=image/webp" "$BASE/exam-sheets")
+    BODY=$(cat "$WORK/body")
+    expect 201
+  done <"$WORK/exam-pages-$1"
+}
+upload_exam_sheet "${STUDENTS[0]}" 1 "$(exam_marks 1 0 0)"
+check '(.data // .) | .score == .max_score and .needs_version == false'
+upload_exam_sheet "${STUDENTS[1]}" 2 "$(exam_marks 2 1 0)"
+check '(.data // .) | .score == .max_score - 1'
+upload_exam_sheet "${STUDENTS[2]}" 2 "$(exam_marks 2 0 2)"
+check '(.data // .) | (.doubts | length) >= 1'
+api GET "/exams/$EXAM_ID/sheet-status"
+expect 200
+check '.summary.scanned == 3 and .summary.missing_numbers == []'
+ok "3 sheets scored by code on upload; sheet status $(jq -c '.summary | {scanned, ready_to_publish, waiting_review}' <<<"$BODY")"
+
+step "exam: the teacher reads the double mark, publishes the class"
+api GET "/assignments/$EXAM_ID/review-queue?per_page=100"
+expect 200
+DOUBT_RID=$(j '[.data[] | select(.exam_answer != null and (.exam_answer.doubts | index("double_mark")) and .reviewed_at == null)][0].id')
+[ "$DOUBT_RID" != "null" ] || fail "no double mark waiting for review"
+api GET "/responses/$DOUBT_RID"
+expect 200
+INTENDED=$(j '(.data // .).exam.selected[0]')
+api POST "/exam-responses/$DOUBT_RID/resolve" "$(jq -nc --argjson o "$INTENDED" '{options:[$o]}')"
+expect 200
+api POST "/assignments/$EXAM_ID/publish"
+expect 200
+check '.data.published == 3'
+work # mastery listeners, notifications
+ok "response #$DOUBT_RID read as option $INTENDED; published 3"
+
+step "exam: option analysis, item analysis, exam observations in mastery"
+api GET "/exams/$EXAM_ID/option-analysis"
+expect 200
+check '.data.published_count == 3 and .data.groups_ready == false and (.data.questions | length) == 5'
+check '.data.questions[0].options[0].correct == true and ([.data.questions[0].options[].count] | add) + .data.questions[0].blank.count + .data.questions[0].multiple.count == 3'
+check '.data.questions[4].options == [] and .data.questions[4].blank.count == 0'
+OPT_SUMMARY=$(jq -c '[.data.questions[] | {n: .position, p}]' <<<"$BODY")
+api GET "/assignments/$EXAM_ID/analytics"
+expect 200
+check '(.data // .) | .published_count == 3 and (.items | length) == 5'
+api GET "/students/${STUDENTS[0]}/indicator-progress?skill_ids=$SKILL1,$SKILL2"
+expect 200
+check '[.data.series[].points[] | select(.source == "exam")] | length >= 1'
+ok "p per question $OPT_SUMMARY; exam observations recorded"
+
+step "exam: the student's result (key hidden by default)"
+TOKEN=$STUDENT_TOKEN
+api GET /student/results
+expect 200
+EXAM_SUB=$(jq -r --argjson a "$EXAM_ID" '[.data[] | select(.assignment_id == $a)][0].submission_id' <<<"$BODY")
+[ "$EXAM_SUB" != "null" ] || fail "the exam result is not listed for the student"
+api GET "/student/results/$EXAM_SUB"
+expect 200
+check '(.data // .) | .kind == "exam" and .items == null and .total == .max'
+EXAM_RESULT=$(j '(.data // .) | "\(.total)/\(.max) ชุด \(.version_label)"')
+api GET /student/assignments
+expect 200
+check "all(.data[]; .id != $EXAM_ID)"
+ok "student sees $EXAM_RESULT, no key, no exam in the to-do list"
+
+step "manual exam and a custom gradebook item with scores"
+TOKEN=$TEACHER_TOKEN
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$COURSE_ID" --arg d "$EXAM_DUE" --argjson g "$FINAL_CAT" \
+  '{classroom_id:$c, course_id:$k, title:"สอบปลายภาค (ครูตรวจเอง) smoke", kind:"exam", grading_method:"manual", manual_full_marks:20, due_at:$d, gradebook_category_id:$g}')"
+expect 201
+check '.data.status == "ready"'
+MANUAL_ID=$(j '.data.id')
+api POST "/assignments/$MANUAL_ID/answer-key/approve"
+expect 422
+check '.code == "exam_manual_grading"'
+api PUT "/assignments/$MANUAL_ID/gradebook-scores" "$(jq -nc --argjson a "${STUDENTS[0]}" --argjson b "${STUDENTS[1]}" \
+  '{scores:[{student_id:$a, score:18}, {student_id:$b, score:12.5}]}')"
+expect 200
+api PUT "/assignments/$MANUAL_ID/gradebook-scores" "$(jq -nc --argjson a "${STUDENTS[0]}" '{scores:[{student_id:$a, score:25}]}')"
+expect 422
+api POST "/assignments/$MANUAL_ID/gradebook-scores/fill-full"
+expect 200
+check '.data.filled == 1'
+api PUT "/assignments/$EXAM_ID/gradebook-scores" "$(jq -nc --argjson a "${STUDENTS[0]}" '{scores:[{student_id:$a, score:3}]}')"
+expect 422
+check '.code == "score_from_app"'
+api POST "/courses/$COURSE_ID/gradebook-items" "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson g "$COLLECT_CAT" \
+  '{classroom_ids:[$c], category_id:$g, name:"งานกลุ่ม smoke", max_points:10}')"
+expect 201
+ITEM_ID=$(j '.data[0].id')
+api PUT "/gradebook-items/$ITEM_ID/scores" "$(jq -nc --argjson a "${STUDENTS[0]}" '{scores:[{student_id:$a, score:9}]}')"
+expect 200
+api POST "/gradebook-items/$ITEM_ID/fill-full"
+expect 200
+check '.data.filled == 2'
+ok "manual exam #$MANUAL_ID (18, 12.5, full), item #$ITEM_ID (9, full, full); app exam score -> 422 score_from_app"
+
+step "gradebook: the table, CSV, publish; the student's grade"
+api GET "/courses/$COURSE_ID/gradebook?classroom_id=$CLASSROOM_ID"
+expect 200
+check '.data.configured == true and (.data.rows | length) == 3'
+check "any(.data.columns[]; .id == $EXAM_ID) and any(.data.columns[]; .id == $MANUAL_ID and .type == \"manual_exam\") and any(.data.columns[]; .type == \"custom\")"
+GRADES=$(jq -c '[.data.rows[] | {n: .student_number, total_rounded, grade}]' <<<"$BODY")
+curl -s -f -o "$WORK/gradebook.csv" -H "Authorization: Bearer $TOKEN" "$BASE/courses/$COURSE_ID/gradebook/export?classroom_id=$CLASSROOM_ID" \
+  || fail "gradebook CSV export failed"
+[ "$(wc -l <"$WORK/gradebook.csv")" -ge 4 ] || fail "gradebook CSV has fewer than 4 lines"
+api POST "/courses/$COURSE_ID/gradebook/publish" "$(jq -nc --argjson c "$CLASSROOM_ID" '{classroom_id:$c}')"
+expect 201
+check '.data.student_count == 3'
+work # grades_published notifications
+TOKEN=$STUDENT_TOKEN
+api GET /student/grades
+expect 200
+check "any(.data[]; .course.id == $COURSE_ID)"
+api GET "/student/courses/$COURSE_ID/grade"
+expect 200
+check '.data.breakdown != null'
+grep -q '"attendance_warning"' <<<"$BODY" && fail "the student's grade exposes the attendance warning"
+ok "grades $GRADES; CSV $(wc -l <"$WORK/gradebook.csv" | tr -d ' ') lines; student 1 sees grade $(j '.data.grade // .data.special')"
 
 # ---------------------------------------------------------------- ml
 step "ml model (student and teacher)"
