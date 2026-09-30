@@ -14,6 +14,8 @@ use InvalidArgumentException;
  *   type: show_work
  *   version: 1
  *   temperature: 0
+ *   thinking: medium            (optional, DESIGN §21.6: low | medium | high)
+ *   max_output_tokens: 16384    (optional)
  *   ---
  *   # System
  *   ...instruction (English)...
@@ -81,7 +83,9 @@ final class PromptRepository
         }
 
         $temperature = isset($meta['temperature']) && is_numeric($meta['temperature']) ? (float) $meta['temperature'] : null;
+        $thinking = in_array($meta['thinking'] ?? null, ['low', 'medium', 'high'], true) ? $meta['thinking'] : null;
+        $maxOutput = isset($meta['max_output_tokens']) && ctype_digit($meta['max_output_tokens']) ? (int) $meta['max_output_tokens'] : null;
 
-        return new Prompt($purpose, $type, $version, $parts['system'], $parts['user'], $temperature);
+        return new Prompt($purpose, $type, $version, $parts['system'], $parts['user'], $temperature, $thinking, $maxOutput);
     }
 }

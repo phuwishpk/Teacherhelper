@@ -20,7 +20,8 @@ const String googleServerClientId = String.fromEnvironment(
 const bool googleNativeSignInBuild = !kIsWeb && googleServerClientId.length > 0;
 
 /// Scopes the teacher grants for the server (DESIGN §18.5). The server
-/// checks it received all of them (`google_scope_missing` otherwise).
+/// checks it received all of them (`google_scope_missing` otherwise); the
+/// list matches `GoogleScopes::REQUIRED` of the backend.
 const googleServerScopes = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
   'https://www.googleapis.com/auth/classroom.rosters.readonly',
@@ -28,7 +29,14 @@ const googleServerScopes = [
   'https://www.googleapis.com/auth/classroom.coursework.students',
   'https://www.googleapis.com/auth/drive.file',
   driveReadonlyScope,
+  announcementsScope,
 ];
+
+/// The per-student private announcement of a published result (DESIGN
+/// §19.7, Phase 8 build step 6). An account connected before it was added
+/// lacks it and must connect again.
+const announcementsScope =
+    'https://www.googleapis.com/auth/classroom.announcements';
 
 /// The one scope the app itself uses: downloading the pictures students
 /// attached (§18.5). The access token stays in memory on the device.

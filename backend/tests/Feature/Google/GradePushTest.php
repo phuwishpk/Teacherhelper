@@ -156,7 +156,11 @@ class GradePushTest extends TestCase
 
         $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
 
-        Http::assertNothingSent();
+        $this->assertCount(0, $this->sentTo('/studentSubmissions'), 'no grade call at all');
+        // The private announcement (§19.7) goes to the student's own matched account only.
+        $announcements = $this->sentTo('/announcements', 'POST');
+        $this->assertCount(1, $announcements);
+        $this->assertSame(['g-1'], $announcements[0]['individualStudentsOptions']['studentIds']);
         $import->refresh();
         $this->assertSame(ClassroomSubmissionImport::STATE_GRADE_FAILED, $import->state);
         $this->assertStringContainsString('identity_mismatch', (string) $import->last_error);

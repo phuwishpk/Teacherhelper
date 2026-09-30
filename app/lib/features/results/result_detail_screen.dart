@@ -58,6 +58,12 @@ class ResultDetailScreen extends ConsumerWidget {
                                     'เผยแพร่ ${formatThaiDate(s.publishedAt!)}',
                                     style: theme.textTheme.bodySmall,
                                   ),
+                                if (s.totalOverridden)
+                                  Text(
+                                    totalOverriddenNote,
+                                    key: const ValueKey('total_overridden'),
+                                    style: theme.textTheme.bodySmall,
+                                  ),
                               ],
                             ),
                           ),

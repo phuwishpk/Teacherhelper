@@ -13,10 +13,12 @@ use App\Http\Resources\GoogleSubmissionResource;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * "ตีกลับให้ถ่ายใหม่" (DESIGN §18.2, §18.6 POST /google-submissions/{id}/return).
+ * "ตีกลับให้ถ่ายใหม่" (DESIGN §18.2, §18.6 POST /google-submissions/{id}/return)
+ * and "รับงานส่งช้า" (DESIGN §19.3 POST /google-submissions/{id}/accept-late).
  * Classroom's API has no private comments, so the work is returned in
  * Classroom (the student can hand in again) and the Thai reason reaches the
  * student through our app: a push and GET /student/retake-requests.
@@ -24,6 +26,32 @@ use Illuminate\Support\Facades\Gate;
 class GoogleSubmissionController extends Controller
 {
     public function __construct(private readonly GoogleAccounts $accounts) {}
+
+    /**
+     * POST /api/v1/google-submissions/{id}/accept-late -> 202 {data: row}:
+     * the teacher takes a late hand-in the assignment's policy refused
+     * (DESIGN §19.3): `rejected_late` becomes `new` with late = TRUE, and the
+     * next sync round downloads and grades it as usual. Any other state:
+     * 409 import_not_rejected.
+     */
+    public function acceptLate(Request $request, int $id): JsonResponse
+    {
+        $import = ClassroomSubmissionImport::query()
+            ->with('assignment.classroom')
+            ->whereIn('assignment_id', AssignmentController::ownQuery($request)->select('id'))
+            ->findOrFail($id);
+        Gate::authorize('update', $import);
+
+        $updated = ClassroomSubmissionImport::query()
+            ->whereKey($import->id)
+            ->where('state', ClassroomSubmissionImport::STATE_REJECTED_LATE)
+            ->update(['state' => ClassroomSubmissionImport::STATE_NEW, 'late' => true, 'last_error' => null, 'updated_at' => now()]);
+        if ($updated !== 1) {
+            throw new ApiException('รับได้เฉพาะงานส่งช้าที่ถูกปฏิเสธ', 'import_not_rejected', 409);
+        }
+
+        return response()->json(['data' => $this->row($import->refresh())], 202);
+    }
 
     /**
      * {reason} -> {data: row} with state returned_for_retake. 409
@@ -62,7 +90,15 @@ class GoogleSubmissionController extends Controller
         $import->save();
         RetakeRequested::dispatch($import->id);
 
-        $import->load('student');
+        return response()->json(['data' => $this->row($import)]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function row(ClassroomSubmissionImport $import): array
+    {
+        $import->load(['student', 'assignment']);
         if ($import->student_id !== null) {
             $import->setAttribute('student_number', ClassroomStudent::query()
                 ->where('classroom_id', $import->assignment->classroom_id)
@@ -70,6 +106,6 @@ class GoogleSubmissionController extends Controller
                 ->value('student_number'));
         }
 
-        return response()->json(['data' => (new GoogleSubmissionResource($import))->resolve($request)]);
+        return (new GoogleSubmissionResource($import))->resolve(request());
     }
 }

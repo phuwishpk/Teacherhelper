@@ -59,8 +59,11 @@ class _FakeMastery implements MasteryRepository {
   final bool available;
 
   @override
-  Future<ClassroomMastery> classroom(int classroomId) async =>
-      ClassroomMastery.fromJson(classroomMasteryJson());
+  Future<ClassroomMastery> classroom(
+    int classroomId, {
+    int? courseId,
+    int? unitId,
+  }) async => ClassroomMastery.fromJson(classroomMasteryJson());
 
   @override
   Future<MasteryList> mine() async => MasteryList(

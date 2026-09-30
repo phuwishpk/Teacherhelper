@@ -58,7 +58,6 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     private var openCvReady = false
     private var detector: ArucoDetector? = null
     private var scanner: BarcodeScanner? = null
-    private val rasterizer = AttachmentRasterizer()
 
     init {
         // Crops the Dart side never adopted (app killed between capture and
@@ -78,18 +77,6 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         guarded {
             val layout = LayoutPage.parse(layoutJson)
             MatScope().use { s -> crop(s, imagePath, detection, layout) }
-        }
-    }
-
-    override suspend fun rasterize(inputPath: String, mimeType: String): RasterizedAttachment = withContext(dispatcher) {
-        // No OpenCV here: PdfRenderer / ImageDecoder only. Output goes to
-        // the same cache folder as the crops, so stale pages are swept too.
-        try {
-            rasterizer.rasterize(File(inputPath), mimeType, File(cacheRoot, UUID.randomUUID().toString()))
-        } catch (e: OutOfMemoryError) {
-            throw FlutterError("pipeline_failed", "Not enough memory for this attachment")
-        } catch (e: SecurityException) {
-            throw FlutterError("pdf_unreadable", e.message ?: "Protected file")
         }
     }
 
@@ -266,7 +253,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
                 throw FlutterError("layout_invalid", "Region ${region.regionId} lies outside the marker frame")
             }
             val file = File(outDir, "${safeName(region.regionId)}.webp")
-            writeWebp(s, sub(s, warped, rect), file)
+            writeCropWebp(s, sub(s, warped, rect), file)
             when (region.kind) {
                 LayoutPage.KIND_MCQ -> crops += RegionCrop(
                     regionId = region.regionId,
@@ -296,7 +283,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
                         }
                         val id = region.regionId + LayoutPage.FINAL_SUFFIX
                         val finalFile = File(outDir, "${safeName(id)}.webp")
-                        writeWebp(s, sub(s, warped, finalRect), finalFile)
+                        writeCropWebp(s, sub(s, warped, finalRect), finalFile)
                         crops += RegionCrop(
                             regionId = id,
                             imagePath = finalFile.path,
@@ -543,6 +530,22 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         val bitmap = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(rgba, bitmap)
         return bitmap
+    }
+
+    /**
+     * Writes a crop for upload, scaled down to
+     * [RegionMath.CROP_UPLOAD_LONG_SIDE] (DESIGN §21.9). Measurements never
+     * read this copy; they use the full-resolution frame.
+     */
+    private fun writeCropWebp(s: MatScope, crop: Mat, file: File) {
+        val size = RegionMath.uploadCropSize(crop.cols(), crop.rows())
+        if (size.width == crop.cols() && size.height == crop.rows()) {
+            writeWebp(s, crop, file)
+            return
+        }
+        val small = s.track(Mat())
+        Imgproc.resize(crop, small, Size(size.width.toDouble(), size.height.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+        writeWebp(s, small, file)
     }
 
     private fun writeWebp(s: MatScope, m: Mat, file: File) {

@@ -28,6 +28,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $match_mode flexible|exact
  * @property array<string, mixed>|null $answer_key
  * @property string $rubric_status not_needed|draft|approved
+ * @property string|null $model_answer the teacher's model answer of an open question (DESIGN §19.5)
+ *
+ * A freeform assignment (DESIGN §19.5) may hold questions whose answer_key is
+ * still null until the key is typed, read from a document or drafted by AI;
+ * approval (KeyCompleteness) requires it.
  */
 class Question extends Model
 {
@@ -67,6 +72,7 @@ class Question extends Model
         'match_mode',
         'answer_key',
         'rubric_status',
+        'model_answer',
     ];
 
     protected $attributes = [
@@ -127,5 +133,15 @@ class Question extends Model
     public function skills(): BelongsToMany
     {
         return $this->belongsToMany(Skill::class, 'question_skill')->withTimestamps()->orderBy('skills.code');
+    }
+
+    /**
+     * Gemini's proposals from the linked lesson plan (DESIGN §20.3); question_skill holds the confirmed ones.
+     *
+     * @return HasMany<IndicatorSuggestion, $this>
+     */
+    public function indicatorSuggestions(): HasMany
+    {
+        return $this->hasMany(IndicatorSuggestion::class);
     }
 }

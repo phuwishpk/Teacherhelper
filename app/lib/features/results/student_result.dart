@@ -1,6 +1,9 @@
 import '../review/review_labels.dart';
 import '../review/review_models.dart';
 
+/// Shown when the total was taken from Google Classroom (DESIGN §19.3).
+const totalOverriddenNote = 'คะแนนรวมปรับตามที่ครูรับจาก Classroom';
+
 /// A published submission as listed by `GET /student/results` (DESIGN §9.7).
 class StudentResult {
   const StudentResult({
@@ -10,14 +13,21 @@ class StudentResult {
     this.totalScore,
     this.maxScore,
     this.publishedAt,
+    this.totalOverridden = false,
   });
 
   final int submissionId;
   final String title;
   final String? subjectName;
+
+  /// The effective total (`COALESCE(total_override, total_score)`, §19.3).
   final double? totalScore;
   final double? maxScore;
   final DateTime? publishedAt;
+
+  /// The teacher took the total from Google Classroom (`total_overridden`,
+  /// DESIGN §19.3), so it may differ from the sum of the per-question scores.
+  final bool totalOverridden;
 
   factory StudentResult.fromJson(Map<String, dynamic> json) {
     final assignment = json['assignment'] as Map<String, dynamic>?;
@@ -30,6 +40,7 @@ class StudentResult {
       totalScore: (json['total_score'] as num?)?.toDouble(),
       maxScore: (json['max_score'] as num?)?.toDouble(),
       publishedAt: published == null ? null : DateTime.tryParse(published),
+      totalOverridden: json['total_overridden'] == true,
     );
   }
 }
@@ -187,6 +198,7 @@ class StudentResultDetail {
               totalScore: summary.totalScore,
               maxScore: answers.fold<double>(0, (s, a) => s + a.maxPoints),
               publishedAt: summary.publishedAt,
+              totalOverridden: summary.totalOverridden,
             ),
       answers: answers,
     );

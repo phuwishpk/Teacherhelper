@@ -2,6 +2,7 @@
 
 namespace App\Domain\Worksheets;
 
+use App\Domain\AnswerKeys\KeyCompleteness;
 use App\Domain\Assignments\AssignmentLocked;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
@@ -16,6 +17,11 @@ use App\Models\Question;
  * version; rebuilding an unchanged assignment (for example after re-approving
  * a rubric) reuses the current version, so sheets already printed stay valid
  * and versions do not pile up.
+ *
+ * Building the layout of a worksheet assignment is also its key approval
+ * (DESIGN §19.5): every question needs a complete key (KeyCompleteness,
+ * 422 answer_key_incomplete) and key_approved_at is set the first time.
+ * A freeform assignment has no worksheet: 422 assignment_freeform.
  */
 class LayoutService
 {
@@ -24,9 +30,12 @@ class LayoutService
     /**
      * @return array{layout: Layout, created: bool}
      */
-    public function build(Assignment $assignment): array
+    public function build(Assignment $assignment, ?int $approvedBy = null): array
     {
-        return AssignmentLocked::run($assignment->id, function (Assignment $assignment) {
+        return AssignmentLocked::run($assignment->id, function (Assignment $assignment) use ($approvedBy) {
+            if ($assignment->isFreeform()) {
+                throw new ApiException('การบ้านแบบไม่ใช้ใบงานของแอปพิมพ์ใบงานไม่ได้ ให้อนุมัติเฉลยแทน', 'assignment_freeform', 422);
+            }
             $questions = $assignment->questions()->get();
             if ($questions->isEmpty()) {
                 throw new ApiException('ยังไม่มีคำถาม เพิ่มคำถามก่อนสร้าง layout', 'assignment_empty', 422);
@@ -41,6 +50,8 @@ class LayoutService
                     ['questions' => $pending->map(fn ($p) => "ข้อ {$p} ยังไม่ได้อนุมัติ rubric")->all()],
                 );
             }
+
+            KeyCompleteness::assertComplete($assignment, $questions);
 
             $assignment->setRelation('questions', $questions);
             $markers = ArucoMarkers::load();
@@ -66,6 +77,11 @@ class LayoutService
             $assignment->update([
                 'current_layout_version' => $layout->version,
                 'status' => Assignment::STATUS_READY,
+                ...($assignment->keyApproved() ? [] : [
+                    'key_approved_at' => now(),
+                    'key_approved_by' => $approvedBy,
+                    'key_origin' => $assignment->key_origin ?? Assignment::KEY_TEACHER,
+                ]),
             ]);
 
             return ['layout' => $layout, 'created' => $created];

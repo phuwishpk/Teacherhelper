@@ -8,6 +8,8 @@ import '../router/app_router.dart';
 /// |---------------------|---------|---------------------|----------------------|
 /// | `grading_done`      | teacher | `assignment_id`     | review queue         |
 /// | `appeal_opened`     | teacher | -                   | appeals list         |
+/// | `classroom_work_imported` | teacher | `assignment_id` | answer key (§19.3) |
+/// | `google_reconnect`  | teacher | -                   | settings (reconnect) |
 /// | `results_published` | student | `submission_id`     | result detail        |
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
 /// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
@@ -23,6 +25,10 @@ String? routeForPush(Map<String, String> data, User user) {
         id('assignment_id')!,
       ),
       'appeal_opened' => AppRoutes.appeals,
+      // "มีงานใหม่จาก Classroom รออนุมัติเฉลย": the AI-drafted key to check.
+      'classroom_work_imported' when id('assignment_id') != null =>
+        AppRoutes.answerKey(id('assignment_id')!),
+      'google_reconnect' => AppRoutes.settings,
       _ => null,
     };
   }

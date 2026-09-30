@@ -21,6 +21,7 @@
         <!-- The whole suite runs in one process; mPDF (worksheets, login cards) needs headroom. -->
         <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
+        <env name="APP_LOCALE" value="th"/>
         <!-- Never read a cached config/routes/events: after `artisan optimize` bootstrap/cache/config.php
              holds the .env values (and would ignore every value below, e.g. run RefreshDatabase against the
              developer's database). These paths never exist; TestCase::setUp also refuses a cached app. -->

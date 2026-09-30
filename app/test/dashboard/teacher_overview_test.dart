@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../practice/practice_fixtures.dart';
 import '../review/review_fixtures.dart';
+import '../helpers/home_fakes.dart';
 
 class _Classrooms extends Fake implements ClassroomsRepository {
   @override
@@ -151,6 +152,7 @@ void main() {
           aiKeyRepositoryProvider.overrideWithValue(
             FakeAiKeyRepository(const AiKeyStatus(configured: true)),
           ),
+          ...homeOverrides(),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -182,6 +184,7 @@ void main() {
     expect(valueOf('stat_appeals'), '2');
     expect(valueOf('stat_practice_drafts'), '2');
     expect(find.byKey(const ValueKey('ai_key_card')), findsOneWidget);
+    expect(find.text('อัปโหลดรูปเพื่อตรวจ'), findsOneWidget);
     expect(find.text('คลังแบบฝึกและลิงก์ทบทวน'), findsOneWidget);
     expect(find.text('ทักษะของห้อง ป.4/1'), findsOneWidget);
     expect(find.text('ทักษะของห้อง ป.4/2'), findsOneWidget);

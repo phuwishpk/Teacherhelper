@@ -121,8 +121,9 @@ class GeminiPayloadPrivacyTest extends TestCase
             }
         }
 
-        $this->assertEqualsCanonicalizing(['extract', 'explanation'], array_unique($purposes));
-        $this->assertGreaterThanOrEqual(3, count(array_filter($purposes, fn ($p) => $p === 'extract')), 'short, show_work and open were all extracted');
+        $this->assertEqualsCanonicalizing(['extract', 'extract_batch', 'explanation'], array_unique($purposes));
+        $this->assertGreaterThanOrEqual(1, count(array_filter($purposes, fn ($p) => $p === 'extract')), 'the page with one answer (short) goes alone');
+        $this->assertGreaterThanOrEqual(1, count(array_filter($purposes, fn ($p) => $p === 'extract_batch')), 'show_work and open of one page share a call (§21.4)');
     }
 
     public function test_ai_calls_and_the_log_hold_neither_student_data_nor_images_nor_keys(): void

@@ -6,6 +6,7 @@ namespace App\Domain\Grading;
  * What GradeScanJob writes for one graded answer: fuzzy system 1 (score,
  * understanding), system 2 (priority) and the trace behind both. state is
  * `scored`, or `manual` when fuzzy could not decide (manualReason set).
+ * autoRule: the answer was decided by code without Gemini (AutoRules, §21.3).
  */
 final readonly class GradeOutcome
 {
@@ -25,6 +26,7 @@ final readonly class GradeOutcome
         public bool $blank = false,
         public bool $suspicious = false,
         public ?string $manualReason = null,
+        public ?string $autoRule = null,
     ) {}
 
     public function isScored(): bool

@@ -55,6 +55,39 @@ void main() {
     );
   });
 
+  test('pending PINs are issued once and roster rows say who waits', () async {
+    final adapter = FakeHttpAdapter((options) async {
+      if (options.uri.path.endsWith('/roster')) {
+        return jsonResponse(200, {
+          'data': [
+            {
+              'student_id': 1,
+              'student_number': 1,
+              'name': 'ก',
+              'pin_pending': true,
+            },
+            {'student_id': 2, 'student_number': 2, 'name': 'ข'},
+          ],
+        });
+      }
+      return jsonResponse(200, {
+        'data': [
+          {'student_id': 1, 'student_number': 1, 'name': 'ก', 'pin': '004211'},
+        ],
+      });
+    });
+    final repo = ApiClassroomsRepository(fakeDio(adapter));
+
+    final roster = await repo.roster(7);
+    expect(roster.map((r) => r.pinPending), [true, false]);
+
+    final issued = await repo.issuePendingPins(7);
+    final req = adapter.requests.last;
+    expect(req.method, 'POST');
+    expect(req.uri.path, '/api/v1/classrooms/7/students/pending-pins');
+    expect(issued.single.pin, '004211');
+  });
+
   test('roster follows cursor pagination and reads student_id', () async {
     final adapter = FakeHttpAdapter((options) async {
       if (options.uri.queryParameters['cursor'] == 'c2') {

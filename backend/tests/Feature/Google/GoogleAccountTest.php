@@ -210,8 +210,8 @@ class GoogleAccountTest extends TestCase
         $this->asUser($teacher)->getJson('/api/v1/google/courses')
             ->assertOk()
             ->assertExactJson(['data' => [
-                ['course_id' => 'c1', 'name' => 'คณิต ม.1/1', 'section' => 'ห้อง 1', 'linked_classroom_id' => null],
-                ['course_id' => 'c2', 'name' => 'ม.2/1', 'section' => null, 'linked_classroom_id' => $classroom->id],
+                ['course_id' => 'c1', 'name' => 'คณิต ม.1/1', 'section' => 'ห้อง 1', 'linked_classroom_id' => null, 'linked_classroom' => null],
+                ['course_id' => 'c2', 'name' => 'ม.2/1', 'section' => null, 'linked_classroom_id' => $classroom->id, 'linked_classroom' => ['id' => $classroom->id, 'name' => $classroom->name]],
             ]]);
         $this->asUser($teacher)->getJson('/api/v1/google/courses')->assertOk()->assertJsonCount(1, 'data');
 

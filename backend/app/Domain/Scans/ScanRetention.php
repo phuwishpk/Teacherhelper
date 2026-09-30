@@ -2,11 +2,13 @@
 
 namespace App\Domain\Scans;
 
+use App\Domain\Pages\PageFiles;
 use App\Models\Assignment;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
 use App\Models\Submission;
+use App\Models\SubmissionPage;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,6 +30,9 @@ use Illuminate\Support\Facades\DB;
  *   stash are deleted, page_image_path becomes NULL and the scan becomes
  *   `superseded` (it can no longer be confirmed). The full-page photo of a
  *   published submission therefore never stays on disk for long.
+ * - whole-page files (DESIGN §19.4, submission_pages): after
+ *   crop_retention_until like the crops, since there are no crops on that
+ *   path; a superseded page (replaced by a newer hand-in) at the next run.
  * - leftovers of an interrupted request are swept once a day old, so the
  *   sweep never races an upload whose transaction has not committed yet:
  *   stash directories of scans that are no longer pending_confirm and the
@@ -43,7 +48,7 @@ final class ScanRetention
     public const PENDING_RESCAN_DAYS = 30;
 
     /**
-     * @return array{page_images: int, crops: int, pending_expired: int, leftovers: int}
+     * @return array{page_images: int, crops: int, pending_expired: int, leftovers: int, whole_pages: int}
      */
     public static function purge(?CarbonInterface $now = null): array
     {
@@ -51,14 +56,17 @@ final class ScanRetention
 
         $crops = 0;
         $expired = 0;
+        $wholePages = 0;
         School::query()
             ->whereNotNull('crop_retention_until')
             ->where('crop_retention_until', '<', $now->toDateString())
-            ->each(function (School $school) use (&$crops, &$expired) {
+            ->each(function (School $school) use (&$crops, &$expired, &$wholePages) {
                 [$c, $p] = self::purgeSchoolCrops($school);
                 $crops += $c;
                 $expired += $p;
+                $wholePages += self::purgeSchoolWholePages($school);
             });
+        $wholePages += self::purgeSupersededWholePages();
 
         $expired += self::expirePendingRescans(
             Scan::query()->where('created_at', '<=', $now->subDays(self::PENDING_RESCAN_DAYS)),
@@ -69,7 +77,51 @@ final class ScanRetention
             'crops' => $crops,
             'pending_expired' => $expired,
             'leftovers' => self::sweepOrphanStashes($now) + self::sweepCropBackups($now),
+            'whole_pages' => $wholePages,
         ];
+    }
+
+    /**
+     * Whole-page files (DESIGN §19.4) are the only evidence of that path, so
+     * they follow the crop rule: deleted after the school's
+     * crop_retention_until for every page received up to that date.
+     */
+    private static function purgeSchoolWholePages(School $school): int
+    {
+        $cutoff = CarbonImmutable::parse($school->crop_retention_until->toDateString())->endOfDay();
+
+        return self::deletePageFiles(SubmissionPage::query()
+            ->where('received_at', '<=', $cutoff)
+            ->whereIn('submission_id', Submission::query()->select('id')->whereIn(
+                'assignment_id',
+                Assignment::query()->select('id')->where('school_id', $school->id),
+            )));
+    }
+
+    /** A page replaced by a newer hand-in is not needed any more (§19.4). */
+    private static function purgeSupersededWholePages(): int
+    {
+        return self::deletePageFiles(SubmissionPage::query()->where('state', SubmissionPage::STATE_SUPERSEDED));
+    }
+
+    /**
+     * @param  Builder<SubmissionPage>  $pages
+     */
+    private static function deletePageFiles(Builder $pages): int
+    {
+        $disk = PageFiles::disk();
+        $count = 0;
+        $pages->whereNotNull('file_path')->chunkById(200, function (Collection $rows) use ($disk, &$count) {
+            foreach ($rows as $page) {
+                /** @var SubmissionPage $page */
+                $disk->delete((string) $page->file_path);
+                $page->file_path = null;
+                $page->save();
+                $count++;
+            }
+        });
+
+        return $count;
     }
 
     private static function purgePublishedPages(): int

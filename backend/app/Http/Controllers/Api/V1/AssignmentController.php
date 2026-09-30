@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Courses\AssignmentCourses;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AssignmentIndexRequest;
@@ -18,6 +19,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Assignments of the signed-in teacher's classrooms (DESIGN §9.3). Queries are
@@ -28,18 +30,24 @@ class AssignmentController extends Controller
 {
     public const PER_PAGE = 50;
 
-    /** GET /api/v1/assignments?classroom_id=&status= -> cursor-paginated */
+    /** GET /api/v1/assignments?classroom_id=&course_id=&lesson_plan_id=&status= -> cursor-paginated */
     public function index(AssignmentIndexRequest $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Assignment::class);
 
         $query = self::ownQuery($request)
-            ->with(['classroom', 'subject', 'googleLink'])
-            ->withCount('questions')
+            ->with(['classroom', 'subject', 'googleLink', 'course', 'lessonPlan'])
+            // submissions_count: students who handed in anything (§19.6 "อัปโหลดรูปเพื่อตรวจ").
+            ->withCount(['questions', 'submissions'])
             ->orderByDesc('id');
 
         if ($request->filled('classroom_id')) {
             $query->where('classroom_id', (int) $request->validated('classroom_id'));
+        }
+        foreach (['course_id', 'lesson_plan_id'] as $filter) {
+            if ($request->filled($filter)) {
+                $query->where($filter, (int) $request->validated($filter));
+            }
         }
         if ($request->filled('status')) {
             $query->where('status', $request->validated('status'));
@@ -54,16 +62,24 @@ class AssignmentController extends Controller
         Gate::authorize('create', Assignment::class);
         $teacher = $request->user();
         $classroom = Classroom::query()->findOrFail($request->validated('classroom_id'));
+        // Every new assignment belongs to a course of its classroom (§20.1).
+        $course = AssignmentCourses::courseFor($teacher, $classroom->id, $request->validated('course_id'));
+        $plan = AssignmentCourses::planFor($course, $request->validated('lesson_plan_id'));
 
         $assignment = Assignment::create([
             'school_id' => $classroom->school_id,
             'classroom_id' => $classroom->id,
-            'subject_id' => $request->validated('subject_id'),
+            'subject_id' => $course->subject_id,
+            'course_id' => $course->id,
+            'lesson_plan_id' => $plan?->id,
             'created_by' => $teacher->id,
             'title' => trim($request->validated('title')),
             'strictness' => $request->validated('strictness') ?? 'normal',
             'status' => Assignment::STATUS_DRAFT,
             'due_at' => self::utc($request->validated('due_at')),
+            'mode' => $request->validated('mode') ?? Assignment::MODE_WORKSHEET,
+            'accept_late' => (bool) ($request->validated('accept_late') ?? true),
+            'score_only' => (bool) ($request->validated('score_only') ?? false),
         ]);
 
         return (new AssignmentResource(self::loadDetail($assignment)))->response()->setStatusCode(201);
@@ -78,15 +94,35 @@ class AssignmentController extends Controller
         return new AssignmentResource(self::loadDetail($assignment));
     }
 
-    /** PATCH /api/v1/assignments/{id} {title?, strictness?, due_at?, status?: draft|closed} */
+    /**
+     * PATCH /api/v1/assignments/{id} {title?, strictness?, due_at?, status?: draft|closed,
+     * mode?, accept_late?, score_only?, course_id?, lesson_plan_id?}. course_id:
+     * a course bound to the classroom (the subject follows it); lesson_plan_id:
+     * a plan of the assignment's course, or null. mode changes only on a draft that
+     * never had a layout or a submission (422 errors.mode). A freeform
+     * assignment sent back to draft loses its key approval (ready ⇔
+     * approved, DESIGN §19.5).
+     */
     public function update(UpdateAssignmentRequest $request, int $id): AssignmentResource
     {
         $assignment = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
 
         $data = $request->validated();
-        DB::transaction(function () use ($assignment, $data) {
+        $teacher = $request->user();
+        DB::transaction(function () use ($assignment, $data, $teacher) {
             $assignment = Assignment::query()->lockForUpdate()->findOrFail($assignment->id);
+            if (array_key_exists('course_id', $data)) {
+                AssignmentCourses::assign($assignment, AssignmentCourses::courseFor($teacher, $assignment->classroom_id, $data['course_id']));
+            }
+            if (array_key_exists('lesson_plan_id', $data)) {
+                if ($data['lesson_plan_id'] !== null && $assignment->course_id === null) {
+                    throw ValidationException::withMessages(['lesson_plan_id' => 'เลือกรายวิชาของการบ้านก่อนเลือกแผนการสอน']);
+                }
+                $assignment->lesson_plan_id = $data['lesson_plan_id'] === null
+                    ? null
+                    : AssignmentCourses::planFor($assignment->course()->firstOrFail(), $data['lesson_plan_id'])?->id;
+            }
             if (array_key_exists('title', $data)) {
                 $assignment->title = trim($data['title']);
             }
@@ -96,9 +132,27 @@ class AssignmentController extends Controller
             if (array_key_exists('due_at', $data)) {
                 $assignment->due_at = self::utc($data['due_at']);
             }
+            if (array_key_exists('mode', $data) && $data['mode'] !== $assignment->mode) {
+                if (! $assignment->isDraft() || $assignment->current_layout_version !== null
+                    || $assignment->layouts()->exists() || $assignment->submissions()->exists()) {
+                    throw ValidationException::withMessages([
+                        'mode' => 'เปลี่ยนโหมดได้เฉพาะการบ้านฉบับร่างที่ยังไม่เคยสร้างใบงานและยังไม่มีงานส่ง',
+                    ]);
+                }
+                $assignment->mode = $data['mode'];
+            }
+            foreach (['accept_late', 'score_only'] as $flag) {
+                if (array_key_exists($flag, $data)) {
+                    $assignment->{$flag} = (bool) $data[$flag];
+                }
+            }
             if (array_key_exists('status', $data)) {
                 // closed: stop edits and printing; draft: reopen (rebuild the layout to print again).
                 $assignment->status = $data['status'];
+                if ($data['status'] === Assignment::STATUS_DRAFT && $assignment->isFreeform()) {
+                    $assignment->key_approved_at = null;
+                    $assignment->key_approved_by = null;
+                }
             }
             $assignment->save();
         });
@@ -146,7 +200,7 @@ class AssignmentController extends Controller
 
     public static function loadDetail(Assignment $assignment): Assignment
     {
-        return $assignment->load(['classroom', 'subject', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
+        return $assignment->load(['classroom', 'subject', 'course', 'lessonPlan', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
             ->loadCount(['questions', 'responses as missing_ai_key_count' => fn ($q) => $q->awaitingAiKey()]);
     }
 

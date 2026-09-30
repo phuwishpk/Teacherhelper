@@ -1873,9 +1873,12 @@ APIs & Services → OAuth consent screen (หรือ Google Auth Platform → 
    - `.../auth/classroom.coursework.students`
    - `.../auth/drive.file`
    - `.../auth/drive.readonly`
+   - `.../auth/classroom.announcements` (เพิ่มใน Phase 8, 30 ก.ย. 2569: ประกาศผลส่วนตัวรายคนใน Classroom DESIGN §19.7)
 4. Audience → Publishing status: **Testing** และเพิ่ม **Test users** = อีเมล Google ของครูทุกคนที่จะทดสอบ (สูงสุด 100 คน)
 
 ตรวจสอบ: หน้า Audience แสดง Testing และมีรายชื่อ test user
+
+ครบ 7 scope ตรงกับ `GoogleScopes::REQUIRED` ใน backend และ `googleServerScopes` ในแอป ถ้า project ตั้งไว้ก่อน Phase 8 ให้เพิ่ม `classroom.announcements` ที่นี่ แล้ว**ครูทุกคนที่เชื่อมไว้แล้วต้องกด "เชื่อมใหม่"** (ตั้งค่า → Google Classroom) แอปจะขึ้นแบนเนอร์ "ต้องเชื่อมบัญชี Google ใหม่" จนกว่าจะเชื่อมใหม่ ระหว่างนั้นการซิงก์และการประกาศผลของครูคนนั้นหยุด
 
 ⚠️ ข้อจำกัดของโหมด Testing: refresh token **หมดอายุใน 7 วัน** ครูต้องกด "เชื่อม Google ใหม่" ในแอปสัปดาห์ละครั้ง และ `drive.readonly` เป็น restricted scope ถ้าจะเปิดให้คนนอก test user ใช้ต้องผ่าน Google verification (หรือให้ผู้ดูแล Workspace ของโรงเรียนตั้งแอปเป็น trusted ดู DESIGN §18.5)
 
@@ -1927,7 +1930,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
 cd app && flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
 
-ใน Chrome ทำได้ทุกอย่างยกเว้น "ดาวน์โหลดและสแกนงานที่ส่ง" ซึ่งต้องใช้แอป Android
+ตั้งแต่ Phase 8 server ดาวน์โหลดและตรวจงานที่ส่งจาก Classroom เอง (DESIGN §19.4) จึงทำได้ทุกอย่างใน Chrome ยกเว้นหน้าสแกนใบงานด้วยกล้อง
 
 ### G7 คอร์สทดลอง
 
@@ -1941,6 +1944,8 @@ cd app && flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 8. นักเรียนเห็นคะแนนในงานของ Classroom และคำอธิบายรายข้อในแอป EduVision
 
 ตรวจสอบ: ขั้น 8 ผ่าน = Phase 7 ใช้ได้จริง
+
+**Phase 8 (DESIGN §19)** ขั้น 7 เปลี่ยนไป: server ซิงก์ทุก 5 นาทีหรือเมื่อกด "ซิงก์ตอนนี้" ดาวน์โหลดไฟล์ที่นักเรียนแนบแล้วตรวจจากรูปทั้งหน้าเอง ไม่ต้องดาวน์โหลดบนมือถือ ทดลองเพิ่ม: "นำเข้าจาก Google Classroom" ในหน้ารายการห้อง, สร้างงานในเว็บ Classroom แล้วดูว่าเข้ามาในแอปพร้อมเฉลยที่ AI ร่าง (รออนุมัติ) และหลังเผยแพร่ นักเรียนเห็นประกาศส่วนตัวที่มีคะแนนและลิงก์เปิดผลในแอป
 
 ### G8 ตอน deploy
 

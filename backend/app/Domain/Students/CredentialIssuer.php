@@ -2,6 +2,7 @@
 
 namespace App\Domain\Students;
 
+use App\Models\ClassroomStudent;
 use App\Models\StudentCredential;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -92,7 +93,8 @@ class CredentialIssuer
 
     /**
      * Resets the PIN, clears the lockout and revokes every session. Returns the
-     * plain PIN, which the teacher sees exactly once.
+     * plain PIN, which the teacher sees exactly once: a student the background
+     * roster sync added (classroom_students.pin_pending_at) has one now.
      */
     public function issuePin(User $student): string
     {
@@ -108,6 +110,7 @@ class CredentialIssuer
                 ],
             );
             $student->tokens()->delete();
+            ClassroomStudent::query()->where('student_id', $student->id)->whereNotNull('pin_pending_at')->update(['pin_pending_at' => null]);
         });
 
         return $pin;

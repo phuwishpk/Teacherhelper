@@ -77,4 +77,16 @@ class RosterMatcherTest extends TestCase
         $this->assertSame([], RosterMatcher::suggest($accounts, [['id' => 11, 'name' => 'สมชาย ใจดี']]));
         $this->assertSame(['g1' => 11], RosterMatcher::suggest([$accounts[0]], [['id' => 11, 'name' => 'สมชาย ใจดี']]));
     }
+
+    public function test_without_first_names_only_full_names_are_suggested(): void
+    {
+        $accounts = [
+            ['google_user_id' => 'g1', 'name' => 'Jaidee Somchai'],
+            ['google_user_id' => 'g2', 'name' => 'สมศรี คนอื่น'],
+        ];
+        $students = [['id' => 1, 'name' => 'Somchai Jaidee'], ['id' => 2, 'name' => 'สมศรี มีสุข']];
+
+        $this->assertSame(['g1' => 1, 'g2' => 2], RosterMatcher::suggest($accounts, $students));
+        $this->assertSame(['g1' => 1], RosterMatcher::suggest($accounts, $students, false));
+    }
 }

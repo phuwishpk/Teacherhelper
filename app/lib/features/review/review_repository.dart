@@ -21,6 +21,11 @@ abstract class ReviewRepository {
   /// Returns how many responses were approved.
   Future<int> approveConfident(int assignmentId);
   Future<void> publishSubmission(int submissionId);
+
+  /// `POST /submissions/{id}/grade` (DESIGN §19.4): grades a new whole-page
+  /// hand-in that waits for the teacher (`regrade_pending`). A published
+  /// submission is reopened. 409 `nothing_to_grade` when none waits.
+  Future<void> gradeSubmission(int submissionId);
   Future<PublishResult> publishAssignment(int assignmentId);
 
   /// `POST /assignments/{id}/requeue-missing-key`: returns how many
@@ -113,6 +118,11 @@ class ApiReviewRepository implements ReviewRepository {
   @override
   Future<void> publishSubmission(int submissionId) async {
     await _dio.post<Object?>('/submissions/$submissionId/publish');
+  }
+
+  @override
+  Future<void> gradeSubmission(int submissionId) async {
+    await _dio.post<Object?>('/submissions/$submissionId/grade');
   }
 
   @override

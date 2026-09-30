@@ -3,9 +3,13 @@
 namespace Tests\Feature\Console;
 
 use App\Jobs\QueueHeartbeatJob;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use Tests\TestCase;
 
 class QueueWorkCommandTest extends TestCase
@@ -26,6 +30,25 @@ class QueueWorkCommandTest extends TestCase
         $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
 
         Queue::assertPushed(QueueHeartbeatJob::class, 1);
+    }
+
+    public function test_an_error_in_a_periodic_step_does_not_stop_the_worker_pass(): void
+    {
+        config(['queue.default' => 'database']);
+        // PollAnalysisBatchJob::dispatchDue() queries analysis_batches: make that fail.
+        // A throwing query listener instead of dropping the table: MariaDB commits DDL
+        // implicitly, which would leave the table missing for the rest of the suite.
+        DB::listen(function (QueryExecuted $query): void {
+            if (str_contains($query->sql, 'analysis_batches')) {
+                throw new RuntimeException('analysis_batches is unavailable');
+            }
+        });
+        Log::spy();
+
+        $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
+
+        $this->assertNotNull(Cache::get(QueueHeartbeatJob::CACHE_KEY), 'the worker pass still ran');
+        Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context) => $message === 'queue_work.dispatch_failed' && $context['step'] === 'analysis_poll');
     }
 
     public function test_one_cron_pass_processes_the_heartbeat_through_the_database_queue(): void

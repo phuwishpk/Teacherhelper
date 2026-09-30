@@ -15,7 +15,8 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * DESIGN §7.5: skills are read-only in Filament and imported from CSV.
+ * DESIGN §7.5 / §20.2: the curriculum is read-only in Filament and imported
+ * from CSV; an admin may edit a school's own rows.
  */
 class SkillResourceTest extends TestCase
 {
@@ -74,5 +75,43 @@ class SkillResourceTest extends TestCase
             ->callAction('import', data: ['csv' => $bad, 'school_id' => null])
             ->assertNotified();
         $this->assertSame(14, Skill::query()->count());
+    }
+
+    public function test_an_admin_edits_a_teacher_added_indicator_but_not_the_curriculum(): void
+    {
+        $subject = Subject::factory()->create(['code' => 'ค']);
+        $curriculum = Skill::factory()->create(['subject_id' => $subject->id, 'code' => 'ค 1.1', 'level' => Skill::LEVEL_STANDARD]);
+        $teacher = $this->makeTeacher();
+        $added = Skill::factory()->create([
+            'subject_id' => $subject->id, 'parent_id' => $curriculum->id, 'school_id' => $teacher->school_id,
+            'code' => 'ค 1.1/ค1', 'name' => 'ครูตั้งชื่อ', 'source' => Skill::SOURCE_TEACHER, 'created_by' => $teacher->id,
+        ]);
+
+        $this->assertFalse(SkillResource::canEdit($curriculum));
+        $this->assertTrue(SkillResource::canEdit($added));
+
+        Livewire::test(ManageSkills::class)
+            ->assertSee('ครูเพิ่มเอง')
+            ->callTableAction('edit', $added, data: ['code' => 'ค 1.1/ค1', 'name' => 'admin แก้ชื่อ', 'grade_level' => 5])
+            ->assertHasNoTableActionErrors();
+        $this->assertSame('admin แก้ชื่อ', $added->refresh()->name);
+
+        // A code the curriculum or the school already uses is refused, as for teachers.
+        Livewire::test(ManageSkills::class)
+            ->callTableAction('edit', $added, data: ['code' => 'ค 1.1', 'name' => 'admin แก้ชื่อ', 'grade_level' => 5])
+            ->assertHasTableActionErrors(['code']);
+        $this->assertSame('ค 1.1/ค1', $added->refresh()->code);
+    }
+
+    public function test_an_import_with_bad_rows_reports_them_and_keeps_the_good_ones(): void
+    {
+        $file = UploadedFile::fake()->createWithContent('mixed.csv', "subject_code,level,code,parent_code,grade_level,name\nค,indicator,ค 1.1 ป.5/1,,5,ดี\nค,chapter,ค 9,,,ผิด\n");
+
+        Livewire::test(ManageSkills::class)
+            ->callAction('import', data: ['csv' => $file, 'school_id' => null])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $this->assertSame(['ค 1.1 ป.5/1'], Skill::query()->pluck('code')->all());
     }
 }

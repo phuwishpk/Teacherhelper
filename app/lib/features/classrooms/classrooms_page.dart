@@ -6,6 +6,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../google_classroom/google_providers.dart';
 import 'classrooms_providers.dart';
 
 /// "ห้องเรียน" tab of the teacher shell. It is a body only: the shell's
@@ -61,17 +62,35 @@ class ClassroomsPage extends ConsumerWidget {
   }
 }
 
-/// "สร้างห้องเรียน" button the shell shows while this tab is selected.
-class ClassroomsFab extends StatelessWidget {
+/// "สร้างห้องเรียน" button the shell shows while this tab is selected, with
+/// "นำเข้าจาก Google Classroom" above it when the server has Google
+/// Classroom set up (DESIGN §19.2).
+class ClassroomsFab extends ConsumerWidget {
   const ClassroomsFab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final create = FloatingActionButton.extended(
       heroTag: 'classroom_new',
       onPressed: () => context.push(AppRoutes.classroomNew),
       icon: const Icon(Icons.add),
       label: const Text('สร้างห้องเรียน'),
+    );
+    if (!ref.watch(googleClassroomEnabledProvider)) return create;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FloatingActionButton.extended(
+          key: const ValueKey('classroom_import_google'),
+          heroTag: 'classroom_import_google',
+          onPressed: () => context.push(AppRoutes.classroomImportGoogle),
+          icon: const Icon(Icons.cloud_download_outlined),
+          label: const Text('นำเข้าจาก Google Classroom'),
+        ),
+        const SizedBox(height: 12),
+        create,
+      ],
     );
   }
 }

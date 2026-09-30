@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/assignments/assignments_providers.dart';
+import '../../features/google_classroom/google_providers.dart';
+import '../../features/home/teacher_attention.dart';
 import '../../features/results/results_repository.dart';
 import '../../features/review/review_providers.dart';
 import '../auth/session.dart';
@@ -167,6 +170,12 @@ final pushCoordinatorProvider = Provider<PushCoordinator>((ref) {
         ref.invalidate(studentResultsProvider);
       case 'retake_requested':
         ref.invalidate(studentRetakeRequestsProvider);
+      case 'classroom_work_imported':
+        ref.invalidate(assignmentsProvider);
+        ref.invalidate(teacherAttentionProvider);
+      case 'google_reconnect':
+        ref.invalidate(googleStatusProvider);
+        ref.invalidate(teacherAttentionProvider);
     }
   }
 

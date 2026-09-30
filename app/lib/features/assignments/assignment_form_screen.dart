@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../courses/course_picker.dart';
 import 'assignment.dart';
 import 'assignments_providers.dart';
 
@@ -49,8 +50,11 @@ class AssignmentEditScreen extends ConsumerWidget {
   }
 }
 
-/// Create an assignment (classroom + subject fixed afterwards) or edit its
-/// title, strictness and due date.
+/// Create an assignment (classroom fixed afterwards) or edit its title,
+/// strictness and due date; its course (required for a new assignment, the
+/// subject follows it) and lesson plan (DESIGN §20.1); the mode (worksheet
+/// or not, §19.5) while it is a draft without a layout, "รับงานส่งช้า" and
+/// "เฉพาะคะแนน" (§21.7).
 class AssignmentFormScreen extends ConsumerStatefulWidget {
   const AssignmentFormScreen({
     super.key,
@@ -71,11 +75,23 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   late final _title = TextEditingController(text: widget.existing?.title ?? '');
   late int? _classroomId =
       widget.existing?.classroomId ?? widget.initialClassroomId;
-  late int? _subjectId = widget.existing?.subjectId;
+  late int? _courseId = widget.existing?.courseId;
+  late int? _lessonPlanId = widget.existing?.lessonPlanId;
   late Strictness _strictness =
       widget.existing?.strictness ?? Strictness.normal;
   late DateTime? _dueAt = widget.existing?.dueAt;
+  late AssignmentMode _mode = widget.existing?.mode ?? AssignmentMode.worksheet;
+  late bool _acceptLate = widget.existing?.acceptLate ?? true;
+  late bool _scoreOnly = widget.existing?.scoreOnly ?? false;
   bool _busy = false;
+
+  /// The server refuses a mode change once a layout was built or work was
+  /// handed in (422 errors.mode); the app only offers it on a fresh draft.
+  bool get _modeEditable {
+    final a = widget.existing;
+    return a == null || (a.isDraft && a.currentLayoutVersion == null);
+  }
+
   String? _error;
 
   @override
@@ -103,8 +119,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.existing == null &&
-        (_classroomId == null || _subjectId == null)) {
-      setState(() => _error = 'เลือกห้องเรียนและวิชา');
+        (_classroomId == null || _courseId == null)) {
+      setState(() => _error = 'เลือกห้องเรียนและรายวิชา');
       return;
     }
     setState(() {
@@ -120,6 +136,14 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               strictness: _strictness,
               dueAt: _dueAt,
               clearDueAt: _dueAt == null && a.dueAt != null,
+              mode: _mode != a.mode ? _mode : null,
+              acceptLate: _acceptLate != a.acceptLate ? _acceptLate : null,
+              scoreOnly: _scoreOnly != a.scoreOnly ? _scoreOnly : null,
+              courseId: _courseId != a.courseId ? _courseId : null,
+              lessonPlanId: _lessonPlanId != a.lessonPlanId
+                  ? _lessonPlanId
+                  : null,
+              clearLessonPlan: _lessonPlanId == null && a.lessonPlanId != null,
             );
         if (!mounted) return;
         showMessage(context, 'บันทึกแล้ว');
@@ -129,13 +153,22 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             .read(assignmentsProvider.notifier)
             .create(
               classroomId: _classroomId!,
-              subjectId: _subjectId!,
+              courseId: _courseId!,
+              lessonPlanId: _lessonPlanId,
               title: _title.text.trim(),
               strictness: _strictness,
               dueAt: _dueAt,
+              mode: _mode,
+              acceptLate: _acceptLate,
+              scoreOnly: _scoreOnly,
             );
         if (!mounted) return;
-        showMessage(context, 'สร้างการบ้านแล้ว เพิ่มคำถามได้เลย');
+        showMessage(
+          context,
+          _mode == AssignmentMode.freeform
+              ? 'สร้างการบ้านแล้ว เพิ่มเฉลยได้เลย'
+              : 'สร้างการบ้านแล้ว เพิ่มคำถามได้เลย',
+        );
         context.pushReplacement(AppRoutes.assignment(created.id));
       }
     } catch (e) {
@@ -149,8 +182,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   Widget build(BuildContext context) {
     final editing = widget.existing != null;
     final classrooms = ref.watch(classroomsProvider);
-    final subjects = ref.watch(subjectsProvider);
     final theme = Theme.of(context);
+    final classroomId = _classroomId;
+    final courseId = _courseId;
 
     return Scaffold(
       appBar: AppBar(title: Text(editing ? 'แก้ไขการบ้าน' : 'สร้างการบ้าน')),
@@ -181,7 +215,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       ),
                     ),
                 ],
-                onChanged: (v) => setState(() => _classroomId = v),
+                onChanged: (v) => setState(() {
+                  _classroomId = v;
+                  _courseId = null;
+                  _lessonPlanId = null;
+                }),
                 validator: (v) => v == null ? 'เลือกห้องเรียน' : null,
               ),
               if (classrooms.hasError)
@@ -193,26 +231,54 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   ),
                 ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: _subjectId,
-                decoration: const InputDecoration(labelText: 'วิชา'),
-                items: [
-                  for (final s in subjects.value ?? const [])
-                    DropdownMenuItem(value: s.id, child: Text(s.name)),
-                ],
-                onChanged: (v) => setState(() => _subjectId = v),
-                validator: (v) => v == null ? 'เลือกวิชา' : null,
+            ],
+            if (classroomId != null) ...[
+              ClassroomCourseField(
+                classroomId: classroomId,
+                value: courseId,
+                isRequired: widget.existing?.courseId != null || !editing,
+                onChanged: (c) => setState(() {
+                  if (c?.id != _courseId) _lessonPlanId = null;
+                  _courseId = c?.id;
+                }),
               ),
-              if (subjects.hasError)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'โหลดรายวิชาไม่ได้: ${apiErrorMessage(subjects.error!)}',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ),
               const SizedBox(height: 16),
             ],
+            if (courseId != null) ...[
+              LessonPlanField(
+                courseId: courseId,
+                value: _lessonPlanId,
+                onChanged: (v) => setState(() => _lessonPlanId = v),
+              ),
+              const SizedBox(height: 16),
+            ],
+            Text('รูปแบบการบ้าน', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            SegmentedButton<AssignmentMode>(
+              showSelectedIcon: false,
+              segments: [
+                for (final m in AssignmentMode.values)
+                  ButtonSegment(value: m, label: Text(m.label)),
+              ],
+              selected: {_mode},
+              onSelectionChanged: _modeEditable
+                  ? (s) => setState(() => _mode = s.first)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _mode == AssignmentMode.freeform
+                  ? 'นักเรียนทำในสมุดหรือใบงานของครูเอง ตรวจจากรูปทั้งหน้า '
+                        'ไม่ต้องพิมพ์ใบงาน ต้องอนุมัติเฉลยก่อนเริ่มตรวจ'
+                  : 'พิมพ์ใบงานของแอปที่มี QR และกรอบคำตอบ แล้วสแกนตรวจ',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (!_modeEditable)
+              Text(
+                'เปลี่ยนรูปแบบไม่ได้หลังสร้าง layout หรือมีงานส่งแล้ว',
+                style: theme.textTheme.bodySmall,
+              ),
+            const SizedBox(height: 16),
             Text('ความเข้มงวดในการตรวจ', style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             SegmentedButton<Strictness>(
@@ -240,6 +306,28 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       onPressed: () => setState(() => _dueAt = null),
                     ),
               onTap: _pickDue,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('รับงานส่งช้า'),
+              subtitle: Text(
+                _acceptLate
+                    ? 'งานที่ส่งหลังกำหนดยังตรวจได้ และมีป้าย "ส่งช้า"'
+                    : 'งานที่ส่งหลังกำหนดไม่ถูกตรวจ นักเรียนส่งในแอปไม่ได้ '
+                          'งานจาก Classroom ครูกด "รับงานส่งช้า" เองได้ที่หน้างานที่ส่ง',
+              ),
+              value: _acceptLate,
+              onChanged: (v) => setState(() => _acceptLate = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('เฉพาะคะแนน'),
+              subtitle: const Text(
+                'นักเรียนเห็นคะแนนและข้อความสำเร็จรูป '
+                'ไม่ให้ AI เขียนคำอธิบาย ประหยัดค่าใช้จ่าย',
+              ),
+              value: _scoreOnly,
+              onChanged: (v) => setState(() => _scoreOnly = v),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

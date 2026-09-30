@@ -12,8 +12,13 @@ abstract class MasteryRepository {
   /// Student: `GET /student/mastery`.
   Future<MasteryList> mine();
 
-  /// Teacher: `GET /classrooms/{id}/mastery` (student x skill heatmap).
-  Future<ClassroomMastery> classroom(int classroomId);
+  /// Teacher: `GET /classrooms/{id}/mastery` (student x skill heatmap),
+  /// optionally only the indicators of a course or of one of its units.
+  Future<ClassroomMastery> classroom(
+    int classroomId, {
+    int? courseId,
+    int? unitId,
+  });
 
   /// Teacher: `GET /students/{id}/mastery`.
   Future<List<SkillMastery>> student(int studentId);
@@ -36,8 +41,15 @@ class ApiMasteryRepository implements MasteryRepository {
   }
 
   @override
-  Future<ClassroomMastery> classroom(int classroomId) async {
-    final res = await _dio.get<Object?>('/classrooms/$classroomId/mastery');
+  Future<ClassroomMastery> classroom(
+    int classroomId, {
+    int? courseId,
+    int? unitId,
+  }) async {
+    final res = await _dio.get<Object?>(
+      '/classrooms/$classroomId/mastery',
+      queryParameters: {'course_id': ?courseId, 'unit_id': ?unitId},
+    );
     return ClassroomMastery.fromJson(unwrapJson(res.data));
   }
 
@@ -58,10 +70,15 @@ final myMasteryProvider = FutureProvider.autoDispose<MasteryList>((ref) {
   return ref.watch(masteryRepositoryProvider).mine();
 }, retry: apiRetry);
 
+/// The heatmap of a classroom, filtered to a course (and a unit of it).
+typedef ClassroomMasteryQuery = ({int classroomId, int? courseId, int? unitId});
+
 final classroomMasteryProvider = FutureProvider.autoDispose
-    .family<ClassroomMastery, int>((ref, classroomId) {
+    .family<ClassroomMastery, ClassroomMasteryQuery>((ref, q) {
       watchSignedInUser(ref, keepAlive: false);
-      return ref.watch(masteryRepositoryProvider).classroom(classroomId);
+      return ref
+          .watch(masteryRepositoryProvider)
+          .classroom(q.classroomId, courseId: q.courseId, unitId: q.unitId);
     }, retry: apiRetry);
 
 final studentMasteryProvider = FutureProvider.autoDispose

@@ -2,32 +2,48 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assignments/answer_key_screen.dart';
 import '../../features/assignments/assignment.dart';
 import '../../features/assignments/assignment_detail_screen.dart';
 import '../../features/assignments/assignment_form_screen.dart';
+import '../../features/assignments/indicator_mapping_screen.dart';
 import '../../features/assignments/question.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
+import '../../features/analysis/classroom_analyses_screen.dart';
+import '../../features/analysis/student_analysis_screen.dart';
 import '../../features/appeals/appeals_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/auth/student_login_screen.dart';
 import '../../features/auth/student_qr_scan_screen.dart';
+import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/courses/course_detail_screen.dart';
+import '../../features/courses/course_form_screen.dart';
+import '../../features/courses/course_models.dart';
+import '../../features/courses/courses_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
+import '../../features/google_classroom/classroom_feedback_screen.dart';
+import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
+import '../../features/google_classroom/grade_conflicts_screen.dart';
 import '../../features/google_classroom/roster_matching_screen.dart';
 import '../../features/google_classroom/submissions_screen.dart';
+import '../../features/hand_in/hand_in_models.dart';
+import '../../features/hand_in/student_hand_in_screen.dart';
+import '../../features/hand_in/teacher_upload_screen.dart';
 import '../../features/home/teacher_shell.dart';
 import '../../features/mastery/classroom_mastery_screen.dart';
 import '../../features/mastery/student_mastery_screen.dart';
 import '../../features/practice/practice_attempt_screen.dart';
 import '../../features/practice/practice_bank_screen.dart';
 import '../../features/practice/practice_page.dart';
+import '../../features/practice/skill_practice_screen.dart';
 import '../../features/practice/skill_resources_screen.dart';
 import '../../features/results/result_detail_screen.dart';
 import '../../features/review/review_detail_screen.dart';
@@ -60,10 +76,43 @@ abstract final class AppRoutes {
   /// Google Classroom (DESIGN §18.7): course picker, student matching and
   /// the submissions of a posted assignment.
   static String classroomGoogleLink(int id) => '/classrooms/$id/google-link';
+
+  /// Import a classroom from Google Classroom (DESIGN §19.2): course
+  /// picker, then the preview of one course.
+  static const classroomImportGoogle = '/classrooms/import-google';
+  static String classroomImportPreview(String courseId) =>
+      '$classroomImportGoogle/${Uri.encodeComponent(courseId)}';
   static String classroomGoogleRoster(int id) =>
       '/classrooms/$id/google-roster';
   static String googleSubmissions(int assignmentId) =>
       '/assignments/$assignmentId/google-submissions';
+
+  /// "คะแนนไม่ตรงกัน": grades changed on the Classroom website (§19.3).
+  static String gradeConflicts(int assignmentId) =>
+      '/assignments/$assignmentId/grade-conflicts';
+
+  /// "ประกาศผลรายคน": the private result announcements in Classroom (§19.7).
+  static String googleFeedback(int assignmentId) =>
+      '/assignments/$assignmentId/google-feedback';
+
+  /// Courses, units and lesson plans (DESIGN §20.1).
+  static const courses = '/courses';
+  static const courseNew = '/courses/new';
+
+  /// The course form with [classroomId] ticked. With [pick] (the
+  /// assignment form) it pops the new course instead of opening it.
+  static String courseNewFor(int? classroomId, {bool pick = false}) {
+    final query = {
+      'classroom': ?classroomId?.toString(),
+      if (pick) 'pick': '1',
+    };
+    return query.isEmpty
+        ? courseNew
+        : Uri(path: courseNew, queryParameters: query).toString();
+  }
+
+  static String course(int id) => '/courses/$id';
+  static String courseEdit(int id) => '/courses/$id/edit';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -72,10 +121,21 @@ abstract final class AppRoutes {
       '/assignments/$assignmentId/questions/new';
   static String questionEdit(int assignmentId, int questionId) =>
       '/assignments/$assignmentId/questions/$questionId/edit';
+
+  /// The teacher's answer key: type, photo, file or AI draft, then approve
+  /// (DESIGN §19.5).
+  static String answerKey(int assignmentId) =>
+      '/assignments/$assignmentId/answer-key';
   static String rubric(int assignmentId, int questionId) =>
       '/assignments/$assignmentId/questions/$questionId/rubric';
 
   static const scan = '/scan';
+
+  /// "อัปโหลดรูปเพื่อตรวจ": the teacher hands in a student's work from
+  /// files (DESIGN §19.6). `extra` may carry [TeacherUploadArgs].
+  static const teacherUpload = '/hand-ins/upload';
+  static String teacherUploadFor(int assignmentId) =>
+      '$teacherUpload?assignment=$assignmentId';
   static const uploadQueue = '/upload-queue';
 
   /// Teacher settings: Gemini API key (DESIGN §10.1), later Google (§18.7).
@@ -98,12 +158,44 @@ abstract final class AppRoutes {
   /// Item analysis of one assignment (DESIGN §9.6, §14.3).
   static String assignmentAnalytics(int id) => '/assignments/$id/analytics';
 
-  /// Student x skill mastery heatmap of a classroom (§14.3).
-  static String classroomMastery(int id) => '/classrooms/$id/mastery';
+  /// Question → indicator mapping with AI suggestions (DESIGN §20.3).
+  static String indicatorMapping(int id) => '/assignments/$id/indicators';
+
+  /// Student x skill mastery heatmap of a classroom (§14.3), optionally
+  /// opened on a course's indicators (§20.4 chart 3).
+  static String classroomMastery(int id, {int? courseId}) => courseId == null
+      ? '/classrooms/$id/mastery'
+      : '/classrooms/$id/mastery?course=$courseId';
+
+  /// The charts of a course in a classroom (DESIGN §20.4).
+  static String courseCharts(int courseId, {int? classroomId}) =>
+      classroomId == null
+      ? '/courses/$courseId/charts'
+      : '/courses/$courseId/charts?classroom=$classroomId';
+
+  /// One student's spider and progress in a course, seen by the teacher.
+  static String studentCourseCharts(
+    int courseId,
+    int studentId, {
+    int? classroomId,
+  }) =>
+      '/courses/$courseId/students/$studentId/charts'
+      '${classroomId == null ? '' : '?classroom=$classroomId'}';
+
+  /// Student: their own charts of one course (§20.4, §20.9).
+  static String myCourseCharts(int courseId) => '/student/courses/$courseId';
 
   /// One student's skills and weaknesses, seen by the teacher.
   static String studentMastery(int classroomId, int studentId) =>
       '/classrooms/$classroomId/students/$studentId/mastery';
+
+  /// Every student's AI analysis in a classroom and its auto-share switch
+  /// (DESIGN §20.5).
+  static String classroomAnalyses(int id) => '/classrooms/$id/analyses';
+
+  /// One student's AI analysis in a classroom: texts, approve, edit, run.
+  static String studentAnalysis(int classroomId, int studentId) =>
+      '/classrooms/$classroomId/students/$studentId/analysis';
 
   /// The school's practice bank (§14.1).
   static const practiceBank = '/practice-bank';
@@ -114,15 +206,47 @@ abstract final class AppRoutes {
   /// Student: one practice item (§9.7).
   static String studentPractice(int itemId) => '/student/practice/$itemId';
 
+  /// Student: the practice of one indicator, from an analysis next step
+  /// (§20.5). `extra` may carry the [Skill].
+  static String studentSkillPractice(int skillId) =>
+      '/student/practice/skills/$skillId';
+
   /// Student: one published submission (§9.7).
   static String studentResult(int submissionId) =>
       '/student/results/$submissionId';
+
+  /// Student: hand in one assignment from the app (§19.6).
+  static String studentHandIn(int assignmentId) =>
+      '/student/assignments/$assignmentId/hand-in';
 
   /// Routes a signed-in student may open (everything else sends them home).
   static bool isStudentArea(String location) =>
       location == student ||
       location.startsWith('$student/results/') ||
-      location.startsWith('$student/practice/');
+      location.startsWith('$student/assignments/') ||
+      location.startsWith('$student/practice/') ||
+      location.startsWith('$student/courses/');
+
+  /// The app location of a result link from a Classroom announcement
+  /// (DESIGN §19.7): `eduvision://r/{submission_id}` (what the server's
+  /// `/r/{id}` page opens) or a bare `/r/{id}`; null for anything else.
+  static String? fromResultLink(Uri uri) {
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    final List<String> rest;
+    if (uri.scheme == 'eduvision' && uri.host == 'r') {
+      rest = segments;
+    } else if ((uri.scheme.isEmpty || uri.scheme == 'eduvision') &&
+        uri.host.isEmpty &&
+        segments.length == 2 &&
+        segments.first == 'r') {
+      rest = segments.sublist(1);
+    } else {
+      return null;
+    }
+    if (rest.length != 1) return null;
+    final id = int.tryParse(rest.single);
+    return id == null || id <= 0 ? null : studentResult(id);
+  }
 
   static bool isPublic(String location) =>
       location == login ||
@@ -140,25 +264,47 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
   ref.listen(sessionProvider, (_, _) => refresh.value++);
 
+  // A result link that waits for the student to sign in.
+  String? pendingResult;
+
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: refresh,
     redirect: (context, state) {
       final session = ref.read(sessionProvider);
-      final location = state.matchedLocation;
+      // A result link from Classroom (§19.7) opens the student's result,
+      // after the student signs in when needed.
+      final link = AppRoutes.fromResultLink(state.uri);
+      if (link != null) pendingResult = link;
+      final location = link ?? state.matchedLocation;
       final public = AppRoutes.isPublic(location);
       final inStudentArea = AppRoutes.isStudentArea(location);
-      return switch (session) {
+      final String? target = switch (session) {
         SessionRestoring() =>
           location == AppRoutes.splash ? null : AppRoutes.splash,
-        SignedOut() => public ? null : AppRoutes.login,
-        SignedIn(:final user) when user.isStudent =>
-          inStudentArea ? null : AppRoutes.student,
-        SignedIn() =>
-          (public || location == AppRoutes.splash || inStudentArea)
+        SignedOut() =>
+          public
+              ? null
+              : pendingResult != null
+              ? AppRoutes.studentLogin
+              : AppRoutes.login,
+        SignedIn(:final user) when user.isStudent => () {
+          final pending = pendingResult;
+          if (pending != null) {
+            if (pending != location) return pending;
+            pendingResult = null;
+          }
+          return inStudentArea ? null : AppRoutes.student;
+        }(),
+        SignedIn() => () {
+          pendingResult = null;
+          return (public || location == AppRoutes.splash || inStudentArea)
               ? AppRoutes.home
-              : null,
+              : null;
+        }(),
       };
+      // The link itself matches no route: always leave it.
+      return target ?? link;
     },
     routes: [
       GoRoute(
@@ -191,6 +337,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             ResultDetailScreen(submissionId: _id(state, 'sid')),
       ),
       GoRoute(
+        path: '/student/assignments/:aid/hand-in',
+        builder: (context, state) => StudentHandInScreen(
+          assignmentId: _id(state, 'aid'),
+          initial: state.extra is StudentAssignment
+              ? state.extra as StudentAssignment
+              : null,
+        ),
+      ),
+      GoRoute(
         path: '/student/practice/:itemId',
         builder: (context, state) => PracticeAttemptScreen(
           itemId: _id(state, 'itemId'),
@@ -200,12 +355,37 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/student/practice/skills/:skillId',
+        builder: (context, state) => SkillPracticeScreen(
+          skillId: _id(state, 'skillId'),
+          skill: state.extra is Skill ? state.extra as Skill : null,
+        ),
+      ),
+      GoRoute(
+        path: '/student/courses/:id',
+        builder: (context, state) =>
+            MyCourseChartsScreen(courseId: _id(state, 'id')),
+      ),
+      GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const TeacherShell(),
       ),
       GoRoute(
         path: AppRoutes.classroomNew,
         builder: (context, state) => const ClassroomFormScreen(),
+      ),
+      // Before '/classrooms/:id', which would take "import-google" as an id.
+      GoRoute(
+        path: AppRoutes.classroomImportGoogle,
+        builder: (context, state) => const GoogleCoursePickerScreen.forImport(),
+        routes: [
+          GoRoute(
+            path: ':courseId',
+            builder: (context, state) => ClassroomImportScreen(
+              courseId: state.pathParameters['courseId']!,
+            ),
+          ),
+        ],
       ),
       GoRoute(
         path: '/classrooms/:id',
@@ -238,14 +418,77 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'mastery',
-            builder: (context, state) =>
-                ClassroomMasteryScreen(classroomId: _id(state, 'id')),
+            builder: (context, state) => ClassroomMasteryScreen(
+              classroomId: _id(state, 'id'),
+              initialCourseId: int.tryParse(
+                state.uri.queryParameters['course'] ?? '',
+              ),
+            ),
           ),
           GoRoute(
             path: 'students/:sid/mastery',
             builder: (context, state) => StudentMasteryScreen(
               classroomId: _id(state, 'id'),
               studentId: _id(state, 'sid'),
+            ),
+          ),
+          GoRoute(
+            path: 'analyses',
+            builder: (context, state) =>
+                ClassroomAnalysesScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'students/:sid/analysis',
+            builder: (context, state) => StudentAnalysisScreen(
+              classroomId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.courses,
+        builder: (context, state) => const CoursesScreen(),
+      ),
+      // Before '/courses/:id', which would take "new" as an id.
+      GoRoute(
+        path: AppRoutes.courseNew,
+        builder: (context, state) => CourseFormScreen(
+          initialClassroomId: int.tryParse(
+            state.uri.queryParameters['classroom'] ?? '',
+          ),
+          popOnCreate: state.uri.queryParameters['pick'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/courses/:id',
+        builder: (context, state) =>
+            CourseDetailScreen(courseId: _id(state, 'id')),
+        routes: [
+          GoRoute(
+            path: 'charts',
+            builder: (context, state) => CourseChartsScreen(
+              courseId: _id(state, 'id'),
+              initialClassroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: 'students/:sid/charts',
+            builder: (context, state) => StudentCourseChartsScreen(
+              courseId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+              classroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: 'edit',
+            builder: (context, state) => CourseEditScreen(
+              courseId: _id(state, 'id'),
+              initial: state.extra is Course ? state.extra as Course : null,
             ),
           ),
         ],
@@ -282,6 +525,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 assignmentId: _id(state, 'id'),
                 subjectId: args?.subjectId,
                 gradeLevel: args?.gradeLevel,
+                freeform: args?.freeform,
               );
             },
           ),
@@ -297,8 +541,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                 initial: args?.question,
                 subjectId: args?.subjectId,
                 gradeLevel: args?.gradeLevel,
+                freeform: args?.freeform,
               );
             },
+          ),
+          GoRoute(
+            path: 'answer-key',
+            builder: (context, state) =>
+                AnswerKeyScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'questions/:qid/rubric',
@@ -313,9 +563,24 @@ final routerProvider = Provider<GoRouter>((ref) {
                 AssignmentAnalyticsScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
+            path: 'indicators',
+            builder: (context, state) =>
+                IndicatorMappingScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
             path: 'google-submissions',
             builder: (context, state) =>
                 GoogleSubmissionsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'grade-conflicts',
+            builder: (context, state) =>
+                GradeConflictsScreen(assignmentId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'google-feedback',
+            builder: (context, state) =>
+                ClassroomFeedbackScreen(assignmentId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'review',
@@ -337,6 +602,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.scan,
         builder: (context, state) => const ScanScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teacherUpload,
+        builder: (context, state) {
+          final extra = state.extra is TeacherUploadArgs
+              ? state.extra as TeacherUploadArgs
+              : null;
+          return TeacherUploadScreen(
+            args: TeacherUploadArgs(
+              assignmentId:
+                  extra?.assignmentId ??
+                  int.tryParse(state.uri.queryParameters['assignment'] ?? ''),
+              files: extra?.files ?? const [],
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.uploadQueue,

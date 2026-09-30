@@ -11,9 +11,13 @@ use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
+use App\Models\Course;
+use App\Models\DocumentExtraction;
 use App\Models\GoogleAccount;
+use App\Models\GradeConflict;
 use App\Models\Layout;
 use App\Models\LearningResource;
+use App\Models\LessonPlan;
 use App\Models\LoginCardPrint;
 use App\Models\ModelVersion;
 use App\Models\PracticeItem;
@@ -22,8 +26,11 @@ use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
 use App\Models\Skill;
+use App\Models\StudentAnalysis;
 use App\Models\Subject;
 use App\Models\Submission;
+use App\Models\SubmissionPage;
+use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorksheetPrint;
 use Illuminate\Http\UploadedFile;
@@ -67,6 +74,8 @@ trait SecurityWorld
 
     protected Classroom $classroomA;
 
+    protected StudentAnalysis $analysisA;
+
     protected Classroom $classroomB;
 
     protected Subject $subject;
@@ -76,6 +85,9 @@ trait SecurityWorld
 
     /** A curriculum skill every school sees. */
     protected Skill $curriculumSkill;
+
+    /** An indicator teacher A added for school A (DESIGN §20.2, "ครูเพิ่มเอง"). */
+    protected Skill $teacherSkillA;
 
     protected Assignment $assignmentA;
 
@@ -109,6 +121,21 @@ trait SecurityWorld
 
     protected ClassroomSubmissionImport $importA;
 
+    protected GradeConflict $conflictA;
+
+    /** What Gemini read from a document of school A (DESIGN §19.5). */
+    protected DocumentExtraction $extractionA;
+
+    /** A whole-page file of student A's (unpublished) submission (DESIGN §19.4). */
+    protected SubmissionPage $pageA;
+
+    /** Teacher A's course bound to classroom A, with a unit and a lesson plan (DESIGN §20.1). */
+    protected Course $courseA;
+
+    protected Unit $unitA;
+
+    protected LessonPlan $lessonPlanA;
+
     protected function makeSecurityWorld(): void
     {
         Storage::fake('local');
@@ -130,7 +157,12 @@ trait SecurityWorld
 
         $this->subject = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
         $this->curriculumSkill = Skill::factory()->create(['subject_id' => $this->subject->id, 'code' => 'ค 1.1 ป.4/1', 'name' => 'จำนวนนับ']);
-        $this->skillA = Skill::factory()->create(['subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id, 'code' => 'ค 1.1 ป.4/1-ก', 'name' => 'ทักษะย่อยของโรงเรียน ก']);
+        $this->skillA = Skill::factory()->create(['subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id, 'code' => 'ค 1.1 ป.4/1-ก', 'name' => 'ทักษะย่อยของโรงเรียน ก', 'level' => Skill::LEVEL_SUB_INDICATOR, 'source' => Skill::SOURCE_SCHOOL_ADMIN]);
+        $this->teacherSkillA = Skill::factory()->create([
+            'subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id,
+            'code' => 'ค 1.1 ป.4/1/ค1', 'name' => 'ครู ก เพิ่มเอง', 'level' => Skill::LEVEL_SUB_INDICATOR,
+            'source' => Skill::SOURCE_TEACHER, 'created_by' => $this->teacherA->id,
+        ]);
 
         $this->assignmentA = Assignment::factory()->for_classroom($this->classroomA)->create([
             'subject_id' => $this->subject->id,
@@ -165,6 +197,27 @@ trait SecurityWorld
         $this->responseA2->forceFill(['final_score' => 1.0, 'final_understanding' => 'partial', 'final_error_types' => ['calculation'], 'reviewed_by' => $this->teacherA->id, 'reviewed_at' => now()])->save();
         $this->submissionA2->forceFill(['published_at' => now(), 'published_by' => $this->teacherA->id, 'total_score' => 1.0])->save();
         $this->appealA2 = Appeal::create(['response_id' => $this->responseA2->id, 'student_id' => $this->studentA2->id, 'reason' => 'ขอตรวจใหม่']);
+        $this->pageA = SubmissionPage::create([
+            'submission_id' => $this->submissionA->id, 'source' => SubmissionPage::SOURCE_CLASSROOM, 'position' => 1,
+            'mime_type' => 'image/webp', 'size_bytes' => 10, 'sha256' => str_repeat('a', 64), 'state' => SubmissionPage::STATE_GRADED, 'received_at' => now(),
+        ]);
+        $this->pageA->forceFill(['file_path' => "pages/{$this->schoolA->id}/{$this->assignmentA->id}/{$this->pageA->id}.webp"])->save();
+        $disk->put($this->pageA->file_path, $this->scanFixture('page.webp'));
+
+        $this->extractionA = DocumentExtraction::create([
+            'school_id' => $this->schoolA->id, 'input_hash' => str_repeat('b', 64), 'purpose' => DocumentExtraction::PURPOSE_ANSWER_KEY,
+            'status' => DocumentExtraction::STATUS_DONE, 'requested_by' => $this->teacherA->id,
+            'result' => ['kind' => 'answer_key_read', 'notes_th' => '', 'questions' => []],
+        ]);
+
+        $this->courseA = Course::create([
+            'school_id' => $this->schoolA->id, 'created_by' => $this->teacherA->id, 'subject_id' => $this->subject->id,
+            'code' => 'ค14101', 'name' => 'คณิตศาสตร์ 4', 'grade_level' => 4, 'academic_year' => 2569,
+        ]);
+        $this->courseA->classrooms()->attach($this->classroomA->id);
+        $this->courseA->indicators()->attach($this->curriculumSkill->id);
+        $this->unitA = Unit::create(['course_id' => $this->courseA->id, 'position' => 1, 'title' => 'จำนวนนับ']);
+        $this->lessonPlanA = LessonPlan::create(['course_id' => $this->courseA->id, 'unit_id' => $this->unitA->id, 'position' => 1, 'title' => 'การอ่านจำนวน']);
 
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',
@@ -189,6 +242,17 @@ trait SecurityWorld
             'assignment_id' => $this->assignmentA->id, 'google_submission_id' => 'sub-1', 'google_user_id' => 'guser-1',
             'student_id' => $this->studentA->id, 'state' => ClassroomSubmissionImport::STATE_NEW, 'google_update_time' => now(),
             'attachments' => [['drive_file_id' => 'f1', 'title' => 'page.jpg', 'mime_type' => 'image/jpeg']],
+        ]);
+        $this->conflictA = GradeConflict::create([
+            'submission_id' => $this->submissionA->id, 'import_id' => $this->importA->id,
+            'app_score' => 5, 'classroom_score' => 4, 'detected_at' => now(),
+        ]);
+
+        // The analysis of student A in classroom A (§20.5), with a draft for the student.
+        $this->analysisA = StudentAnalysis::create([
+            'student_id' => $this->studentA->id, 'classroom_id' => $this->classroomA->id,
+            'computed_input_hash' => str_repeat('c', 64), 'strengths' => [], 'areas' => [],
+            'status' => StudentAnalysis::STATUS_DRAFTED, 'teacher_text' => 'ครู', 'student_text' => 'นักเรียน',
         ]);
     }
 

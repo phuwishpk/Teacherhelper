@@ -1,10 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
 import 'package:eduvision/core/db/app_database.dart';
 import 'package:eduvision/core/db/database_provider.dart';
+import 'package:eduvision/features/assignments/answer_key_models.dart';
+import 'package:eduvision/features/assignments/key_document_sources.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
+import 'package:eduvision/features/hand_in/teacher_upload_screen.dart';
 import 'package:eduvision/features/scan/page_layout.dart';
 import 'package:eduvision/features/scan/scan_camera.dart';
+import 'package:eduvision/features/scan/scan_file_picks.dart';
 import 'package:eduvision/features/scan/scan_meta.dart';
 import 'package:eduvision/features/scan/scan_processor.dart';
 import 'package:eduvision/features/scan/scan_quality.dart';
@@ -13,7 +19,9 @@ import 'package:eduvision/features/upload_queue/queued_scan.dart';
 import 'package:eduvision/platform/scan_pipeline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
+import '../assignments/answer_key_fixtures.dart';
 import '../helpers/pump_screen.dart';
 import 'scan_fixtures.dart';
 
@@ -162,7 +170,10 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    List<PickedDocument> picked = const [],
+  }) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 2.5;
     addTearDown(tester.view.reset);
@@ -173,9 +184,112 @@ void main() {
         appDatabaseProvider.overrideWithValue(db),
         scanProcessorProvider.overrideWithValue(processor),
         scanCameraFactoryProvider.overrideWithValue(() => camera),
+        documentFilePickerProvider.overrideWithValue(
+          FakeDocumentPicker(picked),
+        ),
+        pickedFileStagerProvider.overrideWithValue(
+          (f) async => f.name.startsWith('lost') ? null : '/picks/${f.name}',
+        ),
+      ],
+      extraRoutes: [
+        GoRoute(
+          path: '/hand-ins/upload',
+          builder: (_, state) => Text(
+            'upload ${(state.extra as TeacherUploadArgs?)?.files.map((f) => f.name).join(',') ?? ''}',
+          ),
+        ),
       ],
     );
   }
+
+  PickedDocument picked(String name) =>
+      PickedDocument(name: name, bytes: Uint8List(4));
+
+  ScanRejected noMarkers(String p) => ScanRejected(
+    imagePath: p,
+    capturedAt: _capturedAt,
+    detection: goodDetection(missing: [0, 1, 2, 3], qr: null),
+    issues: const [
+      MarkersMissing([0, 1, 2, 3]),
+      QrUnreadable(),
+    ],
+  );
+
+  testWidgets(
+    'picked photos with markers are scanned, the rest go whole-page',
+    (tester) async {
+      processor.results
+        ..add(_ready)
+        ..add(noMarkers);
+      await pump(
+        tester,
+        picked: [
+          picked('sheet.jpg'),
+          picked('photo.jpg'),
+          picked('work.pdf'),
+          picked('lost.png'),
+        ],
+      );
+
+      await tester.tap(find.byKey(const Key('scan-pick-files')));
+      await tester.pumpAndSettle();
+
+      // The first photo had markers and QR: the usual confirm view.
+      expect(processor.analyzed, ['/picks/sheet.jpg']);
+      expect(find.text('ด.ญ. สมหญิง'), findsOneWidget);
+      expect(find.text('ข้ามไฟล์นี้'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('scan-confirm')));
+      await tester.pumpAndSettle();
+      expect(processor.confirmed.single.imagePath, '/picks/sheet.jpg');
+
+      // No markers, a PDF and an unreadable file: whole-page.
+      expect(processor.analyzed, ['/picks/sheet.jpg', '/picks/photo.jpg']);
+      expect(find.text('ไม่พบสัญลักษณ์หรือ QR ใน 3 ไฟล์'), findsOneWidget);
+      expect(find.text('เลือกแล้ว 3/5 ไฟล์'), findsOneWidget);
+      // Let the "บันทึก … แล้ว" SnackBar go away from the action bar.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('scan-whole-page-2')));
+      await tester.pumpAndSettle();
+      expect(find.text('เลือกแล้ว 2/5 ไฟล์'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('scan-whole-page-send')));
+      await tester.pumpAndSettle();
+      expect(find.text('upload work.pdf,photo.jpg'), findsOneWidget);
+
+      Navigator.of(tester.element(find.textContaining('upload '))).pop();
+      await tester.pumpAndSettle();
+      // The file left out waits for the next round.
+      expect(find.text('ไม่พบสัญลักษณ์หรือ QR ใน 1 ไฟล์'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('scan-whole-page-drop')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('fake-preview')), findsOneWidget);
+      await unmountScreen(tester);
+    },
+  );
+
+  testWidgets('a blurry picked photo can be skipped', (tester) async {
+    processor.results.add(
+      (p) => ScanRejected(
+        imagePath: p,
+        capturedAt: _capturedAt,
+        detection: goodDetection(),
+        issues: const [TooBlurry(10, 80)],
+      ),
+    );
+    await pump(tester, picked: [picked('blurry.jpg')]);
+
+    await tester.tap(find.byKey(const Key('scan-pick-files')));
+    await tester.pumpAndSettle();
+    expect(find.text('ภาพในไฟล์นี้ไม่คมชัด'), findsOneWidget);
+    expect(find.text('ใช้ภาพนี้ต่อ'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('scan-retake')));
+    await tester.pumpAndSettle();
+    expect(processor.discarded.single.imagePath, '/picks/blurry.jpg');
+    expect(find.byKey(const Key('fake-preview')), findsOneWidget);
+    await unmountScreen(tester);
+  });
 
   testWidgets('capture -> confirm -> back to the camera for the next page', (
     tester,
@@ -335,6 +449,11 @@ void main() {
     expect(find.text('สแกนใบงานได้เฉพาะในแอป Android'), findsOneWidget);
     expect(processor.needsLayoutRuns, 0);
     expect(camera.shots, 0);
+
+    // The whole-page upload is the way on from here (§19.6).
+    await tester.tap(find.byKey(const ValueKey('scan_teacher_upload')));
+    await tester.pumpAndSettle();
+    expect(find.text('upload '), findsOneWidget);
     await unmountScreen(tester);
   });
 }

@@ -17,15 +17,18 @@ namespace App\Domain\Google;
  *
  * Students already matched to another account are not offered. The teacher
  * confirms or corrects every pair; a suggestion is only a starting point.
+ * The roster sync (DESIGN §19.2) applies pairs without asking, so it passes
+ * $firstNames = false and keeps only passes 1 and 2.
  */
 final class RosterMatcher
 {
     /**
      * @param  list<array{google_user_id: string, name: string}>  $accounts
      * @param  list<array{id: int, name: string}>  $students  candidates (not matched to another account)
+     * @param  bool  $firstNames  run pass 3 (same first name) too
      * @return array<string, int> google_user_id => suggested student id
      */
-    public static function suggest(array $accounts, array $students): array
+    public static function suggest(array $accounts, array $students, bool $firstNames = true): array
     {
         $suggested = [];
         $taken = [];
@@ -60,6 +63,10 @@ final class RosterMatcher
                     $taken[$free[0]] = true;
                 }
             }
+        }
+
+        if (! $firstNames) {
+            return $suggested;
         }
 
         // Pass 3: a first name that is unique on both sides.

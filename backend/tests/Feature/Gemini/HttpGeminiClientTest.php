@@ -2,12 +2,17 @@
 
 namespace Tests\Feature\Gemini;
 
+use App\Domain\Gemini\CallOutcome;
+use App\Domain\Gemini\GeminiCall;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiException;
+use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiImage;
+use App\Domain\Gemini\GeminiKey;
 use App\Domain\Gemini\GeminiReply;
 use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\HttpGeminiClient;
+use App\Domain\Gemini\MediaResolution;
 use App\Jobs\GradeScanJob;
 use App\Models\AiCall;
 use App\Models\Response;
@@ -107,6 +112,68 @@ class HttpGeminiClientTest extends TestCase
         $this->assertArrayNotHasKey('thinkingConfig', $payload['generationConfig']);
     }
 
+    public function test_a_request_s_own_thinking_level_and_output_limit(): void
+    {
+        $request = new GeminiRequest('answer_key_read', 'general', 'v1', 'SYSTEM', 'hello', thinkingLevel: 'medium', maxOutputTokens: 16384);
+
+        $payload = $this->client()->payload($request);
+        $this->assertSame(['thinkingLevel' => 'medium'], $payload['generationConfig']['thinkingConfig']);
+        $this->assertSame(16384, $payload['generationConfig']['maxOutputTokens']);
+
+        // A model without thinking levels (GEMINI_THINKING_LEVEL empty) never gets one.
+        $this->assertArrayNotHasKey('thinkingConfig', $this->client(thinking: null)->payload($request)['generationConfig']);
+        $this->assertArrayNotHasKey('maxOutputTokens', $this->client()->payload($this->request())['generationConfig']);
+    }
+
+    public function test_media_resolution_goes_once_per_call_at_the_highest_level_by_default(): void
+    {
+        // DESIGN §21.5 fallback: one generationConfig.mediaResolution at the highest level of the parts.
+        $payload = $this->client()->payload($this->request('batch', [
+            new GeminiImage('CROP', GeminiImage::WEBP, MediaResolution::LOW, 'Q2: answer box'),
+            new GeminiImage('WORK', GeminiImage::WEBP, MediaResolution::MEDIUM, 'Q3: working area'),
+        ]));
+
+        $this->assertSame('MEDIA_RESOLUTION_MEDIUM', $payload['generationConfig']['mediaResolution']);
+        $this->assertSame([
+            ['text' => 'batch'],
+            ['text' => 'Q2: answer box'],
+            ['inlineData' => ['mimeType' => 'image/webp', 'data' => base64_encode('CROP')]],
+            ['text' => 'Q3: working area'],
+            ['inlineData' => ['mimeType' => 'image/webp', 'data' => base64_encode('WORK')]],
+        ], $payload['contents'][0]['parts'], 'each label is a text part right before its image');
+
+        $plain = $this->client()->payload($this->request('no level', [new GeminiImage('X')]));
+        $this->assertArrayNotHasKey('mediaResolution', $plain['generationConfig']);
+    }
+
+    public function test_media_resolution_per_part_when_enabled(): void
+    {
+        $client = new HttpGeminiClient('gemini-3.8-flash', 'https://generativelanguage.googleapis.com/v1alpha', 30, 8, 'low', false, mediaPerPart: true);
+        $payload = $client->payload($this->request('page', [
+            new GeminiImage('PAGE', 'application/pdf', MediaResolution::HIGH),
+            new GeminiImage('BOX', GeminiImage::WEBP, MediaResolution::LOW),
+        ]));
+
+        $this->assertArrayNotHasKey('mediaResolution', $payload['generationConfig']);
+        $this->assertSame(['level' => 'MEDIA_RESOLUTION_HIGH'], $payload['contents'][0]['parts'][1]['mediaResolution']);
+        $this->assertSame(['level' => 'MEDIA_RESOLUTION_LOW'], $payload['contents'][0]['parts'][2]['mediaResolution']);
+    }
+
+    public function test_the_configured_levels_and_the_token_details_of_a_reply(): void
+    {
+        $this->assertSame('high', MediaResolution::forPart(MediaResolution::PART_SHORT), 'high until calibrated');
+        $this->assertSame('medium', MediaResolution::forPart(MediaResolution::PART_DOCUMENT));
+        config(['services.gemini.media.short' => 'low', 'services.gemini.media.work' => 'nonsense']);
+        $this->assertSame('low', MediaResolution::forPart(MediaResolution::PART_SHORT));
+        $this->assertSame('high', MediaResolution::forPart(MediaResolution::PART_WORK), 'an unknown value falls back to the default');
+        $this->assertSame('mixed', MediaResolution::summary(['low', 'high']));
+        $this->assertNull(MediaResolution::summary([null]));
+
+        Http::fake([self::URL => Http::response(self::answer('{"ok":true}', ['promptTokenCount' => 900, 'candidatesTokenCount' => 30, 'thoughtsTokenCount' => 12, 'cachedContentTokenCount' => 512]))]);
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame([900, 42, 512, 12], [$reply->inputTokens, $reply->outputTokens, $reply->cachedTokens, $reply->thinkingTokens]);
+    }
+
     public function test_a_batch_runs_through_the_pool_with_one_reply_per_request(): void
     {
         Http::fake([self::URL => Http::response(self::answer('{"ok":true}'))]);
@@ -145,6 +212,63 @@ class HttpGeminiClientTest extends TestCase
         foreach ($replies as $reply) {
             $this->assertStringNotContainsString(self::KEY, (string) $reply->error);
         }
+    }
+
+    public function test_an_answer_cut_off_at_the_output_cap_is_invalid_output(): void
+    {
+        $cut = self::answer('{"ok":');
+        $cut['candidates'][0]['finishReason'] = 'MAX_TOKENS';
+        Http::fake([self::URL => Http::response($cut)]);
+        $this->app->instance(GeminiClient::class, $this->client());
+
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame([GeminiReply::OK, 'MAX_TOKENS'], [$reply->status, $reply->finishReason]);
+
+        $outcome = app(GeminiGateway::class)->run(['a' => new GeminiCall($this->request())], new GeminiKey(self::KEY, 'server'))['a'];
+        $this->assertSame(CallOutcome::INVALID_OUTPUT, $outcome->status);
+        // Retried once like any invalid output, both logged with the reason (DESIGN §21.6).
+        $calls = AiCall::query()->get();
+        $this->assertSame(['invalid_output', 'invalid_output'], $calls->pluck('status')->all());
+        $this->assertStringContainsString('MAX_TOKENS', (string) $calls[0]->error);
+    }
+
+    public function test_the_task_s_thinking_level_and_output_cap_go_in_the_generation_config(): void
+    {
+        $request = new GeminiRequest('explanation', 'general', 'v3', 'S', 'U', thinkingLevel: 'medium', maxOutputTokens: 512);
+        $config = $this->client()->payload($request)['generationConfig'];
+        $this->assertSame([['thinkingLevel' => 'medium'], 512], [$config['thinkingConfig'], $config['maxOutputTokens']]);
+        $this->assertArrayNotHasKey('thinkingConfig', $this->client(thinking: null)->payload($request)['generationConfig'], 'a model without thinking levels');
+    }
+
+    public function test_gemini_gets_the_schema_without_bounds_and_the_gateway_still_checks_them(): void
+    {
+        $schema = ['type' => 'object', 'properties' => [
+            'answers' => ['type' => 'array', 'maxItems' => 2, 'minItems' => 1, 'items' => ['type' => 'object',
+                'properties' => ['question_no' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 5], 'maximum' => ['type' => 'string']],
+                'required' => ['question_no']]],
+        ], 'required' => ['answers']];
+        $sent = $this->client()->payload(new GeminiRequest('extract_page', 'general', 'v2', 'S', 'U', responseSchema: $schema))['generationConfig']['responseJsonSchema'];
+
+        $this->assertSame(['type' => 'object', 'properties' => [
+            'answers' => ['type' => 'array', 'items' => ['type' => 'object',
+                'properties' => ['question_no' => ['type' => 'integer'], 'maximum' => ['type' => 'string']],
+                'required' => ['question_no']]],
+        ], 'required' => ['answers']], $sent, 'a property that happens to be called "maximum" stays');
+
+        Http::fake([self::URL => Http::response(self::answer('{"answers":[{"question_no":9}]}'))]);
+        $this->app->instance(GeminiClient::class, $this->client());
+        $request = new GeminiRequest('extract_page', 'general', 'v2', 'S', 'U', responseSchema: $schema);
+        $outcome = app(GeminiGateway::class)->run(['a' => new GeminiCall($request)], new GeminiKey(self::KEY, 'server'))['a'];
+        $this->assertSame(CallOutcome::INVALID_OUTPUT, $outcome->status, 'question_no 9 > maximum 5');
+    }
+
+    public function test_a_bad_request_names_the_offending_field(): void
+    {
+        Http::fake([self::URL => Http::response(['error' => ['code' => 400, 'message' => 'Request contains an invalid argument.', 'status' => 'INVALID_ARGUMENT',
+            'details' => [['@type' => 'type.googleapis.com/google.rpc.BadRequest', 'fieldViolations' => [['field' => 'generation_config.media_resolution', 'description' => 'not supported']]]]]], 400)]);
+
+        $reply = $this->client()->generate(['a' => $this->request()], self::KEY)['a'];
+        $this->assertSame('HTTP 400: Request contains an invalid argument. (generation_config.media_resolution: not supported)', $reply->error);
     }
 
     public function test_a_timeout_is_an_error_not_an_exception(): void

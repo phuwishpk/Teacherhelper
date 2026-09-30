@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Documents\SourceDocuments;
 use App\Domain\Scans\ScanRetention;
 use App\Domain\Worksheets\WorksheetFiles;
 use Illuminate\Console\Command;
@@ -14,9 +15,13 @@ use Illuminate\Support\Facades\Log;
  *
  * - worksheet PDFs: 30 days after the print was created (WorksheetFiles);
  * - scanned page images: after the submission is published;
- * - answer crops: after schools.crop_retention_until;
+ * - answer crops and whole-page files: after schools.crop_retention_until;
+ * - whole-page files replaced by a newer hand-in: at the next run;
  * - rescans of a published submission never confirmed by the teacher:
- *   after ScanRetention::PENDING_RESCAN_DAYS (ScanRetention).
+ *   after ScanRetention::PENDING_RESCAN_DAYS (ScanRetention);
+ * - teachers' documents (answer keys, question sheets): after
+ *   eduvision.documents.retention_days (SourceDocuments, §19.8); what
+ *   Gemini read from them stays in document_extractions.
  */
 class PurgeImagesCommand extends Command
 {
@@ -28,13 +33,16 @@ class PurgeImagesCommand extends Command
     {
         $worksheets = WorksheetFiles::purgeExpired();
         $scans = ScanRetention::purge();
+        $documents = SourceDocuments::purge();
 
-        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans]);
+        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents]);
         $this->info("Worksheet prints expired: {$worksheets}");
         $this->info("Page images deleted (published): {$scans['page_images']}");
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
         $this->info("Unconfirmed rescans expired (page image and crops deleted): {$scans['pending_expired']}");
         $this->info("Leftover rescan files swept: {$scans['leftovers']}");
+        $this->info("Whole-page files deleted (superseded or past crop_retention_until): {$scans['whole_pages']}");
+        $this->info("Teacher documents deleted (past retention): {$documents}");
 
         return self::SUCCESS;
     }

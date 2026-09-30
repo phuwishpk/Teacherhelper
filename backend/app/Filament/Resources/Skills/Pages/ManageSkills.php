@@ -27,7 +27,7 @@ class ManageSkills extends ManageRecords
                 ->label('นำเข้า CSV')
                 ->icon(Heroicon::OutlinedArrowUpTray)
                 ->modalHeading('นำเข้าตัวชี้วัดจาก CSV')
-                ->modalDescription('รูปแบบ: subject_code,skill_code,parent_code,grade_level,name (UTF-8 ไม่มี BOM) แถวที่มี skill_code เดิมจะถูกอัปเดต')
+                ->modalDescription('รูปแบบ: subject_code,level,code,parent_code,grade_level,name (UTF-8 ไม่มี BOM ดู docs/curriculum) รูปแบบเดิมที่ไม่มี level ยังใช้ได้ แถวที่มี code เดิมจะถูกอัปเดต แถวที่ผิดจะถูกข้ามและแจ้งเลขบรรทัด')
                 ->modalSubmitActionLabel('นำเข้า')
                 ->authorize(fn () => Gate::allows('import', Skill::class))
                 ->schema([
@@ -36,7 +36,8 @@ class ManageSkills extends ManageRecords
                         ->required()
                         ->storeFiles(false)
                         ->acceptedFileTypes(['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'])
-                        ->maxSize(2048),
+                        // The whole core curriculum is a few MB of Thai text.
+                        ->maxSize(20480),
                     Select::make('school_id')
                         ->label('นำเข้าเป็นทักษะย่อยของโรงเรียน')
                         ->options(fn () => School::query()->orderBy('name')->pluck('name', 'id')->all())
@@ -46,11 +47,14 @@ class ManageSkills extends ManageRecords
                 ->action(function (array $data, SkillCsvImporter $importer) {
                     /** @var TemporaryUploadedFile|string $file */
                     $file = $data['csv'];
-                    $csv = $file instanceof TemporaryUploadedFile ? $file->get() : (string) $file;
                     $schoolId = filled($data['school_id'] ?? null) ? (int) $data['school_id'] : null;
+                    $path = $file instanceof TemporaryUploadedFile ? $file->getRealPath() : false;
 
                     try {
-                        $result = $importer->importString((string) $csv, $schoolId);
+                        // Streamed from the upload: the full curriculum is tens of thousands of rows.
+                        $result = is_string($path) && $path !== ''
+                            ? $importer->importFile($path, $schoolId)
+                            : $importer->importString((string) $file, $schoolId);
                     } catch (SkillImportException $e) {
                         Notification::make()
                             ->title('นำเข้าไม่สำเร็จ ไม่มีข้อมูลถูกบันทึก')
@@ -62,10 +66,23 @@ class ManageSkills extends ManageRecords
                         return;
                     }
 
+                    $body = "สร้างใหม่ {$result->created} อัปเดต {$result->updated} ไม่เปลี่ยน {$result->unchanged} วิชาใหม่ {$result->subjectsCreated}"
+                        .($result->warnings === [] ? '' : "\n".implode("\n", $result->warnings));
+                    if ($result->hasErrors()) {
+                        $lines = $result->errorLines();
+                        Notification::make()
+                            ->title('นำเข้าแล้ว '.$result->rows().' รายการ มี '.count($result->errors).' แถวที่ผิด (ข้ามไป)')
+                            ->body($body."\n".implode("\n", array_slice($lines, 0, 10)).(count($lines) > 10 ? "\n…" : ''))
+                            ->warning()
+                            ->persistent()
+                            ->send();
+
+                        return;
+                    }
+
                     Notification::make()
                         ->title("นำเข้าแล้ว {$result->rows()} รายการ")
-                        ->body("สร้างใหม่ {$result->created} อัปเดต {$result->updated} วิชาใหม่ {$result->subjectsCreated}"
-                            .($result->warnings === [] ? '' : "\n".implode("\n", $result->warnings)))
+                        ->body($body)
                         ->success()
                         ->send();
                 }),

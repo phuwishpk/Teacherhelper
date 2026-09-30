@@ -46,6 +46,68 @@ return [
         'max_crop_kb' => max(16, (int) env('SCAN_MAX_CROP_KB', 1024)),
     ],
 
+    // Whole-page submissions (DESIGN §19.4, §19.6): files a Classroom
+    // hand-in, a student's hand-in in the app or a teacher's upload may carry. A PDF counts
+    // each of its pages. PHP must allow upload_max_filesize >= max_file_mb
+    // and post_max_size >= 55M for the upload endpoints.
+    'submissions' => [
+        'max_pages' => max(1, (int) env('SUBMISSION_MAX_PAGES', 5)),
+        'max_file_mb' => max(1, (int) env('SUBMISSION_MAX_FILE_MB', 10)),
+    ],
+
+    // Teachers' documents (DESIGN §19.5): answer keys and question sheets
+    // uploaded with POST /documents and read once by Gemini. max_total_mb
+    // bounds one read (its files go inline in one request); a read of more
+    // than max_pages pages needs a page range (document_too_long). Files are
+    // deleted after retention_days by eduvision:purge-images; the read
+    // result stays in document_extractions.
+    'documents' => [
+        'max_file_mb' => max(1, (int) env('DOCUMENT_MAX_FILE_MB', 10)),
+        'max_total_mb' => max(1, (int) env('DOCUMENT_MAX_TOTAL_MB', 20)),
+        'max_files' => 10,
+        'max_pages' => max(1, (int) env('DOCUMENT_MAX_PAGES', 30)),
+        'retention_days' => max(1, (int) env('DOCUMENT_RETENTION_DAYS', 30)),
+    ],
+
+    // The cron sync with Google Classroom (DESIGN §19.3): at most
+    // max_coursework assignments' submissions per round, and no new work
+    // started after budget_seconds (the worker pass is 50 s).
+    'classroom_sync' => [
+        'max_coursework' => max(1, (int) env('CLASSROOM_SYNC_MAX_COURSEWORK', 20)),
+        'budget_seconds' => max(1, (int) env('CLASSROOM_SYNC_BUDGET_SECONDS', 40)),
+    ],
+
+    // Answers decided by code before any Gemini call (DESIGN §21.3):
+    // - blank_ink_max: an answer box whose ink_ratio is below this gets 0
+    //   points as "ไม่ได้ตอบ" (auto_rule blank_ink) and lands in the `look`
+    //   band. Stricter than the 0.02 the review priority uses (§11.8).
+    // - cnn_skip_*: a numeric `short` answer the on-device digit reader
+    //   reads with at least min_confidence, exactly as an accepted answer,
+    //   gets full marks as "อ่านด้วย CNN" (auto_rule cnn_match); sample_rate
+    //   of them go to the `look` band for the teacher. OFF until the
+    //   calibration harness (§21.10) passes on the team's real handwriting.
+    'grading' => [
+        'blank_ink_max' => (float) env('GRADING_BLANK_INK_MAX', 0.005),
+        'cnn_skip_enabled' => (bool) env('GRADING_CNN_SKIP_ENABLED', false),
+        'cnn_skip_min_confidence' => (float) env('GRADING_CNN_SKIP_MIN_CONFIDENCE', 0.97),
+        'cnn_skip_sample_rate' => (float) env('GRADING_CNN_SKIP_SAMPLE_RATE', 0.10),
+    ],
+
+    // "ผ่าน" of an indicator (DESIGN §20.3): mastery >= pass_threshold. 0.5 is
+    // the 50% pass mark Thai schools use.
+    'mastery' => [
+        'pass_threshold' => min(1.0, max(0.0, (float) env('MASTERY_PASS_THRESHOLD', 0.5))),
+    ],
+
+    // The nightly student analysis through the Gemini Batch API (DESIGN §20.8):
+    // at most batch_max inline requests per batch (one batch per key).
+    'analysis' => [
+        'batch_max' => max(1, (int) env('ANALYSIS_BATCH_MAX', 200)),
+    ],
+
+    // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
+    'usd_thb_rate' => env('USD_THB_RATE'),
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,

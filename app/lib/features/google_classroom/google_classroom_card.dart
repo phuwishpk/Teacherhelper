@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +6,7 @@ import 'google_auth.dart';
 import 'google_browser_connect.dart';
 import 'google_models.dart';
 import 'google_providers.dart';
+import 'google_reconnect_banner.dart' show reconnectReason;
 import 'google_repository.dart';
 
 /// "Google Classroom" card of the teacher settings page, next to the Gemini
@@ -136,27 +136,24 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
               if (s.needsReconnect) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'สิทธิ์ที่ให้ไว้หมดอายุหรือถูกยกเลิก กด "เชื่อมใหม่" '
-                  '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)',
+                  _reconnectText(s),
+                  key: const ValueKey('google_card_reconnect_reason'),
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
               ],
               const SizedBox(height: 8),
             ],
             const Text(
-              'โพสต์การบ้านลง Classroom ดึงรูปที่นักเรียนส่งมาสแกนในเครื่องนี้ '
-              'และส่งคะแนนกลับเมื่อเผยแพร่ผล นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
+              'โพสต์การบ้านลง Classroom ตรวจรูปหรือ PDF ที่นักเรียนส่งจากทั้งหน้า '
+              'ส่งคะแนนกลับ และส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนแต่ละคนเมื่อเผยแพร่ผล '
+              'นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
             ),
             const SizedBox(height: 4),
             Text(
-              'รูปของนักเรียนดาวน์โหลดตรงจาก Google Drive มาที่เครื่องนี้ ไม่ผ่านเซิร์ฟเวอร์ '
-              'เซิร์ฟเวอร์เก็บเฉพาะสิทธิ์ที่ใช้สร้างงานและส่งคะแนน (เข้ารหัสไว้)',
+              'เซิร์ฟเวอร์ดาวน์โหลดไฟล์ที่นักเรียนส่งจาก Google Drive ด้วยสิทธิ์ของบัญชีนี้ (เก็บสิทธิ์แบบเข้ารหัส) '
+              'ไฟล์งานเก็บตามนโยบายเดียวกับภาพใบงาน และส่งให้ AI ตรวจโดยไม่ส่งชื่อนักเรียนไปด้วย',
               style: muted,
             ),
-            if (kIsWeb) ...[
-              const SizedBox(height: 4),
-              Text(phoneOnlyScanNote, style: muted),
-            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -193,4 +190,16 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
       ),
     );
   }
+}
+
+/// What the settings card says about a connection to renew.
+String _reconnectText(GoogleStatus s) {
+  if (s.reconnectMessage == null && !s.lacksAnnouncementsScope) {
+    return 'สิทธิ์ที่ให้ไว้หมดอายุหรือถูกยกเลิก กด "เชื่อมใหม่" '
+        '(ช่วงทดสอบ Google ให้สิทธิ์ได้ครั้งละ 7 วัน)';
+  }
+  final reason = reconnectReason(s);
+  return reason.contains('เชื่อมใหม่')
+      ? reason
+      : '$reason กด "เชื่อมใหม่" แล้วอนุญาตให้ครบทุกข้อ';
 }

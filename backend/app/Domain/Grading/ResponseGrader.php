@@ -17,6 +17,9 @@ use InvalidArgumentException;
  * system 2 (review priority from D, L, B). A blank answer skips fuzzy
  * (score 0, u 0, §11.1); a blank contradicted by ink still gets D = 1.
  * suspicious_instruction forces priority 1.0 (§10.7). Σw = 0 -> manual.
+ *
+ * $disagreement replaces D when the caller has no CNN or ink reading: the
+ * whole-page path (§19.4) passes 1 when two pages disagree, else 0.
  */
 final class ResponseGrader
 {
@@ -33,6 +36,7 @@ final class ResponseGrader
         array $extraction,
         ?string $cnnText = null,
         ?float $inkRatio = null,
+        ?float $disagreement = null,
     ): GradeOutcome {
         $type = $question->type;
         $key = $question->answer_key ?? [];
@@ -84,7 +88,7 @@ final class ResponseGrader
         }
 
         $u = (float) $result->u;
-        $d = PrioritySignals::disagreement(
+        $d = $disagreement ?? PrioritySignals::disagreement(
             numeric: $question->is_numeric && $type !== Question::TYPE_OPEN,
             cnnText: $cnnText,
             geminiText: $geminiText,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../auth/sign_out_action.dart';
+import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
 import '../practice/practice_page.dart';
 import '../results/results_page.dart';
@@ -16,6 +17,7 @@ class _Destination {
 }
 
 const _destinations = [
+  _Destination('ส่งงาน', Icons.upload_file_outlined, Icons.upload_file),
   _Destination(
     'ผลการบ้าน',
     Icons.assignment_turned_in_outlined,
@@ -27,8 +29,8 @@ const _destinations = [
 
 const _railBreakpoint = 840.0;
 
-/// Student-side shell: published results, practice by weak skill and
-/// mastery per skill (DESIGN §9.7, §14.1, §14.2).
+/// Student-side shell: work to hand in (DESIGN §19.6), published results,
+/// practice by weak skill and mastery per skill (§9.7, §14.1, §14.2).
 class StudentShell extends ConsumerStatefulWidget {
   const StudentShell({super.key});
 
@@ -45,9 +47,10 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
 
     final pages = <Widget>[
+      const StudentAssignmentsPage(),
       const ResultsPage(),
       const PracticePage(),
-      MasteryPage(onPractice: () => setState(() => _index = 1)),
+      MasteryPage(onPractice: () => setState(() => _index = 2)),
     ];
     final body = IndexedStack(index: _index, children: pages);
 

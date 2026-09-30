@@ -27,6 +27,7 @@ class QuestionEditScreen extends ConsumerWidget {
     this.initial,
     this.subjectId,
     this.gradeLevel,
+    this.freeform,
   });
 
   final int assignmentId;
@@ -34,6 +35,7 @@ class QuestionEditScreen extends ConsumerWidget {
   final Question? initial;
   final int? subjectId;
   final int? gradeLevel;
+  final bool? freeform;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,6 +45,7 @@ class QuestionEditScreen extends ConsumerWidget {
         existing: q,
         subjectId: subjectId,
         gradeLevel: gradeLevel,
+        freeform: freeform,
       );
     }
     Widget message(Widget body) => Scaffold(
@@ -63,6 +66,7 @@ class QuestionEditScreen extends ConsumerWidget {
           existing: q,
           subjectId: subjectId ?? a.subjectId,
           gradeLevel: gradeLevel ?? classroom?.gradeLevel,
+          freeform: freeform ?? a.isFreeform,
         );
       },
       loading: () => message(const Center(child: CircularProgressIndicator())),
@@ -77,7 +81,9 @@ class QuestionEditScreen extends ConsumerWidget {
 }
 
 /// Add or edit one question of an assignment, including its answer key
-/// (DESIGN §8.3) and skill tags.
+/// (DESIGN §8.3), the model answer of an open question (§19.5) and skill
+/// tags. In a freeform assignment the answer may stay empty until it is
+/// read from a document or drafted by AI; approving the key checks it.
 class QuestionFormScreen extends ConsumerStatefulWidget {
   const QuestionFormScreen({
     super.key,
@@ -85,12 +91,16 @@ class QuestionFormScreen extends ConsumerStatefulWidget {
     this.existing,
     this.subjectId,
     this.gradeLevel,
+    this.freeform,
   });
 
   final int assignmentId;
   final Question? existing;
   final int? subjectId;
   final int? gradeLevel;
+
+  /// Null: taken from the loaded assignment (a deep link without extras).
+  final bool? freeform;
 
   @override
   ConsumerState<QuestionFormScreen> createState() => _QuestionFormScreenState();
@@ -122,6 +132,9 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
   );
   late final _steps = TextEditingController(
     text: widget.existing?.referenceSteps.join('\n') ?? '',
+  );
+  late final _modelAnswer = TextEditingController(
+    text: widget.existing?.modelAnswer ?? '',
   );
   late List<Skill> _skills = List.of(widget.existing?.skills ?? const []);
   bool _busy = false;
@@ -171,13 +184,27 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
       _numericValue,
       _absTol,
       _steps,
+      _modelAnswer,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  /// Set in build: from the route extra, else from the loaded assignment.
+  bool _freeform = false;
+
+  /// Nothing typed for the answer yet (allowed in a freeform assignment).
+  bool get _answerEmpty => switch (_type) {
+    QuestionType.mcq => _mcqCorrect == null,
+    QuestionType.short || QuestionType.showWork =>
+      AnswerKey.splitAccepted(_accepted.text).isEmpty &&
+          AnswerKey.splitLines(_steps.text).isEmpty,
+    QuestionType.open => true,
+  };
+
   Map<String, dynamic>? _buildAnswerKey() {
+    if (_type != QuestionType.open && _freeform && _answerEmpty) return null;
     final numeric = _numeric
         ? double.tryParse(_numericValue.text.trim())
         : null;
@@ -200,6 +227,7 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
   }
 
   String? _validateAnswerKey() {
+    if (_type != QuestionType.open && _freeform && _answerEmpty) return null;
     switch (_type) {
       case QuestionType.mcq:
         return _mcqCorrect == null ? 'เลือกข้อที่ถูก' : null;
@@ -238,6 +266,9 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
       answerKey: _buildAnswerKey(),
       skillIds: _skills.map((s) => s.id).toList(),
       position: widget.existing?.position,
+      modelAnswer: _type == QuestionType.open
+          ? (_modelAnswer.text.trim().isEmpty ? null : _modelAnswer.text.trim())
+          : null,
     );
     final notifier = ref.read(
       assignmentDetailProvider(widget.assignmentId).notifier,
@@ -272,6 +303,13 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final editing = widget.existing != null;
+    _freeform =
+        widget.freeform ??
+        ref
+            .watch(assignmentDetailProvider(widget.assignmentId))
+            .value
+            ?.isFreeform ??
+        false;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -356,6 +394,14 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
             ),
             const SizedBox(height: 16),
             Text('เฉลย', style: theme.textTheme.titleMedium),
+            if (_freeform && _type != QuestionType.open) ...[
+              const SizedBox(height: 4),
+              Text(
+                'เว้นว่างได้ ถ้าจะให้ AI อ่านจากรูปหรือไฟล์เฉลย หรือร่างให้ทีหลัง '
+                '(ต้องครบก่อนอนุมัติเฉลย)',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 8),
             ..._answerKeyFields(theme),
             const SizedBox(height: 16),
@@ -503,12 +549,32 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
         return [
           Card(
             color: theme.colorScheme.surfaceContainerHighest,
-            child: const Padding(
-              padding: EdgeInsets.all(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
-                'ข้ออัตนัยไม่มีเฉลยตายตัว ระบบตรวจตาม rubric '
-                'หลังบันทึกข้อแล้วให้ AI ร่าง rubric แล้วแก้และอนุมัติก่อนพิมพ์ใบงาน',
+                _freeform
+                    ? 'ข้ออัตนัยไม่มีเฉลยตายตัว ระบบตรวจตาม rubric '
+                          'หลังบันทึกข้อแล้วให้ AI ร่าง rubric แล้วแก้และอนุมัติก่อนอนุมัติเฉลย'
+                    : 'ข้ออัตนัยไม่มีเฉลยตายตัว ระบบตรวจตาม rubric '
+                          'หลังบันทึกข้อแล้วให้ AI ร่าง rubric แล้วแก้และอนุมัติก่อนพิมพ์ใบงาน',
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _modelAnswer,
+            minLines: 3,
+            maxLines: 10,
+            maxLength: 4000,
+            keyboardType: TextInputType.multiline,
+            decoration: const InputDecoration(
+              labelText: 'คำตอบตัวอย่างของครู (ไม่บังคับ)',
+              alignLabelWithHint: true,
+              hintText: 'คำตอบที่ดี หรือประเด็นสำคัญที่ควรมี',
+              helperText:
+                  'AI ใช้เป็นข้อมูลตั้งต้นเมื่อร่าง rubric และใช้อ้างอิงตอนตรวจ '
+                  'คะแนนยังตัดสินตาม rubric',
+              helperMaxLines: 3,
             ),
           ),
         ];

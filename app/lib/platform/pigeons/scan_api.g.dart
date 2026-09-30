@@ -181,7 +181,8 @@ class RegionCrop {
   /// region comes back as its own crop with the id `<region_id>_final`.
   String regionId;
 
-  /// WebP (quality 80) in the app cache directory.
+  /// WebP (quality 80), at most 768 px on the long side (DESIGN §21.9), in
+  /// the app cache directory.
   String imagePath;
 
   /// `ink_ratio` (DESIGN §9.4, §11.8): share of the rect (without its printed
@@ -292,56 +293,6 @@ class PageCrops {
   }
 }
 
-/// The pages [ScanPipelineApi.rasterize] made from one attachment.
-class RasterizedAttachment {
-  RasterizedAttachment({required this.pagePaths, required this.totalPages});
-
-  /// JPEG paths, one per rendered page, in the pipeline's cache folder.
-  List<String> pagePaths;
-
-  /// Pages in the file: 1 for a picture, the PDF's page count otherwise.
-  /// More than `pagePaths.length` when a PDF was cut at the page limit.
-  int totalPages;
-
-  List<Object?> _toList() {
-    return <Object?>[pagePaths, totalPages];
-  }
-
-  Object encode() {
-    return _toList();
-  }
-
-  static RasterizedAttachment decode(Object result) {
-    result as List<Object?>;
-    return RasterizedAttachment(
-      pagePaths: (result[0]! as List<Object?>).cast<String>(),
-      totalPages: result[1]! as int,
-    );
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  bool operator ==(Object other) {
-    if (other is! RasterizedAttachment || other.runtimeType != runtimeType) {
-      return false;
-    }
-    if (identical(this, other)) {
-      return true;
-    }
-    return _deepEquals(pagePaths, other.pagePaths) &&
-        _deepEquals(totalPages, other.totalPages);
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
-
-  @override
-  String toString() {
-    return 'RasterizedAttachment(pagePaths: $pagePaths, totalPages: $totalPages)';
-  }
-}
-
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -358,9 +309,6 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PageCrops) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    } else if (value is RasterizedAttachment) {
-      buffer.putUint8(132);
-      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -375,8 +323,6 @@ class _PigeonCodec extends StandardMessageCodec {
         return RegionCrop.decode(readValue(buffer)!);
       case 131:
         return PageCrops.decode(readValue(buffer)!);
-      case 132:
-        return RasterizedAttachment.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -447,38 +393,5 @@ class ScanPipelineApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as PageCrops;
-  }
-
-  /// Turns a file a student attached in Google Classroom (DESIGN §18.2)
-  /// into JPEG pages [detectPage] can read: the pages of a PDF (rendered
-  /// with PdfRenderer at about 200 DPI, the first 20 only; `totalPages`
-  /// tells the caller when more were skipped) or the one picture of an
-  /// image OpenCV cannot decode itself (HEIC/HEIF, WebP, ... through
-  /// ImageDecoder, EXIF orientation applied). [mimeType] is the Drive
-  /// mimeType, used as a hint; the file's own header decides.
-  /// Error codes: `format_unsupported`, `image_unreadable`, `pdf_unreadable`,
-  /// `storage_failed`.
-  Future<RasterizedAttachment> rasterize(
-    String inputPath,
-    String mimeType,
-  ) async {
-    final pigeonVar_channelName =
-        'dev.flutter.pigeon.eduvision.ScanPipelineApi.rasterize$pigeonVar_messageChannelSuffix';
-    final pigeonVar_channel = BasicMessageChannel<Object?>(
-      pigeonVar_channelName,
-      pigeonChannelCodec,
-      binaryMessenger: pigeonVar_binaryMessenger,
-    );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[inputPath, mimeType],
-    );
-    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
-
-    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-      pigeonVar_replyList,
-      pigeonVar_channelName,
-      isNullValid: false,
-    );
-    return pigeonVar_replyValue! as RasterizedAttachment;
   }
 }

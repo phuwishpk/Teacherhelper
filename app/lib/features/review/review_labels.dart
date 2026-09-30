@@ -105,6 +105,7 @@ String manualReasonLabel(String? reason) => switch (reason) {
   'ai_failed' || 'ai_error' => 'AI ตรวจไม่สำเร็จ',
   'invalid_output' => 'AI ตอบผิดรูปแบบ',
   'fuzzy_degenerate' => 'กฎการให้คะแนนไม่ทำงาน',
+  'answer_not_found' => 'หาคำตอบข้อนี้ในภาพไม่เจอ',
   _ => 'ตรวจด้วยตัวเอง',
 };
 

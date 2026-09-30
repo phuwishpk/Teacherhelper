@@ -97,6 +97,8 @@ trait GoogleFixtures
         Http::fake($routes + [
             'oauth2.googleapis.com/token' => Http::response(self::tokenBody()),
             'oauth2.googleapis.com/revoke' => Http::response([]),
+            // The private announcement every publish sends (§19.7).
+            'classroom.googleapis.com/v1/courses/*/announcements' => Http::response(['id' => 'announcement-1', 'alternateLink' => 'https://classroom.google.com/a/1']),
         ]);
     }
 
@@ -132,6 +134,39 @@ trait GoogleFixtures
                 $files,
             )],
         ];
+    }
+
+    /**
+     * One courses.students.list entry.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function courseStudent(string $userId, string $name, ?string $email = null): array
+    {
+        $profile = ['id' => $userId, 'name' => ['fullName' => $name]];
+        if ($email !== null) {
+            $profile['emailAddress'] = $email;
+        }
+
+        return ['courseId' => self::COURSE_ID, 'userId' => $userId, 'profile' => $profile];
+    }
+
+    /**
+     * Fakes courses.list (the teacher's ACTIVE courses) and the roster of
+     * COURSE_ID; $routes come first.
+     *
+     * @param  list<array<string, mixed>>  $students  courseStudent() entries
+     * @param  list<array<string, mixed>>|null  $courses  Course resources (default: COURSE_ID only)
+     * @param  array<string, mixed>  $routes
+     */
+    protected function fakeCourseRoster(array $students, ?array $courses = null, array $routes = []): void
+    {
+        $this->fakeGoogle($routes + [
+            'classroom.googleapis.com/v1/courses/'.self::COURSE_ID.'/students*' => Http::response(['students' => $students]),
+            'classroom.googleapis.com/v1/courses?*' => Http::response(['courses' => $courses ?? [
+                ['id' => self::COURSE_ID, 'name' => 'คณิตศาสตร์', 'section' => 'ม.1/2', 'courseState' => 'ACTIVE'],
+            ]]),
+        ]);
     }
 
     /** Requests sent to a URL containing $needle. @return list<Request> */

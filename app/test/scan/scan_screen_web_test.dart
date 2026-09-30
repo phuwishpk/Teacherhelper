@@ -17,6 +17,7 @@ void main() {
     await pumpScreen(tester, const ScanScreen());
 
     expect(find.text('สแกนใบงานได้เฉพาะในแอป Android'), findsOneWidget);
+    expect(find.text('อัปโหลดรูปเพื่อตรวจ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

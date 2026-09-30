@@ -8,7 +8,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * {id, name, grade_level, academic_year, class_code, students_count,
- *  google_link?: {course_id, course_name, linked_at}|null, created_at, updated_at}
+ *  google_link?: {course_id, course_name, linked_at, roster_synced_at,
+ *  work_synced_at}|null, auto_share_analysis, created_at, updated_at}
  *
  * @mixin Classroom
  */
@@ -26,8 +27,10 @@ class ClassroomResource extends JsonResource
             'academic_year' => $this->academic_year,
             'class_code' => $this->class_code,
             'students_count' => $this->whenCounted('students'),
-            // DESIGN §18.4 classroom_google_links: {course_id, course_name, linked_at} | null
+            // DESIGN §18.4, §19.8 classroom_google_links (ClassroomGoogleLink::toApi) | null
             'google_link' => $this->whenLoaded('googleLink', fn () => $this->googleLink?->toApi()),
+            // DESIGN §20.5: new analysis texts reach students without approval.
+            'auto_share_analysis' => (bool) $this->auto_share_analysis,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

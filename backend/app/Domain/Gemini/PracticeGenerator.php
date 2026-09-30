@@ -11,6 +11,9 @@ final class PracticeGenerator
 {
     public const PURPOSE = 'practice_gen';
 
+    /** ai_calls.feature (DESIGN §21.8). */
+    public const FEATURE = 'practice_bank';
+
     public function __construct(
         private readonly GeminiGateway $gateway,
         private readonly PromptRepository $prompts,
@@ -46,6 +49,8 @@ final class PracticeGenerator
                     'skill_code' => $request->skillCode,
                     'n' => $request->count,
                 ],
+                thinkingLevel: $prompt->thinking,
+                maxOutputTokens: $prompt->maxOutputTokens,
             ),
             skillId: $request->skillId,
             check: function (array $data) use ($request) {
@@ -53,6 +58,7 @@ final class PracticeGenerator
 
                 return $data;
             },
+            feature: self::FEATURE,
         );
 
         return PracticeDraft::fromArray((array) $this->gateway->runOne($call, $key)->data, $request->count);

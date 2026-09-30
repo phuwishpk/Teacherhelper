@@ -22,6 +22,12 @@ class SubmissionPolicy
         return self::teacherOwns($user, $submission);
     }
 
+    /** POST /submissions/{id}/grade (§19.9): a new whole-page hand-in. */
+    public function grade(User $user, Submission $submission): bool
+    {
+        return self::teacherOwns($user, $submission);
+    }
+
     public static function teacherOwns(User $user, Submission $submission): bool
     {
         $assignment = $submission->assignment;

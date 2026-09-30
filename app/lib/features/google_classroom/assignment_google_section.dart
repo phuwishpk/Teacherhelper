@@ -11,6 +11,7 @@ import '../assignments/assignment.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classroom.dart';
 import 'classroom_google_section.dart' show gradeReturnNote;
+import 'google_browser_connect.dart' show externalUrlOpenerProvider;
 import 'google_providers.dart';
 import 'google_repository.dart';
 
@@ -21,6 +22,29 @@ Future<void> copyLink(BuildContext context, String link) async {
     showMessage(context, 'คัดลอกลิงก์แล้ว เปิดในเบราว์เซอร์ได้');
   }
 }
+
+/// "เปิดใน Classroom": opens [link] (a Classroom https page) outside the
+/// app, or copies it when nothing can open it.
+Future<void> openInClassroom(
+  BuildContext context,
+  WidgetRef ref,
+  String link,
+) async {
+  final url = Uri.tryParse(link);
+  final opened =
+      url != null &&
+      url.scheme == 'https' &&
+      await ref.read(externalUrlOpenerProvider)(url);
+  if (!opened && context.mounted) await copyLink(context, link);
+}
+
+/// Shown on courseWork created on the Classroom website (DESIGN §19.3).
+const webCourseWorkNote =
+    'งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้';
+
+/// Google Docs/Sheets/Slides attached on the website cannot be read.
+const googleDocsMaterialNote =
+    'อ่านไฟล์ Google Docs ไม่ได้ บันทึกเป็น PDF แล้วแนบในแอป หรือพิมพ์เฉลยเอง';
 
 /// "Google Classroom" card on the assignment detail (DESIGN §18.7): post the
 /// assignment as courseWork, show its link, and fetch the submissions.
@@ -67,9 +91,7 @@ class _AssignmentGoogleSectionState
       ref.read(assignmentDetailProvider(a.id).notifier).setGoogleLink(link);
       if (mounted) showMessage(context, 'โพสต์ลง Google Classroom แล้ว');
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (apiErrorCode(e) == 'already_posted') {
         ref.invalidate(assignmentDetailProvider(a.id));
       }
@@ -94,16 +116,63 @@ class _AssignmentGoogleSectionState
 
     final List<Widget> content;
     if (link != null) {
+      final web = link.fromClassroomWeb;
+      final docs = link.materials.where((m) => !m.supported).toList();
       content = [
-        Text(
-          [
-            if (link.postedAt != null)
-              'โพสต์แล้ว ${formatThaiDateTime(link.postedAt!)}'
-            else
-              'โพสต์แล้ว',
-            if (link.hasBlankWorksheet) 'แนบใบงานสำรองแล้ว',
-          ].join(' · '),
-        ),
+        if (web) ...[
+          Text(
+            webCourseWorkNote,
+            key: const ValueKey('web_coursework_note'),
+            style: TextStyle(color: theme.colorScheme.tertiary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'ครูสร้างงานนี้ในเว็บ Classroom แอปนำเข้ามาให้ AI ตรวจงานที่ส่งได้ตามปกติ '
+            'เมื่อเผยแพร่ผล นักเรียนได้ประกาศส่วนตัวที่มีคะแนนและคำอธิบายใน Classroom '
+            'ส่วนคะแนนใน Classroom ใช้ "คัดลอกคะแนน" (หน้างานที่ส่ง หรือประกาศผลรายคน) แล้วกรอกเอง',
+            style: muted,
+          ),
+          if (!a.keyApproved) ...[
+            const SizedBox(height: 8),
+            Text(
+              'ระบบยังไม่ตรวจงานที่ส่งมาจนกว่าจะอนุมัติเฉลย '
+              '(AI ร่างเฉลยจากชื่องาน คำอธิบาย และไฟล์ที่แนบในงานให้แล้ว)',
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              key: const ValueKey('web_coursework_key'),
+              onPressed: () => context.push(AppRoutes.answerKey(a.id)),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('ตรวจและอนุมัติเฉลย'),
+            ),
+          ],
+          if (link.materials.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'ไฟล์ที่แนบในงาน: '
+              '${link.materials.map((m) => m.supported ? m.title : '${m.title} (อ่านไม่ได้)').join(', ')}',
+              style: muted,
+            ),
+          ],
+          if (docs.any((m) => m.isGoogleDoc)) ...[
+            const SizedBox(height: 4),
+            Text(
+              googleDocsMaterialNote,
+              key: const ValueKey('google_docs_note'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ],
+        ] else
+          Text(
+            [
+              if (link.postedAt != null)
+                'โพสต์แล้ว ${formatThaiDateTime(link.postedAt!)}'
+              else
+                'โพสต์แล้ว',
+              if (link.hasBlankWorksheet) 'แนบใบงานสำรองแล้ว',
+            ].join(' · '),
+          ),
         if (link.alternateLink.isNotEmpty) ...[
           const SizedBox(height: 8),
           Row(
@@ -126,16 +195,54 @@ class _AssignmentGoogleSectionState
         ],
         const SizedBox(height: 4),
         Text(
-          'นักเรียนถ่ายรูปใบงานส่งใน Classroom ครูกด "ดึงงานที่ส่ง" เพื่อดาวน์โหลดมาสแกน '
-          'เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom ให้เอง',
+          link.lastSyncedAt == null
+              ? 'ยังไม่ได้ซิงก์งานที่ส่ง ระบบซิงก์ให้เองทุก 5 นาที'
+              : 'ซิงก์งานที่ส่งล่าสุด ${formatThaiDateTime(link.lastSyncedAt!)} '
+                    '(ซิงก์เองทุก 5 นาที)',
+          key: const ValueKey('assignment_last_synced'),
           style: muted,
         ),
+        if (!web) ...[
+          const SizedBox(height: 4),
+          Text(
+            'นักเรียนถ่ายรูปหรือแนบ PDF ส่งใน Classroom เซิร์ฟเวอร์ดาวน์โหลดไฟล์และให้ AI ตรวจจากรูปทั้งหน้าเอง '
+            'กด "ดึงงานที่ส่ง" เพื่อดูสถานะ เมื่อเผยแพร่ผล ระบบส่งคะแนนกลับ Classroom '
+            'และส่งประกาศส่วนตัวที่มีคำอธิบายรายข้อถึงนักเรียนให้เอง',
+            style: muted,
+          ),
+        ],
         const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          key: const ValueKey('google_fetch_submissions'),
-          onPressed: () => context.push(AppRoutes.googleSubmissions(a.id)),
-          icon: const Icon(Icons.cloud_download_outlined),
-          label: const Text('ดึงงานที่ส่ง'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.tonalIcon(
+              key: const ValueKey('google_fetch_submissions'),
+              onPressed: () => context.push(AppRoutes.googleSubmissions(a.id)),
+              icon: const Icon(Icons.cloud_download_outlined),
+              label: const Text('ดึงงานที่ส่ง'),
+            ),
+            if (link.alternateLink.isNotEmpty)
+              OutlinedButton.icon(
+                key: const ValueKey('open_in_classroom'),
+                onPressed: () =>
+                    openInClassroom(context, ref, link.alternateLink),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('เปิดใน Classroom'),
+              ),
+            OutlinedButton.icon(
+              key: const ValueKey('open_grade_conflicts'),
+              onPressed: () => context.push(AppRoutes.gradeConflicts(a.id)),
+              icon: const Icon(Icons.compare_arrows),
+              label: const Text('คะแนนไม่ตรงกัน'),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('open_google_feedback'),
+              onPressed: () => context.push(AppRoutes.googleFeedback(a.id)),
+              icon: const Icon(Icons.campaign_outlined),
+              label: const Text('ประกาศผลรายคน'),
+            ),
+          ],
         ),
       ];
     } else if (course == null) {
@@ -152,7 +259,8 @@ class _AssignmentGoogleSectionState
         ),
       ];
     } else {
-      // §18.6: only a `ready` assignment (printable from its layout).
+      // §18.6: only a `ready` assignment (printable from its layout, or a
+      // freeform one whose key is approved, §19.5).
       final ready = a.status == 'ready';
       content = [
         Text('โพสต์เป็นงานในคอร์ส ${course.courseName}'),
@@ -161,8 +269,10 @@ class _AssignmentGoogleSectionState
         if (!ready) ...[
           const SizedBox(height: 8),
           Text(
-            'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" '
-            '(อนุมัติ rubric ครบและสร้าง layout แล้ว)',
+            a.isFreeform
+                ? 'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" (อนุมัติเฉลยแล้ว)'
+                : 'โพสต์ได้เมื่อการบ้านอยู่ในสถานะ "พร้อมใช้" '
+                      '(อนุมัติ rubric ครบและสร้าง layout แล้ว)',
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ],
@@ -198,7 +308,13 @@ class _AssignmentGoogleSectionState
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
-                if (link != null)
+                if (link != null && link.fromClassroomWeb)
+                  StatusChip(
+                    key: const ValueKey('web_coursework_chip'),
+                    label: 'สร้างในเว็บ Classroom',
+                    color: theme.colorScheme.tertiary,
+                  )
+                else if (link != null)
                   StatusChip(label: 'โพสต์แล้ว', color: Colors.green.shade700),
               ],
             ),

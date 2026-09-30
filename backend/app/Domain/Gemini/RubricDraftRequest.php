@@ -29,7 +29,7 @@ final readonly class RubricDraftRequest
             questionId: $question->id,
             teacherId: $assignment->classroom->teacher_id,
             type: $question->type,
-            subject: $assignment->subject->name,
+            subject: (string) $assignment->subject?->name,
             gradeLabel: self::gradeLabel($assignment->classroom->grade_level),
             maxPoints: $question->max_points,
             promptText: $question->prompt_text,
@@ -55,6 +55,11 @@ final readonly class RubricDraftRequest
                 .($steps !== [] ? "\nขั้นตอนที่ครูเขียนไว้: ".implode(' | ', $steps) : '');
         }
 
-        return '(ไม่มีเฉลยตายตัว ใช้เกณฑ์การให้คะแนน)';
+        // The teacher's model answer seeds the rubric of an open question (DESIGN §19.5).
+        $model = trim((string) $question->model_answer);
+
+        return $model !== ''
+            ? "คำตอบตัวอย่างของครู:\n{$model}"
+            : '(ไม่มีเฉลยตายตัว ใช้เกณฑ์การให้คะแนน)';
     }
 }

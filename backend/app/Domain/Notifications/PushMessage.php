@@ -13,6 +13,8 @@ namespace App\Domain\Notifications;
  *   results_published  student     submission_id, assignment_id
  *   appeal_resolved    student     submission_id, appeal_id
  *   retake_requested   student     assignment_id (Google Classroom, §18.2)
+ *   classroom_work_imported teacher assignment_id (courseWork from the Classroom website, §19.3)
+ *   google_reconnect   teacher     - (the Google grant stopped working, §19.3)
  *
  * The body never carries a score (§9.9: nothing on the lock screen) and the
  * data carries ids only.
@@ -28,6 +30,10 @@ final readonly class PushMessage
     public const APPEAL_RESOLVED = 'appeal_resolved';
 
     public const RETAKE_REQUESTED = 'retake_requested';
+
+    public const CLASSROOM_WORK_IMPORTED = 'classroom_work_imported';
+
+    public const GOOGLE_RECONNECT = 'google_reconnect';
 
     public const TITLE = 'EduVision';
 

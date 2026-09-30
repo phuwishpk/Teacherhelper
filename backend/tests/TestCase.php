@@ -5,7 +5,9 @@ namespace Tests;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Students\CredentialIssuer;
 use App\Models\Classroom;
+use App\Models\Course;
 use App\Models\School;
+use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
@@ -58,6 +60,29 @@ abstract class TestCase extends BaseTestCase
     protected function makeClassroom(User $teacher, array $attributes = []): Classroom
     {
         return Classroom::factory()->for_teacher($teacher)->create($attributes);
+    }
+
+    /**
+     * A course (DESIGN §20.1) of the teacher, bound to the given classrooms.
+     *
+     * @param  list<Classroom>  $classrooms
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function makeCourse(User $teacher, array $classrooms = [], array $attributes = []): Course
+    {
+        $course = Course::create($attributes + [
+            'school_id' => $teacher->school_id,
+            'created_by' => $teacher->id,
+            'subject_id' => $attributes['subject_id'] ?? Subject::query()->firstOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์'])->id,
+            'code' => 'ค15101',
+            'name' => 'คณิตศาสตร์ 5',
+            'grade_level' => 5,
+            'semester' => 0,
+            'academic_year' => 2569,
+        ]);
+        $course->classrooms()->sync(array_map(fn (Classroom $c) => $c->id, $classrooms));
+
+        return $course;
     }
 
     /**

@@ -238,8 +238,10 @@ final class ReviewQueue
             'final_understanding' => $response->final_understanding,
             'final_error_types' => $response->final_error_types,
             'explanation_error' => $response->explanationError(),
+            'auto_rule' => $response->auto_rule,
             'has_crop' => $response->crop_path !== null,
             'has_final_crop' => $response->final_crop_path !== null,
+            'submission_page_id' => $response->submission_page_id,
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
         ];
@@ -268,6 +270,9 @@ final class ReviewQueue
                 'id' => $submission->id,
                 'status' => $submission->status,
                 'student' => $this->student($submission),
+                'channel' => $submission->channel,
+                'late' => (bool) $submission->late,
+                'regrade_pending' => (bool) $submission->regrade_pending,
                 'response_count' => $responses->count(),
                 'reviewed_count' => $reviewed,
                 // Questions of the printed sheet; pages not scanned yet block publishing (§9.5).
@@ -275,7 +280,9 @@ final class ReviewQueue
                 'missing_pages' => SubmissionCoverage::pages($missing),
                 'publishable' => ! $submission->isPublished() && $responses->isNotEmpty() && $missing === [] && $reviewed === $responses->count(),
                 'open_appeal_count' => $responses->filter(fn (Response $r) => isset($this->openAppeals()[$r->id]))->count(),
-                'total_score' => $submission->isPublished() ? $submission->total_score : $current,
+                // The effective total (COALESCE(total_override, total_score), §19.3) once published.
+                'total_score' => $submission->isPublished() ? $submission->effectiveTotal() : $current,
+                'total_override' => $submission->total_override,
                 'published_at' => $submission->published_at?->toIso8601String(),
             ];
         }

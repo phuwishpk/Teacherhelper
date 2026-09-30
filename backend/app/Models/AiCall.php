@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
  * text. No updated_at.
  *
  * @property int $id
- * @property string $purpose extract|rubric_draft|explanation|practice_gen
+ * @property string $purpose extract|extract_batch|extract_page|rubric_draft|explanation|practice_gen|... (§21.8)
  * @property int|null $response_id
  * @property int|null $question_id
  * @property int|null $skill_id
@@ -24,6 +24,14 @@ use Illuminate\Support\Carbon;
  * @property int|null $latency_ms
  * @property string $status ok|error|invalid_output
  * @property string|null $error
+ * @property string|null $feature grading_crop, grading_page, ... (§21.8)
+ * @property int|null $cached_tokens
+ * @property int|null $thinking_tokens
+ * @property string|null $media_resolution low|medium|high|ultra_high|mixed
+ * @property int|null $image_count
+ * @property int|null $question_count
+ * @property int|null $assignment_id
+ * @property bool $batch
  * @property Carbon $created_at
  */
 class AiCall extends Model
@@ -53,6 +61,14 @@ class AiCall extends Model
         'latency_ms',
         'status',
         'error',
+        'feature',
+        'cached_tokens',
+        'thinking_tokens',
+        'media_resolution',
+        'image_count',
+        'question_count',
+        'assignment_id',
+        'batch',
     ];
 
     /**
@@ -64,6 +80,11 @@ class AiCall extends Model
             'input_tokens' => 'integer',
             'output_tokens' => 'integer',
             'latency_ms' => 'integer',
+            'cached_tokens' => 'integer',
+            'thinking_tokens' => 'integer',
+            'image_count' => 'integer',
+            'question_count' => 'integer',
+            'batch' => 'boolean',
         ];
     }
 

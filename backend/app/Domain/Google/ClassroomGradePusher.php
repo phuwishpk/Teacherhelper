@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Log;
 /**
  * Sends a published total to Google Classroom (DESIGN §18.2 "ส่งคะแนนกลับ",
  * §18.6): finds the student's studentSubmission in the assignment's
- * courseWork, sets assignedGrade = submissions.total_score
- * (updateMask=assignedGrade) and returns the work, so the student sees the
+ * courseWork, sets assignedGrade = the effective total
+ * (COALESCE(total_override, total_score), §19.3; with draftGrade, §19.7) and returns the work, so the student sees the
  * score in Classroom; the per-question explanations stay in our app.
  *
  * Runs from PushClassroomGradeJob with the Google account of the teacher who
@@ -30,9 +30,11 @@ use Illuminate\Support\Facades\Log;
  * identity_mismatch by §18.3, or a roster re-matched since) ends as
  * grade_failed with the reason instead of grading the classmate's work.
  *
- * Outcome on the import row: `graded` + grade_pushed_at, or `grade_failed` +
- * last_error (Thai, shown to the teacher). A transient error is thrown for
- * the queue to retry.
+ * Outcome on the import row: `graded` + grade_pushed_at + pushed_grade (the
+ * base of the grade-conflict check), or `grade_failed` + last_error (Thai,
+ * shown to the teacher). A transient error is thrown for the queue to retry.
+ * courseWork created on the Classroom website (origin classroom_web) is
+ * skipped: Classroom refuses its grades from this project.
  */
 final class ClassroomGradePusher
 {
@@ -55,6 +57,11 @@ final class ClassroomGradePusher
         $assignment = $submission?->assignment;
         $posted = $assignment?->googleLink;
         if ($submission === null || ! $submission->isPublished() || $posted === null) {
+            return self::SKIPPED;
+        }
+        if ($posted->isFromClassroomWeb()) {
+            // Created on the Classroom website: Classroom refuses grades from this
+            // project (ProjectPermissionDenied, §19.3), so nothing is sent.
             return self::SKIPPED;
         }
 
@@ -86,7 +93,7 @@ final class ClassroomGradePusher
         }
 
         $api = GoogleApi::forAccount($account, $this->tokens);
-        $grade = round((float) $submission->total_score, 2);
+        $grade = (float) $submission->effectiveTotal();
 
         try {
             $import ??= $this->findOnClassroom($api, $assignment, $link->course_id, $posted->course_work_id, (string) $googleUserId, $submission->student_id);
@@ -126,6 +133,9 @@ final class ClassroomGradePusher
 
         $import->state = ClassroomSubmissionImport::STATE_GRADED;
         $import->grade_pushed_at = now();
+        // The base of the conflict check (§19.3): what the app sent is what Classroom shows now.
+        $import->pushed_grade = $grade;
+        $import->classroom_grade = $grade;
         $import->last_error = $note;
         $import->save();
         Log::info('google.grade_pushed', ['submission_id' => $submission->id, 'import_id' => $import->id]);

@@ -11,12 +11,19 @@ import 'question.dart';
 abstract class AssignmentsRepository {
   Future<List<Assignment>> list({int? classroomId});
   Future<Assignment> get(int id);
+
+  /// `POST /assignments`: [courseId] must be a course bound to the
+  /// classroom; the subject comes from it (DESIGN §20.1).
   Future<Assignment> create({
     required int classroomId,
-    required int subjectId,
+    required int courseId,
+    int? lessonPlanId,
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
+    AssignmentMode mode = AssignmentMode.worksheet,
+    bool acceptLate = true,
+    bool scoreOnly = false,
   });
   Future<Assignment> update(
     int id, {
@@ -25,6 +32,12 @@ abstract class AssignmentsRepository {
     DateTime? dueAt,
     bool clearDueAt = false,
     String? status,
+    AssignmentMode? mode,
+    bool? acceptLate,
+    bool? scoreOnly,
+    int? courseId,
+    int? lessonPlanId,
+    bool clearLessonPlan = false,
   });
   Future<void> delete(int id);
 
@@ -45,7 +58,14 @@ abstract class AssignmentsRepository {
   Future<PrintJob> requestWorksheets(int assignmentId);
   Future<PrintJob> worksheetPrint(PrintJob job);
 
-  Future<List<Skill>> searchSkills({int? subjectId, int? grade, String? q});
+  /// `GET /skills?subject=&grade=&q=&level=`; [level] is a comma list such
+  /// as `indicator,sub_indicator` (DESIGN §20.7).
+  Future<List<Skill>> searchSkills({
+    int? subjectId,
+    int? grade,
+    String? q,
+    String? level,
+  });
   Future<List<Subject>> subjects();
 }
 
@@ -73,19 +93,27 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
   @override
   Future<Assignment> create({
     required int classroomId,
-    required int subjectId,
+    required int courseId,
+    int? lessonPlanId,
     required String title,
     Strictness strictness = Strictness.normal,
     DateTime? dueAt,
+    AssignmentMode mode = AssignmentMode.worksheet,
+    bool acceptLate = true,
+    bool scoreOnly = false,
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments',
       data: {
         'classroom_id': classroomId,
-        'subject_id': subjectId,
+        'course_id': courseId,
+        'lesson_plan_id': ?lessonPlanId,
         'title': title,
         'strictness': strictness.apiValue,
         'due_at': dueAt?.toUtc().toIso8601String(),
+        'mode': mode.apiValue,
+        'accept_late': acceptLate,
+        'score_only': scoreOnly,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -99,15 +127,27 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     DateTime? dueAt,
     bool clearDueAt = false,
     String? status,
+    AssignmentMode? mode,
+    bool? acceptLate,
+    bool? scoreOnly,
+    int? courseId,
+    int? lessonPlanId,
+    bool clearLessonPlan = false,
   }) async {
     final res = await _dio.patch<Object?>(
       '/assignments/$id',
       data: {
+        'course_id': ?courseId,
+        'lesson_plan_id': ?lessonPlanId,
+        if (clearLessonPlan) 'lesson_plan_id': null,
         'title': ?title,
         'strictness': ?strictness?.apiValue,
         if (dueAt != null) 'due_at': dueAt.toUtc().toIso8601String(),
         if (clearDueAt) 'due_at': null,
         'status': ?status,
+        'mode': ?mode?.apiValue,
+        'accept_late': ?acceptLate,
+        'score_only': ?scoreOnly,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -211,6 +251,7 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     int? subjectId,
     int? grade,
     String? q,
+    String? level,
   }) async {
     final rows = await fetchAllPages(
       _dio,
@@ -219,6 +260,7 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'subject': ?subjectId,
         'grade': ?grade,
         if (q != null && q.isNotEmpty) 'q': q,
+        if (level != null && level.isNotEmpty) 'level': level,
       },
       maxPages: 5,
     );

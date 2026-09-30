@@ -24,6 +24,11 @@ use Illuminate\Support\Carbon;
  * @property float|null $total_score
  * @property Carbon|null $published_at
  * @property int|null $published_by
+ * @property string|null $channel scan|whole_page: the grading path used last (DESIGN §19.8)
+ * @property Carbon|null $submitted_at when the student handed in (whole-page)
+ * @property bool $late handed in after the due time (Classroom's `late`)
+ * @property bool $regrade_pending a new hand-in waits for the teacher's "ตรวจ" (§19.4)
+ * @property float|null $total_override the total taken from Classroom (accept_classroom, DESIGN §19.3)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -39,6 +44,10 @@ class Submission extends Model
 
     public const STATUS_PUBLISHED = 'published';
 
+    public const CHANNEL_SCAN = 'scan';
+
+    public const CHANNEL_WHOLE_PAGE = 'whole_page';
+
     protected $fillable = [
         'assignment_id',
         'student_id',
@@ -46,10 +55,17 @@ class Submission extends Model
         'total_score',
         'published_at',
         'published_by',
+        'channel',
+        'submitted_at',
+        'late',
+        'regrade_pending',
+        'total_override',
     ];
 
     protected $attributes = [
         'status' => self::STATUS_AWAITING_SCAN,
+        'late' => false,
+        'regrade_pending' => false,
     ];
 
     /**
@@ -60,6 +76,10 @@ class Submission extends Model
         return [
             'total_score' => 'float',
             'published_at' => 'datetime',
+            'submitted_at' => 'datetime',
+            'late' => 'boolean',
+            'regrade_pending' => 'boolean',
+            'total_override' => 'float',
         ];
     }
 
@@ -87,6 +107,12 @@ class Submission extends Model
         return $this->hasMany(Scan::class);
     }
 
+    /** @return HasMany<SubmissionPage, $this> */
+    public function pages(): HasMany
+    {
+        return $this->hasMany(SubmissionPage::class);
+    }
+
     /** @return HasMany<Response, $this> */
     public function responses(): HasMany
     {
@@ -96,5 +122,17 @@ class Submission extends Model
     public function isPublished(): bool
     {
         return $this->status === self::STATUS_PUBLISHED;
+    }
+
+    /**
+     * The total that counts (DESIGN §19.3 "คะแนนรวมที่ใช้จริง"):
+     * COALESCE(total_override, total_score). Shown and sent wherever a
+     * total is; per-question scores and mastery never use it.
+     */
+    public function effectiveTotal(): ?float
+    {
+        $total = $this->total_override ?? $this->total_score;
+
+        return $total === null ? null : round((float) $total, 2);
     }
 }

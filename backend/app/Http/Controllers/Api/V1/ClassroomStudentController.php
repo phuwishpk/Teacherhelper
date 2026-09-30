@@ -3,21 +3,28 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\StudentEnroller;
+use App\Domain\Students\CredentialIssuer;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BulkStoreStudentsRequest;
 use App\Http\Resources\RosterStudentResource;
 use App\Models\Classroom;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Roster of a classroom (DESIGN §9.2): bulk add and list.
+ * Roster of a classroom (DESIGN §9.2): bulk add, list and the PINs of
+ * students the background roster sync added (§19.2).
  */
 class ClassroomStudentController extends Controller
 {
-    public function __construct(private readonly StudentEnroller $enroller) {}
+    public function __construct(
+        private readonly StudentEnroller $enroller,
+        private readonly CredentialIssuer $issuer,
+    ) {}
 
     /**
      * POST /api/v1/classrooms/{id}/students {students: [{name, student_number}]}
@@ -56,6 +63,32 @@ class ClassroomStudentController extends Controller
         Gate::authorize('manageStudents', $classroom);
 
         return RosterStudentResource::collection($classroom->students()->get());
+    }
+
+    /**
+     * POST /api/v1/classrooms/{id}/students/pending-pins -> {data:
+     * [{student_id, student_number, name, pin}]}: the first PINs of the
+     * students the background roster sync added (roster `pin_pending`,
+     * DESIGN §19.2), which nobody has seen. Each gets a new PIN, shown once,
+     * and stops being pending. An empty list when nobody is pending.
+     */
+    public function pendingPins(Request $request, int $id): JsonResponse
+    {
+        $classroom = $this->ownClassroom($request, $id);
+        Gate::authorize('manageStudents', $classroom);
+
+        $rows = DB::transaction(function () use ($classroom) {
+            $pending = $classroom->students()->wherePivotNotNull('pin_pending_at')->lockForUpdate()->get();
+
+            return $pending->map(fn (User $student) => [
+                'student_id' => $student->id,
+                'student_number' => (int) $student->pivot->student_number,
+                'name' => $student->name,
+                'pin' => $this->issuer->issuePin($student),
+            ])->values()->all();
+        });
+
+        return response()->json(['data' => $rows]);
     }
 
     private function ownClassroom(Request $request, int $id): Classroom

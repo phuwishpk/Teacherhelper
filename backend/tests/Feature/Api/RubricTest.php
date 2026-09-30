@@ -87,7 +87,7 @@ class RubricTest extends TestCase
 
         $this->assertCount(1, $fake->requests);
         $request = $fake->requests[0];
-        $this->assertSame(['rubric_draft', 'open', 'v1'], [$request->purpose, $request->type, $request->promptVersion]);
+        $this->assertSame(['rubric_draft', 'open', 'v2'], [$request->purpose, $request->type, $request->promptVersion]);
         $this->assertStringContainsString('subject: วิทยาศาสตร์, grade: ป.5, max points: 4', $request->userText);
         $this->assertStringContainsString($question->prompt_text, $request->userText);
         $this->assertStringContainsString('Points must sum to 4', $request->userText);
@@ -95,9 +95,10 @@ class RubricTest extends TestCase
         $this->assertSame(0.2, $request->temperature);
 
         $call = AiCall::query()->sole();
-        $this->assertSame(['rubric_draft', 'ok', 'server', $question->id, 'fake:gemini-3.8-flash', 'v1'], [
-            $call->purpose, $call->status, $call->key_source, $call->question_id, $call->model, $call->prompt_version,
+        $this->assertSame(['rubric_draft', 'ok', 'server', $question->id, 'fake:gemini-3.8-flash', 'v2', 'rubric_ai_draft'], [
+            $call->purpose, $call->status, $call->key_source, $call->question_id, $call->model, $call->prompt_version, $call->feature,
         ]);
+        $this->assertSame(['medium', 4096], [$request->thinkingLevel, $request->maxOutputTokens], 'DESIGN §21.6');
         $this->assertSame('draft', $question->refresh()->rubric_status);
     }
 

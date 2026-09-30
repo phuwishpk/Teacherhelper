@@ -1,4 +1,5 @@
 import 'package:eduvision/features/appeals/appeals_screen.dart';
+import 'package:eduvision/features/review/review_models.dart';
 import 'package:eduvision/features/review/review_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,8 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/pump_screen.dart';
 import 'review_fixtures.dart';
 
-Map<String, dynamic> _appeal(int id, {int responseId = 11}) => {
+Map<String, dynamic> _appeal(
+  int id, {
+  int responseId = 11,
+  bool overridden = false,
+}) => {
   'id': id,
+  'total_overridden': overridden,
   'response_id': responseId,
   'status': 'open',
   'reason': 'หนูหารได้ 5 ค่ะ',
@@ -59,5 +65,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.resolved.last, (4, 'rejected', 'บรรทัดที่ 3 ยังหารผิด', null));
     expect(find.text('ไม่มีคำขอที่รอตอบ'), findsOneWidget);
+  });
+
+  testWidgets('accepting with a new score warns when the total came from '
+      'Classroom (§19.3)', (tester) async {
+    final repo = FakeReviewRepository()
+      ..appealRows = [_appeal(3, overridden: true)];
+    await pumpScreen(
+      tester,
+      const AppealsScreen(),
+      overrides: [reviewRepositoryProvider.overrideWithValue(repo)],
+    );
+    await tester.tap(find.text('ตอบคำขอ'));
+    await tester.pumpAndSettle();
+    expect(find.text(totalOverrideClearWarning), findsNothing);
+    await tester.tap(find.byTooltip('เพิ่มคะแนน'));
+    await tester.pumpAndSettle();
+    expect(find.text(totalOverrideClearWarning), findsOneWidget);
+    await tester.tap(find.text('ยืนยันคะแนนเดิม'));
+    await tester.pumpAndSettle();
+    expect(find.text(totalOverrideClearWarning), findsNothing);
   });
 }

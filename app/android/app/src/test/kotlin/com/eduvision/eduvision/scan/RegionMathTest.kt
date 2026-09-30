@@ -55,6 +55,17 @@ class RegionMathTest {
     }
 
     @Test
+    fun uploadCropsAreScaledToAtMost768Px() {
+        // A full-width show_work region of the A4 frame (178 mm at 200 DPI
+        // plus the 2% margins) is scaled down with its aspect ratio kept.
+        assertEquals(PixelSize(768, 334), RegionMath.uploadCropSize(1402, 610))
+        assertEquals(PixelSize(300, 768), RegionMath.uploadCropSize(600, 1536))
+        // Short-answer boxes are already small: written as they are.
+        assertEquals(PixelSize(620, 180), RegionMath.uploadCropSize(620, 180))
+        assertEquals(PixelSize(768, 200), RegionMath.uploadCropSize(768, 200))
+    }
+
+    @Test
     fun cnnStripWidthFollowsPreprocess() {
         assertEquals(64, RegionMath.cnnStripWidth(100, 50))
         assertEquals(128, RegionMath.cnnStripWidth(1000, 50))

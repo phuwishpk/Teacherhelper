@@ -12,10 +12,12 @@ use JsonException;
  * 1. sends the batch through GeminiClient (Http::pool, up to 8 at a time);
  * 2. decodes the JSON and checks it against the request's schema, then the
  *    call's semantic check;
- * 3. invalid output is retried once; still invalid -> invalid_output;
+ * 3. invalid output (an answer cut off at maxOutputTokens included) is
+ *    retried once; still invalid -> invalid_output;
  * 4. logs every request, retries included, to `ai_calls` (purpose, model,
- *    prompt_version, tokens, latency, status, key_source) and never the
- *    prompt, the images or the key.
+ *    prompt_version, tokens, latency, status, key_source, and the §21.8
+ *    labels: feature, media resolution, image and question counts) and
+ *    never the prompt, the images or the key.
  *
  * Transport errors are not retried here: GradeScanJob counts attempts and
  * releases itself with backoff.
@@ -23,6 +25,8 @@ use JsonException;
 final class GeminiGateway
 {
     private const ERROR_LIMIT = 500;
+
+    private const MAX_TOKENS = 'MAX_TOKENS';
 
     public function __construct(private readonly GeminiClient $client) {}
 
@@ -32,14 +36,17 @@ final class GeminiGateway
     }
 
     /**
+     * passes = 1 skips the retry of invalid output (the caller already had
+     * its first try, e.g. in a batch).
+     *
      * @param  array<array-key, GeminiCall>  $calls
      * @return array<array-key, CallOutcome> same keys
      */
-    public function run(array $calls, GeminiKey $key): array
+    public function run(array $calls, GeminiKey $key, int $passes = 2): array
     {
         $outcomes = [];
         $pending = $calls;
-        for ($pass = 1; $pass <= 2 && $pending !== []; $pass++) {
+        for ($pass = 1; $pass <= $passes && $pending !== []; $pass++) {
             $replies = $this->client->generate(
                 array_map(fn (GeminiCall $call) => $call->request, $pending),
                 $key->apiKey,
@@ -51,7 +58,7 @@ final class GeminiGateway
                 $outcome = self::judge($call, $reply);
                 $this->log($call, $reply, $outcome, $key);
 
-                if ($outcome->status === CallOutcome::INVALID_OUTPUT && $pass === 1) {
+                if ($outcome->status === CallOutcome::INVALID_OUTPUT && $pass < $passes) {
                     $retry[$id] = $call;
 
                     continue;
@@ -62,6 +69,20 @@ final class GeminiGateway
         }
 
         return $outcomes;
+    }
+
+    /**
+     * One reply that came back from the Batch API (DESIGN §20.8): judged
+     * like any call and logged to ai_calls with batch = TRUE. No retry here:
+     * the caller decides (StudentAnalyses retries invalid output once as an
+     * ordinary call).
+     */
+    public function judgeBatchReply(GeminiCall $call, GeminiReply $reply, GeminiKey $key): CallOutcome
+    {
+        $outcome = self::judge($call, $reply);
+        $this->log($call, $reply, $outcome, $key, batch: true);
+
+        return $outcome;
     }
 
     /** One call; throws unless the outcome is ok. */
@@ -87,6 +108,10 @@ final class GeminiGateway
         if (! $reply->isOk()) {
             return new CallOutcome(CallOutcome::ERROR, null, $reply->error);
         }
+        if ($reply->finishReason === self::MAX_TOKENS) {
+            // Cut off at maxOutputTokens (DESIGN §21.6): never use half an answer.
+            return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'output cut off at maxOutputTokens (finishReason MAX_TOKENS)');
+        }
 
         try {
             $data = json_decode(self::stripFence((string) $reply->text), true, 64, JSON_THROW_ON_ERROR);
@@ -97,8 +122,9 @@ final class GeminiGateway
             return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'output is not a JSON object');
         }
 
-        if ($call->request->responseSchema !== null) {
-            $errors = SchemaValidator::validate($call->request->responseSchema, $data);
+        $schema = $call->validationSchema ?? $call->request->responseSchema;
+        if ($schema !== null) {
+            $errors = SchemaValidator::validate($schema, $data);
             if ($errors !== []) {
                 return new CallOutcome(CallOutcome::INVALID_OUTPUT, null, 'schema: '.implode('; ', array_slice($errors, 0, 5)));
             }
@@ -126,7 +152,7 @@ final class GeminiGateway
         return $text;
     }
 
-    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key): void
+    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key, bool $batch = false): void
     {
         AiCall::create([
             'purpose' => $call->request->purpose,
@@ -145,6 +171,14 @@ final class GeminiGateway
                 default => AiCall::STATUS_ERROR,
             },
             'error' => $outcome->error === null ? null : Str::limit(self::redact($outcome->error, $key), self::ERROR_LIMIT),
+            'feature' => $call->feature === null ? null : Str::limit($call->feature, 40, ''),
+            'cached_tokens' => $reply->cachedTokens,
+            'thinking_tokens' => $reply->thinkingTokens,
+            'media_resolution' => MediaResolution::summary(array_map(fn (GeminiImage $i) => $i->mediaResolution, $call->request->images)),
+            'image_count' => $call->request->images === [] ? null : min(255, count($call->request->images)),
+            'question_count' => $call->questionCount === null ? null : min(255, $call->questionCount),
+            'assignment_id' => $call->assignmentId,
+            'batch' => $batch,
         ]);
     }
 

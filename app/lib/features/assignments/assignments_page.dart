@@ -127,16 +127,35 @@ class _AssignmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = assignment;
+    final scheme = Theme.of(context).colorScheme;
     final parts = [
       ?classroomName,
-      ?a.subjectName,
+      ?(a.courseLabel ?? a.subjectName),
       if (a.dueAt != null) 'ส่ง ${formatThaiDate(a.dueAt!)}',
       if (a.currentLayoutVersion != null) 'layout v${a.currentLayoutVersion}',
     ];
+    final chips = [
+      if (a.fromClassroomWeb)
+        StatusChip(label: 'สร้างในเว็บ Classroom', color: scheme.tertiary),
+      if (a.isFreeform && !a.keyApproved && a.status != 'closed')
+        StatusChip(label: 'รออนุมัติเฉลย', color: scheme.error),
+    ];
     return Card(
+      key: ValueKey('assignment_card_${a.id}'),
       child: ListTile(
         title: Text(a.title),
-        subtitle: parts.isEmpty ? null : Text(parts.join(' · ')),
+        subtitle: parts.isEmpty && chips.isEmpty
+            ? null
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (parts.isNotEmpty) Text(parts.join(' · ')),
+                  if (chips.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Wrap(spacing: 6, runSpacing: 4, children: chips),
+                  ],
+                ],
+              ),
         trailing: StatusChip(
           label: assignmentStatusLabel(a.status),
           color: assignmentStatusColor(context, a.status),

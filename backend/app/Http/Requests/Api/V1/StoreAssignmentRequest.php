@@ -7,8 +7,12 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * POST /api/v1/assignments — {classroom_id, subject_id, title, strictness?, due_at?}
- * (DESIGN §8.3). The classroom must be one the teacher teaches.
+ * POST /api/v1/assignments — {classroom_id, course_id, lesson_plan_id?,
+ * title, strictness?, due_at?, mode?: worksheet|freeform, accept_late?,
+ * score_only?} (DESIGN §8.3, §19.5, §20.1). The classroom must be one the
+ * teacher teaches; the course must be bound to it and the lesson plan be
+ * one of the course (checked in the controller). The subject comes from
+ * the course (a subject_id sent by an older app is ignored).
  */
 class StoreAssignmentRequest extends FormRequest
 {
@@ -32,10 +36,14 @@ class StoreAssignmentRequest extends FormRequest
                     ->where('teacher_id', $teacher?->id)
                     ->where('school_id', $teacher?->school_id),
             ],
-            'subject_id' => ['required', 'integer', Rule::exists('subjects', 'id')],
+            'course_id' => ['required', 'integer', 'min:1'],
+            'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'title' => ['required', 'string', 'max:255'],
             'strictness' => ['sometimes', 'nullable', Rule::in(Assignment::STRICTNESS)],
             'due_at' => ['sometimes', 'nullable', 'date'],
+            'mode' => ['sometimes', 'nullable', Rule::in(Assignment::MODES)],
+            'accept_late' => ['sometimes', 'nullable', 'boolean'],
+            'score_only' => ['sometimes', 'nullable', 'boolean'],
         ];
     }
 
@@ -47,8 +55,8 @@ class StoreAssignmentRequest extends FormRequest
         return AssignmentMessages::MESSAGES + [
             'classroom_id.required' => 'กรุณาเลือกห้องเรียน',
             'classroom_id.exists' => 'ไม่พบห้องเรียนนี้ในห้องที่คุณสอน',
-            'subject_id.required' => 'กรุณาเลือกวิชา',
-            'subject_id.exists' => 'ไม่พบวิชานี้',
+            'course_id.required' => 'กรุณาเลือกรายวิชา',
+            'course_id.integer' => 'รหัสรายวิชาไม่ถูกต้อง',
         ];
     }
 }

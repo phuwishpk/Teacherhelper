@@ -33,6 +33,12 @@ abstract class ScanCamera {
 
 /// `package:camera` (CameraX on Android).
 class PluginScanCamera implements ScanCamera {
+  PluginScanCamera({this.preset = ResolutionPreset.max});
+
+  /// [ResolutionPreset.max] for worksheets; a teacher's key photo only needs
+  /// [ResolutionPreset.veryHigh] (1080p: at most 2,000 px, DESIGN §21.9).
+  final ResolutionPreset preset;
+
   CameraController? _controller;
 
   @override
@@ -48,9 +54,9 @@ class PluginScanCamera implements ScanCamera {
       );
       final controller = CameraController(
         back,
-        // Highest still resolution: the page is warped to 200 DPI
-        // (DESIGN §6.2), which needs about 8 MP (KICKOFF 2b).
-        ResolutionPreset.max,
+        // Worksheets: highest still resolution, the page is warped to
+        // 200 DPI (DESIGN §6.2), which needs about 8 MP (KICKOFF 2b).
+        preset,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -121,4 +127,12 @@ class PluginScanCamera implements ScanCamera {
 /// A fresh camera per scan screen; tests override it with a fake.
 final scanCameraFactoryProvider = Provider<ScanCamera Function()>(
   (ref) => PluginScanCamera.new,
+);
+
+/// The camera of "ถ่ายรูปเฉลย" (DESIGN §19.5): 1080p is plenty for Gemini
+/// at the document resolution and keeps several photos under the upload
+/// limit of one read.
+final keyPhotoCameraFactoryProvider = Provider<ScanCamera Function()>(
+  (ref) =>
+      () => PluginScanCamera(preset: ResolutionPreset.veryHigh),
 );

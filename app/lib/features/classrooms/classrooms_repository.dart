@@ -43,6 +43,11 @@ abstract class ClassroomsRepository {
 
   /// Resets a student's PIN; returns the new PIN (shown once).
   Future<PinReset> resetPin(int studentId);
+
+  /// `POST /classrooms/{id}/students/pending-pins` (DESIGN §19.2): the
+  /// first PINs of the students the background roster sync added, shown
+  /// once. Empty when nobody waits.
+  Future<List<EnrolledStudent>> issuePendingPins(int classroomId);
 }
 
 class ApiClassroomsRepository implements ClassroomsRepository {
@@ -136,6 +141,14 @@ class ApiClassroomsRepository implements ClassroomsRepository {
   Future<PrintJob> reissueLoginCard(int studentId) async {
     final res = await _dio.post<Object?>('/students/$studentId/login-card');
     return PrintJob.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<List<EnrolledStudent>> issuePendingPins(int classroomId) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/$classroomId/students/pending-pins',
+    );
+    return unwrapList(res.data).map(EnrolledStudent.fromJson).toList();
   }
 
   @override

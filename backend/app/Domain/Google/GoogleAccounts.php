@@ -127,6 +127,7 @@ final class GoogleAccounts
                 'scopes' => implode(' ', $grant->scopes),
                 'connected_at' => now(),
                 'last_error' => null,
+                'reconnect_notified_at' => null,
             ]);
         } catch (UniqueConstraintViolationException) {
             throw self::accountInUse();
@@ -143,7 +144,10 @@ final class GoogleAccounts
      * its Google Classroom UI when it is true); the second name is kept for
      * clients that read it.
      *
-     * @return array{connected: bool, email: string|null, scopes: list<string>, needs_reconnect: bool, last_error: string|null, connected_at: string|null, configured: bool, server_configured: bool}
+     * `reconnect_message` says in Thai why needs_reconnect is true (null
+     * otherwise), e.g. the missing announcements scope of DESIGN §19.7.
+     *
+     * @return array{connected: bool, email: string|null, scopes: list<string>, needs_reconnect: bool, reconnect_message: string|null, last_error: string|null, connected_at: string|null, configured: bool, server_configured: bool}
      */
     public function status(User $teacher): array
     {
@@ -154,6 +158,7 @@ final class GoogleAccounts
             'email' => $account?->email,
             'scopes' => $account?->scopeList() ?? [],
             'needs_reconnect' => $account?->needsReconnect() ?? false,
+            'reconnect_message' => $account?->reconnectMessage(),
             'last_error' => $account?->last_error,
             'connected_at' => $account?->connected_at?->toIso8601String(),
             'configured' => $configured = GoogleOAuth::isConfigured(),
@@ -193,7 +198,7 @@ final class GoogleAccounts
             throw GoogleErrors::notConnected();
         }
         if ($account->needsReconnect()) {
-            throw GoogleErrors::reconnectRequired();
+            throw GoogleErrors::reconnectRequired($account->reconnectMessage());
         }
 
         return $account;

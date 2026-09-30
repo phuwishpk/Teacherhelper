@@ -160,12 +160,29 @@ final class GoogleApi
     }
 
     /**
-     * courses.courseWork.studentSubmissions.list, optionally for one state
-     * (TURNED_IN) or one student (userId).
+     * courses.courseWork.list of PUBLISHED courseWork (DESIGN §19.10): the
+     * sync looks for courseWork the teacher created on the Classroom website
+     * (associatedWithDeveloper false) and reads its materials.
      *
+     * @return list<array<string, mixed>> raw CourseWork resources
+     */
+    public function courseWorks(string $courseId): array
+    {
+        return $this->pages('courseWork.list', self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork', [
+            'courseWorkStates' => 'PUBLISHED',
+            'pageSize' => 100,
+        ], 'courseWork');
+    }
+
+    /**
+     * courses.courseWork.studentSubmissions.list, optionally for some states
+     * (TURNED_IN, or TURNED_IN and RETURNED for the grade sync; the
+     * parameter repeats) or one student (userId).
+     *
+     * @param  string|list<string>|null  $state
      * @return list<array<string, mixed>> raw StudentSubmission resources
      */
-    public function studentSubmissions(string $courseId, string $courseWorkId, ?string $state = null, ?string $userId = null): array
+    public function studentSubmissions(string $courseId, string $courseWorkId, string|array|null $state = null, ?string $userId = null): array
     {
         $query = ['pageSize' => 100];
         if ($state !== null) {
@@ -179,8 +196,10 @@ final class GoogleApi
     }
 
     /**
-     * studentSubmissions.patch with updateMask=assignedGrade. Only courseWork
-     * this project created can be graded (else project_permission_denied).
+     * studentSubmissions.patch with updateMask=assignedGrade,draftGrade
+     * (DESIGN §19.7: both, so the teacher's grading view in Classroom shows the
+     * same number). Only courseWork this project created can be graded (else
+     * project_permission_denied).
      *
      * @return array<string, mixed> the updated StudentSubmission
      */
@@ -189,10 +208,37 @@ final class GoogleApi
         return (array) $this->send(
             'studentSubmissions.patch',
             fn (PendingRequest $http) => $http->patch(
-                self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).'?updateMask=assignedGrade',
-                ['assignedGrade' => $grade],
+                self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).'?updateMask=assignedGrade,draftGrade',
+                ['assignedGrade' => $grade, 'draftGrade' => $grade],
             ),
         )->json();
+    }
+
+    /**
+     * courses.announcements.create of a PUBLISHED announcement that only the
+     * listed students (and the course's teachers) see: assigneeMode
+     * INDIVIDUAL_STUDENTS with individualStudentsOptions.studentIds
+     * (DESIGN §19.7). Needs the classroom.announcements scope.
+     *
+     * @param  list<string>  $studentIds  Classroom user ids
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createPrivateAnnouncement(string $courseId, string $text, array $studentIds): array
+    {
+        $body = $this->send(
+            'announcements.create',
+            fn (PendingRequest $http) => $http->post(self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/announcements', [
+                'text' => $text,
+                'state' => 'PUBLISHED',
+                'assigneeMode' => 'INDIVIDUAL_STUDENTS',
+                'individualStudentsOptions' => ['studentIds' => array_values($studentIds)],
+            ]),
+        )->json();
+
+        return [
+            'id' => (string) ($body['id'] ?? ''),
+            'alternate_link' => (string) ($body['alternateLink'] ?? ''),
+        ];
     }
 
     /** studentSubmissions.return: the student sees the work returned (and may hand in again). */
@@ -254,6 +300,37 @@ final class GoogleApi
         return is_string($mime) && $mime !== '' ? $mime : null;
     }
 
+    /**
+     * Drive files.get?fields=mimeType,size,name (drive.readonly): what a
+     * Classroom attachment is before the server downloads it (DESIGN §19.4).
+     * size is null for Google Docs, Sheets and Slides (they have no bytes).
+     *
+     * @return array{mime_type: string, size: int|null, name: string}
+     */
+    public function driveFile(string $fileId): array
+    {
+        $body = (array) $this->send(
+            'drive.files.get',
+            fn (PendingRequest $http) => $http->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['fields' => 'mimeType,size,name', 'supportsAllDrives' => 'true']),
+        )->json();
+
+        return [
+            'mime_type' => is_string($body['mimeType'] ?? null) ? $body['mimeType'] : '',
+            'size' => is_numeric($body['size'] ?? null) ? (int) $body['size'] : null,
+            'name' => is_string($body['name'] ?? null) ? $body['name'] : '',
+        ];
+    }
+
+    /** Drive files.get?alt=media: the attachment's bytes, with the teacher's token. */
+    public function downloadDriveFile(string $fileId): string
+    {
+        return $this->send(
+            'drive.files.download',
+            fn (PendingRequest $http) => $http->withHeaders(['Accept' => '*/*'])
+                ->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['alt' => 'media', 'supportsAllDrives' => 'true']),
+        )->body();
+    }
+
     private static function submissionsUrl(string $courseId, string $courseWorkId): string
     {
         return self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork/'.rawurlencode($courseWorkId).'/studentSubmissions';
@@ -270,7 +347,7 @@ final class GoogleApi
         $items = [];
         $pageToken = null;
         for ($page = 0; $page < self::MAX_PAGES; $page++) {
-            $params = $pageToken === null ? $query : [...$query, 'pageToken' => $pageToken];
+            $params = self::queryString($pageToken === null ? $query : [...$query, 'pageToken' => $pageToken]);
             $body = $this->send($what, fn (PendingRequest $http) => $http->get($url, $params))->json();
             foreach (is_array($body[$key] ?? null) ? $body[$key] : [] as $item) {
                 if (is_array($item)) {
@@ -284,6 +361,24 @@ final class GoogleApi
         }
 
         return $items;
+    }
+
+    /**
+     * Google repeats a list parameter (states=TURNED_IN&states=RETURNED);
+     * PHP's http_build_query would write states[0]=..., which Google ignores.
+     *
+     * @param  array<string, scalar|list<scalar>>  $query
+     */
+    private static function queryString(array $query): string
+    {
+        $pairs = [];
+        foreach ($query as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $item) {
+                $pairs[] = rawurlencode((string) $key).'='.rawurlencode(is_bool($item) ? ($item ? 'true' : 'false') : (string) $item);
+            }
+        }
+
+        return implode('&', $pairs);
     }
 
     /**

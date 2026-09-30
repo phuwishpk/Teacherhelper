@@ -14,7 +14,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * {id, submission_id, assignment_id, title, subject_name,
  *  assignment: {id, title, subject: {id, code, name}|null},
- *  total_score, max_score, published_at}
+ *  total_score, total_overridden, max_score, published_at}
+ *
+ * total_score is the effective total (COALESCE(total_override, total_score),
+ * DESIGN §19.3); total_overridden = the teacher took the total from Google
+ * Classroom, so it may differ from the sum of the questions (the app notes
+ * "คะแนนรวมปรับตามที่ครูรับจาก Classroom").
  * and, for GET /student/results/{submission_id} (responses loaded):
  * retake_reason (the open Google Classroom retake request of this assignment,
  * or null, §18.2) and
@@ -51,7 +56,8 @@ class StudentResultResource extends JsonResource
                 'title' => $assignment->title,
                 'subject' => $subject === null ? null : ['id' => $subject->id, 'code' => $subject->code, 'name' => $subject->name],
             ],
-            'total_score' => $submission->total_score,
+            'total_score' => $submission->effectiveTotal(),
+            'total_overridden' => $submission->total_override !== null,
             'max_score' => $submission->getAttribute('max_score') === null ? null : round((float) $submission->getAttribute('max_score'), 2),
             'published_at' => $submission->published_at?->toIso8601String(),
             // Detail only: the teacher asked for a new photo in Google Classroom (§18.2).
@@ -88,6 +94,7 @@ class StudentResultResource extends JsonResource
             'has_final_crop' => $response->final_crop_path !== null,
             'crop_url' => $response->crop_path !== null ? route('api.responses.crop', $response->id, false) : null,
             'final_crop_url' => $response->final_crop_path !== null ? route('api.responses.crop', ['id' => $response->id, 'part' => 'final'], false) : null,
+            'page_image_url' => ResponseDetailResource::pageImageUrl($response),
             'appeal' => $appeal instanceof Appeal ? AppealResource::summary($appeal) : null,
             'can_appeal' => $appeal === null,
         ];

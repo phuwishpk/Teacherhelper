@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
+import '../charts/score_distribution_chart.dart';
 import '../review/review_labels.dart';
 import 'analytics_models.dart';
 import 'analytics_repository.dart';
@@ -65,6 +66,8 @@ class AssignmentAnalyticsScreen extends ConsumerWidget {
                   child: ListView(
                     children: [
                       _SummaryCard(analytics: a),
+                      const SizedBox(height: 16),
+                      ScoreDistributionCard(assignmentId: assignmentId),
                       const SizedBox(height: 16),
                       _Section(
                         title: 'ข้อที่ทั้งห้องผิดมากที่สุด',

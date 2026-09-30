@@ -59,7 +59,7 @@ class PracticePage extends ConsumerWidget {
                         ),
                       ),
                       for (final r in withContent)
-                        _RecommendationCard(recommendation: r),
+                        PracticeRecommendationCard(recommendation: r),
                     ],
                   ),
                 ),
@@ -69,8 +69,10 @@ class PracticePage extends ConsumerWidget {
   }
 }
 
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.recommendation});
+/// One skill's practice items and review links; also the page an analysis
+/// next step opens (DESIGN §20.5).
+class PracticeRecommendationCard extends StatelessWidget {
+  const PracticeRecommendationCard({super.key, required this.recommendation});
 
   final PracticeRecommendation recommendation;
 

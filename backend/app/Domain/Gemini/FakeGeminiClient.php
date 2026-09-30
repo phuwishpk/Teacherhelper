@@ -3,6 +3,8 @@
 namespace App\Domain\Gemini;
 
 use App\Models\Question;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Offline stand-in for Gemini (GEMINI_FAKE=true and every test): no network,
@@ -23,8 +25,29 @@ use App\Models\Question;
  *   [fake:schema]        JSON that misses required fields
  *   [fake:error]         HTTP 503, every time
  *   [fake:explanation-error] / [fake:explanation-invalid]   for `explanation`
+ *   [fake:max-tokens]    any purpose: a cut-off answer, finishReason MAX_TOKENS
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
+ *
+ * `extract_batch` and `extract_page` answer every question of the call with
+ * the same logic (see multi() for their extra markers).
+ *
+ * `answer_key_read` / `answer_key_draft` (DESIGN §19.5) answer every
+ * question in hints.questions, or, without any, a four-question sheet
+ * (mcq, short, show_work, open); see answerKey() for their markers.
+ *
+ * `document_read` (DESIGN §20.1) answers a fixed course of two units and
+ * three lesson plans; see courseDocument() for its markers.
+ *
+ * `indicator_suggest` (DESIGN §20.3) picks, per question, the plan's
+ * indicators whose code the question text mentions, else the first one;
+ * see indicatorSuggestions() for its markers.
+ *
+ * `student_analysis` (DESIGN §20.5) writes a teacher and a student text
+ * from hints.indicators; see analysis() for its markers. Batches
+ * (GeminiBatchClient) are answered at once: submitBatch() answers every
+ * request like generate() and keeps the replies in the cache, and
+ * batchStatus() returns them as succeeded.
  *
  * The same markers are also read from the bytes of the images (a PNG tEXt
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
@@ -34,7 +57,7 @@ use App\Models\Question;
  * listModels() refuses keys containing "invalid" and fails for keys
  * containing "unavailable".
  */
-class FakeGeminiClient implements GeminiClient
+class FakeGeminiClient implements GeminiBatchClient, GeminiClient
 {
     /** @var array<string, int> request signature => times seen (for [fake:invalid-once]) */
     private array $seen = [];
@@ -79,6 +102,34 @@ class FakeGeminiClient implements GeminiClient
         return [$this->model, 'gemini-3.5-flash-lite', 'text-embedding-004'];
     }
 
+    /** How long a fake batch stays readable (the cache of the queue worker or the test). */
+    private const BATCH_TTL_SECONDS = 172800;
+
+    public function submitBatch(array $requests, string $displayName, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        if (stripos($apiKey, 'rejected') !== false) {
+            throw new GeminiException('HTTP 400: API key not valid. Please pass a valid API key.', GeminiException::KEY_INVALID);
+        }
+        $name = 'batches/fake-'.Str::lower(Str::random(16));
+        $replies = [];
+        foreach ($this->generate($requests, $apiKey) as $key => $reply) {
+            $replies[(string) $key] = $reply;
+        }
+        Cache::put('fake-gemini-batch:'.$name, $replies, self::BATCH_TTL_SECONDS);
+
+        return new GeminiBatch($name, GeminiBatch::PENDING);
+    }
+
+    public function batchStatus(string $name, #[\SensitiveParameter] string $apiKey): GeminiBatch
+    {
+        $replies = Cache::get('fake-gemini-batch:'.$name);
+        if (! is_array($replies)) {
+            throw new GeminiException('HTTP 404: batch not found');
+        }
+
+        return new GeminiBatch($name, GeminiBatch::SUCCEEDED, $replies);
+    }
+
     private function answer(GeminiRequest $request, string $apiKey): GeminiReply
     {
         if (stripos($apiKey, 'rejected') !== false) {
@@ -89,6 +140,10 @@ class FakeGeminiClient implements GeminiClient
         $has = fn (string $marker) => str_contains($markers, '[fake:'.$marker.']');
         $signature = md5($request->purpose."\0".$request->userText."\0".($request->images[0]->data ?? ''));
         $this->seen[$signature] = ($this->seen[$signature] ?? 0) + 1;
+
+        if ($has('max-tokens')) {
+            return GeminiReply::ok('{"answers": [', 10, $request->maxOutputTokens ?? 8192, 0, finishReason: 'MAX_TOKENS');
+        }
 
         $data = match ($request->purpose) {
             'extract' => (function () use ($request, $has, $signature) {
@@ -104,17 +159,30 @@ class FakeGeminiClient implements GeminiClient
 
                 return $this->extract($request, $has);
             })(),
+            'extract_batch', 'extract_page' => $this->multi($request, $has, $signature),
             'explanation' => match (true) {
                 $has('explanation-error') => GeminiReply::error('HTTP 500: fake explanation failure', 0, 500),
                 $has('explanation-invalid') => ['explanation_th' => 42],
                 default => $this->explanation($request),
             },
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
+            'answer_key_read', 'answer_key_draft' => self::answerKey($request),
+            'document_read' => self::courseDocument($request),
+            'indicator_suggest' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('invalid') => 'not json at all {',
+                default => self::indicatorSuggestions($request),
+            },
             'practice_gen' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
                 $has('practice-bad-key') => ['items' => [['prompt_th' => 'x', 'answer_type' => 'mcq', 'options' => ['ก', 'ข'], 'accepted_answers' => ['ค'], 'explanation_th' => 'y']]],
                 default => self::practice($request),
+            },
+            'student_analysis' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('invalid') => 'not json at all {',
+                default => self::analysis($request, $has('weak-word') || ($has('weak-word-once') && $this->seen[$signature] === 1)),
             },
             'check' => ['ok' => true, 'word_th' => 'สวัสดี'], // eduvision:gemini-check --generate
             default => GeminiReply::error("the fake does not answer {$request->purpose}", 0, 501),
@@ -130,6 +198,7 @@ class FakeGeminiClient implements GeminiClient
             inputTokens: intdiv(strlen($request->systemInstruction.$request->userText), 4) + 258 * count($request->images),
             outputTokens: max(1, intdiv(strlen($text), 4)),
             latencyMs: 0,
+            finishReason: 'STOP',
         );
     }
 
@@ -144,6 +213,121 @@ class FakeGeminiClient implements GeminiClient
         }
 
         return strtolower(implode(' ', $found));
+    }
+
+    /**
+     * `extract_batch` (crops of several questions, DESIGN §21.4) and
+     * `extract_page` (a whole page, §19.4): one answer per question in
+     * hints.questions (question_no => the hints of `extract`, plus `images`,
+     * the indexes of the question's own crops in a batch). The page or crop
+     * image and the question text carry the markers above, per question:
+     *
+     *   [fake:error]         left out of a call with several questions (the
+     *                        fallback call then fails); HTTP 503 when alone
+     *   [fake:invalid]       an answer that fails its schema; not JSON when alone
+     *   [fake:invalid-once]  as [fake:invalid], valid on the gateway's retry when alone
+     *   [fake:page-missing]  left out of a call with several questions only
+     *   [fake:page-missing-always]  left out of every call, alone too (a valid reply)
+     *   [fake:not-found]     extract_page: found = false
+     *
+     * and, in a page image, [fake:questions=1,3]: only those question numbers
+     * are on this page (the rest found = false). Markers in a page image
+     * that are not per question ([fake:error], [fake:invalid]) fail the call.
+     *
+     * @param  callable(string): bool  $pageHas
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private function multi(GeminiRequest $request, callable $pageHas, string $signature): array|string|GeminiReply
+    {
+        $page = $request->purpose === 'extract_page';
+        $questions = (array) ($request->hints['questions'] ?? []);
+        $alone = count($questions) === 1;
+        $pageMarkers = self::imageMarkers($request);
+        if ($page && str_contains($pageMarkers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if ($page && str_contains($pageMarkers, '[fake:invalid]')) {
+            return 'Sorry, here is the page: {not json';
+        }
+        $onPage = null;
+        foreach ($request->images as $image) {
+            if (preg_match('/\[fake:questions=([0-9,]+)\]/i', $image->data, $m) === 1) {
+                $onPage = array_map('intval', explode(',', $m[1]));
+            }
+        }
+
+        $answers = [];
+        foreach ($questions as $no => $hints) {
+            $no = (int) $no;
+            $images = $page
+                ? $request->images
+                : array_values(array_intersect_key($request->images, array_flip((array) ($hints['images'] ?? []))));
+            $sub = new GeminiRequest('extract', (string) $hints['type'], 'fake', '', '', $images, null, null, $hints);
+            $markers = strtolower((string) ($hints['question_text'] ?? '')).' '.($page ? '' : self::imageMarkers($sub));
+            $has = fn (string $marker) => str_contains($markers, '[fake:'.$marker.']') || ($page && $marker !== 'error' && $marker !== 'invalid' && $pageHas($marker));
+
+            if ($has('page-missing-always')) {
+                continue;
+            }
+            if ($has('error') || ($has('page-missing') && ! $alone)) {
+                if ($alone) {
+                    return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+                }
+
+                continue;
+            }
+            if ($has('invalid') || ($has('invalid-once') && ! ($alone && $this->seen[$signature] > 1))) {
+                if ($alone) {
+                    return 'Sorry, here is the answer: {not json';
+                }
+                $answers[] = ['question_no' => $no, 'found' => true, 'blank' => 'no'];
+
+                continue;
+            }
+            if ($page && ($has('not-found') || ($onPage !== null && ! in_array($no, $onPage, true)))) {
+                $answers[] = ['question_no' => $no, 'found' => false];
+
+                continue;
+            }
+            if ($has('schema')) {
+                $answers[] = ['question_no' => $no, 'found' => true, 'blank' => false, 'legibility' => 'clear'];
+
+                continue;
+            }
+
+            $answer = $hints['type'] === Question::TYPE_MCQ ? $this->mcq($sub, $has) : $this->extract($sub, $has);
+            $answers[] = ['question_no' => $no] + ($page ? ['found' => true, 'answer_box' => [min(900, 80 * $no), 60, min(990, 80 * $no + 70), 940]] : []) + $answer;
+        }
+
+        return ['answers' => $answers];
+    }
+
+    /**
+     * An mcq read from a whole page: the key for a correct outcome, another
+     * letter otherwise.
+     *
+     * @param  callable(string): bool  $has
+     * @return array<string, mixed>
+     */
+    private function mcq(GeminiRequest $request, callable $has): array
+    {
+        $correct = (string) ($request->hints['correct'] ?? 'A');
+        $outcome = match (true) {
+            $has('correct') => 'correct',
+            $has('wrong'), $has('partial') => 'wrong',
+            default => ['correct', 'wrong'][crc32($request->images[0]->data ?? '') % 2],
+        };
+        $blank = $has('blank');
+        $other = $correct === 'A' ? 'B' : 'A';
+
+        return [
+            'blank' => $blank,
+            'suspicious_instruction' => $has('suspicious'),
+            'legibility' => 'clear',
+            'selected_options' => $blank ? [] : [$outcome === 'correct' ? $correct : $other],
+            'error_types' => $blank ? ['no_answer'] : ($outcome === 'correct' ? [] : ['concept']),
+            'summary_th' => $blank ? 'ไม่ได้เลือกคำตอบ' : self::summary($outcome),
+        ];
     }
 
     /**
@@ -306,11 +490,185 @@ class FakeGeminiClient implements GeminiClient
     }
 
     /**
+     * A structured answer key. Markers in the document bytes or in a
+     * question text: [fake:error] (HTTP 503), [fake:invalid] (not JSON),
+     * [fake:empty] (no question at all: invalid after the check),
+     * [fake:no-answer] (the questions come back without answers). Keys:
+     * mcq C, short "42", show_work "12" with two steps, open a model answer
+     * with two key points.
+     *
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private static function answerKey(GeminiRequest $request): array|string|GeminiReply
+    {
+        $questions = array_values((array) ($request->hints['questions'] ?? []));
+        $markers = self::imageMarkers($request).' '.strtolower(implode(' ', array_map(fn ($q) => (string) ($q['question'] ?? ''), $questions)));
+        if (str_contains($markers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if (str_contains($markers, '[fake:invalid]')) {
+            return 'Here is the key: {not json';
+        }
+        if (str_contains($markers, '[fake:empty]')) {
+            return ['questions' => [], 'notes_th' => 'ไม่พบข้อในเอกสาร'];
+        }
+        if ($questions === []) {
+            $questions = [
+                ['question_no' => 1, 'type' => 'mcq', 'question' => 'ข้อใดเป็นจำนวนเฉพาะ'],
+                ['question_no' => 2, 'type' => 'short', 'question' => '6 × 7 เท่ากับเท่าไร'],
+                ['question_no' => 3, 'type' => 'show_work', 'question' => 'แม่ซื้อส้ม 3 กิโลกรัม กิโลกรัมละ 4 บาท จ่ายเงินเท่าไร'],
+                ['question_no' => 4, 'type' => 'open', 'question' => 'ทำไมใบไม้จึงมีสีเขียว'],
+            ];
+        }
+        $answers = ! str_contains($markers, '[fake:no-answer]');
+
+        $out = [];
+        foreach ($questions as $q) {
+            $item = [
+                'question_no' => (int) $q['question_no'],
+                'type' => (string) $q['type'],
+                'prompt_text' => (string) $q['question'],
+                'max_points' => match ((string) $q['type']) {
+                    'mcq' => 1,
+                    'short' => 2,
+                    'show_work' => 5,
+                    default => 4,
+                },
+                'confidence' => $answers ? 'high' : 'low',
+            ];
+            if ($answers) {
+                $item += match ((string) $q['type']) {
+                    'mcq' => ['correct_option' => 'C'],
+                    'short' => ['accepted_answers' => ['42', 'สี่สิบสอง'], 'numeric_value' => 42],
+                    'show_work' => ['accepted_answers' => ['12'], 'numeric_value' => 12, 'reference_steps' => ['3 × 4', '= 12 บาท']],
+                    default => ['model_answer' => 'ใบไม้มีคลอโรฟิลล์ซึ่งสะท้อนแสงสีเขียว', 'key_points' => ['มีคลอโรฟิลล์', 'สะท้อนแสงสีเขียว']],
+                };
+            }
+            $out[] = $item;
+        }
+
+        return ['questions' => $out, 'notes_th' => $answers ? '' : 'อ่านคำตอบไม่ได้บางข้อ'];
+    }
+
+    /**
+     * A course description / structure (hints.kind course) or lesson plans
+     * (lesson_plan) read from documents. Markers in the document bytes:
+     * [fake:error] (HTTP 503), [fake:invalid] (not JSON), [fake:empty]
+     * (nothing found: invalid after the check). The indicator codes are
+     * printed three ways: as in the curriculum (ค 1.1 ป.5/1), with other
+     * spacing and Thai digits (ค1.1 ป.๕/๒), and one that no curriculum has
+     * (ค 9.9 ป.5/9).
+     *
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private static function courseDocument(GeminiRequest $request): array|string|GeminiReply
+    {
+        $markers = self::imageMarkers($request);
+        if (str_contains($markers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if (str_contains($markers, '[fake:invalid]')) {
+            return 'Here is the course: {not json';
+        }
+        if (str_contains($markers, '[fake:empty]')) {
+            return ['indicators' => [], 'units' => [], 'lesson_plans' => [], 'notes_th' => 'ไม่พบข้อมูลรายวิชาในเอกสาร'];
+        }
+        $plans = [
+            ['position' => 1, 'unit_position' => 1, 'title' => 'การบวกเศษส่วน', 'hours' => 2, 'objectives' => 'บวกเศษส่วนที่ตัวส่วนเท่ากันได้', 'content' => 'การบวกเศษส่วน', 'activities' => 'ใช้แถบเศษส่วน', 'assessment' => 'ใบงาน', 'indicator_codes' => ['ค 1.1 ป.5/1']],
+            ['position' => 2, 'unit_position' => 1, 'title' => 'การลบเศษส่วน', 'hours' => 2, 'indicator_codes' => ['ค1.1 ป.๕/๒']],
+            ['position' => 3, 'unit_position' => 2, 'title' => 'ทศนิยม', 'hours' => 3, 'indicator_codes' => ['ค 9.9 ป.5/9']],
+        ];
+        if (($request->hints['kind'] ?? 'course') === 'lesson_plan') {
+            return ['indicators' => [], 'units' => [], 'lesson_plans' => array_map(fn (array $p) => array_diff_key($p, ['unit_position' => true]), $plans), 'notes_th' => ''];
+        }
+
+        return [
+            'course' => ['code' => 'ค15101', 'name' => 'คณิตศาสตร์ 5', 'subject_code' => 'ค', 'grade_level' => 5, 'semester' => 0, 'academic_year' => 2569, 'hours' => 160, 'description' => 'ศึกษาเศษส่วนและทศนิยม'],
+            'indicators' => [
+                ['code' => 'ค 1.1 ป.5/1', 'text' => 'แสดงวิธีหาคำตอบของโจทย์ปัญหาเศษส่วน'],
+                ['code' => 'ค1.1 ป.๕/๒', 'text' => 'เขียนเศษส่วนในรูปทศนิยม'],
+                ['code' => 'ค 9.9 ป.5/9', 'text' => 'ตัวชี้วัดที่ไม่มีในระบบ'],
+            ],
+            'units' => [
+                ['position' => 1, 'title' => 'เศษส่วน', 'hours' => 20, 'indicator_codes' => ['ค 1.1 ป.5/1', 'ค1.1 ป.๕/๒']],
+                ['position' => 2, 'title' => 'ทศนิยม', 'hours' => 16, 'description' => 'ทศนิยมสองตำแหน่ง', 'indicator_codes' => []],
+            ],
+            'lesson_plans' => $plans,
+            'notes_th' => 'หน้า 3 อ่านไม่ชัด',
+        ];
+    }
+
+    /**
      * The canned draft of the earlier stub: 4 steps for show_work, 2–3
      * criteria (half the points on the core one) for open.
      *
      * @return array<string, mixed>
      */
+    /**
+     * hints.questions (question_no => text) and hints.indicator_codes (the
+     * plan's). Per question, in its text: [fake:no-indicator] = none fits,
+     * [fake:outside-plan] = also a code that is not in the plan (the server
+     * drops it). A code of the plan written in the text is picked; else
+     * the first code of the plan.
+     *
+     * @return array<string, mixed>
+     */
+    private static function indicatorSuggestions(GeminiRequest $request): array
+    {
+        $codes = array_values(array_map('strval', (array) ($request->hints['indicator_codes'] ?? [])));
+        $out = [];
+        foreach ((array) ($request->hints['questions'] ?? []) as $no => $text) {
+            $text = mb_strtolower((string) $text);
+            if (str_contains($text, '[fake:no-indicator]') || $codes === []) {
+                $out[] = ['question_no' => (int) $no, 'indicator_codes' => [], 'reason_th' => 'ไม่มีตัวชี้วัดในแผนที่ตรงกับข้อนี้'];
+
+                continue;
+            }
+            $picked = array_values(array_filter($codes, fn (string $c) => str_contains($text, mb_strtolower($c))));
+            $picked = $picked === [] ? [$codes[0]] : $picked;
+            if (str_contains($text, '[fake:outside-plan]')) {
+                array_unshift($picked, 'ค 9.9 ป.9/9');
+            }
+            $out[] = ['question_no' => (int) $no, 'indicator_codes' => $picked, 'reason_th' => 'ข้อนี้วัด '.$picked[count($picked) - 1]];
+        }
+
+        return ['questions' => $out];
+    }
+
+    /**
+     * `student_analysis` (DESIGN §20.5): hints.indicators is the input
+     * ({code, name, mastery, n_obs, practice_items}); the strengths and
+     * areas are the codes of hints.strength_codes / hints.area_codes, and
+     * the next steps the areas that have approved practice. Markers (in the
+     * subject or an indicator name): [fake:weak-word] the student text says
+     * "อ่อน" every time, [fake:weak-word-once] only the first time,
+     * [fake:error] HTTP 503, [fake:invalid] not JSON.
+     *
+     * @return array<string, mixed>
+     */
+    private static function analysis(GeminiRequest $request, bool $weakWord): array
+    {
+        $indicators = array_values(array_filter((array) ($request->hints['indicators'] ?? []), 'is_array'));
+        $strengths = array_values(array_map('strval', (array) ($request->hints['strength_codes'] ?? [])));
+        $areas = array_values(array_map('strval', (array) ($request->hints['area_codes'] ?? [])));
+        $practice = [];
+        foreach ($indicators as $indicator) {
+            if ((int) ($indicator['practice_items'] ?? 0) > 0) {
+                $practice[] = (string) ($indicator['code'] ?? '');
+            }
+        }
+        $next = array_values(array_slice(array_intersect($areas, $practice), 0, 3));
+
+        $teacher = 'จุดเด่น: '.($strengths === [] ? 'ยังไม่มี' : implode(', ', $strengths))
+            .' จุดที่ควรพัฒนา: '.($areas === [] ? 'ไม่มี' : implode(', ', $areas))
+            .' ขั้นต่อไป: '.($next === [] ? 'ทบทวนตามแผน' : 'ทำแบบฝึกซ่อม '.implode(', ', $next));
+        $student = $weakWord
+            ? 'เรื่องนี้หนูยังอ่อนอยู่ ลองฝึกเพิ่มนะ'
+            : 'ทำได้ดีมาก '.($strengths === [] ? 'ตั้งใจต่อไปนะ' : 'โดยเฉพาะ '.implode(', ', $strengths)).($next === [] ? '' : ' ลองทำแบบฝึก '.implode(', ', $next).' เพิ่มอีกนิดนะ');
+
+        return ['teacher_text' => $teacher, 'student_text' => $student, 'next_step_skill_codes' => $next];
+    }
+
     private function rubric(GeminiRequest $request, bool $invalid): array
     {
         if ($request->type === Question::TYPE_SHOW_WORK) {

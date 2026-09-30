@@ -4,9 +4,7 @@ namespace App\Domain\Grading;
 
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\CropMissing;
-use App\Domain\Gemini\ExplanationRequests;
 use App\Domain\Gemini\ExtractionRequests;
-use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDraftRequest;
 use App\Domain\Notifications\GradingNotices;
@@ -16,7 +14,6 @@ use App\Models\Assignment;
 use App\Models\Question;
 use App\Models\Response;
 use App\Models\Scan;
-use App\Models\ScoreEvent;
 use App\Models\Submission;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,9 +22,13 @@ use Illuminate\Support\Facades\DB;
  * The grading pipeline behind GradeScanJob (DESIGN §7.2):
  *
  * 1. the scan's responses that are `queued`, or `failed` with attempts < 3;
- * 2. the key per §10.1 (teacher, then server); none -> `manual`, ai_key_missing;
- * 3. `extract` for all of them through GeminiGateway (Http::pool, 8 at a
- *    time; invalid output retried once);
+ * 2. answers code can decide (AutoRules, §21.3: an empty box, or a sure
+ *    digit reading of an accepted answer) are graded without Gemini and
+ *    without a key;
+ *    the key per §10.1 (teacher, then server); none -> the rest `manual`, ai_key_missing;
+ * 3. extraction through CropExtractor: one `extract_batch` call for the
+ *    page's answers, then `extract` alone for any answer the batch missed
+ *    or got wrong (DESIGN §21.4; invalid output retried once by the gateway);
  * 4. fuzzy systems 1 and 2 (ResponseGrader);
  * 5. `explanation` (text only) for answers below full marks, template praise
  *    for full marks, a template for blank answers; none for suspicious ones
@@ -68,10 +69,9 @@ final class ScanGrader
     public const KEY_REASONS = [self::REASON_KEY_MISSING, self::REASON_KEY_INVALID];
 
     public function __construct(
-        private readonly GeminiGateway $gateway,
         private readonly GeminiKeyResolver $keys,
-        private readonly ExtractionRequests $extractions,
-        private readonly ExplanationRequests $explanations,
+        private readonly CropExtractor $extractor,
+        private readonly GradeApplier $applier,
         private readonly GradingNotices $notices,
     ) {}
 
@@ -95,19 +95,39 @@ final class ScanGrader
             return new ScanGradingResult;
         }
 
+        // Answers code can decide need neither Gemini nor a key (§21.3).
+        $auto = [];
+        foreach ($responses as $response) {
+            $question = $response->question;
+            $rule = $question->type === Question::TYPE_MCQ ? null : AutoRules::decide($response, $question);
+            if ($rule !== null) {
+                $auto[$response->id] = AutoRules::grade($rule, $response, $question, $question->rubricCriteria->count(), $assignment->strictness);
+            }
+        }
+        $autoGraded = array_map(fn (array $a) => $a[0], $auto);
+        $autoOutcomes = array_map(fn (array $a) => new CallOutcome(CallOutcome::OK, $a[1]), $auto);
+        $autoExplanations = [];
+        foreach ($autoGraded as $id => $grade) {
+            $autoExplanations[$id] = AutoRules::explanation($id, $grade);
+        }
+
         $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
         if ($key === null) {
-            $manual = $responses->mapWithKeys(fn (Response $r) => [$r->id => self::REASON_KEY_MISSING])->all();
+            $manual = $responses->reject(fn (Response $r) => isset($auto[$r->id]))
+                ->mapWithKeys(fn (Response $r) => [$r->id => self::REASON_KEY_MISSING])->all();
 
-            return $this->write($scan, $assignment, $responses, [], [], [], $manual);
+            return $this->write($scan, $assignment, $responses, $autoOutcomes, $autoGraded, $autoExplanations, $manual);
         }
 
         $gradeLabel = RubricDraftRequest::gradeLabel((int) $assignment->classroom->grade_level);
         $subject = (string) $assignment->subject?->name;
 
-        $calls = [];
+        $items = [];
         $manual = [];
         foreach ($responses as $response) {
+            if (isset($auto[$response->id])) {
+                continue;
+            }
             $question = $response->question;
             $criteria = $question->rubricCriteria->all();
             if ($question->type === Question::TYPE_MCQ) {
@@ -121,13 +141,14 @@ final class ScanGrader
                 continue;
             }
             try {
-                $calls[$response->id] = $this->extractions->forResponse($response, $question, $criteria, $subject, $gradeLabel);
+                [$crop, $final] = ExtractionRequests::crops($response, $question);
+                $items[$response->id] = ['response' => $response, 'question' => $question, 'criteria' => $criteria, 'crop' => $crop, 'final' => $final];
             } catch (CropMissing) {
                 $manual[$response->id] = self::REASON_CROP_MISSING;
             }
         }
 
-        $outcomes = $calls === [] ? [] : $this->gateway->run($calls, $key);
+        $outcomes = $this->extractor->extract($items, $key, $subject, $gradeLabel, $assignment->id);
 
         $graded = [];
         foreach ($outcomes as $id => $outcome) {
@@ -145,42 +166,18 @@ final class ScanGrader
             );
         }
 
-        $explanations = [];
-        $explainCalls = [];
-        foreach ($graded as $id => $grade) {
-            $response = $responses->firstWhere('id', $id);
-            $max = (float) $response->question->max_points;
-            if (! $grade->isScored()) {
-                continue;
-            }
-            if ($grade->score !== null && $grade->score >= $max) {
-                $explanations[$id] = FeedbackTemplates::praise($id);
-            } elseif ($grade->blank) {
-                $explanations[$id] = FeedbackTemplates::BLANK;
-            } elseif (! $grade->suspicious) {
-                $explainCalls[$id] = $this->explanations->forResponse(
-                    $response,
-                    $response->question,
-                    $response->question->rubricCriteria->all(),
-                    $gradeLabel,
-                    (array) $outcomes[$id]->data,
-                );
-            }
-        }
-        $explanationErrors = [];
-        if ($explainCalls !== []) {
-            $explained = $this->gateway->run($explainCalls, $key);
-            foreach (array_keys($explainCalls) as $id) {
-                $outcome = $explained[$id] ?? null;
-                if ($outcome?->isOk()) {
-                    $explanations[$id] = ExplanationRequests::text((array) $outcome->data);
-                } else {
-                    $explanationErrors[$id] = $outcome->status ?? CallOutcome::ERROR;
-                }
-            }
-        }
+        [$explanations, $explanationErrors] = $this->applier->explain(
+            $graded,
+            $responses->keyBy('id')->all(),
+            array_map(fn (CallOutcome $o) => (array) $o->data, array_intersect_key($outcomes, $graded)),
+            $key,
+            $gradeLabel,
+            (bool) $assignment->score_only,
+            ExtractionRequests::FEATURE,
+            $assignment->id,
+        );
 
-        return $this->write($scan, $assignment, $responses, $outcomes, $graded, $explanations, $manual, $explanationErrors);
+        return $this->write($scan, $assignment, $responses, $outcomes + $autoOutcomes, $graded + $autoGraded, $explanations + $autoExplanations, $manual, $explanationErrors);
     }
 
     /**
@@ -208,7 +205,7 @@ final class ScanGrader
      * @param  Collection<int, Response>  $responses  as loaded before calling Gemini
      * @param  array<int, CallOutcome>  $outcomes
      * @param  array<int, GradeOutcome>  $graded
-     * @param  array<int, string>  $explanations
+     * @param  array<int, array{text: string, source: string}>  $explanations
      * @param  array<int, string>  $manual  response id => manual reason
      * @param  array<int, string>  $explanationErrors  response id => status of the failed explanation call
      */
@@ -240,10 +237,10 @@ final class ScanGrader
                 }
 
                 if (isset($manual[$response->id])) {
-                    self::markManual($response, $manual[$response->id]);
+                    GradeApplier::markManual($response, $manual[$response->id]);
                     $counts['manual']++;
                 } elseif (isset($graded[$response->id])) {
-                    $state = $this->applyGrade(
+                    $state = GradeApplier::applyGrade(
                         $response,
                         $graded[$response->id],
                         (array) $outcomes[$response->id]->data,
@@ -252,7 +249,7 @@ final class ScanGrader
                     );
                     $counts[$state === Response::STATE_SCORED ? 'scored' : 'manual']++;
                 } elseif (isset($outcomes[$response->id])) {
-                    $state = self::applyFailure($response, $outcomes[$response->id]);
+                    $state = GradeApplier::applyFailure($response, $outcomes[$response->id]);
                     $counts[$state === Response::STATE_FAILED ? 'failed' : 'manual']++;
                 } else {
                     $counts['skipped']++;
@@ -271,76 +268,5 @@ final class ScanGrader
         }
 
         return new ScanGradingResult($counts['scored'], $counts['failed'], $counts['manual'], $counts['skipped'], $counts['failed'] > 0);
-    }
-
-    private function applyGrade(Response $response, GradeOutcome $grade, array $extraction, ?string $explanation, ?string $explanationError): string
-    {
-        $trace = $grade->trace;
-        if ($explanationError !== null && ! $response->explanation_edited) {
-            $trace['explanation_error'] = $explanationError; // the teacher's own text stays; nothing is missing then
-        }
-        $response->forceFill([
-            'grading_state' => $grade->isScored() ? Response::STATE_SCORED : Response::STATE_MANUAL,
-            'extraction' => $extraction,
-            'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, $trace),
-            'ai_score' => $grade->score,
-            'ai_understanding' => $grade->understanding,
-            'ai_error_types' => $grade->errorTypes,
-            'review_priority' => $grade->reviewPriority,
-            'priority_band' => $grade->priorityBand,
-        ]);
-        if (! $response->explanation_edited) {
-            $response->explanation = $explanation;
-        }
-        $response->save();
-
-        if ($grade->isScored()) {
-            ScoreEvent::create([
-                'response_id' => $response->id,
-                'actor' => ScoreEvent::ACTOR_AI,
-                'actor_user_id' => null,
-                'action' => ScoreEvent::ACTION_AI_SCORED,
-                'old_score' => null,
-                'new_score' => $grade->score,
-                'old_understanding' => null,
-                'new_understanding' => $grade->understanding,
-                'reason' => null,
-            ]);
-        }
-
-        return $response->grading_state;
-    }
-
-    private static function applyFailure(Response $response, CallOutcome $outcome): string
-    {
-        $response->attempts++;
-        if ($outcome->status === CallOutcome::KEY_INVALID) {
-            self::markManual($response, self::REASON_KEY_INVALID, $outcome->status);
-
-            return Response::STATE_MANUAL;
-        }
-        if ($response->attempts >= self::MAX_ATTEMPTS) {
-            $reason = $outcome->status === CallOutcome::INVALID_OUTPUT ? self::REASON_INVALID_OUTPUT : self::REASON_AI_ERROR;
-            self::markManual($response, $reason, $outcome->status);
-
-            return Response::STATE_MANUAL;
-        }
-
-        $response->grading_state = Response::STATE_FAILED;
-        $response->fuzzy_trace = ReviewFlags::carry($response->fuzzy_trace, ['last_error' => $outcome->status]);
-        $response->save();
-
-        return Response::STATE_FAILED;
-    }
-
-    private static function markManual(Response $response, string $reason, ?string $lastError = null): void
-    {
-        $priority = ReviewPriority::manual();
-        $response->forceFill([
-            'grading_state' => Response::STATE_MANUAL,
-            'fuzzy_trace' => ReviewFlags::carry($response->fuzzy_trace, array_filter(['manual_reason' => $reason, 'last_error' => $lastError])),
-            'review_priority' => $priority->storedP(),
-            'priority_band' => $priority->band,
-        ])->save();
     }
 }

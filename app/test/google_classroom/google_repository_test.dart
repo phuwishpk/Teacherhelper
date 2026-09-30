@@ -383,7 +383,7 @@ void main() {
     final first = rows.first;
     expect(first.state, SubmissionImportState.newSubmission);
     expect(first.student!.label, 'ด.ญ. สมหญิง (เลขที่ 12)');
-    expect(first.attachments.map((a) => a.needsRasterize), [true, true]);
+    expect(first.attachments.map((a) => a.isSupported), [true, true]);
     expect(first.attachments.last.isPdf, isTrue);
     final second = rows.last;
     expect(second.studentLabel, 'ยังไม่ได้จับคู่นักเรียน');

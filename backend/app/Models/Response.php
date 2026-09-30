@@ -25,7 +25,8 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $submission_id
  * @property int $question_id
- * @property int $scan_id
+ * @property int|null $scan_id NULL for a whole-page answer (DESIGN §19.4)
+ * @property int|null $submission_page_id the whole-page file the answer was read from
  * @property string|null $crop_path
  * @property string|null $final_crop_path
  * @property float|null $ink_ratio
@@ -46,6 +47,9 @@ use Illuminate\Support\Carbon;
  * @property list<string>|null $final_error_types
  * @property string|null $explanation
  * @property bool $explanation_edited
+ * @property string|null $ai_explanation Gemini's text once the teacher edited the explanation (§19.4)
+ * @property string|null $explanation_source ai|template|reused|teacher
+ * @property string|null $auto_rule blank_ink|cnn_match: decided by code without Gemini (§21.3)
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
  * @property Carbon|null $created_at
@@ -70,10 +74,25 @@ class Response extends Model
 
     public const BANDS = ['check', 'look', 'confident'];
 
+    public const EXPLANATION_AI = 'ai';
+
+    public const EXPLANATION_TEMPLATE = 'template';
+
+    public const EXPLANATION_REUSED = 'reused';
+
+    public const EXPLANATION_TEACHER = 'teacher';
+
+    /** responses.auto_rule (DESIGN §21.3): an empty answer box, 0 points, no Gemini call. */
+    public const AUTO_BLANK_INK = 'blank_ink';
+
+    /** responses.auto_rule: the digit reader is sure and reads an accepted answer, full marks. */
+    public const AUTO_CNN_MATCH = 'cnn_match';
+
     protected $fillable = [
         'submission_id',
         'question_id',
         'scan_id',
+        'submission_page_id',
         'crop_path',
         'final_crop_path',
         'ink_ratio',
@@ -94,6 +113,9 @@ class Response extends Model
         'final_error_types',
         'explanation',
         'explanation_edited',
+        'ai_explanation',
+        'explanation_source',
+        'auto_rule',
         'reviewed_by',
         'reviewed_at',
     ];
@@ -142,6 +164,12 @@ class Response extends Model
     public function scan(): BelongsTo
     {
         return $this->belongsTo(Scan::class);
+    }
+
+    /** @return BelongsTo<SubmissionPage, $this> */
+    public function submissionPage(): BelongsTo
+    {
+        return $this->belongsTo(SubmissionPage::class);
     }
 
     /** @return BelongsTo<User, $this> */

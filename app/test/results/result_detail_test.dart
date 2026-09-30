@@ -12,8 +12,12 @@ import '../helpers/fake_http_adapter.dart';
 import '../helpers/pump_screen.dart';
 import '../review/review_fixtures.dart';
 
-Map<String, dynamic> _detail({Map<String, dynamic>? appealOnQ2}) => {
+Map<String, dynamic> _detail({
+  Map<String, dynamic>? appealOnQ2,
+  bool overridden = false,
+}) => {
   'submission_id': 70,
+  'total_overridden': overridden,
   'assignment': {
     'id': 5,
     'title': 'บวกเลข',
@@ -64,12 +68,17 @@ Map<String, dynamic> _detail({Map<String, dynamic>? appealOnQ2}) => {
 };
 
 class _FakeResults extends Fake implements ResultsRepository {
+  _FakeResults({this.overridden = false});
+
+  final bool overridden;
   Map<String, dynamic>? appealOnQ2;
   final appeals = <(int, String?)>[];
 
   @override
   Future<StudentResultDetail> detail(int submissionId) async =>
-      StudentResultDetail.fromJson(_detail(appealOnQ2: appealOnQ2));
+      StudentResultDetail.fromJson(
+        _detail(appealOnQ2: appealOnQ2, overridden: overridden),
+      );
 
   @override
   Future<Appeal> appeal(int responseId, {String? reason}) async {
@@ -96,6 +105,7 @@ void main() {
 
     expect(find.text('บวกเลข'), findsWidgets);
     expect(find.text('3.5/5'), findsOneWidget);
+    expect(find.text(totalOverriddenNote), findsNothing);
     // Sorted by question position.
     final q1 = tester.getTopLeft(find.text('ข้อ 1')).dy;
     final q2 = tester.getTopLeft(find.text('ข้อ 2')).dy;
@@ -129,6 +139,38 @@ void main() {
     expect(results.appeals, [(12, 'หนูหารได้ 5 ค่ะ')]);
     expect(find.text('คำขอให้ครูตรวจใหม่: รอครูตรวจ'), findsOneWidget);
     expect(find.text('ขอให้ครูตรวจใหม่'), findsNothing);
+  });
+
+  testWidgets('a total taken from Classroom carries a note (§19.3)', (
+    tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      const ResultDetailScreen(submissionId: 70),
+      overrides: [
+        resultsRepositoryProvider.overrideWithValue(
+          _FakeResults(overridden: true),
+        ),
+        cropLoaderProvider.overrideWithValue(NoCropLoader()),
+      ],
+    );
+
+    expect(find.text('3.5/5'), findsOneWidget);
+    expect(find.text(totalOverriddenNote), findsOneWidget);
+  });
+
+  test('summary parses total_overridden', () {
+    expect(StudentResult.fromJson(_detail()).totalOverridden, isFalse);
+    expect(
+      StudentResultDetail.fromJson(
+        _detail(overridden: true),
+      ).summary.totalOverridden,
+      isTrue,
+    );
+    final noMax = _detail(overridden: true)..remove('max_score');
+    final d = StudentResultDetail.fromJson(noMax);
+    expect(d.summary.maxScore, 5, reason: 'summed from the questions');
+    expect(d.summary.totalOverridden, isTrue);
   });
 
   test('repository: detail path and appeal body', () async {

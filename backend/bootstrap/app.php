@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
@@ -95,6 +96,18 @@ return Application::configure(basePath: dirname(__DIR__))
             return $wantsApiError($request)
                 ? ApiErrorResponse::make(ApiErrorResponse::messageFor(404), 'not_found', 404)
                 : null;
+        });
+
+        // A body over PHP's post_max_size (ValidatePostSize): PHP has dropped every file,
+        // so say what the teacher or student can act on, with the code the upload
+        // screens know (DESIGN §19.4: HOSTING needs post_max_size >= 55M).
+        $exceptions->render(function (PostTooLargeException $e, Request $request) use ($wantsApiError) {
+            if (! $wantsApiError($request)) {
+                return null;
+            }
+            $message = 'ไฟล์ที่ส่งรวมกันใหญ่เกินที่ระบบรับได้ ส่งทีละน้อยไฟล์ลงหรือย่อรูปก่อนส่ง';
+
+            return ApiErrorResponse::make($message, 'file_too_large', 413, ['files' => [$message]]);
         });
 
         // 404 unknown route, 405, 429 from throttle, abort(...) and friends.

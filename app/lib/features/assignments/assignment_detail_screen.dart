@@ -9,11 +9,14 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../google_classroom/assignment_google_section.dart';
+import '../hand_in/teacher_upload_screen.dart';
 import '../worksheets/print_flow.dart';
 import 'assignment.dart';
 import 'assignments_page.dart';
 import 'assignments_providers.dart';
 import 'assignments_repository.dart';
+import 'indicator_mapping.dart';
+import 'indicator_mapping_screen.dart';
 import 'question.dart';
 
 class AssignmentDetailScreen extends ConsumerWidget {
@@ -149,72 +152,114 @@ class AssignmentDetailScreen extends ConsumerWidget {
                                 a.classroomName ??
                                 'ห้อง #${a.classroomId}',
                           ),
-                          if (a.subjectName != null) Text(a.subjectName!),
+                          if (a.fromClassroomWeb)
+                            StatusChip(
+                              key: const ValueKey('web_coursework_chip'),
+                              label: 'สร้างในเว็บ Classroom',
+                              color: theme.colorScheme.tertiary,
+                            ),
+                          if (a.courseLabel != null)
+                            Text(a.courseLabel!)
+                          else if (a.subjectName != null)
+                            Text(a.subjectName!),
+                          if (a.needsCourse)
+                            Text(
+                              'ยังไม่เลือกรายวิชา (เลือกตอนอนุมัติเฉลย)',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                          if (a.lessonPlanTitle != null)
+                            Text('แผน: ${a.lessonPlanTitle}'),
                           Text('ตรวจแบบ${a.strictness.label}'),
                           if (a.dueAt != null)
                             Text('ส่ง ${formatThaiDate(a.dueAt!)}'),
-                          Text(
-                            a.currentLayoutVersion == null
-                                ? 'ยังไม่มี layout'
-                                : 'layout v${a.currentLayoutVersion}',
-                          ),
+                          Text(a.mode.label),
+                          if (!a.isFreeform)
+                            Text(
+                              a.currentLayoutVersion == null
+                                  ? 'ยังไม่มี layout'
+                                  : 'layout v${a.currentLayoutVersion}',
+                            ),
+                          if (a.scoreOnly) const Text('เฉพาะคะแนน'),
+                          if (!a.acceptLate) const Text('ไม่รับงานส่งช้า'),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ใบงาน', style: theme.textTheme.titleMedium),
-                          const SizedBox(height: 8),
-                          if (a.questions.isEmpty)
-                            const Text('เพิ่มคำถามก่อน จึงจะสร้าง layout ได้')
-                          else if (missingRubrics > 0)
-                            Text(
-                              'มี $missingRubrics ข้อ (แสดงวิธีทำ/อัตนัย) ที่ยังไม่อนุมัติ rubric '
-                              'ต้องอนุมัติให้ครบก่อนสร้าง layout',
-                              style: TextStyle(color: theme.colorScheme.error),
-                            )
-                          else if (a.currentLayoutVersion == null)
-                            const Text('พร้อมสร้าง layout แล้ว')
-                          else
-                            const Text(
-                              'ถ้าแก้คำถามหลังพิมพ์ ให้สร้าง layout ใหม่ก่อนพิมพ์อีกครั้ง',
-                            ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              FilledButton.tonalIcon(
-                                onPressed:
-                                    a.questions.isEmpty || missingRubrics > 0
-                                    ? null
-                                    : () => _createLayout(context, ref),
-                                icon: const Icon(Icons.grid_on),
-                                label: Text(
-                                  a.currentLayoutVersion == null
-                                      ? 'สร้าง layout'
-                                      : 'สร้าง layout ใหม่',
+                  _AnswerKeyCard(assignment: a),
+                  if (!a.isFreeform) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ใบงาน', style: theme.textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            if (a.questions.isEmpty)
+                              const Text('เพิ่มคำถามก่อน จึงจะสร้าง layout ได้')
+                            else if (missingRubrics > 0)
+                              Text(
+                                'มี $missingRubrics ข้อ (แสดงวิธีทำ/อัตนัย) ที่ยังไม่อนุมัติ rubric '
+                                'ต้องอนุมัติให้ครบก่อนสร้าง layout',
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
                                 ),
+                              )
+                            else if (a.currentLayoutVersion == null)
+                              const Text('พร้อมสร้าง layout แล้ว')
+                            else
+                              const Text(
+                                'ถ้าแก้คำถามหลังพิมพ์ ให้สร้าง layout ใหม่ก่อนพิมพ์อีกครั้ง',
                               ),
-                              FilledButton.icon(
-                                onPressed: a.currentLayoutVersion == null
-                                    ? null
-                                    : () => _printWorksheets(context, ref, a),
-                                icon: const Icon(Icons.print_outlined),
-                                label: const Text('พิมพ์ใบงาน'),
-                              ),
-                            ],
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  onPressed:
+                                      a.questions.isEmpty || missingRubrics > 0
+                                      ? null
+                                      : () => _createLayout(context, ref),
+                                  icon: const Icon(Icons.grid_on),
+                                  label: Text(
+                                    a.currentLayoutVersion == null
+                                        ? 'สร้าง layout'
+                                        : 'สร้าง layout ใหม่',
+                                  ),
+                                ),
+                                FilledButton.icon(
+                                  onPressed: a.currentLayoutVersion == null
+                                      ? null
+                                      : () => _printWorksheets(context, ref, a),
+                                  icon: const Icon(Icons.print_outlined),
+                                  label: const Text('พิมพ์ใบงาน'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
+                  if (canUploadFor(a)) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        key: const ValueKey('assignment_teacher_upload'),
+                        leading: const Icon(Icons.upload_file),
+                        title: const Text('อัปโหลดรูปเพื่อตรวจ'),
+                        subtitle: const Text(
+                          'แนบรูปหรือ PDF งานของนักเรียนทีละคน ตรวจจากรูปทั้งหน้า',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(AppRoutes.teacherUploadFor(a.id)),
+                      ),
+                    ),
+                  ],
                   if (!a.isDraft) ...[
                     const SizedBox(height: 12),
                     Card(
@@ -245,6 +290,32 @@ class AssignmentDetailScreen extends ConsumerWidget {
                   ],
                   const SizedBox(height: 12),
                   AssignmentGoogleSection(assignment: a, classroom: classroom),
+                  if (a.questions.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        key: const ValueKey('assignment_indicator_mapping'),
+                        leading: const Icon(Icons.account_tree_outlined),
+                        title: const Text('จับคู่ข้อกับตัวชี้วัด'),
+                        subtitle: Text(
+                          a.lessonPlanId != null
+                              ? 'ให้ AI เสนอตัวชี้วัดจากแผนการสอน แล้วยืนยันหรือแก้'
+                              : 'เลือกตัวชี้วัดของแต่ละข้อ ใช้คำนวณกราฟตามตัวชี้วัด',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(AppRoutes.indicatorMapping(a.id)),
+                      ),
+                    ),
+                    if (unmappedWarningText(a.unmappedQuestionCount)
+                        case final warning?)
+                      UnmappedWarning(
+                        key: const ValueKey('assignment_unmapped'),
+                        text: warning,
+                        onTap: () =>
+                            context.push(AppRoutes.indicatorMapping(a.id)),
+                      ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'คำถาม (${a.questions.length} ข้อ · รวม ${_totalPoints(a)} คะแนน)',
@@ -317,11 +388,16 @@ class QuestionFormArgs {
     required this.subjectId,
     required this.gradeLevel,
     this.question,
+    this.freeform = false,
   });
 
-  final int subjectId;
+  final int? subjectId;
   final int? gradeLevel;
   final Question? question;
+
+  /// The assignment has no worksheet of the app (§19.5): the answer may be
+  /// left for a read or an AI draft.
+  final bool freeform;
 
   static QuestionFormArgs forAssignment(
     WidgetRef ref,
@@ -333,6 +409,62 @@ class QuestionFormArgs {
       subjectId: a.subjectId,
       gradeLevel: classroom?.gradeLevel,
       question: q,
+      freeform: a.isFreeform,
+    );
+  }
+}
+
+/// The answer key of the assignment: approved or not, who wrote it, and
+/// the way into the answer-key screen (DESIGN §19.5, §19.11).
+class _AnswerKeyCard extends StatelessWidget {
+  const _AnswerKeyCard({required this.assignment});
+
+  final Assignment assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = assignment;
+    final theme = Theme.of(context);
+    final approvedAt = a.keyApprovedAt;
+    final String subtitle;
+    if (approvedAt != null) {
+      subtitle = 'อนุมัติเฉลยแล้ว ${formatThaiDateTime(approvedAt)}';
+    } else if (a.isFreeform) {
+      subtitle =
+          'พิมพ์ ถ่ายรูป หรือแนบไฟล์เฉลย แล้วอนุมัติ ระบบเริ่มตรวจหลังอนุมัติเฉลย';
+    } else {
+      subtitle =
+          'อ่านเฉลยจากรูปหรือไฟล์ได้ อนุมัติพร้อมสร้าง layout หรือกดอนุมัติที่หน้าเฉลย';
+    }
+    return Card(
+      key: const ValueKey('answer_key_card'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: Icon(
+              approvedAt != null
+                  ? Icons.verified_outlined
+                  : Icons.fact_check_outlined,
+              color: approvedAt != null
+                  ? Colors.green.shade700
+                  : theme.colorScheme.primary,
+            ),
+            title: const Text('เฉลย'),
+            subtitle: Text(subtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push(AppRoutes.answerKey(a.id)),
+          ),
+          if (a.keyOrigin == KeyOrigin.aiDraft)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: StatusChip(
+                label: 'AI ร่าง ไม่มีคำตอบของครู',
+                color: theme.colorScheme.error,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -366,10 +498,17 @@ class _QuestionTile extends StatelessWidget {
           children: [
             Text('${q.type.label} · ${q.maxPoints} คะแนน'),
             if (q.isNumeric) const Text('ตัวเลข'),
+            if (q.missingAnswer)
+              StatusChip(label: 'ยังไม่มีเฉลย', color: theme.colorScheme.error),
             if (q.skills.isNotEmpty)
               Text(
                 q.skills.map((s) => s.code).join(', '),
                 style: theme.textTheme.bodySmall,
+              )
+            else
+              StatusChip(
+                label: 'ยังไม่ผูกตัวชี้วัด',
+                color: Colors.orange.shade800,
               ),
             if (q.type.needsRubric)
               InkWell(

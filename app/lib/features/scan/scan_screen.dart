@@ -11,10 +11,15 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../ml/ml_providers.dart';
 import '../../platform/scan_pipeline.dart';
+import '../assignments/answer_key_models.dart';
+import '../assignments/key_document_sources.dart';
 import '../classrooms/classroom.dart';
+import '../hand_in/hand_in_models.dart';
+import '../hand_in/teacher_upload_screen.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'page_layout.dart';
 import 'scan_camera.dart';
+import 'scan_file_picks.dart';
 import 'scan_processor.dart';
 import 'scan_quality.dart';
 
@@ -22,6 +27,11 @@ import 'scan_quality.dart';
 /// blur -> layout -> crops -> the teacher confirms -> `scan_queue` -> upload,
 /// then straight back to the camera for the next page. No student is picked
 /// beforehand; the QR says whose page it is.
+///
+/// "เลือกไฟล์" (DESIGN §19.6) runs picked photos through the same marker
+/// pipeline one by one. Files without usable markers or QR, and every PDF,
+/// are collected for the whole-page path, where the teacher picks the
+/// assignment and the student ("อัปโหลดรูปเพื่อตรวจ").
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
 
@@ -45,6 +55,16 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
   String? _busy;
   ScanAnalysis? _result;
   int _saved = 0;
+
+  /// Picked photos still to run through the marker pipeline.
+  final _pendingFiles = <PickedDocument>[];
+
+  /// The picked file [_result] came from (null for a camera photo).
+  PickedDocument? _currentFile;
+
+  /// Picked files for the whole-page path, and those ticked to send next.
+  final _wholePage = <PickedDocument>[];
+  final _wholePageSelected = <PickedDocument>{};
 
   @override
   void initState() {
@@ -168,7 +188,102 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     final result = _result;
     setState(() => _result = null);
     if (result != null) await _processor.discard(result);
+    await _nextFile();
   }
+
+  Future<void> _pickFiles() async {
+    if (_busy != null || _result != null) return;
+    final picked = await ref
+        .read(documentFilePickerProvider)
+        .pick(dialogTitle: 'เลือกรูปหรือ PDF ของใบงาน');
+    if (!mounted || picked.isEmpty) return;
+    setState(() {
+      for (final file in picked) {
+        // PDFs have no photo for the marker pipeline: whole-page only.
+        if (file.mimeType.startsWith('image/')) {
+          _pendingFiles.add(file);
+        } else {
+          _addWholePage(file);
+        }
+      }
+    });
+    await _nextFile();
+  }
+
+  void _addWholePage(PickedDocument file) {
+    _wholePage.add(file);
+    if (_wholePageSelected.length < kMaxHandInFiles) {
+      _wholePageSelected.add(file);
+    }
+  }
+
+  /// Runs the next picked photo through the pipeline, until one needs the
+  /// teacher (ready, needs layout, blurry) or none is left.
+  Future<void> _nextFile() async {
+    while (mounted && _result == null && _pendingFiles.isNotEmpty) {
+      final file = _pendingFiles.removeAt(0);
+      setState(() {
+        _currentFile = file;
+        _busy = 'กำลังตรวจไฟล์ ${file.name}…';
+      });
+      ScanAnalysis? result;
+      try {
+        final path = await ref.read(pickedFileStagerProvider)(file);
+        if (path != null) result = await _processor.analyze(path);
+      } catch (e) {
+        debugPrint('picked file scan failed: $e');
+      }
+      if (!mounted) {
+        if (result != null) unawaited(_processor.discard(result));
+        return;
+      }
+      if (result == null || needsWholePage(result)) {
+        setState(() => _addWholePage(file));
+        // The upload sends the bytes; the staged copy is no longer needed.
+        if (result != null && file.bytes != null) {
+          unawaited(_processor.discard(result));
+        }
+        continue;
+      }
+      setState(() => _result = result);
+    }
+    if (!mounted) return;
+    setState(() {
+      _busy = null;
+      if (_result == null) _currentFile = null;
+    });
+  }
+
+  Future<void> _sendWholePage() async {
+    final files = [
+      for (final f in _wholePage)
+        if (_wholePageSelected.contains(f)) f,
+    ];
+    if (files.isEmpty) return;
+    setState(() {
+      _wholePage.removeWhere(files.contains);
+      _wholePageSelected.clear();
+      for (final f in _wholePage.take(kMaxHandInFiles)) {
+        _wholePageSelected.add(f);
+      }
+    });
+    await context.push(
+      AppRoutes.teacherUpload,
+      extra: TeacherUploadArgs(files: files),
+    );
+  }
+
+  void _toggleWholePage(PickedDocument file) => setState(() {
+    if (!_wholePageSelected.remove(file) &&
+        _wholePageSelected.length < kMaxHandInFiles) {
+      _wholePageSelected.add(file);
+    }
+  });
+
+  void _dropWholePage() => setState(() {
+    _wholePage.clear();
+    _wholePageSelected.clear();
+  });
 
   Future<void> _run(String label, Future<void> Function() action) async {
     setState(() => _busy = label);
@@ -182,33 +297,38 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     }
   }
 
-  Future<void> _confirm(ScanReady ready) => _run('กำลังบันทึก…', () async {
-    await _processor.confirm(ready);
-    if (!mounted) return;
-    setState(() {
-      _saved++;
-      _result = null;
-    });
-    showMessage(
-      context,
-      'บันทึก ${studentLabel(ready.student, ready.qr.studentId)} '
-      'หน้า ${ready.qr.page} แล้ว สแกนแผ่นต่อไปได้เลย',
-    );
-  });
-
-  Future<void> _keepForLater(ScanNeedsLayout scan) =>
-      _run('กำลังบันทึก…', () async {
-        await _processor.keepForLater(scan);
-        if (!mounted) return;
-        setState(() {
-          _saved++;
-          _result = null;
-        });
-        showMessage(
-          context,
-          'เก็บไว้ในคิวแล้ว จะตัดภาพและอัปโหลดเมื่อต่อเน็ตได้',
-        );
+  Future<void> _confirm(ScanReady ready) async {
+    await _run('กำลังบันทึก…', () async {
+      await _processor.confirm(ready);
+      if (!mounted) return;
+      setState(() {
+        _saved++;
+        _result = null;
       });
+      showMessage(
+        context,
+        'บันทึก ${studentLabel(ready.student, ready.qr.studentId)} '
+        'หน้า ${ready.qr.page} แล้ว สแกนแผ่นต่อไปได้เลย',
+      );
+    });
+    await _nextFile();
+  }
+
+  Future<void> _keepForLater(ScanNeedsLayout scan) async {
+    await _run('กำลังบันทึก…', () async {
+      await _processor.keepForLater(scan);
+      if (!mounted) return;
+      setState(() {
+        _saved++;
+        _result = null;
+      });
+      showMessage(
+        context,
+        'เก็บไว้ในคิวแล้ว จะตัดภาพและอัปโหลดเมื่อต่อเน็ตได้',
+      );
+    });
+    await _nextFile();
+  }
 
   Future<void> _acceptBlur(ScanRejected rejected) =>
       _run('กำลังตัดภาพ…', () async {
@@ -243,17 +363,26 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     if (!_supported) {
       return Scaffold(
         appBar: AppBar(title: const Text('สแกนใบงาน'), actions: [queueButton]),
-        body: const EmptyView(
+        body: EmptyView(
           icon: Icons.document_scanner_outlined,
           title: 'สแกนใบงานได้เฉพาะในแอป Android',
           message:
               'การหา marker, อ่าน QR และตัดภาพทำบนโทรศัพท์ Android '
-              'เปิดหน้านี้ในแอปบนมือถือหรือแท็บเล็ตของครู',
+              'บนเครื่องนี้ส่งรูปหรือ PDF ของงานให้ตรวจแทนได้ '
+              'โดยเลือกวิชา การบ้าน และนักเรียนเอง',
+          // The whole-page path works everywhere, the web included (§19.6).
+          action: FilledButton.icon(
+            key: const ValueKey('scan_teacher_upload'),
+            onPressed: () => context.push(AppRoutes.teacherUpload),
+            icon: const Icon(Icons.upload_file),
+            label: const Text('อัปโหลดรูปเพื่อตรวจ'),
+          ),
         ),
       );
     }
 
     final result = _result;
+    final fromFile = _currentFile != null;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -266,6 +395,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
               onPressed: _toggleTorch,
               icon: Icon(_torch ? Icons.flash_on : Icons.flash_off),
             ),
+          if (result == null)
+            IconButton(
+              key: const Key('scan-pick-files'),
+              tooltip: 'เลือกไฟล์',
+              onPressed: _busy == null ? _pickFiles : null,
+              icon: const Icon(Icons.upload_file),
+            ),
           queueButton,
         ],
       ),
@@ -273,9 +409,18 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
         children: [
           Positioned.fill(
             child: switch (result) {
+              null when _wholePage.isNotEmpty && _busy == null =>
+                _WholePageView(
+                  files: _wholePage,
+                  selected: _wholePageSelected,
+                  onToggle: _toggleWholePage,
+                  onDrop: _dropWholePage,
+                  onSend: _wholePageSelected.isEmpty ? null : _sendWholePage,
+                ),
               null => _cameraView(),
               ScanReady() => _ReadyView(
                 ready: result,
+                fromFile: fromFile,
                 onRetake: _retake,
                 onConfirm: () => _confirm(result),
               ),
@@ -286,6 +431,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
               ),
               ScanRejected() => _RejectedView(
                 rejected: result,
+                fromFile: fromFile,
                 onRetake: _retake,
                 onAccept: result.canOverride ? () => _acceptBlur(result) : null,
               ),
@@ -304,9 +450,21 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
         icon: Icons.no_photography_outlined,
         title: 'เปิดกล้องไม่ได้',
         message: error,
-        action: FilledButton.tonal(
-          onPressed: _openCamera,
-          child: const Text('ลองใหม่'),
+        action: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            FilledButton.tonal(
+              onPressed: _openCamera,
+              child: const Text('ลองใหม่'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy == null ? _pickFiles : null,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('เลือกไฟล์แทน'),
+            ),
+          ],
         ),
       );
     }
@@ -463,9 +621,13 @@ class _ReadyView extends StatelessWidget {
     required this.ready,
     required this.onRetake,
     required this.onConfirm,
+    this.fromFile = false,
   });
 
   final ScanReady ready;
+
+  /// From "เลือกไฟล์": "ข้ามไฟล์นี้" instead of "ถ่ายใหม่".
+  final bool fromFile;
   final VoidCallback onRetake;
   final VoidCallback onConfirm;
 
@@ -571,8 +733,8 @@ class _ReadyView extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: onRetake,
-                icon: const Icon(Icons.replay),
-                label: const Text('ถ่ายใหม่'),
+                icon: Icon(fromFile ? Icons.skip_next : Icons.replay),
+                label: Text(fromFile ? 'ข้ามไฟล์นี้' : 'ถ่ายใหม่'),
               ),
             ),
             const SizedBox(width: 12),
@@ -582,7 +744,7 @@ class _ReadyView extends StatelessWidget {
                 key: const Key('scan-confirm'),
                 onPressed: onConfirm,
                 icon: const Icon(Icons.check),
-                label: const Text('ยืนยัน แล้วสแกนต่อ'),
+                label: Text(fromFile ? 'ยืนยัน' : 'ยืนยัน แล้วสแกนต่อ'),
               ),
             ),
           ],
@@ -655,9 +817,11 @@ class _RejectedView extends StatelessWidget {
     required this.rejected,
     required this.onRetake,
     required this.onAccept,
+    this.fromFile = false,
   });
 
   final ScanRejected rejected;
+  final bool fromFile;
   final VoidCallback onRetake;
   final VoidCallback? onAccept;
 
@@ -667,7 +831,7 @@ class _RejectedView extends StatelessWidget {
     return _MessageLayout(
       icon: Icons.replay_circle_filled_outlined,
       iconColor: theme.colorScheme.error,
-      title: 'ถ่ายใหม่อีกครั้ง',
+      title: fromFile ? 'ภาพในไฟล์นี้ไม่คมชัด' : 'ถ่ายใหม่อีกครั้ง',
       body: [
         for (final issue in rejected.issues)
           Padding(
@@ -697,8 +861,8 @@ class _RejectedView extends StatelessWidget {
           child: FilledButton.icon(
             key: const Key('scan-retake'),
             onPressed: onRetake,
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('ถ่ายใหม่'),
+            icon: Icon(fromFile ? Icons.skip_next : Icons.camera_alt),
+            label: Text(fromFile ? 'ข้ามไฟล์นี้' : 'ถ่ายใหม่'),
           ),
         ),
       ],
@@ -751,6 +915,85 @@ class _NeedsLayoutView extends StatelessWidget {
             key: const Key('scan-keep'),
             onPressed: onKeep,
             child: const Text('เก็บไว้ในคิว'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Picked files the marker pipeline could not use (and every PDF): the
+/// teacher ticks the pages of one student (at most [kMaxHandInFiles]) and
+/// sends them to "อัปโหลดรูปเพื่อตรวจ", round after round.
+class _WholePageView extends StatelessWidget {
+  const _WholePageView({
+    required this.files,
+    required this.selected,
+    required this.onToggle,
+    required this.onDrop,
+    required this.onSend,
+  });
+
+  final List<PickedDocument> files;
+  final Set<PickedDocument> selected;
+  final ValueChanged<PickedDocument> onToggle;
+  final VoidCallback onDrop;
+  final VoidCallback? onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _MessageLayout(
+      icon: Icons.photo_library_outlined,
+      title: 'ไม่พบสัญลักษณ์หรือ QR ใน ${files.length} ไฟล์',
+      body: [
+        const Text(
+          'ส่งตรวจแบบรูปทั้งหน้าได้ โดยเลือกการบ้านและนักเรียนเอง '
+          'เลือกไฟล์ของนักเรียนคนเดียวกัน ครั้งละไม่เกิน $kMaxHandInFiles ไฟล์ '
+          'ไฟล์ที่เหลือส่งรอบถัดไป',
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (i, f) in files.indexed)
+              FilterChip(
+                key: ValueKey('scan-whole-page-$i'),
+                avatar: Icon(
+                  f.mimeType == 'application/pdf'
+                      ? Icons.picture_as_pdf_outlined
+                      : Icons.image_outlined,
+                  size: 18,
+                ),
+                label: Text(f.name, overflow: TextOverflow.ellipsis),
+                selected: selected.contains(f),
+                onSelected: (_) => onToggle(f),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'เลือกแล้ว ${selected.length}/$kMaxHandInFiles ไฟล์',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+      actions: [
+        Expanded(
+          child: OutlinedButton(
+            key: const Key('scan-whole-page-drop'),
+            onPressed: onDrop,
+            child: const Text('ทิ้งทั้งหมด'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: FilledButton.icon(
+            key: const Key('scan-whole-page-send'),
+            onPressed: onSend,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('ส่งแบบรูปทั้งหน้า'),
           ),
         ),
       ],

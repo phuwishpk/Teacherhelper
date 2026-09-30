@@ -13,11 +13,20 @@ namespace App\Domain\Google;
  *   classroom.profile.emails          ... with the students' e-mail addresses
  *   classroom.coursework.students     post courseWork, read submissions, grade, return
  *   drive.file                        upload the spare worksheet PDF
- *   drive.readonly                    the phone downloads the students' pictures
+ *   drive.readonly                    the server downloads the students' pictures
+ *   classroom.announcements           the per-student private announcement of a
+ *                                     published result (DESIGN §19.7)
+ *
+ * An account connected before a scope was added lacks it: it counts as
+ * needs_reconnect (GoogleAccount::needsReconnect(), and the migration that
+ * added the scope marks it scope_missing) until the teacher connects again.
  */
 final class GoogleScopes
 {
     public const PREFIX = 'https://www.googleapis.com/auth/';
+
+    /** courses.announcements.create (DESIGN §19.7), added in Phase 8 build step 6. */
+    public const ANNOUNCEMENTS = self::PREFIX.'classroom.announcements';
 
     public const REQUIRED = [
         self::PREFIX.'classroom.courses.readonly',
@@ -26,6 +35,7 @@ final class GoogleScopes
         self::PREFIX.'classroom.coursework.students',
         self::PREFIX.'drive.file',
         self::PREFIX.'drive.readonly',
+        self::ANNOUNCEMENTS,
     ];
 
     /** What each scope is for, in Thai (the browser flow's error page). */
@@ -36,6 +46,7 @@ final class GoogleScopes
         self::PREFIX.'classroom.coursework.students' => 'สร้างงาน ดูงานที่ส่ง ให้คะแนน และส่งคืนงานใน Classroom',
         self::PREFIX.'drive.file' => 'อัปโหลดใบงานที่แอปสร้างขึ้นไปที่ Google Drive',
         self::PREFIX.'drive.readonly' => 'เปิดไฟล์ใน Google Drive (รูปงานที่นักเรียนแนบมา)',
+        self::ANNOUNCEMENTS => 'ส่งประกาศส่วนตัวถึงนักเรียนใน Classroom (ผลตรวจรายคน)',
     ];
 
     public static function label(string $scope): string

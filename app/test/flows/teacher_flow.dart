@@ -198,12 +198,14 @@ Future<int> createClassroom(
   return app.server.classrooms.single['id'] as int;
 }
 
-/// "การบ้าน" tab -> FAB -> form -> `POST /assignments` -> assignment detail.
+/// "การบ้าน" tab -> FAB -> form -> "สร้างรายวิชา" (`POST /courses`, back
+/// with the course picked) -> `POST /assignments` -> assignment detail.
 Future<int> createAssignment(
   WidgetTester tester,
   TeacherFlowApp app, {
   required int classroomId,
   String title = 'เศษส่วน ชุดที่ 1',
+  String courseCode = 'ค15101',
 }) async {
   final classroom = app.server.classrooms.singleWhere(
     (c) => c['id'] == classroomId,
@@ -233,10 +235,54 @@ Future<int> createAssignment(
         .last,
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(DropdownButtonFormField<int>, 'วิชา'));
+  // A new assignment needs a course of the classroom (DESIGN §20.1): the
+  // room has none yet, so the teacher creates one from the form.
+  expect(
+    find.text('ห้องนี้ยังไม่มีรายวิชา สร้างรายวิชาและผูกกับห้องนี้ก่อน'),
+    findsOneWidget,
+  );
+  await _tapVisible(
+    tester,
+    find.byKey(const ValueKey('course_create_for_classroom')),
+  );
+  expect(app.location, AppRoutes.courseNew);
+  await tester.enterText(find.byKey(const ValueKey('course_code')), courseCode);
+  await tester.enterText(
+    find.byKey(const ValueKey('course_name')),
+    'คณิตศาสตร์ 5',
+  );
+  await tester.tap(find.byKey(const ValueKey('course_subject')));
   await tester.pumpAndSettle();
   await tester.tap(find.text('คณิตศาสตร์').last);
   await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('course_grade')));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.text(gradeLevelLabel(classroom['grade_level'] as int)).last,
+  );
+  await tester.pumpAndSettle();
+  final roomChip = find.byKey(ValueKey('course_classroom_$classroomId'));
+  await tester.ensureVisible(roomChip);
+  expect(tester.widget<FilterChip>(roomChip).selected, isTrue);
+  await _tapVisible(tester, find.byKey(const ValueKey('course_save')));
+
+  expect(app.location, AppRoutes.assignmentNew);
+  final course = app.lastRequest('POST', '/courses');
+  expect(course.status, 201);
+  expect(course.jsonBody, {
+    'code': courseCode,
+    'name': 'คณิตศาสตร์ 5',
+    'subject_id': 1,
+    'grade_level': classroom['grade_level'],
+    'semester': 1,
+    'academic_year': currentThaiYear(),
+    'hours': null,
+    'description': null,
+    'classroom_ids': [classroomId],
+    'skill_ids': <int>[],
+  });
+  final courseId = app.server.courses.single['id'] as int;
+  expect(find.text('$courseCode คณิตศาสตร์ 5'), findsOneWidget);
   await _tapVisible(tester, find.widgetWithText(FilledButton, 'สร้างการบ้าน'));
 
   final id = app.server.assignments.single['id'] as int;
@@ -247,10 +293,13 @@ Future<int> createAssignment(
   expect(created.status, 201);
   expect(created.jsonBody, {
     'classroom_id': classroomId,
-    'subject_id': 1,
+    'course_id': courseId,
     'title': title,
     'strictness': 'normal',
     'due_at': null,
+    'mode': 'worksheet',
+    'accept_late': true,
+    'score_only': false,
   });
   return id;
 }

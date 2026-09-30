@@ -56,6 +56,33 @@ class ScoreEvent extends Model
         'reason',
     ];
 
+    /** Actions that change a question's score (the others only confirm it). */
+    public const SCORE_CHANGING_ACTIONS = [self::ACTION_OVERRIDE, self::ACTION_APPEAL_ACCEPTED, self::ACTION_RESCAN, self::ACTION_AI_SCORED];
+
+    /**
+     * A per-question score changed after the teacher took the total from
+     * Classroom (DESIGN §19.3 "ล้าง total_override"): the total is the sum of
+     * the questions again, in the same transaction as the change. This event
+     * is the record of that change.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (ScoreEvent $event) {
+            if (! in_array($event->action, self::SCORE_CHANGING_ACTIONS, true)) {
+                return;
+            }
+            $changed = in_array($event->action, [self::ACTION_RESCAN, self::ACTION_AI_SCORED], true)
+                || $event->old_score !== $event->new_score;
+            if (! $changed) {
+                return;
+            }
+            Submission::query()
+                ->whereIn('id', Response::query()->whereKey($event->response_id)->select('submission_id'))
+                ->whereNotNull('total_override')
+                ->update(['total_override' => null, 'updated_at' => now()]);
+        });
+    }
+
     /**
      * @return array<string, string>
      */

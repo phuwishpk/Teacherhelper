@@ -104,9 +104,7 @@ class _RosterMatchingFormState extends ConsumerState<RosterMatchingForm> {
       showMessage(context, 'บันทึกการจับคู่แล้ว');
       if (context.canPop()) context.pop();
     } catch (e) {
-      if (isGoogleReconnectError(e)) {
-        ref.read(googleStatusProvider.notifier).markNeedsReconnect();
-      }
+      ref.read(googleStatusProvider.notifier).noteError(e);
       if (mounted) showMessage(context, googleErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);

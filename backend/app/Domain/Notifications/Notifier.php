@@ -39,4 +39,16 @@ interface Notifier
      * photo (DESIGN §18.2): tell the student why (Classroom cannot).
      */
     public function retakeRequested(ClassroomSubmissionImport $import): void;
+
+    /**
+     * The cron sync mirrored courseWork the teacher created on the Classroom
+     * website (DESIGN §19.3): its answer key waits for the teacher's approval.
+     */
+    public function classroomWorkImported(Assignment $assignment): void;
+
+    /**
+     * The teacher's Google grant stopped working (invalid_grant, a scope
+     * taken back): once per drop (google_accounts.reconnect_notified_at, §19.3).
+     */
+    public function googleReconnectNeeded(int $teacherId): void;
 }

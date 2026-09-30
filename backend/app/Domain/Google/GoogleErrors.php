@@ -78,10 +78,11 @@ final class GoogleErrors
         );
     }
 
-    public static function reconnectRequired(): ApiException
+    /** $message: the account's own reason (GoogleAccount::reconnectMessage()), else the expired-grant text. */
+    public static function reconnectRequired(?string $message = null): ApiException
     {
         return new ApiException(
-            'สิทธิ์ที่ให้ Google ไว้หมดอายุหรือถูกยกเลิกแล้ว ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"',
+            $message ?? 'สิทธิ์ที่ให้ Google ไว้หมดอายุหรือถูกยกเลิกแล้ว ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"',
             'google_reconnect_required',
             409,
         );

@@ -75,8 +75,12 @@ class GoogleAccountController extends Controller
 
     /**
      * GET /api/v1/google/courses -> {data: [{course_id, name, section,
-     * linked_classroom_id}]}: ACTIVE courses the teacher teaches;
-     * linked_classroom_id = the teacher's classroom already linked to it.
+     * linked_classroom_id, linked_classroom}]}: ACTIVE courses the teacher
+     * teaches. linked_classroom = {id, name} of the classroom already linked
+     * to the course (DESIGN §19.2: shown faded, cannot be imported);
+     * for another teacher's classroom (a co-taught course) id is null and
+     * name is generic, and linked_classroom_id (kept for older clients)
+     * names only the teacher's own classroom.
      */
     public function courses(Request $request): JsonResponse
     {
@@ -84,14 +88,24 @@ class GoogleAccountController extends Controller
         $teacher = $request->user();
 
         $courses = $this->accounts->call($teacher, fn (GoogleApi $api) => $api->teacherCourses());
-        $linked = ClassroomGoogleLink::query()
+        $links = ClassroomGoogleLink::query()
+            ->with('classroom:id,teacher_id,name')
             ->whereIn('course_id', array_column($courses, 'course_id'))
-            ->whereHas('classroom', fn ($q) => $q->where('teacher_id', $teacher->id))
-            ->pluck('classroom_id', 'course_id');
+            ->get()
+            ->keyBy('course_id');
 
-        return response()->json(['data' => array_map(fn (array $course) => [
-            ...$course,
-            'linked_classroom_id' => isset($linked[$course['course_id']]) ? (int) $linked[$course['course_id']] : null,
-        ], $courses)]);
+        return response()->json(['data' => array_map(function (array $course) use ($links, $teacher) {
+            $classroom = $links[$course['course_id']]->classroom ?? null;
+            $own = $classroom !== null && $classroom->teacher_id === $teacher->id;
+
+            return [
+                ...$course,
+                'linked_classroom_id' => $own ? $classroom->id : null,
+                'linked_classroom' => $classroom === null ? null : [
+                    'id' => $own ? $classroom->id : null,
+                    'name' => $own ? $classroom->name : 'ห้องเรียนของครูท่านอื่น',
+                ],
+            ];
+        }, $courses)]);
     }
 }

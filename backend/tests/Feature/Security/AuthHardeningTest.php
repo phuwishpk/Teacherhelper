@@ -170,7 +170,7 @@ class AuthHardeningTest extends TestCase
         }
 
         $this->assertSame(
-            ['ai-key', 'appeal', 'explanation', 'google', 'practice-attempt', 'practice-generate', 'student-auth', 'teacher-auth'],
+            ['ai-key', 'analysis-now', 'answer-key', 'appeal', 'course-extract', 'documents', 'explanation', 'google', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'student-auth', 'student-submission', 'teacher-auth'],
             collect($throttled)->keys()->sort()->values()->all(),
         );
     }
@@ -190,6 +190,11 @@ class AuthHardeningTest extends TestCase
             'practice-generate' => ['teacher', 'POST', '/api/v1/skills/999999/practice-items/generate', 10],
             'appeal' => ['student', 'POST', '/api/v1/student/responses/999999/appeal', 30],
             'practice-attempt' => ['student', 'POST', '/api/v1/student/practice/999999/attempts', 60],
+            'page-upload' => ['teacher', 'POST', '/api/v1/assignments/999999/students/999999/pages', 60],
+            'student-submission' => ['student', 'POST', '/api/v1/student/assignments/999999/submission', 10],
+            'course-extract' => ['teacher', 'POST', '/api/v1/courses/extract', 10],
+            'indicator-suggest' => ['teacher', 'POST', '/api/v1/assignments/999999/indicator-suggestions', 10],
+            'analysis-now' => ['teacher', 'POST', '/api/v1/students/999999/analysis/run', 10],
         ];
     }
 

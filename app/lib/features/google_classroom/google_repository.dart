@@ -25,6 +25,18 @@ abstract class GoogleClassroomRepository {
   Future<void> disconnect();
 
   Future<List<GoogleCourse>> courses();
+
+  /// The room, grade, year and numbered students proposed for importing
+  /// [courseId] (DESIGN §19.2). 409 `course_already_linked`.
+  Future<ClassroomImportPreview> importPreview(String courseId);
+
+  /// Creates the room, its students, the course link and every account
+  /// match in one step. The answer carries the one-time PINs.
+  Future<ClassroomImportResult> importClassroom(ClassroomImportRequest request);
+
+  /// Appends new course accounts, marks students who left and matches
+  /// returning ones back ("ซิงก์รายชื่อ"). 422 `classroom_not_linked`.
+  Future<RosterSyncResult> syncRoster(int classroomId);
   Future<ClassroomGoogleLink> link(int classroomId, GoogleCourse course);
   Future<void> unlink(int classroomId);
   Future<List<GoogleRosterEntry>> roster(int classroomId);
@@ -50,6 +62,33 @@ abstract class GoogleClassroomRepository {
   /// Sends the grades of `grade_failed` rows again; returns how many were
   /// queued when the server says.
   Future<int?> retryGrades(int assignmentId);
+
+  /// "ซิงก์ตอนนี้": queues one sync round of the classroom (new courseWork
+  /// from the website, hand-ins, grades) instead of waiting for the cron
+  /// (DESIGN §19.3). 409 `google_reconnect_required`.
+  Future<void> syncNow(int classroomId);
+
+  /// "คะแนนไม่ตรงกัน" of an assignment, open ones first.
+  Future<List<GradeConflict>> gradeConflicts(int assignmentId);
+
+  /// Settles one conflict. 409 `conflict_resolved` / `coursework_not_owned`.
+  Future<GradeConflict> resolveConflict(
+    int conflictId,
+    GradeConflictAction action,
+  );
+
+  /// Takes a hand-in the late policy refused (`rejected_late` -> `new`);
+  /// the next sync round downloads and grades it. 409
+  /// `import_not_rejected`.
+  Future<GoogleSubmission?> acceptLate(int importId);
+
+  /// The private result announcement of each student's latest publish
+  /// (DESIGN §19.7), by student number. No Google call on the server.
+  Future<List<ClassroomFeedbackPost>> feedback(int assignmentId);
+
+  /// "ส่งประกาศอีกครั้ง": queues every failed announcement again with the
+  /// students' current matches; returns how many were queued.
+  Future<int?> retryFeedback(int assignmentId);
 }
 
 class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
@@ -102,6 +141,36 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
   Future<List<GoogleCourse>> courses() async {
     final res = await _dio.get<Object?>('/google/courses', options: _slow);
     return unwrapList(res.data).map(GoogleCourse.fromJson).toList();
+  }
+
+  @override
+  Future<ClassroomImportPreview> importPreview(String courseId) async {
+    final res = await _dio.get<Object?>(
+      '/google/courses/${Uri.encodeComponent(courseId)}/import-preview',
+      options: _slow,
+    );
+    return ClassroomImportPreview.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<ClassroomImportResult> importClassroom(
+    ClassroomImportRequest request,
+  ) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/import-google',
+      data: request.toJson(),
+      options: _slow,
+    );
+    return ClassroomImportResult.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<RosterSyncResult> syncRoster(int classroomId) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/$classroomId/google-roster/sync',
+      options: _slow,
+    );
+    return RosterSyncResult.fromJson(unwrapJson(res.data));
   }
 
   @override
@@ -221,6 +290,64 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
         ? ((json['queued'] ?? json['retried'] ?? json['count']) as num).toInt()
         : null;
   }
+
+  @override
+  Future<void> syncNow(int classroomId) async {
+    await _dio.post<Object?>('/classrooms/$classroomId/google-sync');
+  }
+
+  @override
+  Future<List<GradeConflict>> gradeConflicts(int assignmentId) async {
+    final res = await _dio.get<Object?>(
+      '/assignments/$assignmentId/grade-conflicts',
+    );
+    return unwrapList(res.data).map(GradeConflict.fromJson).toList();
+  }
+
+  @override
+  Future<GradeConflict> resolveConflict(
+    int conflictId,
+    GradeConflictAction action,
+  ) async {
+    final res = await _dio.post<Object?>(
+      '/grade-conflicts/$conflictId/resolve',
+      data: {'action': action.apiValue},
+    );
+    return GradeConflict.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<GoogleSubmission?> acceptLate(int importId) async {
+    final res = await _dio.post<Object?>(
+      '/google-submissions/$importId/accept-late',
+    );
+    final body = res.data;
+    if (body is Map && (body['id'] != null || body['data'] is Map)) {
+      return GoogleSubmission.fromJson(unwrapJson(body));
+    }
+    return null;
+  }
+
+  @override
+  Future<List<ClassroomFeedbackPost>> feedback(int assignmentId) async {
+    final res = await _dio.get<Object?>(
+      '/assignments/$assignmentId/google-feedback',
+    );
+    return unwrapList(res.data).map(ClassroomFeedbackPost.fromJson).toList();
+  }
+
+  @override
+  Future<int?> retryFeedback(int assignmentId) async {
+    final res = await _dio.post<Object?>(
+      '/assignments/$assignmentId/google-feedback/retry',
+    );
+    final body = res.data;
+    if (body is! Map) return null;
+    return switch (unwrapJson(body)['queued']) {
+      num n => n.toInt(),
+      _ => null,
+    };
+  }
 }
 
 final googleClassroomRepositoryProvider = Provider<GoogleClassroomRepository>(
@@ -248,18 +375,46 @@ String googleErrorMessage(Object error) {
       'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google Classroom กรุณาแจ้งผู้ดูแลระบบ',
     'google_not_connected' =>
       'ยังไม่ได้เชื่อมบัญชี Google ไปที่ ตั้งค่า → Google Classroom ก่อน',
-    'google_reconnect_required' ||
-    'google_needs_reconnect' ||
-    'invalid_grant' =>
-      'สิทธิ์ที่ให้ Google ไว้หมดอายุแล้ว ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"',
+    'google_reconnect_required' => _reconnectMessage(error),
+    'google_needs_reconnect' || 'invalid_grant' => _expiredMessage,
     'google_scope_missing' =>
-      'ต้องติ๊กอนุญาตทุกสิทธิ์ที่แอปขอ (Classroom และ Drive) กดเชื่อมอีกครั้งแล้วอนุญาตให้ครบ',
+      'ต้องติ๊กอนุญาตทุกสิทธิ์ที่แอปขอ (Classroom, Drive และประกาศถึงนักเรียน) '
+          'กดเชื่อมอีกครั้งแล้วอนุญาตให้ครบ',
     'already_posted' => 'การบ้านนี้โพสต์ลง Google Classroom แล้ว',
+    'course_already_linked' =>
+      'คอร์สนี้ผูกกับห้องเรียนในแอปแล้ว เลือกคอร์สอื่น หรือเปิดห้องที่ผูกไว้',
     'classroom_not_linked' =>
       'ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ผูกที่หน้าห้องเรียนก่อน',
+    'coursework_not_owned' =>
+      'งานนี้สร้างในเว็บ Classroom แอปส่งคะแนนกลับให้ไม่ได้ '
+          'เปิดใน Classroom แล้วกรอกคะแนนเอง',
+    'conflict_resolved' => 'รายการนี้ตัดสินไปแล้ว ดึงรายการใหม่อีกครั้ง',
+    'import_not_rejected' => 'งานนี้ไม่ได้ถูกปฏิเสธเพราะส่งช้าแล้ว',
     'ProjectPermissionDenied' || 'project_permission_denied' =>
       'งานนี้สร้างในเว็บ Classroom เอง แอปส่งคะแนนกลับหรือส่งคืนงานให้ไม่ได้ '
           'ต้องสั่งงานผ่านปุ่ม "โพสต์ลง Classroom" ในแอป',
     _ => apiErrorMessage(error),
   };
+}
+
+const _expiredMessage =
+    'สิทธิ์ที่ให้ Google ไว้หมดอายุแล้ว ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"';
+
+/// The server's reason for a 409 `google_reconnect_required` (e.g. the
+/// account lacks the announcements scope, DESIGN §19.7), with the way to
+/// fix it when the reason does not say.
+String _reconnectMessage(Object error) {
+  final reason = serverReconnectMessage(error);
+  if (reason == null) return _expiredMessage;
+  return reason.contains('เชื่อมใหม่')
+      ? reason
+      : '$reason ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"';
+}
+
+/// The Thai `message` the server sent with a reconnect error, if any.
+String? serverReconnectMessage(Object error) {
+  if (error is! DioException) return null;
+  final data = error.response?.data;
+  final message = data is Map ? data['message'] : null;
+  return message is String && message.trim().isNotEmpty ? message.trim() : null;
 }

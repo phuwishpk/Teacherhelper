@@ -71,6 +71,14 @@ Set<String> _flags(Map<String, dynamic> json) {
   };
 }
 
+/// `manual_reason` of an answer Gemini could not find on any page of a
+/// whole-page submission (DESIGN §19.4).
+const answerNotFoundReason = 'answer_not_found';
+
+/// `responses.auto_rule` values (DESIGN §21.3): decided by code, no Gemini.
+const autoRuleBlankInk = 'blank_ink';
+const autoRuleCnnMatch = 'cnn_match';
+
 /// `manual_reason` at the top level, or where the backend stores it
 /// (`fuzzy_trace.manual_reason`).
 String? _manualReason(Map<String, dynamic> json) =>
@@ -98,6 +106,8 @@ class ReviewItem {
     this.finalUnderstanding,
     this.reviewedAt,
     this.submissionStatus,
+    this.submissionPageId,
+    this.autoRule,
   });
 
   /// The response id.
@@ -122,10 +132,25 @@ class ReviewItem {
   final DateTime? reviewedAt;
   final String? submissionStatus;
 
+  /// The whole-page file this answer was read from (DESIGN §19.4); null on
+  /// the crop path.
+  final int? submissionPageId;
+
+  /// How code decided this answer without Gemini (DESIGN §21.3):
+  /// `blank_ink` ("ไม่ได้ตอบ"), `cnn_match` ("อ่านด้วย CNN") or null.
+  final String? autoRule;
+
+  bool get isAutoBlank => autoRule == autoRuleBlankInk;
+  bool get isCnnMatch => autoRule == autoRuleCnnMatch;
   bool get isManual => gradingState == 'manual';
   bool get isSuspicious => flags.contains('suspicious');
   bool get identityMismatch => flags.contains('identity_mismatch');
   bool get hasOpenAppeal => flags.contains('appeal_open');
+  bool get isWholePage => submissionPageId != null;
+
+  /// Gemini found no answer to this question on any page (§19.4): manual,
+  /// band `check` ("ต้องดู"), never approved in bulk.
+  bool get answerNotFound => isManual && manualReason == answerNotFoundReason;
   bool get isReviewed => reviewedAt != null;
   bool get isPublished => submissionStatus == 'published';
   bool get missingAiKey => isManual && manualReason == 'ai_key_missing';
@@ -195,6 +220,8 @@ class ReviewItem {
       reviewedAt: _date(json['reviewed_at']),
       submissionStatus:
           (json['submission_status'] ?? submission?['status']) as String?,
+      submissionPageId: _int(json['submission_page_id']),
+      autoRule: json['auto_rule'] as String?,
     );
   }
 }
@@ -225,6 +252,12 @@ class PendingScan {
   );
 }
 
+/// Shown before a change that clears `total_override` (DESIGN §19.3
+/// "ล้าง total_override"): a question's score changes or the work is
+/// graded again.
+const totalOverrideClearWarning =
+    'คะแนนรวมที่รับจาก Classroom จะถูกแทนด้วยผลรวมรายข้อ';
+
 /// Per-student progress for publishing one submission at a time.
 class SubmissionSummary {
   const SubmissionSummary({
@@ -234,6 +267,11 @@ class SubmissionSummary {
     required this.reviewedCount,
     this.student,
     this.totalScore,
+    this.channel,
+    this.late = false,
+    this.regradePending = false,
+    this.publishable,
+    this.totalOverridden = false,
   });
 
   final int id;
@@ -245,9 +283,28 @@ class SubmissionSummary {
   final StudentRef? student;
   final double? totalScore;
 
+  /// How the work came in (`submissions.channel`, DESIGN §19.8), e.g.
+  /// `paper` or `classroom`.
+  final String? channel;
+
+  /// Handed in after the due date (Classroom's `late`).
+  final bool late;
+
+  /// A new whole-page hand-in waits for the teacher's "ตรวจ" (§19.4).
+  final bool regradePending;
+
+  /// The server's verdict (`publishable`), when it sent one.
+  final bool? publishable;
+
+  /// The teacher took the total from Google Classroom (`total_override`,
+  /// §19.3): [totalScore] of a published submission is that total.
+  final bool totalOverridden;
+
   bool get isPublished => status == 'published';
+  bool get isGrading => status == 'grading';
   bool get canPublish =>
-      !isPublished && responseCount > 0 && reviewedCount >= responseCount;
+      publishable ??
+      (!isPublished && responseCount > 0 && reviewedCount >= responseCount);
 
   factory SubmissionSummary.fromJson(Map<String, dynamic> json) =>
       SubmissionSummary(
@@ -257,6 +314,13 @@ class SubmissionSummary {
         reviewedCount: _int(json['reviewed_count']) ?? 0,
         student: StudentRef.fromJson(json['student']),
         totalScore: _double(json['total_score']),
+        channel: json['channel'] as String?,
+        late: _bool(json['late']),
+        regradePending: _bool(json['regrade_pending']),
+        publishable: json['publishable'] is bool
+            ? json['publishable'] as bool
+            : null,
+        totalOverridden: json['total_override'] != null,
       );
 
   /// Fallback when the queue has no `meta.submissions`: derived from rows.
@@ -452,6 +516,15 @@ class ResponseDetail {
     this.hasCrop = true,
     this.hasFinalCrop = false,
     this.appeal,
+    this.channel,
+    this.late = false,
+    this.submissionPageId,
+    this.pageMimeType,
+    this.answerBox,
+    this.aiExplanation,
+    this.explanationSource,
+    this.totalOverridden = false,
+    this.autoRule,
   });
 
   final int id;
@@ -486,7 +559,47 @@ class ResponseDetail {
   final bool hasFinalCrop;
   final Appeal? appeal;
 
+  /// `submissions.channel` (DESIGN §19.8).
+  final String? channel;
+
+  /// The work was handed in late (shown as "ส่งช้า").
+  final bool late;
+
+  /// The whole-page file the answer was read from (§19.4), shown instead
+  /// of a crop.
+  final int? submissionPageId;
+
+  /// Type of that file as it was handed in (the server never converts it).
+  final String? pageMimeType;
+
+  /// Where on the page the answer is: `[ymin, xmin, ymax, xmax]`, each
+  /// 0–1000 (Gemini's `box_2d`), or null.
+  final List<double>? answerBox;
+
+  /// Gemini's explanation, kept once the teacher edited it (§19.4).
+  final String? aiExplanation;
+
+  /// `ai` / `template` / `reused` / `teacher`.
+  final String? explanationSource;
+
+  /// The submission's total was taken from Google Classroom
+  /// (`total_overridden`, §19.3): changing this score clears it.
+  final bool totalOverridden;
+
+  /// `blank_ink` / `cnn_match` / null (DESIGN §21.3), see [ReviewItem.autoRule].
+  final String? autoRule;
+
+  bool get isAutoBlank => autoRule == autoRuleBlankInk;
+  bool get isCnnMatch => autoRule == autoRuleCnnMatch;
   bool get isManual => gradingState == 'manual';
+  bool get isWholePage => submissionPageId != null;
+  bool get answerNotFound => isManual && manualReason == answerNotFoundReason;
+
+  /// The teacher rewrote the AI's text and the original can be shown.
+  bool get hasAiOriginal =>
+      aiExplanation != null &&
+      aiExplanation!.trim().isNotEmpty &&
+      aiExplanation!.trim() != (explanation ?? '').trim();
   bool get isSuspicious => flags.contains('suspicious');
   bool get identityMismatch => flags.contains('identity_mismatch');
   bool get isReviewed => reviewedAt != null;
@@ -540,8 +653,29 @@ class ResponseDetail {
       appeal: _map(json['appeal']) == null
           ? null
           : Appeal.fromJson(_map(json['appeal'])!),
+      channel: (json['channel'] ?? submission?['channel']) as String?,
+      late: _bool(json['late'] ?? submission?['late']),
+      submissionPageId: _int(json['submission_page_id']),
+      pageMimeType: json['page_mime_type'] as String?,
+      answerBox: _box(json['answer_box']),
+      aiExplanation: json['ai_explanation'] as String?,
+      explanationSource: json['explanation_source'] as String?,
+      totalOverridden: _bool(
+        json['total_overridden'] ?? submission?['total_overridden'],
+      ),
+      autoRule: json['auto_rule'] as String?,
     );
   }
+}
+
+/// `[ymin, xmin, ymax, xmax]` in 0–1000 when well formed, else null (a box
+/// the app cannot place is not drawn).
+List<double>? _box(Object? v) {
+  if (v is! List || v.length != 4) return null;
+  final box = [for (final n in v) _double(n)];
+  if (box.any((n) => n == null || n < 0 || n > 1000)) return null;
+  final b = box.cast<double>();
+  return b[0] < b[2] && b[1] < b[3] ? b : null;
 }
 
 /// What the teacher decided for one response (`PATCH /responses/{id}`).
@@ -590,6 +724,7 @@ class Appeal {
     this.questionPosition,
     this.maxPoints,
     this.currentScore,
+    this.totalOverridden = false,
   });
 
   final int id;
@@ -608,6 +743,10 @@ class Appeal {
   final int? questionPosition;
   final double? maxPoints;
   final double? currentScore;
+
+  /// The submission's total was taken from Google Classroom (§19.3):
+  /// accepting with a new score clears it.
+  final bool totalOverridden;
 
   bool get isOpen => status == 'open';
 
@@ -644,6 +783,7 @@ class Appeal {
             response?['final_score'] ??
             json['current_score'],
       ),
+      totalOverridden: _bool(json['total_overridden']),
     );
   }
 }

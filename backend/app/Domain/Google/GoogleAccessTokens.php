@@ -2,6 +2,7 @@
 
 namespace App\Domain\Google;
 
+use App\Jobs\NotifyGoogleReconnectJob;
 use App\Models\GoogleAccount;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
@@ -72,7 +73,11 @@ final class GoogleAccessTokens
         Cache::forget(self::cacheKey($account));
     }
 
-    /** Records why the teacher must connect again; nothing else changes. */
+    /**
+     * Records why the teacher must connect again, and queues the one push
+     * of this drop (NotifyGoogleReconnectJob, DESIGN §19.3). The cron sync
+     * skips the teacher until a new connect clears last_error.
+     */
     public static function markNeedsReconnect(GoogleAccount $account, string $error): void
     {
         if ($account->last_error === $error) {
@@ -81,6 +86,9 @@ final class GoogleAccessTokens
         $account->last_error = $error;
         $account->save();
         Log::warning('google.needs_reconnect', ['user_id' => $account->user_id, 'error' => $error]);
+        if ($account->reconnect_notified_at === null) {
+            NotifyGoogleReconnectJob::dispatch($account->user_id);
+        }
     }
 
     private static function cacheKey(GoogleAccount $account): string

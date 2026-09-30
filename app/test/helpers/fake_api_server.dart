@@ -56,6 +56,9 @@ class FakeApiServer {
   final classrooms = <Map<String, dynamic>>[];
   final assignments = <Map<String, dynamic>>[];
 
+  /// Courses (DESIGN §20.1) in the detail form of `GET /courses/{id}`.
+  final courses = <Map<String, dynamic>>[];
+
   /// Questions by assignment id.
   final questions = <int, List<Map<String, dynamic>>>{};
 
@@ -167,6 +170,26 @@ class FakeApiServer {
         return _find(classrooms, id) == null
             ? _notFound()
             : (200, {'data': <Object>[]});
+      case ('GET', ['courses']):
+        final classroomId = int.tryParse(
+          o.uri.queryParameters['classroom_id'] ?? '',
+        );
+        return (
+          200,
+          {
+            'data': [
+              for (final c in courses)
+                if (classroomId == null ||
+                    (c['classroom_ids'] as List).contains(classroomId))
+                  c,
+            ],
+          },
+        );
+      case ('POST', ['courses']):
+        return _createCourse(body);
+      case ('GET', ['courses', final id]):
+        final row = _find(courses, id);
+        return row == null ? _notFound() : (200, {'data': row});
       case ('GET', ['assignments']):
         return (
           200,
@@ -209,6 +232,20 @@ class FakeApiServer {
         return (200, _page(const <Object>[]));
       case ('GET', ['practice-items']):
         return (200, _page(const <Object>[]));
+      case ('GET', ['teacher', 'attention']):
+        return (
+          200,
+          {
+            'data': {
+              'keys_pending': 0,
+              'grade_conflicts': 0,
+              'grade_failed': 0,
+              'feedback_failed': 0,
+              'regrade_pending': 0,
+              'needs_reconnect': false,
+            },
+          },
+        );
       case ('GET', ['ml', 'models', 'active']):
         return (404, _error('ยังไม่มีโมเดลที่เปิดใช้', code: 'not_found'));
       // A server without Google Classroom (no OAuth client): the app hides
@@ -262,24 +299,84 @@ class FakeApiServer {
     return (201, {'data': row});
   }
 
-  (int, Object?) _createAssignment(Map<String, dynamic> body) {
+  /// `POST /courses` like CourseController: the classrooms must be the
+  /// teacher's; the answer is the course detail.
+  (int, Object?) _createCourse(Map<String, dynamic> body) {
     final errors = <String, List<String>>{};
-    final classroom = _find(classrooms, '${body['classroom_id']}');
     final subject = subjects
         .where((s) => s['id'] == body['subject_id'])
         .firstOrNull;
-    final title = body['title'];
-    if (classroom == null) errors['classroom_id'] = ['ไม่พบห้องเรียน'];
-    if (subject == null) errors['subject_id'] = ['ไม่พบวิชา'];
-    if (title is! String || title.trim().isEmpty) {
-      errors['title'] = ['กรอกชื่อการบ้าน'];
+    for (final field in ['code', 'name']) {
+      final v = body[field];
+      if (v is! String || v.trim().isEmpty) errors[field] = ['กรอก $field'];
+    }
+    if (subject == null) errors['subject_id'] = ['กรุณาเลือกกลุ่มสาระ'];
+    if (body['grade_level'] is! int) errors['grade_level'] = ['กรุณาเลือกชั้น'];
+    if (body['academic_year'] is! int) {
+      errors['academic_year'] = ['กรุณากรอกปีการศึกษา (พ.ศ.)'];
+    }
+    final ids = [
+      for (final id in (body['classroom_ids'] as List?) ?? const []) id as int,
+    ];
+    final rooms = [for (final id in ids) ?_find(classrooms, '$id')];
+    if (rooms.length != ids.length) {
+      errors['classroom_ids.0'] = ['ไม่พบห้องเรียนนี้ในห้องที่คุณสอน'];
     }
     if (errors.isNotEmpty) return _invalid(errors);
     final id = _nextId++;
     final row = <String, dynamic>{
       'id': id,
-      'classroom_id': classroom!['id'],
+      'code': body['code'],
+      'name': body['name'],
       'subject_id': subject!['id'],
+      'subject': subject,
+      'grade_level': body['grade_level'],
+      'semester': body['semester'] ?? 0,
+      'academic_year': body['academic_year'],
+      'hours': body['hours'],
+      'description': body['description'],
+      'classroom_ids': ids,
+      'classrooms': [
+        for (final r in rooms) {'id': r['id'], 'name': r['name']},
+      ],
+      'indicator_count': 0,
+      'unit_count': 0,
+      'lesson_plan_count': 0,
+      'assignment_count': 0,
+      'indicators': <Object>[],
+      'units': <Object>[],
+      'lesson_plans': <Object>[],
+    };
+    courses.add(row);
+    return (201, {'data': row});
+  }
+
+  /// `POST /assignments`: the course must be bound to the classroom and
+  /// gives the subject (DESIGN §20.1).
+  (int, Object?) _createAssignment(Map<String, dynamic> body) {
+    final errors = <String, List<String>>{};
+    final classroom = _find(classrooms, '${body['classroom_id']}');
+    final course = _find(courses, '${body['course_id']}');
+    final title = body['title'];
+    if (classroom == null) errors['classroom_id'] = ['ไม่พบห้องเรียน'];
+    if (course == null ||
+        classroom == null ||
+        !(course['classroom_ids'] as List).contains(classroom['id'])) {
+      errors['course_id'] = ['รายวิชานี้ไม่ได้ผูกกับห้องเรียนของการบ้าน'];
+    }
+    if (title is! String || title.trim().isEmpty) {
+      errors['title'] = ['กรอกชื่อการบ้าน'];
+    }
+    if (errors.isNotEmpty) return _invalid(errors);
+    final subject = course!['subject'] as Map<String, dynamic>;
+    course['assignment_count'] = (course['assignment_count'] as int) + 1;
+    final id = _nextId++;
+    final row = <String, dynamic>{
+      'id': id,
+      'classroom_id': classroom!['id'],
+      'subject_id': subject['id'],
+      'course_id': course['id'],
+      'lesson_plan_id': body['lesson_plan_id'],
       'title': title,
       'strictness': body['strictness'] ?? 'normal',
       'status': 'draft',
@@ -287,6 +384,12 @@ class FakeApiServer {
       'due_at': body['due_at'],
       'classroom': {'id': classroom['id'], 'name': classroom['name']},
       'subject': {'id': subject['id'], 'name': subject['name']},
+      'course': {
+        'id': course['id'],
+        'code': course['code'],
+        'name': course['name'],
+      },
+      'lesson_plan': null,
       'google_link': null,
     };
     assignments.add(row);

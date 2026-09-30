@@ -78,7 +78,9 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // Every user-facing string is Thai: a server .env without APP_LOCALE must
+    // not fall back to English validation summaries.
+    'locale' => env('APP_LOCALE', 'th'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
