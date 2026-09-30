@@ -5,7 +5,6 @@ namespace Tests\Feature\Exams;
 use App\Domain\Exams\ExamSheetLayout;
 use App\Domain\Exams\ExamSheetPdfRenderer;
 use App\Domain\Worksheets\ArucoMarkers;
-use App\Domain\Worksheets\PdfMerger;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\WorksheetLayoutException;
 use App\Domain\Worksheets\WorksheetMpdfFactory;
@@ -15,6 +14,7 @@ use App\Models\Layout;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
+use Tests\Support\PdfStreams;
 use Tests\TestCase;
 
 /**
@@ -37,6 +37,8 @@ class ExamSheetPdfTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         $this->makeExamWorld();
+        // The factory picks a random room name; a fixed one keeps the PDF bytes the same on every run.
+        $this->classroom->update(['name' => 'ป.5/2']);
     }
 
     private function renderer(): ExamSheetPdfRenderer
@@ -67,17 +69,6 @@ class ExamSheetPdfTest extends TestCase
         ]);
     }
 
-    private function pageCount(string $pdf): int
-    {
-        $path = tempnam(sys_get_temp_dir(), 'ex').'.pdf';
-        file_put_contents($path, $pdf);
-        try {
-            return PdfMerger::pageCount($path);
-        } finally {
-            @unlink($path);
-        }
-    }
-
     /**
      * Start points of every circle mPDF drew, per page: Ellipse() begins
      * with "x y m" at (cx + r, cy) followed by a Bézier "c".
@@ -86,16 +77,8 @@ class ExamSheetPdfTest extends TestCase
      */
     private function circleStarts(string $pdf): array
     {
-        // mPDF writes "stream\n<data>\nendstream". The data is binary and may end
-        // in a \r, so the delimiters are matched exactly (a \r? there cut that
-        // byte off, the stream failed to inflate and its page went missing).
-        preg_match_all('/stream\n(.*?)\nendstream/s', $pdf, $streams);
         $pages = [];
-        foreach ($streams[1] as $stream) {
-            $content = @gzuncompress($stream);
-            if ($content === false) {
-                $content = $stream;
-            }
+        foreach (PdfStreams::decoded($pdf) as $content) {
             if (! str_contains($content, ' re') && ! str_contains($content, ' c')) {
                 continue;
             }
@@ -123,7 +106,7 @@ class ExamSheetPdfTest extends TestCase
         ]);
 
         $this->assertStringStartsWith('%PDF', $pdf);
-        $this->assertSame(4, $this->pageCount($pdf));
+        $this->assertSame(4, PdfStreams::pageCount($pdf));
         $this->assertStringContainsString('Sarabun', $pdf);
         $signer = new QrSigner(self::KEY);
         $this->assertSame([
@@ -145,7 +128,7 @@ class ExamSheetPdfTest extends TestCase
 
         $pdf = $this->renderer()->render($exam, $this->layoutOf($exam), [null]);
 
-        $this->assertSame(1, $this->pageCount($pdf));
+        $this->assertSame(1, PdfStreams::pageCount($pdf));
         $this->assertSame([(new QrSigner(self::KEY))->signExamSheet($exam->id, 0, 1, 1)], $this->signed);
     }
 
@@ -155,8 +138,40 @@ class ExamSheetPdfTest extends TestCase
         $this->addSection($exam, ['type' => 'mcq', 'option_count' => 6, 'question_count' => 30]);
         $this->addSection($exam, ['type' => 'true_false', 'question_count' => 5]);
         $this->addSection($exam, ['type' => 'numeric', 'numeric' => ['digits' => 3, 'allow_negative' => true, 'allow_decimal' => true], 'question_count' => 5]);
+
+        // 30 × 6 + 5 × 2 row bubbles, 3 version bubbles, 5 blocks × (sign + 4 columns × 11).
+        $this->assertSame(180 + 10 + 3 + 5 * (1 + 4 * 11), $this->assertBubblesDrawn($exam));
+    }
+
+    public function test_sixty_mcq_fill_page_one_in_order_and_the_numeric_questions_follow(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 60]);
+        $this->addSection($exam, ['type' => 'numeric', 'numeric' => ['digits' => 2, 'allow_negative' => false, 'allow_decimal' => false], 'question_count' => 5]);
         $layout = $this->layoutOf($exam);
 
+        $numbers = fn (array $page, string $kind) => array_values(array_map(
+            fn (array $r) => $r['sheet_no'],
+            array_filter($page['regions'], fn (array $r) => $r['kind'] === $kind),
+        ));
+        $this->assertCount(2, $layout->pages);
+        $this->assertSame(range(1, 60), $numbers($layout->pages[0], 'omr_row'));
+        $this->assertSame([], $numbers($layout->pages[0], 'digit_block'));
+        $this->assertSame([], $numbers($layout->pages[1], 'omr_row'));
+        $this->assertSame(range(61, 65), $numbers($layout->pages[1], 'digit_block'));
+
+        $this->assertSame(60 * 4 + 5 * 2 * 10, $this->assertBubblesDrawn($exam));
+    }
+
+    /**
+     * Renders the exam for one student and checks that every bubble of its
+     * layout JSON is drawn at the place the layout gives, on the right page.
+     *
+     * @return int the number of bubbles checked
+     */
+    private function assertBubblesDrawn(Assignment $exam): int
+    {
+        $layout = $this->layoutOf($exam);
         $pages = $this->circleStarts($this->renderer()->render($exam, $layout, [new WorksheetStudent(1, 'ทดสอบ', 1)]));
         $this->assertCount(count($layout->pages), $pages);
 
@@ -182,8 +197,8 @@ class ExamSheetPdfTest extends TestCase
                 $checked++;
             }
         }
-        // 30 × 6 + 5 × 2 row bubbles, 3 version bubbles, 5 blocks × (sign + 4 columns × 11).
-        $this->assertSame(180 + 10 + 3 + 5 * (1 + 4 * 11), $checked);
+
+        return $checked;
     }
 
     public function test_it_refuses_to_print_from_a_layout_the_exam_no_longer_matches(): void
