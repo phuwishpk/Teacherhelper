@@ -165,6 +165,9 @@ class ExamApiTest extends TestCase
         $this->assertSame([2, 3, 4], array_column($json['sections'][1]['questions'], 'position'));
         $this->assertSame([5, 6], array_column($json['sections'][2]['questions'], 'position'));
         $this->assertSame(['digits' => 3, 'allow_negative' => false, 'allow_decimal' => true], $json['sections'][0]['numeric']);
+        // A PATCH that sends only the digits keeps the sign and decimal flags.
+        $this->asUser($this->teacher)->patchJson("/api/v1/exam-sections/{$num['id']}", ['numeric' => ['digits' => 4]])
+            ->assertOk()->assertJsonPath('data.numeric', ['digits' => 4, 'allow_negative' => false, 'allow_decimal' => true]);
         $this->assertFalse($json['key_complete']);
         $this->assertCount(6, $json['incomplete_questions']);
         $this->assertSame(['not_approved', 'no_key'], $json['incomplete_questions'][0]['reasons']);

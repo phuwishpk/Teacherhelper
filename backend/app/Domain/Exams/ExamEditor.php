@@ -575,8 +575,9 @@ final class ExamEditor
         }
         if ($type === ExamSection::TYPE_NUMERIC && array_key_exists('numeric', $v)) {
             $attributes['numeric_digits'] = (int) $v['numeric']['digits'];
-            $attributes['numeric_allow_negative'] = (bool) ($v['numeric']['allow_negative'] ?? false);
-            $attributes['numeric_allow_decimal'] = (bool) ($v['numeric']['allow_decimal'] ?? false);
+            // A flag left out of a PATCH keeps its value; a new section starts without it.
+            $attributes['numeric_allow_negative'] = (bool) ($v['numeric']['allow_negative'] ?? $current?->numeric_allow_negative ?? false);
+            $attributes['numeric_allow_decimal'] = (bool) ($v['numeric']['allow_decimal'] ?? $current?->numeric_allow_decimal ?? false);
         }
         if (array_key_exists('default_points', $v)) {
             $attributes['default_points'] = round((float) $v['default_points'], 2);
