@@ -30,6 +30,9 @@ final class ExamImages
     /** Larger pictures are refused before GD decodes them (memory on shared hosting). */
     private const MAX_SOURCE_PX = 8000;
 
+    /** Decoded pixels at most (about 5 bytes each in GD), whatever the memory_limit says. */
+    private const MAX_SOURCE_PIXELS = 25_000_000;
+
     private const QUALITY = 85;
 
     private const TYPES = [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP];
@@ -76,12 +79,39 @@ final class ExamImages
         if ($info[0] < 1 || $info[1] < 1 || max($info[0], $info[1]) > self::MAX_SOURCE_PX) {
             self::fail('รูปภาพใหญ่เกินไป ด้านยาวต้องไม่เกิน '.number_format(self::MAX_SOURCE_PX).' พิกเซล');
         }
+        if ($info[0] * $info[1] > self::MAX_SOURCE_PIXELS || ! self::fitsInMemory($info[0], $info[1])) {
+            // A 48 MP photo needs about 240 MB in GD: refuse it instead of a fatal out-of-memory 500.
+            self::fail('รูปภาพมีจำนวนพิกเซลมากเกินไป ย่อรูปให้ด้านยาวไม่เกิน 4,000 พิกเซลแล้วแนบใหม่');
+        }
         $image = @imagecreatefromstring($bytes);
+        unset($bytes);
         if (! $image instanceof GdImage) {
             self::fail('อ่านรูปภาพนี้ไม่ได้ ลองบันทึกเป็น JPEG แล้วแนบใหม่');
         }
 
         self::writeJpeg(self::scaled($image), $path);
+    }
+
+    /**
+     * Whether GD can decode a w x h picture (truecolor, about 5 bytes a
+     * pixel with the scaled copy) within the PHP memory_limit left, so a
+     * large photo on shared hosting fails softly instead of fatally.
+     */
+    public static function fitsInMemory(int $width, int $height): bool
+    {
+        $limit = trim((string) ini_get('memory_limit'));
+        if ($limit === '' || $limit === '-1') {
+            return true;
+        }
+        $bytes = (int) $limit;
+        $bytes *= match (strtolower(substr($limit, -1))) {
+            'g' => 1024 ** 3,
+            'm' => 1024 ** 2,
+            'k' => 1024,
+            default => 1,
+        };
+
+        return $width * $height * 5 + 16 * 1024 * 1024 <= $bytes - memory_get_usage();
     }
 
     /** Writes $image as a JPEG (quality 85) at $path on the private disk. */

@@ -306,7 +306,7 @@ final class ExamFigures
             throw ValidationException::withMessages(['image' => 'ภาพหน้าเอกสารใหญ่เกินไป ด้านยาวต้องไม่เกิน '.number_format(self::SERVER_MAX_PX).' พิกเซล']);
         }
         $size = [$info[0], $info[1]];
-        if (max($size) > self::PAGE_MAX_PX && self::fitsInMemory($size[0], $size[1])) {
+        if (max($size) > self::PAGE_MAX_PX && ExamImages::fitsInMemory($size[0], $size[1])) {
             // Larger than the app renders: kept at PAGE_MAX_PX like a page the server decodes.
             $image = @imagecreatefromstring($bytes);
             if (! $image instanceof GdImage) {
@@ -440,28 +440,6 @@ final class ExamFigures
         return ExamImages::scaled($cut);
     }
 
-    /**
-     * Whether GD can decode a w x h picture (truecolor, about 5 bytes a
-     * pixel with the scaled copy) within the PHP memory_limit left, so a
-     * 6,000 px photo on shared hosting fails softly instead of fatally.
-     */
-    private static function fitsInMemory(int $width, int $height): bool
-    {
-        $limit = trim((string) ini_get('memory_limit'));
-        if ($limit === '' || $limit === '-1') {
-            return true;
-        }
-        $bytes = (int) $limit;
-        $bytes *= match (strtolower(substr($limit, -1))) {
-            'g' => 1024 ** 3,
-            'm' => 1024 ** 2,
-            'k' => 1024,
-            default => 1,
-        };
-
-        return $width * $height * 5 + 16 * 1024 * 1024 <= $bytes - memory_get_usage();
-    }
-
     private static function loadPage(ExamPageImage $page): ?GdImage
     {
         if ($page->file_path === null || ! ExamImages::disk()->exists($page->file_path)) {
@@ -486,7 +464,7 @@ final class ExamFigures
         $ok = $info !== false
             && in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)
             && $info[0] >= 1 && $info[1] >= 1 && max($info[0], $info[1]) <= self::SERVER_MAX_PX
-            && self::fitsInMemory($info[0], $info[1]);
+            && ExamImages::fitsInMemory($info[0], $info[1]);
         $image = $ok ? @imagecreatefromstring($bytes) : false;
         if (! $image instanceof GdImage) {
             Log::info('exam_figures.server_decode_failed', ['page_image_id' => $page->id, 'source_document_id' => $page->source_document_id]);

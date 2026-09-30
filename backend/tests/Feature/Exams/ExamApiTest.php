@@ -518,6 +518,34 @@ class ExamApiTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles("exams/{$exam->school_id}/{$exam->id}"));
     }
 
+    public function test_a_picture_with_too_many_pixels_is_refused_before_gd_decodes_it(): void
+    {
+        $exam = $this->createExam();
+        $question = $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 1])['questions'][0];
+
+        // A small JPEG whose frame header claims 7000 x 7000 (49 MP, about 245 MB in GD).
+        $image = imagecreatetruecolor(8, 8);
+        ob_start();
+        imagejpeg($image);
+        $jpeg = (string) ob_get_clean();
+        $sof = strpos($jpeg, "\xFF\xC0");
+        $this->assertNotFalse($sof);
+        $jpeg = substr_replace($jpeg, pack('nn', 7000, 7000), $sof + 5, 4);
+        $this->assertSame([7000, 7000], array_slice((array) getimagesizefromstring($jpeg), 0, 2));
+        $path = tempnam(sys_get_temp_dir(), 'big');
+        file_put_contents($path, $jpeg);
+
+        try {
+            $this->asUser($this->teacher)->post("/api/v1/questions/{$question['id']}/image", [
+                'image' => new UploadedFile($path, 'huge.jpg', 'image/jpeg', null, true),
+            ], ['Accept' => 'application/json'])
+                ->assertStatus(422)
+                ->assertJsonPath('errors.image.0', 'รูปภาพมีจำนวนพิกเซลมากเกินไป ย่อรูปให้ด้านยาวไม่เกิน 4,000 พิกเซลแล้วแนบใหม่');
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_another_teachers_exam_is_not_found(): void
     {
         $exam = $this->createExam();
