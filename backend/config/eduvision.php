@@ -120,6 +120,8 @@ return [
         'max_blank_questions' => 100,
         'image_max_kb' => 5120,
         'image_max_px' => 1600,
+        // Answer sheets rendered per RenderAnswerSheetsJob (DESIGN §22.6: 20 students).
+        'sheet_batch_size' => max(1, (int) env('EXAM_SHEET_BATCH_SIZE', 20)),
     ],
 
     // Sanctum token lifetimes in days per DESIGN §7.4.

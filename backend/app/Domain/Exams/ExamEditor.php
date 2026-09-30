@@ -342,7 +342,8 @@ final class ExamEditor
 
     /**
      * POST /exams/{id}/unlock-structure: allowed while no answer sheet was
-     * scanned (409 exam_sheets_scanned). The versions are shuffled anew and
+     * scanned (409 exam_sheets_scanned). The versions are shuffled anew,
+     * the answer-sheet layout gets a new version at the next print and
      * everything has to be printed again.
      */
     public function unlockStructure(Assignment $exam): void
@@ -354,6 +355,10 @@ final class ExamEditor
             self::assertNoScannedSheets($exam);
             $exam->structure_locked_at = null;
             $exam->shuffle_nonce = ($exam->shuffle_nonce + 1) % 65536;
+            // The next print builds a new answer-sheet layout version even if
+            // the grid is unchanged: the versions are shuffled anew, so a key
+            // sheet printed before must read as layout_unknown (§22.6).
+            $exam->current_layout_version = null;
             $exam->save();
             ExamVersions::sync($exam);
         });

@@ -3089,6 +3089,14 @@ ALTER TABLE ai_calls
 - เล่มและกระดาษคำตอบของนักเรียนพิมพ์ได้เมื่อ**อนุมัติเฉลยแล้ว**และทุกข้ออนุมัติแล้ว (409 `answer_key_not_approved`) และข้อสอบต้องเป็น `grading_method = app` สำหรับกระดาษคำตอบ (422 `exam_manual_grading`) ข้อสอบ `manual` พิมพ์ได้เฉพาะเล่ม ไม่ดูเฉลย ใช้กติกาข้ออนุมัติครบของ §22.1 เล่มของทุกวิธีตรวจต้องมีโจทย์ทุกข้อด้วย (ข้อว่าง §22.4)
 - **การพิมพ์ครั้งแรกทุกชนิด รวมกระดาษเฉลยของครู ตั้ง `structure_locked_at`** เพราะกระดาษเฉลยใช้ layout และ permutation ของชุดเดียวกัน ถ้าโครงสร้างหรือการสุ่มเปลี่ยนหลังพิมพ์ กระดาษเฉลยที่ฝนไว้จะแปลงกลับผิด ครูปลดล็อกได้ตามกติกา §22.2 (กระดาษเฉลยไม่นับเป็นกระดาษคำตอบที่สแกน) หลังปลดล็อก layout ได้เวอร์ชันใหม่ กระดาษเฉลยเก่าส่งเข้า `key-sheet-read` ตอบ 422 `layout_unknown` ("พิมพ์กระดาษเฉลยใหม่") เพราะ `key-sheet-read` รับเฉพาะ `layout_version` ปัจจุบัน
 - ไฟล์ที่ `worksheets/{assignment}/{print}.pdf` ลบ 30 วันหลังสร้างตาม §7.3
+- **รายละเอียดที่ตัดสินตอน build 2** (30 ก.ย. 2569)
+  - เล่มของข้อสอบที่มี**ชุดเดียว**ไม่พิมพ์รหัสชุด (ไม่มีกรอบ "ชุด ก" บนปก ท้ายหน้าเป็น "หน้า x/y" เฉยๆ) เพราะกระดาษคำตอบชุดเดียวไม่มีวงชุด ข้อสอบหลายชุดพิมพ์ "ชุด ข" ทั้งบนปกและท้ายทุกหน้า
+  - บนเล่ม ตอนแต่ละตอนขึ้นต้นด้วยชื่อตอน ช่วงเลขข้อ ("ข้อ 1–40 ข้อละ 1 คะแนน" เมื่อทุกข้อคะแนนเท่ากัน) และคำชี้แจง หัวตอนอยู่ในบล็อกเดียวกับข้อแรกของตอน จึงไม่ค้างท้ายหน้า ข้อที่คะแนนต่างจากค่าตั้งต้นของตอนแสดง "(x คะแนน)" ท้ายโจทย์ ข้อสูงเกินหนึ่งหน้าย่อภาพเป็นขั้น (0.8, 0.64, … ถึง 0.2) ยังไม่พอ print นั้น `failed` พร้อมเหตุ
+  - `version_no` บังคับสำหรับเล่มเมื่อ `version_count > 1` (ชุดเดียวใช้ 1) `student_ids` ต้องเป็นนักเรียนในห้องของข้อสอบ (422 `errors.student_ids.N`) ไม่ส่ง = ทั้งห้องเรียงตามเลขที่ ห้องว่าง 422 `classroom_empty` กระดาษเฉลยของข้อสอบที่ไม่มีข้อ 422 `assignment_empty`
+  - `QR_SIGNING_KEY` (503 `qr_key_missing`) ตรวจเฉพาะกระดาษคำตอบและกระดาษเฉลย เล่มไม่มี QR จึงพิมพ์ได้แม้ไม่มี key
+  - กระดาษคำตอบและกระดาษเฉลยใช้ `layouts` แบบใบงาน: สร้าง layout ตอนสั่งพิมพ์ (ใน request, งานคำนวณล้วนไม่ต้องวาด) ถ้าตรงกับ `current_layout_version` ใช้เวอร์ชันเดิม ไม่ตรงสร้างเวอร์ชันใหม่ **ปลดล็อกโครงสร้างล้าง `current_layout_version`** การพิมพ์ครั้งถัดไปจึงได้เวอร์ชันใหม่เสมอแม้ตารางเหมือนเดิม (ชุดถูกสุ่มใหม่ กระดาษเฉลยเก่าต้องเป็น `layout_unknown`) job วาดตรวจว่าโครงสร้างยังตรงกับ layout ที่ระบุก่อนวาด ไม่ตรง print นั้น `failed`
+  - จำนวนคนต่อ `RenderAnswerSheetsJob` ตั้งใน `config('eduvision.exams.sheet_batch_size')` (ค่าตั้งต้น 20) เล่มวาดใน `RenderExamBookletJob` job เดียวไม่ต้องรวมไฟล์ วัดบนเครื่องพัฒนา: กระดาษคำตอบ 20 คน × 2 หน้าประมาณ 1 วินาที เล่ม 200 ข้อ (21 หน้า) ประมาณ 1.3 วินาที ต้องวัดบน hosting อีกครั้ง
+  - ชื่อไฟล์ที่ดาวน์โหลด: `exam-{id}-booklet-{version_no}.pdf`, `exam-{id}-answer-sheets-v{layout}.pdf`, `exam-{id}-key-sheet-v{layout}.pdf`
 
 ### 22.7 เรขาคณิตของกระดาษคำตอบ
 
@@ -3131,6 +3139,7 @@ ALTER TABLE ai_calls
 
 - ที่ความละเอียดหลัง warp ประมาณ 200 DPI (7.9 px/มม.) วงรัศมี 2.1 มม. กว้างประมาณ 33 px พอสำหรับวัดสัดส่วนการฝนตาม §6.2 ข้อ 6
 - ตัวเลข geometry อยู่ใน `ExamSheetGeometry` (backend) และถูกบันทึกลง layout JSON ตามพิกัดที่วาดจริง (§22.8) แอปไม่ต้องรู้ค่าคงที่เหล่านี้
+- **รายละเอียดที่ตัดสินตอน build 2**: แถบตัวเลขอยู่ที่ 11 หรือ 22 แถวสุดท้ายของตารางเสมอ (แถบบนสุดเริ่มแถว 4 เมื่อมี 2 แถบ แถว 15 เมื่อมี 1 แถบ) แถวข้อฝนจึงมี 25 − 11b แถวต่อคอลัมน์ คอลัมน์ของบล็อกชิดซ้ายห่างขอบคอลัมน์ตาราง 2.15 (= (43.5 − 39.2)/2) คอลัมน์เครื่องหมายมีแค่วง "−" ในแถวบนสุด ทุกคอลัมน์ของบล็อก (รวมคอลัมน์เครื่องหมาย) มีช่องสี่เหลี่ยม 5 × 5.5 ให้เขียนกำกับที่ 6 มม. ใต้ขอบบนของบล็อก หัวคอลัมน์ของตารางพิมพ์ป้ายของแถวที่มีตัวเลือกมากที่สุดในคอลัมน์นั้น (คอลัมน์ที่มีแต่ ถ/ผ พิมพ์ ถ ผ) ตัวอย่างวงถูก/ผิดท้ายหน้าอยู่ที่ x 142 และ 160 นอก `answer_area`
 
 ### 22.8 QR และ layout JSON
 
@@ -3164,6 +3173,7 @@ ALTER TABLE ai_calls
 ```
 
 - `sign` เป็น `null` เมื่อตอนไม่มีเครื่องหมายลบ ใน `omr_row` ค่า `value` คือ**ตำแหน่งที่แสดง** (1–6) ของหน้านั้น การแปลงเป็นตำแหน่งต้นฉบับทำด้วย permutation ของชุด (§22.5) ไม่ใช่ใน layout
+- **เพิ่มตอน build 2**: `omr_row` และ `digit_block` มี `rect` (normalize แบบ §5.3) ของช่องแถว (กว้าง 43.5 สูง 8) หรือของบล็อก (43.5 × 88) ไว้ให้หน้าตรวจทานไฮไลต์ข้อนั้น (§22.11) โดยไม่ต้องคำนวณจากวง `answer_area` คือ x 17–193 × y 46–256 มม. (ตาราง แถบตัวเลข และหัวคอลัมน์ ไม่รวมส่วนหัวและท้ายหน้า) วงชุดอยู่นอก `answer_area` แต่ใช้เกณฑ์ threshold เดียวกัน รัศมี `r` normalize ด้วยความกว้างของกรอบเหมือน §5.3
 
 ### 22.9 อ่านกระดาษคำตอบบนมือถือ และการให้คะแนนในเครื่อง
 
@@ -3341,7 +3351,8 @@ ALTER TABLE responses
 
 ALTER TABLE worksheet_prints
   ADD COLUMN kind        ENUM('worksheet','exam_booklet','answer_sheet','key_sheet') NOT NULL DEFAULT 'worksheet',
-  ADD COLUMN version_no  TINYINT UNSIGNED NULL;       -- exam_booklet: ชุดของเล่ม
+  ADD COLUMN version_no  TINYINT UNSIGNED NULL,       -- exam_booklet: ชุดของเล่ม
+  MODIFY COLUMN layout_version SMALLINT UNSIGNED NULL; -- build 2: NULL ของ exam_booklet (เล่มไม่มี layout และไม่ถูกสแกน)
 
 ALTER TABLE document_extractions
   MODIFY COLUMN purpose ENUM('answer_key','coursework','course','lesson_plan','exam') NOT NULL;
@@ -3379,7 +3390,7 @@ ALTER TABLE skill_observations
 | GET | `/exams/{id}/versions` | ครู | ลำดับข้อและตัวเลือกของทุกชุด และเฉลยตามชุด (ไว้ให้ครูตรวจ) |
 | POST | `/exams/{id}/versions/reshuffle` | ครู | สุ่มใหม่ (`shuffle_nonce + 1`) ล็อกแล้ว 409 `exam_structure_locked` |
 | POST | `/exams/{id}/unlock-structure` | ครู | ปลดล็อก มีกระดาษคำตอบสแกนแล้ว 409 `exam_sheets_scanned` |
-| POST | `/exams/{id}/prints` | ครู | `{kind: exam_booklet\|answer_sheet\|key_sheet, version_no?, student_ids?[]}` ตอบ `202` print job ของ `worksheet_prints` (`GET /worksheet-prints/{id}` เดิม) ทุกชนิดล็อกโครงสร้างเมื่อพิมพ์ครั้งแรก (§22.6) `key_sheet` ไม่ต้องอนุมัติเฉลย ข้อสอบ `app` ที่ยังไม่อนุมัติ 409 `answer_key_not_approved` เล่มที่มีข้อยังไม่อนุมัติหรือยังไม่มีโจทย์ (ทุกวิธีตรวจ §22.4) หรือเล่มของข้อสอบ `manual` ที่ไม่มีข้อ 422 `answer_key_incomplete` เกิน 2 หน้า 422 `exam_sheet_overflow` ข้อสอบ `manual` ขอกระดาษคำตอบ 422 `exam_manual_grading` ไม่มี `QR_SIGNING_KEY` 503 ตามเดิม |
+| POST | `/exams/{id}/prints` | ครู | `{kind: exam_booklet\|answer_sheet\|key_sheet, version_no?, student_ids?[]}` ตอบ `202` print job ของ `worksheet_prints` (`GET /worksheet-prints/{id}` เดิม, ข้อมูล print มี `kind` และ `version_no` เพิ่ม, `layout_version` ของเล่มเป็น `null`) ทุกชนิดล็อกโครงสร้างเมื่อพิมพ์ครั้งแรก (§22.6) `key_sheet` ไม่ต้องอนุมัติเฉลย ข้อสอบ `app` ที่ยังไม่อนุมัติ 409 `answer_key_not_approved` เล่มที่มีข้อยังไม่อนุมัติหรือยังไม่มีโจทย์ (ทุกวิธีตรวจ §22.4) หรือเล่มของข้อสอบ `manual` ที่ไม่มีข้อ 422 `answer_key_incomplete` เกิน 2 หน้า 422 `exam_sheet_overflow` ข้อสอบ `manual` ขอกระดาษคำตอบ 422 `exam_manual_grading` ไม่มี `QR_SIGNING_KEY` 503 ตามเดิม |
 | GET | `/exams/{id}/scan-kit` | ครู | §22.9 ข้อ 1 ยังไม่อนุมัติเฉลย 409 `answer_key_not_approved` |
 | POST | `/exam-sheets` | ครู | multipart `meta` `{client_scan_id, qr, scanned_at, blur_score, version_fill?, rows, digits?, device_score?}` + `page` ตอบ `201 {scan_id, submission_id, state, page_no, page_count, version_no\|null, score, max_score, doubts[], needs_version}` `client_scan_id` ซ้ำ `200` เผยแพร่แล้ว `202 pending_confirm` ถูกปฏิเสธ 422 `qr_invalid` \| `layout_unknown` \| `page_mismatch` \| `exam_manual_grading` \| `validation_failed` |
 | GET | `/exams/{id}/sheet-status` | ครู | `{data: [{student_id, student_number, name, pages_received[], page_count, version_no, score, status, doubt_count, needs_version}], summary: {scanned, total, missing_numbers[]}}` |

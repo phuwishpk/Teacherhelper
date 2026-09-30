@@ -202,6 +202,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('exams/{id}/versions', [ExamController::class, 'versions'])->name('api.exams.versions');
                 Route::post('exams/{id}/versions/reshuffle', [ExamController::class, 'reshuffle'])->name('api.exams.versions.reshuffle');
                 Route::post('exams/{id}/unlock-structure', [ExamController::class, 'unlockStructure'])->name('api.exams.unlock-structure');
+                Route::post('exams/{id}/prints', [ExamController::class, 'prints'])->name('api.exams.prints.store');
                 Route::patch('exam-sections/{id}', [ExamSectionController::class, 'update'])->name('api.exam-sections.update');
                 Route::delete('exam-sections/{id}', [ExamSectionController::class, 'destroy'])->name('api.exam-sections.destroy');
                 Route::post('exam-sections/{id}/questions', [ExamSectionController::class, 'storeQuestion'])->name('api.exam-sections.questions.store');

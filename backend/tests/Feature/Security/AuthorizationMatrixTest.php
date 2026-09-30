@@ -118,6 +118,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.exams.versions' => ['GET', 'exams/{exam}/versions', 404, 404],
         'api.exams.versions.reshuffle' => ['POST', 'exams/{exam}/versions/reshuffle', 404, 404],
         'api.exams.unlock-structure' => ['POST', 'exams/{exam}/unlock-structure', 404, 404],
+        'api.exams.prints.store' => ['POST', 'exams/{exam}/prints', 404, 404],
         'api.exam-sections.update' => ['PATCH', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.destroy' => ['DELETE', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.questions.store' => ['POST', 'exam-sections/{exam_section}/questions', 404, 404],

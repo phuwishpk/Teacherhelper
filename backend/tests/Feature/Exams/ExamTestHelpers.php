@@ -5,6 +5,7 @@ namespace Tests\Feature\Exams;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\Course;
+use App\Models\Question;
 use App\Models\Scan;
 use App\Models\Submission;
 use App\Models\User;
@@ -73,5 +74,33 @@ trait ExamTestHelpers
             'uploaded_by' => $this->teacher->id, 'scanned_at' => now(), 'blur_score' => 150.0, 'state' => Scan::STATE_ACTIVE,
             'page_image_path' => 'scans/page.webp',
         ]);
+    }
+
+    /**
+     * Gives every question of the exam a prompt, option texts, a key and the
+     * teacher's approval straight in the database (fast for 200 questions).
+     */
+    protected function fillExam(Assignment $exam, bool $prompts = true, bool $keys = true): void
+    {
+        $questions = Question::query()->where('assignment_id', $exam->id)->with('options')->get();
+        foreach ($questions as $question) {
+            $question->forceFill([
+                'prompt_text' => $prompts ? 'ข้อใดถูกต้องสำหรับโจทย์ข้อที่ '.$question->position : '',
+                'answer_key' => $keys ? ($question->type === Question::TYPE_NUMERIC ? ['accepted_values' => ['1']] : ['accepted_options' => [1]]) : null,
+                'approved_at' => now(),
+            ])->save();
+            foreach ($question->options as $option) {
+                $option->update(['text' => 'ตัวเลือก '.$option->position]);
+            }
+        }
+    }
+
+    /** fillExam() then the key approval gate (DESIGN §22.3). */
+    protected function approveExam(Assignment $exam): Assignment
+    {
+        $this->fillExam($exam);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$exam->id}/answer-key/approve")->assertOk();
+
+        return $exam->refresh();
     }
 }

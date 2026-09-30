@@ -30,7 +30,10 @@ class WorksheetMpdfFactory
     div.qimg { margin: 1.5mm 0 0 9mm; padding: 0; }
     CSS;
 
-    public function create(): Mpdf
+    /**
+     * @param  array<string, mixed>  $overrides  mPDF settings that differ, e.g. the margins of an exam booklet
+     */
+    public function create(array $overrides = []): Mpdf
     {
         $config = (new ConfigVariables)->getDefaults();
         $fonts = (new FontVariables)->getDefaults();
@@ -57,6 +60,7 @@ class WorksheetMpdfFactory
             'margin_header' => 0,
             'margin_footer' => 0,
             'useDictionaryLBR' => true,
+            ...$overrides,
         ]);
         $mpdf->autoScriptToLang = false;
         $mpdf->autoLangToFont = false;

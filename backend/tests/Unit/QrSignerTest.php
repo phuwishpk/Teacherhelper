@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * DESIGN §5.4: EV1.{assignment}.{student}.{page}.{layout_version}.{sig},
  * sig = base32(first 5 bytes of HMAC-SHA256(prefix, QR_SIGNING_KEY)).
+ * DESIGN §22.8: exam answer sheets use EVX1 with the same signature.
  */
 class QrSignerTest extends TestCase
 {
@@ -91,5 +92,35 @@ class QrSignerTest extends TestCase
         $this->assertSame('MZXW6', QrSigner::base32('foo'));
         $this->assertSame('MZXW6YQ', QrSigner::base32('foob'));
         $this->assertSame('MZXW6YTB', QrSigner::base32('fooba'));
+    }
+
+    public function test_exam_sheet_qrs_use_the_evx1_prefix_with_the_same_signature(): void
+    {
+        // Expected values from Python, as above, with the EVX1 prefix.
+        $signer = new QrSigner(self::KEY);
+
+        $this->assertSame('EVX1.301.4567.1.1.Z7N2B5MN', $signer->signExamSheet(301, 4567, 1, 1));
+        $this->assertSame('EVX1.301.0.2.3.B7M2MBGC', $signer->signExamSheet(301, 0, 2, 3));
+
+        $qr = $signer->verifyExamSheet('EVX1.301.4567.1.1.Z7N2B5MN');
+        $this->assertNotNull($qr);
+        $this->assertSame([301, 4567, 1, 1], [$qr->assignmentId, $qr->studentId, $qr->page, $qr->layoutVersion]);
+        $this->assertTrue($signer->verifyExamSheet($signer->signExamSheet(301, 0, 2, 3))?->isAnonymous(), 'student 0 is the key sheet');
+    }
+
+    public function test_worksheet_and_exam_sheet_qrs_do_not_verify_as_each_other(): void
+    {
+        $signer = new QrSigner(self::KEY);
+        $worksheet = $signer->sign(301, 4567, 1, 1);
+        $exam = $signer->signExamSheet(301, 4567, 1, 1);
+
+        $this->assertNull($signer->verifyExamSheet($worksheet));
+        $this->assertNull($signer->verify($exam));
+        // Swapping the prefix keeps the worksheet signature, which does not sign the EVX1 prefix.
+        $this->assertNull($signer->verifyExamSheet('EVX1'.substr($worksheet, 3)));
+        $this->assertNull($signer->verify('EV1'.substr($exam, 4)));
+        // A forged signature.
+        $this->assertNull($signer->verifyExamSheet(substr($exam, 0, -8).'AAAAAAAA'));
+        $this->assertNull((new QrSigner('another-key'))->verifyExamSheet($exam));
     }
 }

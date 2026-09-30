@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Exams\ExamEditor;
 use App\Domain\Exams\ExamPayload;
+use App\Domain\Exams\ExamPrintService;
 use App\Domain\Exams\ExamVersions;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\WorksheetPrintResource;
 use App\Models\Assignment;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +19,7 @@ use Illuminate\Support\Facades\Gate;
  * Exams of the signed-in teacher (DESIGN §22.15). {id} is an assignment
  * with kind = exam of one of the teacher's classrooms; homework or another
  * teacher's exam is a 404. Sections, the answer key, question approval and
- * the shuffled versions (§22.2–§22.5).
+ * the shuffled versions (§22.2–§22.5), and printing (§22.6).
  */
 class ExamController extends Controller
 {
@@ -112,6 +114,26 @@ class ExamController extends Controller
         $this->editor->unlockStructure($exam);
 
         return response()->json(['data' => ExamPayload::of($exam->refresh())]);
+    }
+
+    /**
+     * POST /api/v1/exams/{id}/prints {kind: exam_booklet|answer_sheet|key_sheet,
+     * version_no? (booklet; required with more than one version),
+     * student_ids?[] (answer sheets; default the whole roster)} -> 202
+     * {data: print}, polled with GET /worksheet-prints/{id}. The first print
+     * locks the structure. 409 answer_key_not_approved, 422
+     * answer_key_incomplete / exam_sheet_overflow / exam_manual_grading /
+     * assignment_empty / classroom_empty / validation_failed, 503
+     * qr_key_missing (sheets). See ExamPrintService.
+     */
+    public function prints(Request $request, int $id, ExamPrintService $prints): JsonResponse
+    {
+        $exam = self::ownQuery($request)->with('classroom')->findOrFail($id);
+        Gate::authorize('print', $exam);
+
+        $print = $prints->queue($exam, $request->user(), $request->only(['kind', 'version_no', 'student_ids']));
+
+        return (new WorksheetPrintResource($print->refresh()))->response()->setStatusCode(202);
     }
 
     /**

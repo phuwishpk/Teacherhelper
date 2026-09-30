@@ -26,14 +26,41 @@ final class ExamSheetCapacity
      */
     public static function of(int $rowQuestions, int $numericQuestions): array
     {
-        $pages = 0;
-        while ($rowQuestions > 0 || $numericQuestions > 0) {
-            $pages++;
-            $bands = min(self::MAX_BANDS, intdiv($numericQuestions + self::COLUMNS - 1, self::COLUMNS));
-            $numericQuestions -= min($numericQuestions, self::COLUMNS * $bands);
-            $rowQuestions -= min($rowQuestions, self::COLUMNS * (self::ROWS - self::BAND_ROWS * $bands));
-        }
+        $pages = count(self::split($rowQuestions, $numericQuestions));
 
         return ['pages' => $pages, 'overflow' => $pages > self::MAX_PAGES];
+    }
+
+    /**
+     * What each page holds under the greedy rule, page by page (the list may
+     * be longer than MAX_PAGES; the caller decides about the overflow).
+     *
+     * @return list<array{rows: int, blocks: int, bands: int}>
+     */
+    public static function split(int $rowQuestions, int $numericQuestions): array
+    {
+        $pages = [];
+        while ($rowQuestions > 0 || $numericQuestions > 0) {
+            $bands = min(self::MAX_BANDS, intdiv($numericQuestions + self::COLUMNS - 1, self::COLUMNS));
+            $blocks = min($numericQuestions, self::COLUMNS * $bands);
+            $rows = min($rowQuestions, self::rowCapacity($bands));
+            $numericQuestions -= $blocks;
+            $rowQuestions -= $rows;
+            $pages[] = ['rows' => $rows, 'blocks' => $blocks, 'bands' => $bands];
+        }
+
+        return $pages;
+    }
+
+    /** Bubble rows of one grid column on a page with $bands digit bands. */
+    public static function rowsPerColumn(int $bands): int
+    {
+        return self::ROWS - self::BAND_ROWS * $bands;
+    }
+
+    /** Bubble rows of a page with $bands digit bands: 4 × (25 − 11b). */
+    public static function rowCapacity(int $bands): int
+    {
+        return self::COLUMNS * self::rowsPerColumn($bands);
     }
 }
