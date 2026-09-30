@@ -39,6 +39,12 @@ use Throwable;
  * The state of the latest request (queued, done, failed) lives in the
  * cache (database store in production), not in a table: it only tells the
  * polling app whether to wait, and the suggestions themselves are rows.
+ *
+ * guidance (§21.12): the teacher's guidance of the latest round, kept in
+ * the state (so the app can show and prefill it) and carried by the job.
+ * While a round is queued a new request queues nothing and answers the
+ * running round's state, guidance included; once it finished, a request
+ * with any guidance starts a new round.
  */
 final class IndicatorSuggestions
 {
@@ -63,7 +69,7 @@ final class IndicatorSuggestions
      *
      * @throws ApiException
      */
-    public function request(Assignment $assignment): array
+    public function request(Assignment $assignment, ?string $guidance = null, ?int $guidanceBy = null): array
     {
         $plan = $this->planOf($assignment);
         if ($plan === null) {
@@ -85,7 +91,7 @@ final class IndicatorSuggestions
         }
 
         if (! $this->isRunning($assignment->id)) {
-            $this->queue($assignment->id);
+            $this->queue($assignment->id, $guidance, $guidanceBy);
         }
 
         return $this->state($assignment->id);
@@ -119,7 +125,7 @@ final class IndicatorSuggestions
      *
      * @throws GeminiException
      */
-    public function process(int $assignmentId, bool $lastAttempt): void
+    public function process(int $assignmentId, bool $lastAttempt, ?string $guidance = null, ?int $guidanceBy = null): void
     {
         $assignment = Assignment::query()->with(['classroom', 'subject'])->find($assignmentId);
         if ($assignment === null) {
@@ -143,7 +149,7 @@ final class IndicatorSuggestions
         $questions = Question::query()->where('assignment_id', $assignment->id)->orderBy('position')->get()->all();
         $indicators = self::sortedIndicators($plan);
         try {
-            $result = $this->suggester->suggest($assignment, $plan, $questions, $indicators, $key);
+            $result = $this->suggester->suggest($assignment, $plan, $questions, $indicators, $key, $guidance, $guidanceBy);
         } catch (GeminiException $e) {
             if ($e->status === GeminiException::ERROR && ! $lastAttempt) {
                 throw $e;
@@ -180,6 +186,7 @@ final class IndicatorSuggestions
             'error' => null,
             'suggested_question_count' => count($result['suggestions']),
             'dropped_code_count' => $result['dropped'],
+            'guidance' => $state['guidance'],
         ]);
     }
 
@@ -193,9 +200,10 @@ final class IndicatorSuggestions
 
     /**
      * {status: null|queued|done|failed, requested_at, finished_at,
-     *  error: {code, message}|null, suggested_question_count, dropped_code_count}
+     *  error: {code, message}|null, suggested_question_count, dropped_code_count,
+     *  guidance: the teacher's guidance of that round|null}
      *
-     * @return array{status: string|null, requested_at: string|null, finished_at: string|null, error: array{code: string, message: string}|null, suggested_question_count: int|null, dropped_code_count: int|null}
+     * @return array{status: string|null, requested_at: string|null, finished_at: string|null, error: array{code: string, message: string}|null, suggested_question_count: int|null, dropped_code_count: int|null, guidance: string|null}
      */
     public function state(int $assignmentId): array
     {
@@ -208,6 +216,7 @@ final class IndicatorSuggestions
             'error' => $state['error'] ?? null,
             'suggested_question_count' => $state['suggested_question_count'] ?? null,
             'dropped_code_count' => $state['dropped_code_count'] ?? null,
+            'guidance' => $state['guidance'] ?? null,
         ];
     }
 
@@ -284,7 +293,7 @@ final class IndicatorSuggestions
             && Carbon::parse($state['requested_at'])->gt(now()->subMinutes(self::STALE_MINUTES));
     }
 
-    private function queue(int $assignmentId): void
+    private function queue(int $assignmentId, ?string $guidance = null, ?int $guidanceBy = null): void
     {
         $this->remember($assignmentId, [
             'status' => self::STATUS_QUEUED,
@@ -293,8 +302,9 @@ final class IndicatorSuggestions
             'error' => null,
             'suggested_question_count' => null,
             'dropped_code_count' => null,
+            'guidance' => $guidance,
         ]);
-        SuggestIndicatorsJob::dispatch($assignmentId);
+        SuggestIndicatorsJob::dispatch($assignmentId, $guidance, $guidanceBy);
     }
 
     private function fail(int $assignmentId, string $code, string $message): void
@@ -307,6 +317,7 @@ final class IndicatorSuggestions
             'error' => ['code' => $code, 'message' => $message],
             'suggested_question_count' => null,
             'dropped_code_count' => null,
+            'guidance' => $state['guidance'],
         ]);
     }
 

@@ -12,7 +12,8 @@ use Throwable;
  * suggests indicators of the linked lesson plan for every question
  * (IndicatorSuggestions::process). Transport errors retry with backoff;
  * after the last try the request is `failed` and the teacher can ask
- * again or pick indicators by hand. Carries the id only.
+ * again or pick indicators by hand. Carries the id and the teacher's
+ * guidance (a short text they typed, never student data).
  */
 class SuggestIndicatorsJob implements ShouldQueue
 {
@@ -25,14 +26,22 @@ class SuggestIndicatorsJob implements ShouldQueue
 
     public int $timeout = 90;
 
-    public function __construct(public readonly int $assignmentId)
-    {
+    /**
+     * $guidance / $guidanceBy: the teacher's guidance to the AI of this
+     * request and its author (DESIGN §21.12); null for the suggestion made
+     * on answer-key approval.
+     */
+    public function __construct(
+        public readonly int $assignmentId,
+        public readonly ?string $guidance = null,
+        public readonly ?int $guidanceBy = null,
+    ) {
         $this->onQueue('default');
     }
 
     public function handle(IndicatorSuggestions $suggestions): void
     {
-        $suggestions->process($this->assignmentId, lastAttempt: $this->attempts() >= $this->tries);
+        $suggestions->process($this->assignmentId, lastAttempt: $this->attempts() >= $this->tries, guidance: $this->guidance, guidanceBy: $this->guidanceBy);
     }
 
     public function failed(?Throwable $exception): void

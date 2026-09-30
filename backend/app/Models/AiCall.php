@@ -9,7 +9,8 @@ use Illuminate\Support\Carbon;
 /**
  * DESIGN §8.4 `ai_calls`: one Gemini request (tokens, latency, outcome) and
  * whose key paid for it (key_source, §10.1). Never holds images or prompt
- * text. No updated_at.
+ * text, except the teacher's own guidance the call carried
+ * (teacher_guidance, guidance_by; §21.12). No updated_at.
  *
  * @property int $id
  * @property string $purpose extract|extract_batch|extract_page|rubric_draft|explanation|practice_gen|... (§21.8)
@@ -32,6 +33,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $question_count
  * @property int|null $assignment_id
  * @property bool $batch
+ * @property string|null $teacher_guidance
+ * @property int|null $guidance_by
  * @property Carbon $created_at
  */
 class AiCall extends Model
@@ -69,6 +72,8 @@ class AiCall extends Model
         'question_count',
         'assignment_id',
         'batch',
+        'teacher_guidance',
+        'guidance_by',
     ];
 
     /**
@@ -85,6 +90,7 @@ class AiCall extends Model
             'image_count' => 'integer',
             'question_count' => 'integer',
             'batch' => 'boolean',
+            'guidance_by' => 'integer',
         ];
     }
 

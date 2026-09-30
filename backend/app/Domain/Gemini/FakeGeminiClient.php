@@ -53,6 +53,10 @@ use Illuminate\Support\Str;
  * chunk, see tests/fixtures/injection): the fake then behaves like a model
  * that read the words written in the answer box.
  *
+ * The teacher's guidance (the {teacher_guidance} block, DESIGN §21.12) is
+ * only in the user text, never in the hints: a marker written in it
+ * changes nothing, the way guidance must never override the prompt's rules.
+ *
  * A key containing "rejected" is refused on every call (key_invalid);
  * listModels() refuses keys containing "invalid" and fails for keys
  * containing "unavailable".

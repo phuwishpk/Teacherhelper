@@ -207,8 +207,10 @@ final class ResponseReviewer
      * GradeScanJob uses; anything else calls Gemini with the transcription
      * and the teacher's error types. Without any text read from the answer
      * (mcq, never extracted) there is nothing to explain from.
+     * $guidance: the teacher's guidance to the AI (DESIGN §21.12), used only
+     * when Gemini is called.
      */
-    public function regenerateExplanation(Response $response, User $teacher): Response
+    public function regenerateExplanation(Response $response, User $teacher, ?string $guidance = null): Response
     {
         $response->loadMissing(['question.rubricCriteria', 'submission.assignment.classroom']);
         DB::transaction(fn () => self::lock($response)); // published / still grading -> 409
@@ -222,7 +224,7 @@ final class ResponseReviewer
         } elseif (($response->extraction['blank'] ?? false) === true) {
             $text = ['text' => FeedbackTemplates::BLANK, 'source' => Response::EXPLANATION_TEMPLATE];
         } else {
-            $text = ['text' => $this->askGemini($response), 'source' => Response::EXPLANATION_AI];
+            $text = ['text' => $this->askGemini($response, $guidance, $teacher->id), 'source' => Response::EXPLANATION_AI];
         }
 
         return DB::transaction(function () use ($response, $text) {
@@ -246,7 +248,7 @@ final class ResponseReviewer
         });
     }
 
-    private function askGemini(Response $response): string
+    private function askGemini(Response $response, ?string $guidance, int $teacherId): string
     {
         $assignment = $response->submission->assignment;
         $key = $this->keys->forTeacher($assignment?->classroom?->teacher_id);
@@ -264,6 +266,8 @@ final class ResponseReviewer
             $extraction,
             self::FEATURE_REGENERATE,
             $assignment?->id,
+            $guidance,
+            $teacherId,
         );
         $outcome = $this->gateway->run(['explanation' => $call], $key)['explanation'];
 

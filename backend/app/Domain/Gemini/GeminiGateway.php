@@ -17,7 +17,9 @@ use JsonException;
  * 4. logs every request, retries included, to `ai_calls` (purpose, model,
  *    prompt_version, tokens, latency, status, key_source, and the §21.8
  *    labels: feature, media resolution, image and question counts) and
- *    never the prompt, the images or the key.
+ *    never the prompt, the images or the key. The one part of a prompt
+ *    that is logged is the teacher's own guidance (teacher_guidance,
+ *    guidance_by; DESIGN §21.12), so what steered a call can be traced.
  *
  * Transport errors are not retried here: GradeScanJob counts attempts and
  * releases itself with backoff.
@@ -179,6 +181,8 @@ final class GeminiGateway
             'question_count' => $call->questionCount === null ? null : min(255, $call->questionCount),
             'assignment_id' => $call->assignmentId,
             'batch' => $batch,
+            'teacher_guidance' => $call->guidance,
+            'guidance_by' => $call->guidance === null ? null : $call->guidanceBy,
         ]);
     }
 

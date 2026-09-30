@@ -8,6 +8,7 @@ use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\PromptRepository;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Exceptions\ApiException;
 use App\Jobs\ReadCourseDocumentJob;
 use App\Models\DocumentExtraction;
@@ -34,6 +35,10 @@ use Illuminate\Support\Str;
  *
  * Nothing is written to courses here: the teacher confirms the result in a
  * form and sends it to POST /courses/import (CourseImporter).
+ *
+ * guidance (DESIGN §21.12): the teacher's optional guidance to the AI is
+ * part of the cache key (TeacherGuidance::cacheKey; none = the key of
+ * before) and is kept on the row, where the job reads it.
  */
 final class CourseDocuments
 {
@@ -49,16 +54,17 @@ final class CourseDocuments
     ) {}
 
     /**
-     * @param  array<string, mixed>  $input  {document_ids[], purpose, page_from?, page_to?}
+     * @param  array<string, mixed>  $input  {document_ids[], purpose, page_from?, page_to?, guidance?}
      * @return array{extraction: DocumentExtraction, cached: bool, estimate: array{input_tokens: int, output_tokens: int, thb: float|null}}
      *
      * @throws ApiException
      */
     public function request(User $teacher, array $input): array
     {
-        [$kind, $selection] = $this->resolve($teacher, $input);
+        [$kind, $selection, $guidance] = $this->resolve($teacher, $input);
         $estimate = CostEstimate::forPages($selection->pageCount());
-        $existing = $this->cached($teacher, $kind, $selection);
+        $hash = TeacherGuidance::cacheKey($selection->inputHash(), $guidance);
+        $existing = $this->cached($teacher, $kind, $hash);
         if ($existing?->isDone()) {
             return ['extraction' => $existing, 'cached' => true, 'estimate' => $estimate];
         }
@@ -69,8 +75,8 @@ final class CourseDocuments
         $selection->files(); // still stored, not too large, range cuttable: 422 now rather than a failed job
 
         $extraction = $existing ?? DocumentExtraction::createOrFirst(
-            ['school_id' => $teacher->school_id, 'input_hash' => $selection->inputHash(), 'purpose' => $kind],
-            ['status' => DocumentExtraction::STATUS_QUEUED, 'requested_by' => $teacher->id],
+            ['school_id' => $teacher->school_id, 'input_hash' => $hash, 'purpose' => $kind],
+            ['status' => DocumentExtraction::STATUS_QUEUED, 'requested_by' => $teacher->id, 'guidance' => $guidance],
         );
         if ($extraction->isDone()) {
             return ['extraction' => $extraction, 'cached' => true, 'estimate' => $estimate];
@@ -89,19 +95,19 @@ final class CourseDocuments
     }
 
     /**
-     * @param  array<string, mixed>  $input  {document_ids[], purpose, page_from?, page_to?}
+     * @param  array<string, mixed>  $input  {document_ids[], purpose, page_from?, page_to?, guidance?}
      * @return array{purpose: string, pages: int, cached: bool, estimate: array{input_tokens: int, output_tokens: int, thb: float|null}}
      *
      * @throws ApiException
      */
     public function estimate(User $teacher, array $input): array
     {
-        [$kind, $selection] = $this->resolve($teacher, $input);
+        [$kind, $selection, $guidance] = $this->resolve($teacher, $input);
 
         return [
             'purpose' => $kind,
             'pages' => $selection->pageCount(),
-            'cached' => (bool) $this->cached($teacher, $kind, $selection)?->isDone(),
+            'cached' => (bool) $this->cached($teacher, $kind, TeacherGuidance::cacheKey($selection->inputHash(), $guidance))?->isDone(),
             'estimate' => CostEstimate::forPages($selection->pageCount()),
         ];
     }
@@ -157,7 +163,7 @@ final class CourseDocuments
         }
 
         try {
-            $result = $this->reader->read($kind, $files, $key);
+            $result = $this->reader->read($kind, $files, $key, $extraction->guidance, $extraction->guidance === null ? null : $extraction->requested_by);
         } catch (GeminiException $e) {
             if ($e->status === GeminiException::ERROR && ! $lastAttempt) {
                 throw $e; // transient: the queue retries with backoff
@@ -192,7 +198,7 @@ final class CourseDocuments
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{0: string, 1: DocumentSelection}
+     * @return array{0: string, 1: DocumentSelection, 2: string|null}
      *
      * @throws ApiException
      */
@@ -209,14 +215,14 @@ final class CourseDocuments
             throw new ApiException('กรุณาแนบไฟล์เอกสารอย่างน้อย 1 ไฟล์', 'validation_failed', 422, ['document_ids' => ['กรุณาแนบไฟล์เอกสารอย่างน้อย 1 ไฟล์']]);
         }
 
-        return [$kind, DocumentSelection::resolve($teacher, $input)];
+        return [$kind, DocumentSelection::resolve($teacher, $input), TeacherGuidance::fromInput($input)];
     }
 
-    private function cached(User $teacher, string $kind, DocumentSelection $selection): ?DocumentExtraction
+    private function cached(User $teacher, string $kind, string $hash): ?DocumentExtraction
     {
         return DocumentExtraction::query()
             ->where('school_id', $teacher->school_id)
-            ->where('input_hash', $selection->inputHash())
+            ->where('input_hash', $hash)
             ->where('purpose', $kind)
             ->first();
     }

@@ -11,13 +11,15 @@ use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\MediaResolution;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\ResponseSchemas;
+use App\Domain\Gemini\TeacherGuidance;
 
 /**
  * The one Gemini call that reads a course description, course structure or
  * lesson plans (prompt document_read, DESIGN §20.1, §21.2, §21.6: thinking
  * medium, up to 16,384 output tokens), through the gateway (schema check,
  * one retry of invalid output, ai_calls with feature course_import). Every
- * file goes at GEMINI_MEDIA_DOCUMENT (teachers' documents, §21.5).
+ * file goes at GEMINI_MEDIA_DOCUMENT (teachers' documents, §21.5). The
+ * teacher's guidance, if any, fills the {teacher_guidance} slot (§21.12).
  */
 final class CourseDocumentReader
 {
@@ -44,12 +46,14 @@ final class CourseDocumentReader
      *
      * @throws GeminiException
      */
-    public function read(string $kind, array $files, GeminiKey $key): array
+    public function read(string $kind, array $files, GeminiKey $key, ?string $guidance = null, ?int $guidanceBy = null): array
     {
         $call = new GeminiCall(
-            request: $this->request($kind, $files),
+            request: $this->request($kind, $files, $guidance),
             check: fn (array $data) => CourseDocumentResult::fromGemini($kind, $data),
             feature: self::FEATURE,
+            guidance: $guidance,
+            guidanceBy: $guidanceBy,
         );
 
         return (array) $this->gateway->runOne($call, $key)->data;
@@ -58,7 +62,7 @@ final class CourseDocumentReader
     /**
      * @param  list<array{bytes: string, mime_type: string, page_count: int}>  $files
      */
-    public function request(string $kind, array $files): GeminiRequest
+    public function request(string $kind, array $files, ?string $guidance = null): GeminiRequest
     {
         $prompt = $this->prompts->get(self::PURPOSE, 'general');
         $level = MediaResolution::forPart(MediaResolution::PART_DOCUMENT);
@@ -71,6 +75,7 @@ final class CourseDocumentReader
             userText: $prompt->renderUser([
                 'file_note' => self::fileNote($files),
                 'document_kind' => self::KIND_TEXT[$kind] ?? self::KIND_TEXT[CourseDocumentResult::KIND_COURSE],
+                'teacher_guidance' => TeacherGuidance::block($guidance),
             ]),
             images: array_map(fn (array $f) => new GeminiImage($f['bytes'], $f['mime_type'], $level), array_values($files)),
             responseSchema: ResponseSchemas::get(self::PURPOSE, 'general'),

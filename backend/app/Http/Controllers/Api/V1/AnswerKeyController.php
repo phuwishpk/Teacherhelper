@@ -26,7 +26,7 @@ class AnswerKeyController extends Controller
      * GET /api/v1/assignments/{id}/answer-key -> {data: {assignment_id,
      * mode, status, key_origin, key_approved_at, key_approved_by,
      * extraction_status: queued|done|failed|null, extraction: {id, purpose,
-     * status, error, kind, notes_th, created_at, updated_at}|null,
+     * status, error, guidance, kind, notes_th, created_at, updated_at}|null,
      * key_complete, incomplete_questions: [position], questions: [...]}}
      */
     public function show(Request $request, int $id): JsonResponse
@@ -39,7 +39,10 @@ class AnswerKeyController extends Controller
 
     /**
      * POST /api/v1/assignments/{id}/answer-key/extract {document_ids[],
-     * page_from?, page_to?}: reads the teacher's key from the documents.
+     * page_from?, page_to?, guidance?}: reads the teacher's key from the
+     * documents. guidance: the teacher's guidance to the AI (DESIGN §21.12,
+     * at most 500 characters, 422 validation_failed errors.guidance), part
+     * of the cache key and echoed as answer_key.extraction.guidance.
      * Read before in this school -> 200 with the questions filled
      * (extraction.cached = true, no cost); otherwise 202 (ExtractDocumentJob,
      * poll GET .../answer-key). 422 document_too_long (> 30 pages without a
@@ -53,7 +56,7 @@ class AnswerKeyController extends Controller
 
     /**
      * POST /api/v1/assignments/{id}/answer-key/draft {document_ids?[],
-     * page_from?, page_to?}: no teacher key, AI drafts the answers from the
+     * page_from?, page_to?, guidance?}: no teacher key, AI drafts the answers from the
      * typed questions and/or a question sheet (key_origin = ai_draft). Same
      * answers as extract; 422 assignment_empty without questions or files.
      */
@@ -64,7 +67,7 @@ class AnswerKeyController extends Controller
 
     /**
      * POST /api/v1/assignments/{id}/answer-key/estimate {kind?: read|draft,
-     * document_ids?[], page_from?, page_to?} -> {data: {kind, pages, cached,
+     * document_ids?[], page_from?, page_to?, guidance?} -> {data: {kind, pages, cached,
      * estimate: {input_tokens, output_tokens, thb}}}: what extract (read,
      * the default) or draft would cost for this selection and whether the
      * school read it before (cached: free). Queues nothing. Same 422s as
@@ -82,7 +85,7 @@ class AnswerKeyController extends Controller
         }
         $kind = $kind === 'read' ? AnswerKeyResult::KIND_READ : AnswerKeyResult::KIND_DRAFT;
 
-        $outcome = $this->keys->estimate($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to']));
+        $outcome = $this->keys->estimate($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to', 'guidance']));
 
         return response()->json(['data' => $outcome]);
     }
@@ -116,7 +119,7 @@ class AnswerKeyController extends Controller
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $assignment);
 
-        $outcome = $this->keys->request($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to']));
+        $outcome = $this->keys->request($request->user(), $assignment, $kind, $request->only(['document_ids', 'page_from', 'page_to', 'guidance']));
 
         return response()->json(['data' => [
             'cached' => $outcome['cached'],

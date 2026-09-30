@@ -95,10 +95,12 @@ final class StudentAnalyses
 
     /**
      * "วิเคราะห์ตอนนี้" (§20.5): synchronous, the request's own timeout.
+     * $guidance: the teacher's guidance to the AI (§21.12), kept on the row
+     * with the texts it steered.
      *
      * @throws ApiException 422 analysis_no_data | ai_key_missing | ai_key_invalid, 502 ai_unavailable
      */
-    public function runNow(User $student, Classroom $classroom): StudentAnalysis
+    public function runNow(User $student, Classroom $classroom, ?string $guidance = null, ?int $guidanceBy = null): StudentAnalysis
     {
         $input = $this->inputs->forStudent($student->id, $classroom);
         $row = $this->record($input);
@@ -110,7 +112,7 @@ final class StudentAnalyses
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 
-        $outcome = $this->gateway->run(['analysis' => $this->requests->call($input, self::FEATURE_NOW)], $key)['analysis'];
+        $outcome = $this->gateway->run(['analysis' => $this->requests->call($input, self::FEATURE_NOW, $guidance, $guidanceBy)], $key)['analysis'];
         if ($outcome->status === CallOutcome::KEY_INVALID) {
             throw new ApiException('Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง', 'ai_key_invalid', 422);
         }
@@ -118,19 +120,20 @@ final class StudentAnalyses
             throw new ApiException('AI วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง', 'ai_unavailable', 502);
         }
 
-        return $this->applyText($row->id, (array) $outcome->data, StudentAnalysis::VIA_NOW, $input->hash(), null) ?? $row->refresh();
+        return $this->applyText($row->id, (array) $outcome->data, StudentAnalysis::VIA_NOW, $input->hash(), null, $guidance) ?? $row->refresh();
     }
 
     /**
      * Writes Gemini's texts. A row that has meanwhile been queued in another
      * batch, or already collected, is left alone when batchId is given and
-     * the row no longer belongs to it.
+     * the row no longer belongs to it. $guidance: what steered these texts
+     * (null for a nightly batch, which has none).
      *
      * @param  array{teacher_text?: string, student_text?: string, next_step_skill_ids?: list<int>}  $text
      */
-    public function applyText(int $analysisId, array $text, string $via, string $inputHash, ?int $batchId): ?StudentAnalysis
+    public function applyText(int $analysisId, array $text, string $via, string $inputHash, ?int $batchId, ?string $guidance = null): ?StudentAnalysis
     {
-        return DB::transaction(function () use ($analysisId, $text, $via, $inputHash, $batchId) {
+        return DB::transaction(function () use ($analysisId, $text, $via, $inputHash, $batchId, $guidance) {
             $row = StudentAnalysis::query()->lockForUpdate()->find($analysisId);
             if ($row === null) {
                 return null;
@@ -147,6 +150,7 @@ final class StudentAnalyses
             $row->generated_via = $via;
             $row->batch_id = $batchId;
             $row->generated_at = now();
+            $row->guidance = $guidance;
             if (Classroom::query()->whereKey($row->classroom_id)->value('auto_share_analysis')) {
                 $row->shared_student_text = $row->student_text;
                 $row->shared_at = now();

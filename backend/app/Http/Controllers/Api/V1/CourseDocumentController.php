@@ -25,18 +25,21 @@ class CourseDocumentController extends Controller
 
     /**
      * POST /api/v1/courses/extract {document_ids[], purpose: course|lesson_plan,
-     * page_from?, page_to?} -> 200 cached {data: {cached: true, estimate:
-     * null, extraction, result, indicator_matches}} or 202 queued {data:
-     * {cached: false, estimate, extraction, result: null, indicator_matches:
-     * []}}; poll GET /document-extractions/{id}. 422 ai_key_missing,
-     * document_too_long, document_missing, file_too_large,
-     * document_split_unsupported.
+     * page_from?, page_to?, guidance?} -> 200 cached {data: {cached: true,
+     * estimate: null, extraction, result, indicator_matches}} or 202 queued
+     * {data: {cached: false, estimate, extraction, result: null,
+     * indicator_matches: []}}; poll GET /document-extractions/{id}.
+     * guidance: the teacher's guidance to the AI (DESIGN §21.12, at most 500
+     * characters), part of the cache key and echoed as extraction.guidance.
+     * 422 ai_key_missing, document_too_long, document_missing,
+     * file_too_large, document_split_unsupported, validation_failed
+     * (errors.guidance).
      */
     public function extract(Request $request): JsonResponse
     {
         Gate::authorize('create', Course::class);
         $teacher = $request->user();
-        $outcome = $this->documents->request($teacher, $request->only(['document_ids', 'purpose', 'page_from', 'page_to']));
+        $outcome = $this->documents->request($teacher, $request->only(['document_ids', 'purpose', 'page_from', 'page_to', 'guidance']));
         $extraction = $outcome['extraction'];
 
         return response()->json(['data' => [
@@ -55,7 +58,7 @@ class CourseDocumentController extends Controller
     {
         Gate::authorize('create', Course::class);
 
-        return response()->json(['data' => $this->documents->estimate($request->user(), $request->only(['document_ids', 'purpose', 'page_from', 'page_to']))]);
+        return response()->json(['data' => $this->documents->estimate($request->user(), $request->only(['document_ids', 'purpose', 'page_from', 'page_to', 'guidance']))]);
     }
 
     /** POST /api/v1/courses/import (see CourseImporter) -> 201 {data: course detail} */

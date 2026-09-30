@@ -6,6 +6,7 @@ use App\Domain\Courses\IndicatorSuggestions;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\GeminiException;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Jobs\SuggestIndicatorsJob;
 use App\Models\AiCall;
 use App\Models\Assignment;
@@ -123,7 +124,7 @@ class IndicatorSuggestionTest extends TestCase
         // One text-only call, thinking low, 1,024 tokens (§21.6), with the plan's indicators and no student data.
         $this->assertCount(1, $this->gemini->requests);
         $request = $this->gemini->requests[0];
-        $this->assertSame(['indicator_suggest', 'indicator_suggest.general.v1', 'low', 1024, []], [$request->purpose, 'indicator_suggest.general.'.$request->promptVersion, $request->thinkingLevel, $request->maxOutputTokens, $request->images]);
+        $this->assertSame(['indicator_suggest', 'indicator_suggest.general.v2', 'low', 1024, []], [$request->purpose, 'indicator_suggest.general.'.$request->promptVersion, $request->thinkingLevel, $request->maxOutputTokens, $request->images]);
         $this->assertStringContainsString('- ค 1.1 ป.5/1: บวกลบเศษส่วน', $request->userText);
         $this->assertStringNotContainsString('ค 1.1 ป.5/3', $request->userText, 'only the plan\'s indicators are offered');
         $call = AiCall::query()->sole();
@@ -218,6 +219,47 @@ class IndicatorSuggestionTest extends TestCase
         $suggestions->request($this->work->refresh()->load('classroom'));
         (new SuggestIndicatorsJob($this->work->id))->failed(null);
         $this->assertSame('failed', $suggestions->state($this->work->id)['status']);
+    }
+
+    public function test_the_teachers_guidance_reaches_every_call_is_logged_and_shown(): void
+    {
+        Queue::fake();
+        // DESIGN §21.12: guidance is optional, trimmed, and kept with the round.
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => "  เน้นตัวชี้วัดเรื่องการบวก\r\n  "])->assertStatus(202)
+            ->assertJsonPath('data.status', 'queued')
+            ->assertJsonPath('data.guidance', 'เน้นตัวชี้วัดเรื่องการบวก');
+        // Asked again while queued: nothing queued, the running round (and its guidance) answers.
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => 'อย่างอื่น'])->assertStatus(202)
+            ->assertJsonPath('data.guidance', 'เน้นตัวชี้วัดเรื่องการบวก');
+        Queue::assertPushed(SuggestIndicatorsJob::class, 1);
+        $job = Queue::pushed(SuggestIndicatorsJob::class)->first();
+        $this->assertSame(['เน้นตัวชี้วัดเรื่องการบวก', $this->teacher->id], [$job->guidance, $job->guidanceBy]);
+
+        $this->app->call([$job, 'handle']);
+        $this->assertCount(1, $this->gemini->requests);
+        $this->assertStringContainsString("TEACHER GUIDANCE:\n".TeacherGuidance::LABEL."\n<<<\nเน้นตัวชี้วัดเรื่องการบวก\n>>>", $this->gemini->requests[0]->userText);
+        $call = AiCall::query()->sole();
+        $this->assertSame(['เน้นตัวชี้วัดเรื่องการบวก', $this->teacher->id], [$call->teacher_guidance, $call->guidance_by]);
+        $this->asUser($this->teacher)->getJson($this->url())->assertOk()
+            ->assertJsonPath('data.status', 'done')
+            ->assertJsonPath('data.guidance', 'เน้นตัวชี้วัดเรื่องการบวก');
+
+        // After a finished round other guidance starts a new one; none at all is "(ไม่มี)".
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => 'รอบใหม่'])->assertStatus(202)
+            ->assertJsonPath('data.status', 'queued')->assertJsonPath('data.guidance', 'รอบใหม่');
+        Queue::assertPushed(SuggestIndicatorsJob::class, 2);
+        app(IndicatorSuggestions::class)->process($this->work->id, lastAttempt: true);
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => '   '])->assertStatus(202)->assertJsonPath('data.guidance', null);
+        app(IndicatorSuggestions::class)->process($this->work->id, lastAttempt: true);
+        $this->assertStringContainsString("TEACHER GUIDANCE:\n(ไม่มี)", $this->gemini->requests[2]->userText);
+        $this->assertSame([null, null], [AiCall::query()->orderByDesc('id')->first()->teacher_guidance, AiCall::query()->orderByDesc('id')->first()->guidance_by]);
+
+        // Too long, or not text: 422 before anything is queued.
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => str_repeat('ก', 501)])->assertStatus(422)
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonPath('errors.guidance.0', 'คำแนะนำถึง AI ยาวได้ไม่เกิน 500 ตัวอักษร');
+        $this->asUser($this->teacher)->postJson($this->url(), ['guidance' => ['x']])->assertStatus(422)->assertJsonPath('errors.guidance.0', 'คำแนะนำถึง AI ต้องเป็นข้อความ');
+        Queue::assertPushed(SuggestIndicatorsJob::class, 3);
     }
 
     public function test_many_questions_are_split_into_calls_of_ten(): void

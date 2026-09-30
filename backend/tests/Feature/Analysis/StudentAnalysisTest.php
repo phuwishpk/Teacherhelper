@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Analysis;
 
+use App\Domain\Gemini\TeacherGuidance;
 use App\Models\AiCall;
 use App\Models\Assignment;
 use App\Models\Question;
@@ -87,6 +88,34 @@ class StudentAnalysisTest extends TestCase
         $this->assertStringContainsString('ค 1.1 ป.5/4', $request->userText);
         $this->assertStringContainsString('"mastery":30', $request->userText);
         $this->assertSame(['low', 1536], [$request->thinkingLevel, $request->maxOutputTokens]);
+    }
+
+    public function test_analyse_now_carries_the_teachers_guidance_and_the_student_never_sees_it(): void
+    {
+        $url = "/api/v1/students/{$this->students['A']->id}/analysis/run";
+        // DESIGN §21.12: validated before any call.
+        $this->asUser($this->teacher)->postJson($url, ['classroom_id' => $this->room->id, 'guidance' => str_repeat('ก', 501)])
+            ->assertStatus(422)->assertJsonPath('errors.guidance.0', 'คำแนะนำถึง AI ยาวได้ไม่เกิน 500 ตัวอักษร');
+        $this->assertSame(0, AiCall::query()->count());
+
+        $this->asUser($this->teacher)->postJson($url, ['classroom_id' => $this->room->id, 'guidance' => ' เน้นเรื่องเศษส่วน ใช้ภาษาง่าย '])
+            ->assertOk()->assertJsonPath('data.guidance', 'เน้นเรื่องเศษส่วน ใช้ภาษาง่าย');
+        $request = $this->fake()->requests[0];
+        $this->assertStringContainsString("TEACHER GUIDANCE:\n".TeacherGuidance::LABEL."\n<<<\nเน้นเรื่องเศษส่วน ใช้ภาษาง่าย\n>>>", $request->userText);
+        $call = AiCall::query()->sole();
+        $this->assertSame(['analysis_now', 'v2', 'เน้นเรื่องเศษส่วน ใช้ภาษาง่าย', $this->teacher->id], [$call->feature, $call->prompt_version, $call->teacher_guidance, $call->guidance_by]);
+        $this->asUser($this->teacher)->getJson($this->showUrl('A'))->assertOk()->assertJsonPath('data.guidance', 'เน้นเรื่องเศษส่วน ใช้ภาษาง่าย');
+
+        // The student's endpoint never carries the teacher's guidance.
+        $id = StudentAnalysis::query()->sole()->id;
+        $this->asUser($this->teacher)->postJson("/api/v1/analyses/{$id}/approve")->assertOk();
+        $mine = $this->asUser($this->students['A'])->getJson('/api/v1/student/analysis')->assertOk()->json('data');
+        $this->assertArrayNotHasKey('guidance', $mine[0]);
+        $this->assertStringNotContainsString('เน้นเรื่องเศษส่วน', json_encode($mine, JSON_UNESCAPED_UNICODE));
+
+        // Without guidance the slot reads "(ไม่มี)" and the row's guidance is cleared.
+        $this->run_('A')->assertOk()->assertJsonPath('data.guidance', null);
+        $this->assertStringContainsString("TEACHER GUIDANCE:\n(ไม่มี)", $this->fake()->requests[1]->userText);
     }
 
     public function test_the_forbidden_word_in_the_student_text_is_retried_once(): void
