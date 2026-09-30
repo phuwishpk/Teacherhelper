@@ -4,7 +4,6 @@ namespace Tests\Feature\Exams;
 
 use App\Domain\Exams\ExamScanKit;
 use App\Domain\Worksheets\QrSigner;
-use App\Models\Assignment;
 use App\Models\ExamSheetRead;
 use App\Models\Layout;
 use App\Models\Question;
@@ -18,7 +17,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -29,6 +27,7 @@ use Tests\TestCase;
  */
 class ExamSheetScanTest extends TestCase
 {
+    use ExamSheetTestHelpers;
     use ExamTestHelpers;
     use RefreshDatabase;
 
@@ -45,107 +44,6 @@ class ExamSheetScanTest extends TestCase
         for ($n = 1; $n <= 3; $n++) {
             $this->students[] = $this->enrollStudent($this->classroom, $n, 'นักเรียน '.$n)['student'];
         }
-    }
-
-    /**
-     * An approved app exam with $mcq 4-option rows and $numeric 2-digit
-     * blocks, printed once as answer sheets (layout version 1, locked).
-     */
-    private function printedExam(int $mcq = 4, int $numeric = 0, int $versions = 1): Assignment
-    {
-        $exam = $this->createExam(['version_count' => $versions]);
-        while ($mcq > 0) {
-            $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => min(100, $mcq)]);
-            $mcq -= 100;
-        }
-        if ($numeric > 0) {
-            $this->addSection($exam, ['type' => 'numeric', 'numeric' => ['digits' => 2, 'allow_decimal' => true], 'question_count' => $numeric]);
-        }
-        $exam = $this->approveExam($exam);
-        $this->asUser($this->teacher)->postJson("/api/v1/exams/{$exam->id}/prints", ['kind' => 'answer_sheet'])->assertStatus(202);
-
-        return $exam->refresh();
-    }
-
-    private function layout(Assignment $exam): Layout
-    {
-        return $exam->refresh()->currentLayout() ?? $this->fail('no layout');
-    }
-
-    /**
-     * Readings of one layout page: every bubble 0.02 except the marks.
-     * $marks: sheet_no => displayed position (int), several (list) or a
-     * number (string); $version: the version bubble to mark.
-     *
-     * @param  array<int, int|list<int>|string>  $marks
-     * @return array{version_fill: array<string, float>|null, rows: array<string, array<string, float>>, digits: array<string, mixed>}
-     */
-    private function reading(Assignment $exam, int $page, array $marks, ?int $version = null): array
-    {
-        $layoutPage = $this->layout($exam)->pages[$page - 1];
-        $versionFill = null;
-        $rows = [];
-        $digits = [];
-        foreach ($layoutPage['regions'] as $region) {
-            if ($region['kind'] === 'version_bubbles') {
-                foreach ($region['bubbles'] as $b) {
-                    $versionFill[(string) $b['value']] = $b['value'] === $version ? 0.92 : 0.02;
-                }
-            } elseif ($region['kind'] === 'omr_row') {
-                $mark = (array) ($marks[$region['sheet_no']] ?? []);
-                foreach ($region['bubbles'] as $b) {
-                    $rows[(string) $region['sheet_no']][(string) $b['value']] = in_array($b['value'], $mark, true) ? 0.9 : 0.02;
-                }
-            } else {
-                $text = (string) ($marks[$region['sheet_no']] ?? '');
-                $columns = [];
-                foreach ($region['columns'] as $i => $column) {
-                    $fill = [];
-                    foreach ($column['bubbles'] as $b) {
-                        $fill[(string) $b['value']] = ($text[$i] ?? null) === (string) $b['value'] ? 0.9 : 0.02;
-                    }
-                    $columns[] = $fill;
-                }
-                $digits[(string) $region['sheet_no']] = ['sign' => $region['sign'] === null ? null : 0.02, 'columns' => $columns];
-            }
-        }
-
-        return ['version_fill' => $versionFill, 'rows' => $rows, 'digits' => $digits];
-    }
-
-    /**
-     * @param  array<string, mixed>  $reading
-     * @param  array<string, mixed>  $extra
-     */
-    private function upload(Assignment $exam, User $student, int $page, array $reading, array $extra = []): TestResponse
-    {
-        $qr = app(QrSigner::class)->signExamSheet($exam->id, $student->id, $page, $this->layout($exam)->version);
-        $meta = [
-            'client_scan_id' => (string) Str::uuid(),
-            'qr' => $qr,
-            'scanned_at' => '2026-10-15T03:00:00Z',
-            'blur_score' => 150.5,
-            ...$reading,
-            ...$extra,
-        ];
-
-        return $this->asUser($this->teacher)->post('/api/v1/exam-sheets', [
-            'meta' => json_encode($meta),
-            'page' => UploadedFile::fake()->createWithContent('page.webp', (string) file_get_contents(base_path('tests/fixtures/scans/page.webp'))),
-        ], ['Accept' => 'application/json']);
-    }
-
-    /** @return array<int, Response> by original question position */
-    private function responses(Assignment $exam, User $student): array
-    {
-        $submission = Submission::query()->where('assignment_id', $exam->id)->where('student_id', $student->id)->firstOrFail();
-        $out = [];
-        foreach (Response::query()->where('submission_id', $submission->id)->with('question')->get() as $r) {
-            $out[$r->question->position] = $r;
-        }
-        ksort($out);
-
-        return $out;
     }
 
     public function test_scan_kit_needs_an_approved_key_of_an_app_exam(): void
@@ -322,7 +220,7 @@ class ExamSheetScanTest extends TestCase
         $this->assertSame(Submission::STATUS_REVIEWED, Submission::query()->firstOrFail()->status);
 
         $status = $this->asUser($this->teacher)->getJson("/api/v1/exams/{$exam->id}/sheet-status")->assertOk()->json();
-        $this->assertSame(['scanned' => 1, 'total' => 3, 'missing_numbers' => [1, 3], 'page_count' => 2, 'max_score' => 120], $status['summary']);
+        $this->assertSame(['scanned' => 1, 'total' => 3, 'missing_numbers' => [1, 3], 'page_count' => 2, 'max_score' => 120, 'published' => 0, 'ready_to_publish' => 1, 'waiting_review' => 0], $status['summary']);
         $this->assertSame([1, 2], $status['data'][1]['pages_received']);
         $this->assertSame(2, $status['data'][1]['version_no']);
         $this->assertEquals(120, $status['data'][1]['score']);

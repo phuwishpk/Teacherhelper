@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreAppealRequest;
 use App\Http\Resources\AppealResource;
 use App\Http\Resources\StudentResultResource;
+use App\Models\Assignment;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\Question;
 use App\Models\Response;
@@ -63,13 +64,17 @@ class StudentResultController extends Controller
 
     /**
      * POST /api/v1/student/responses/{id}/appeal {reason?} -> 201 {data: appeal};
-     * once per answer (409 appeal_exists).
+     * once per answer (409 appeal_exists). An exam answer can be appealed
+     * only while the teacher shows the key (DESIGN §22.12): without the
+     * per-question result there is nothing to appeal, so it is a 404.
      */
     public function appeal(StoreAppealRequest $request, int $responseId): JsonResponse
     {
         $response = Response::query()
             ->with('submission')
-            ->whereIn('submission_id', self::published($request)->select('submissions.id'))
+            ->whereIn('submission_id', self::published($request)
+                ->whereHas('assignment', fn (Builder $q) => $q->where('kind', Assignment::KIND_HOMEWORK)->orWhere('show_key_to_students', true))
+                ->select('submissions.id'))
             ->findOrFail($responseId);
         Gate::authorize('appeal', $response);
 

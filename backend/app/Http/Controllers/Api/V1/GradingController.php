@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamRegrade;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Grading\ClassRegrade;
 use App\Domain\Grading\ScanGrader;
@@ -27,6 +28,7 @@ class GradingController extends Controller
     public function __construct(
         private readonly GeminiKeyResolver $keys,
         private readonly ClassRegrade $regrade,
+        private readonly ExamRegrade $exams,
     ) {}
 
     /**
@@ -37,14 +39,17 @@ class GradingController extends Controller
      * with the current approved key (ClassRegrade, DESIGN §21.13). Published
      * submissions with a changed answer are reopened for review. 409
      * answer_key_not_approved / regrade_in_progress, 422 ai_key_missing /
-     * validation_failed.
+     * validation_failed. An exam is scored again by code in RescoreExamJob
+     * (ExamRegrade, §22.3): no Gemini key, 422 exam_manual_grading.
      */
     public function regrade(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('review', $assignment);
 
-        $outcome = $this->regrade->run($assignment, $request->user(), self::includeOverridden($request));
+        $outcome = $assignment->isExam()
+            ? $this->exams->run($assignment, $request->user(), self::includeOverridden($request))
+            : $this->regrade->run($assignment, $request->user(), self::includeOverridden($request));
 
         return response()->json(['data' => $outcome], $outcome['queued_submissions'] > 0 ? 202 : 200);
     }
@@ -56,13 +61,17 @@ class GradingController extends Controller
      * skipped_missing_image, published_submissions, in_progress, estimate:
      * {input_tokens, output_tokens, thb}}}: what regrade would do and cost
      * (an upper bound). Free, changes nothing. 409 answer_key_not_approved.
+     * An exam is always 0 baht (mcq_by_code counts its changed answers).
      */
     public function regradeEstimate(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
         Gate::authorize('review', $assignment);
+        $include = self::includeOverridden($request);
 
-        return response()->json(['data' => $this->regrade->estimate($assignment, self::includeOverridden($request))]);
+        return response()->json(['data' => $assignment->isExam()
+            ? $this->exams->estimate($assignment, $include)
+            : $this->regrade->estimate($assignment, $include)]);
     }
 
     private static function includeOverridden(Request $request): bool

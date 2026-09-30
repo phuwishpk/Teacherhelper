@@ -209,6 +209,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('exams/{id}/sheet-status', [ExamController::class, 'sheetStatus'])->name('api.exams.sheet-status');
                 Route::post('exams/{id}/key-sheet-read', [ExamController::class, 'keySheetRead'])->name('api.exams.key-sheet-read');
                 Route::post('exam-sheets', [ExamSheetController::class, 'store'])->name('api.exam-sheets.store');
+                // Review of scanned answer sheets by code (§22.11): pick a page's version, read a doubtful mark.
+                Route::post('exam-sheets/{id}/version', [ExamSheetController::class, 'version'])->name('api.exam-sheets.version');
+                Route::post('exam-responses/{id}/resolve', [ExamSheetController::class, 'resolve'])->name('api.exam-responses.resolve');
                 Route::patch('exam-sections/{id}', [ExamSectionController::class, 'update'])->name('api.exam-sections.update');
                 Route::delete('exam-sections/{id}', [ExamSectionController::class, 'destroy'])->name('api.exam-sections.destroy');
                 Route::post('exam-sections/{id}/questions', [ExamSectionController::class, 'storeQuestion'])->name('api.exam-sections.questions.store');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Exams\ExamAnswerView;
 use App\Domain\Review\ReviewFlags;
 use App\Domain\Review\ReviewQueue;
 use App\Domain\Review\ScoreExplainer;
@@ -33,7 +34,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  answer_box ([ymin, xmin, ymax, xmax] 0–1000 on that page, or null),
  *  ai_explanation (Gemini's text once the teacher edited it), explanation_source,
  *  auto_rule (blank_ink "ไม่ได้ตอบ" | cnn_match "อ่านด้วย CNN" | null, §21.3),
- *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...]}
+ *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...],
+ *  exam: an answer-sheet answer of an exam (ExamAnswerView::teacher) | null}
  *
  * rubric_criteria.criterion_id is the number `extraction.criteria[].criterion_id`
  * refers to (1-based position order, ExtractionRequests); `id` is the row id.
@@ -127,6 +129,7 @@ class ResponseDetailResource extends JsonResource
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
             'appeal' => $appeal === null ? null : AppealResource::summary($appeal),
+            'exam' => ExamAnswerView::teacher($response),
             'score_events' => $response->scoreEvents
                 ->sortByDesc('id')
                 ->values()

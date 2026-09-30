@@ -124,6 +124,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.exams.key-sheet-read' => ['POST', 'exams/{exam}/key-sheet-read', 404, 404],
         // The QR names the exam; the scan policy answers 403 like POST /scans.
         'api.exam-sheets.store' => ['POST', 'exam-sheets', 403, 403],
+        // Review of a scanned page (§22.11): looked up among the owner's exams only.
+        'api.exam-sheets.version' => ['POST', 'exam-sheets/{exam_scan}/version', 404, 404],
+        'api.exam-responses.resolve' => ['POST', 'exam-responses/{exam_response}/resolve', 404, 404],
         'api.exam-sections.update' => ['PATCH', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.destroy' => ['DELETE', 'exam-sections/{exam_section}', 404, 404],
         'api.exam-sections.questions.store' => ['POST', 'exam-sections/{exam_section}/questions', 404, 404],
@@ -427,6 +430,8 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_section}' => $this->examSectionA->id,
             '{exam_question}' => $this->examQuestionA->id,
             '{exam_option}' => $this->examOptionA->id,
+            '{exam_scan}' => $this->examScanA->id,
+            '{exam_response}' => $this->examResponseA->id,
         ]);
 
         if ($uri === 'scans') {

@@ -14,6 +14,7 @@ use App\Models\ClassroomSubmissionImport;
 use App\Models\Course;
 use App\Models\DocumentExtraction;
 use App\Models\ExamSection;
+use App\Models\ExamSheetRead;
 use App\Models\GoogleAccount;
 use App\Models\GradeConflict;
 use App\Models\Layout;
@@ -101,6 +102,11 @@ trait SecurityWorld
     protected Question $examQuestionA;
 
     protected QuestionOption $examOptionA;
+
+    /** A scanned answer-sheet page of the exam and its answer (§22.11), not published. */
+    protected Scan $examScanA;
+
+    protected Response $examResponseA;
 
     protected Question $shortA;
 
@@ -278,6 +284,17 @@ trait SecurityWorld
         $this->examOptionA->forceFill(['image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/o{$this->examOptionA->id}.jpg"])->save();
         $disk->put($this->examQuestionA->prompt_image_path, 'jpeg-bytes');
         $disk->put($this->examOptionA->image_path, 'jpeg-bytes');
+        $examSubmission = Submission::create(['assignment_id' => $this->examA->id, 'student_id' => $this->studentA->id, 'status' => Submission::STATUS_NEEDS_REVIEW]);
+        $this->examScanA = Scan::create([
+            'client_scan_id' => (string) Str::uuid(), 'submission_id' => $examSubmission->id, 'page_no' => 1, 'layout_version' => 1,
+            'uploaded_by' => $this->teacherA->id, 'scanned_at' => now(), 'blur_score' => 150.0, 'state' => Scan::STATE_ACTIVE,
+        ]);
+        ExamSheetRead::create(['scan_id' => $this->examScanA->id, 'assignment_id' => $this->examA->id, 'rows_fill' => ['1' => ['1' => 0.9, '2' => 0.9]]]);
+        $this->examResponseA = Response::create(['submission_id' => $examSubmission->id, 'question_id' => $this->examQuestionA->id, 'scan_id' => $this->examScanA->id]);
+        $this->examResponseA->forceFill([
+            'grading_state' => Response::STATE_SCORED, 'ai_score' => 0, 'ai_understanding' => 'not_yet', 'priority_band' => 'check',
+            'exam_answer' => ['sheet_no' => 1, 'version_no' => 1, 'selected' => [1, 2], 'value' => null, 'doubts' => ['double_mark']],
+        ])->save();
 
         // The analysis of student A in classroom A (§20.5), with a draft for the student.
         $this->analysisA = StudentAnalysis::create([

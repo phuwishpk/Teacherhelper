@@ -16,13 +16,20 @@ use App\Models\User;
  *
  *   {data: [{student_id, student_number, name, pages_received[], page_count,
  *            version_no, score, status, doubt_count, needs_version}],
- *    summary: {scanned, total, missing_numbers[], page_count, max_score}}
+ *    summary: {scanned, total, missing_numbers[], page_count, max_score,
+ *              published, ready_to_publish, waiting_review}}
  *
  * pages_received are the active pages; a student counts as scanned when
  * every page of the current layout is in. score is the sum of the current
  * answer scores (null before any is written); status is the submission's,
  * or `missing` without one. doubt_count counts answers still waiting in the
  * review queue.
+ *
+ * The publish counts are what "ประกาศผลทั้งห้อง" shows before the teacher
+ * presses it (§22.11): published, ready_to_publish (every page in, every
+ * answer reviewed: status reviewed) and waiting_review (scanned but still
+ * needs review: a doubt, a version to pick or a missing page). Students
+ * without any page count in missing_numbers only.
  */
 final class ExamSheetStatus
 {
@@ -49,6 +56,7 @@ final class ExamSheetStatus
         $rows = [];
         $scanned = 0;
         $missing = [];
+        $publish = ['published' => 0, 'ready_to_publish' => 0, 'waiting_review' => 0];
         /** @var User $student */
         foreach ($exam->classroom()->firstOrFail()->students()->get() as $student) {
             $number = (int) $student->pivot->student_number;
@@ -78,6 +86,14 @@ final class ExamSheetStatus
             }
             $pages = array_values(array_unique($pages));
             sort($pages);
+            $state = $submission?->status;
+            if ($state === Submission::STATUS_PUBLISHED) {
+                $publish['published']++;
+            } elseif ($state === Submission::STATUS_REVIEWED) {
+                $publish['ready_to_publish']++;
+            } elseif ($pages !== []) {
+                $publish['waiting_review']++;
+            }
             $complete = $pageCount > 0 && count(array_intersect(range(1, $pageCount), $pages)) === $pageCount;
             if ($complete) {
                 $scanned++;
@@ -107,6 +123,7 @@ final class ExamSheetStatus
                 'missing_numbers' => $missing,
                 'page_count' => $pageCount,
                 'max_score' => round((float) $exam->questions()->sum('max_points'), 2),
+                ...$publish,
             ],
         ];
     }

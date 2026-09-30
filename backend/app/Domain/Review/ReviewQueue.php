@@ -2,6 +2,7 @@
 
 namespace App\Domain\Review;
 
+use App\Domain\Exams\ExamAnswerView;
 use App\Domain\Grading\ReviewPriority;
 use App\Domain\Grading\ScanGrader;
 use App\Models\Appeal;
@@ -244,6 +245,8 @@ final class ReviewQueue
             'submission_page_id' => $response->submission_page_id,
             'reviewed_by' => $response->reviewed_by,
             'reviewed_at' => $response->reviewed_at?->toIso8601String(),
+            // An answer-sheet answer of an exam (§22.11): {sheet_no, version_no, doubts, resolved} | null.
+            'exam_answer' => ExamAnswerView::queue($response),
         ];
     }
 
