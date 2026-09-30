@@ -17,6 +17,7 @@ use App\Models\Response;
 use App\Models\Submission;
 use App\Models\SubmissionPage;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,7 +29,9 @@ use Illuminate\Support\Facades\DB;
  *    services.gemini.page_max_questions per call), the file at the page
  *    media resolution;
  * 2. a question the call left out or answered against its schema is asked
- *    again once, alone, on the same file (per-question retry);
+ *    again once, alone, on the same file (per-question retry, one call: no
+ *    gateway retry on top). Still left out = not found on that page; still
+ *    against its schema = invalid;
  * 3. the per-question result is stored on the page (submission_pages.result)
  *    and the page becomes `graded`. A transport error makes the job try
  *    again (60 / 180 / 600 s); after 3 runs, or with no usable key, the page
@@ -64,6 +67,9 @@ final class WholePageGrader
     public const PAGE_KEY_INVALID = 'key_invalid';
 
     public const PAGE_FILE_MISSING = 'file_missing';
+
+    /** A merge's explanation calls run concurrently; this is well above one round of them. */
+    private const MERGE_LOCK_SECONDS = 150;
 
     public function __construct(
         private readonly GeminiGateway $gateway,
@@ -185,12 +191,16 @@ final class WholePageGrader
             foreach ($retry as $no => $item) {
                 $calls[$no] = $this->requests->forFile($bytes, $page->mime_type, $page->page_count, [$item], $subject, $gradeLabel, $assignment->id);
             }
-            $outcomes = $this->gateway->run($calls, $key);
+            // Once (§19.4): the gateway does not retry this retry again.
+            $outcomes = $this->gateway->run($calls, $key, passes: 1);
             foreach ($retry as $no => $item) {
                 $outcome = $outcomes[$no];
                 $answer = $outcome->isOk() ? ($outcome->data['answers'][$no] ?? null) : null;
                 $questions[$item['question']->id] = match (true) {
                     is_array($answer) => self::stored($answer),
+                    // A valid reply that still leaves the question out (or lists it only
+                    // against its schema is invalid below): not found on this page.
+                    $outcome->isOk() && ! isset($outcome->data['invalid'][$no]) => ['found' => false],
                     $outcome->status === CallOutcome::KEY_INVALID => ['error' => self::PAGE_KEY_INVALID],
                     $outcome->status === CallOutcome::ERROR => ['error' => self::PAGE_ERROR],
                     default => ['invalid' => true],
@@ -232,8 +242,20 @@ final class WholePageGrader
     /**
      * Grades the round once every page is read. Safe to call more than once:
      * only responses still `queued` in this round are written.
+     *
+     * Two page jobs of one round that finish together would both find no
+     * page left `grading` and both pay for the explanation calls, which run
+     * outside the transaction. The cache lock (database driver) runs one
+     * merge of a submission at a time; the second then finds nothing queued.
+     * A wait that times out throws, and the job's next try merges again.
      */
     public function merge(int $submissionId, ?GeminiKey $key): void
+    {
+        Cache::lock('whole-page-merge:'.$submissionId, self::MERGE_LOCK_SECONDS)
+            ->block((int) config('eduvision.grading.merge_lock_wait_seconds', 100), fn () => $this->mergeNow($submissionId, $key));
+    }
+
+    private function mergeNow(int $submissionId, ?GeminiKey $key): void
     {
         $submission = Submission::query()->with(['assignment.classroom'])->find($submissionId);
         $assignment = $submission?->assignment;

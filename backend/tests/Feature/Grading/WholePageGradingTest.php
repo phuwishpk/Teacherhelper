@@ -4,6 +4,7 @@ namespace Tests\Feature\Grading;
 
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
+use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Google\GoogleApiException;
 use App\Domain\Grading\FeedbackTemplates;
 use App\Domain\Grading\WholePageGrader;
@@ -22,8 +23,10 @@ use App\Models\Response;
 use App\Models\ScoreEvent;
 use App\Models\Submission;
 use App\Models\SubmissionPage;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -242,8 +245,50 @@ class WholePageGradingTest extends TestCase
 
         $short = $this->response('short');
         $this->assertSame(['manual', 'invalid_output', 'check'], [$short->grading_state, $short->manualReason(), $short->priority_band]);
-        $this->assertSame(['ok', 'invalid_output', 'invalid_output'], AiCall::query()->where('purpose', 'extract_page')->orderBy('id')->pluck('status')->all(), 'the retry alone is itself retried once by the gateway');
+        $this->assertSame(['ok', 'invalid_output'], AiCall::query()->where('purpose', 'extract_page')->orderBy('id')->pluck('status')->all(), 'the retry alone is asked once (§19.4), not retried again by the gateway');
         $this->assertSame('scored', $this->response('mcq')->grading_state, 'the other answers are not held back');
+    }
+
+    public function test_a_question_the_retry_leaves_out_again_is_not_found_rather_than_invalid(): void
+    {
+        $this->mark('short', '[fake:page-missing-always]');
+        $this->handIn([['f-1', 'a.jpg', self::jpeg('[fake:correct]')]]);
+
+        $this->sync();
+
+        $short = $this->response('short');
+        $this->assertSame(['manual', WholePageGrader::REASON_ANSWER_NOT_FOUND, 'check'], [$short->grading_state, $short->manualReason(), $short->priority_band]);
+        $this->assertSame(['ok', 'ok'], AiCall::query()->where('purpose', 'extract_page')->orderBy('id')->pluck('status')->all());
+    }
+
+    public function test_two_merges_of_one_round_pay_for_the_explanations_once(): void
+    {
+        $this->mark('mcq', '[fake:correct]');
+        $this->mark('short', '[fake:correct]');
+        $this->mark('work', '[fake:partial]');
+        $this->mark('open', '[fake:correct]');
+        $this->handIn([['f-1', 'a.jpg', self::jpeg()]]);
+        $this->sync();
+        $explanations = AiCall::query()->where('purpose', 'explanation')->count();
+        $this->assertGreaterThan(0, $explanations);
+        $submission = Submission::query()->where('assignment_id', $this->assignment->id)->sole();
+
+        // A second page job that saw no page left `grading` merges again: nothing is queued any more.
+        app(WholePageGrader::class)->merge($submission->id, app(GeminiKeyResolver::class)->forTeacher($this->teacher->id));
+        $this->assertSame($explanations, AiCall::query()->where('purpose', 'explanation')->count());
+
+        // While another merge of the submission holds the lock, this one waits (and gives up here).
+        config(['eduvision.grading.merge_lock_wait_seconds' => 0]);
+        $held = Cache::lock('whole-page-merge:'.$submission->id, 60);
+        $this->assertTrue($held->get());
+        try {
+            app(WholePageGrader::class)->merge($submission->id, null);
+            $this->fail('the merge should wait for the lock');
+        } catch (LockTimeoutException) {
+            $this->addToAssertionCount(1);
+        } finally {
+            $held->release();
+        }
     }
 
     public function test_an_answer_found_on_no_page_must_be_checked(): void

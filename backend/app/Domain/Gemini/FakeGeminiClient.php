@@ -227,6 +227,7 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
      *   [fake:invalid]       an answer that fails its schema; not JSON when alone
      *   [fake:invalid-once]  as [fake:invalid], valid on the gateway's retry when alone
      *   [fake:page-missing]  left out of a call with several questions only
+     *   [fake:page-missing-always]  left out of every call, alone too (a valid reply)
      *   [fake:not-found]     extract_page: found = false
      *
      * and, in a page image, [fake:questions=1,3]: only those question numbers
@@ -265,6 +266,9 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
             $markers = strtolower((string) ($hints['question_text'] ?? '')).' '.($page ? '' : self::imageMarkers($sub));
             $has = fn (string $marker) => str_contains($markers, '[fake:'.$marker.']') || ($page && $marker !== 'error' && $marker !== 'invalid' && $pageHas($marker));
 
+            if ($has('page-missing-always')) {
+                continue;
+            }
             if ($has('error') || ($has('page-missing') && ! $alone)) {
                 if ($alone) {
                     return GeminiReply::error('HTTP 503: fake outage', 0, 503);
