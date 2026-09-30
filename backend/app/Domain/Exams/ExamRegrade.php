@@ -35,8 +35,9 @@ use Illuminate\Support\Facades\Log;
  *   (ai_score = final_score);
  * - an answer whose score does not change is left alone and not counted;
  * - a rescored answer: resolved -> ai = final, still reviewed; a doubtful
- *   answer without a reading of the teacher -> ai only, back in the review
- *   queue; a clear one -> ai = final, reviewed at once (reviewed_by NULL),
+ *   answer the teacher already reviewed at the code's score (PATCH, not an
+ *   override) -> ai = final, still reviewed; a doubtful answer the teacher
+ *   has not read -> ai only, back in the review queue; a clear one -> ai = final, reviewed at once (reviewed_by NULL),
  *   like a freshly scanned page. Logged as `rescan` (actor teacher, reason
  *   ClassRegrade::REASON) and `ai_scored` (actor system);
  * - a published submission with a changed answer is reopened like a
@@ -201,9 +202,13 @@ final class ExamRegrade
             'ai_understanding' => $scored['understanding'],
             'ai_error_types' => $errors,
         ]);
-        if ($answer['resolved']) {
+        if ($answer['resolved'] || ($doubtful && $response->reviewed_by !== null)) {
+            // The teacher's reading, or a doubt the teacher already read and
+            // kept at the code's score (PATCH, not an override): the new key
+            // applies to the same reading and it stays reviewed (§22.11).
             $response->forceFill(['final_score' => $scored['score'], 'final_understanding' => $scored['understanding'], 'final_error_types' => $errors]);
         } elseif ($doubtful) {
+            // A doubt the teacher has not read yet goes back to the queue.
             $response->forceFill(['final_score' => null, 'final_understanding' => null, 'final_error_types' => null, 'reviewed_at' => null, 'reviewed_by' => null]);
         } else {
             $response->forceFill([

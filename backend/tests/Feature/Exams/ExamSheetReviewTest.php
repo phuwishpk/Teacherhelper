@@ -340,6 +340,87 @@ class ExamSheetReviewTest extends TestCase
         $this->assertSame(1, $summary['published']);
     }
 
+    public function test_every_page_of_a_sheet_keeps_the_version_of_page_one(): void
+    {
+        $exam = $this->printedExam(mcq: 120, versions: 2);
+        $student = $this->students[0];
+
+        // Page 2 first: the teacher may pick its version while page 1 is unknown.
+        $two = $this->upload($exam, $student, 2, $this->reading($exam, 2, []))->assertCreated()->json('scan_id');
+        $this->asUser($this->teacher)->postJson("/api/v1/exam-sheets/{$two}/version", ['version_no' => 2])->assertOk();
+
+        // Page 1 then reads version 1 from its bubble: page 2 follows page 1,
+        // so no two sheet numbers map to one question.
+        $one = $this->upload($exam, $student, 1, $this->reading($exam, 1, [], version: 1))->assertCreated()->json('scan_id');
+        $read = ExamSheetRead::query()->findOrFail($two);
+        $this->assertSame(1, $read->version_no);
+        $this->assertSame(ExamSheetRead::SOURCE_PAGE_ONE, $read->version_source);
+        $this->assertCount(120, $this->responses($exam, $student));
+
+        $this->asUser($this->teacher)->postJson("/api/v1/exam-sheets/{$two}/version", ['version_no' => 2])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonPath('errors.version_no.0', 'หน้า 1 ของนักเรียนคนนี้เป็นชุด ก ทุกหน้าต้องเป็นชุดเดียวกัน ถ้าชุดผิด ให้เลือกชุดที่หน้า 1');
+        $this->asUser($this->teacher)->postJson("/api/v1/exam-sheets/{$two}/version", ['version_no' => 1])->assertOk();
+
+        // Page 1 decides for the sheet: changing it moves page 2 too.
+        $this->asUser($this->teacher)->postJson("/api/v1/exam-sheets/{$one}/version", ['version_no' => 2])->assertOk();
+        $this->assertSame(2, ExamSheetRead::query()->findOrFail($two)->version_no);
+        $this->assertCount(120, $this->responses($exam, $student));
+
+        // sheet-status lists the active pages so the app can open one to pick its version.
+        $unclear = $this->reading($exam, 1, [], version: 1);
+        $unclear['version_fill']['2'] = 0.3;
+        $other = $this->upload($exam, $this->students[1], 1, $unclear)->assertCreated()->json('scan_id');
+        $rows = collect($this->asUser($this->teacher)->getJson("/api/v1/exams/{$exam->id}/sheet-status")->assertOk()->json('data'))->keyBy('student_id');
+        $this->assertSame([
+            ['scan_id' => $one, 'page_no' => 1, 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_TEACHER, 'version_doubtful' => false],
+            ['scan_id' => $two, 'page_no' => 2, 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_PAGE_ONE, 'version_doubtful' => false],
+        ], $rows[$student->id]['pages']);
+        $this->assertSame([
+            ['scan_id' => $other, 'page_no' => 1, 'version_no' => 1, 'version_source' => ExamSheetRead::SOURCE_BUBBLE, 'version_doubtful' => true],
+        ], $rows[$this->students[1]->id]['pages']);
+        $this->assertSame([], $rows[$this->students[2]->id]['pages']);
+    }
+
+    public function test_class_regrade_keeps_a_doubt_the_teacher_already_reviewed(): void
+    {
+        $exam = $this->printedExam(mcq: 2);
+        // Row 1: ก clear with an unclear ค beside it (ambiguous_mark), scored by the key (ก).
+        foreach ([0, 1] as $i) {
+            $reading = $this->reading($exam, 1, [1 => 1, 2 => 1]);
+            $reading['rows']['1']['3'] = 0.3;
+            $this->upload($exam, $this->students[$i], 1, $reading)->assertCreated();
+        }
+        $read = $this->responses($exam, $this->students[0])[1];
+        $this->assertSame('check', $read->priority_band);
+        $this->assertNull($read->reviewed_at);
+        // Student 1's doubt is reviewed at the code's own score: not an override.
+        $this->asUser($this->teacher)->patchJson("/api/v1/responses/{$read->id}", [
+            'final_score' => $read->ai_score, 'final_understanding' => $read->ai_understanding,
+        ])->assertOk();
+        $this->assertFalse(ClassRegrade::overridden($read->refresh()));
+
+        $question = Question::query()->where('assignment_id', $exam->id)->orderBy('position')->firstOrFail();
+        $this->asUser($this->teacher)->putJson("/api/v1/exams/{$exam->id}/answer-key", ['answers' => [
+            ['question_id' => $question->id, 'accepted_options' => [2]],
+        ]])->assertOk();
+        Queue::fake();
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$exam->id}/regrade")
+            ->assertStatus(202)->assertJsonPath('data.rescored_by_code', 2);
+        app()->call([Queue::pushed(RescoreExamJob::class)->first(), 'handle']);
+
+        $read = $this->responses($exam, $this->students[0])[1];
+        $this->assertSame(0.0, $read->ai_score);
+        $this->assertSame(0.0, $read->final_score, 'the new key applies to the reading the teacher kept');
+        $this->assertNotNull($read->reviewed_at, 'a doubt the teacher read stays reviewed');
+        $this->assertSame($this->teacher->id, $read->reviewed_by);
+        $unread = $this->responses($exam, $this->students[1])[1];
+        $this->assertSame(0.0, $unread->ai_score);
+        $this->assertNull($unread->final_score, 'a doubt nobody read goes back to the queue');
+        $this->assertNull($unread->reviewed_at);
+    }
+
     public function test_students_see_the_score_only_unless_the_key_is_shown(): void
     {
         $exam = $this->printedExam(mcq: 2, numeric: 1, versions: 2);

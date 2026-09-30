@@ -20,7 +20,8 @@ use App\Models\User;
  *
  * - Each active page gets its version (ExamSheetScorer::version): a page
  *   after page 1 takes page 1's, so page 2 that arrived first is scored as
- *   soon as page 1 comes in. A version the teacher picked is kept.
+ *   soon as page 1 comes in. A version the teacher picked is kept (on a
+ *   later page only while it matches page 1's).
  * - A page with a known version writes one response per ORIGINAL question
  *   (the version's question_order maps the sheet number back), exam_answer
  *   holding {sheet_no, version_no, selected (original positions), value,
@@ -105,7 +106,12 @@ final class ExamSheetGrader
      */
     public static function evaluate(Assignment $exam, Scan $scan, ExamSheetRead $read, ?int $pageOneVersion, array $keys): array
     {
-        if ($read->version_source === ExamSheetRead::SOURCE_TEACHER && $read->version_no !== null) {
+        // A version the teacher picked is kept, except on a later page that
+        // disagrees with page 1: both pages of one sheet share a version, and
+        // two versions would map two sheet numbers to one question.
+        $teacher = $read->version_source === ExamSheetRead::SOURCE_TEACHER && $read->version_no !== null
+            && ($scan->page_no === 1 || $pageOneVersion === null || $pageOneVersion === $read->version_no);
+        if ($teacher) {
             $version = ['version_no' => $read->version_no, 'source' => ExamSheetRead::SOURCE_TEACHER, 'doubtful' => false];
         } else {
             $version = ExamSheetScorer::version((int) $exam->version_count, $scan->page_no, $read->version_fill, $pageOneVersion);

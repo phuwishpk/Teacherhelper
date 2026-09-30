@@ -25,7 +25,8 @@ use Illuminate\Validation\ValidationException;
  *   `teacher`, then the submission is scored at once (a page 2 waiting for
  *   page 1's version is scored with it). A page whose bubble was read may be
  *   corrected the same way. A page waiting for confirm-replace only keeps
- *   the choice until it is confirmed.
+ *   the choice until it is confirmed. A later page must match page 1's
+ *   known version (422 errors.version_no); page 1 decides for the sheet.
  * - resolve(): POST /exam-responses/{id}/resolve {options[] | value}. The
  *   answer the teacher sees the student meant, for a double, unclear or
  *   unreadable mark. `options` are the positions ON THE SHEET of the
@@ -75,6 +76,9 @@ final class ExamSheetReview
             }
             if ($scan->isActive() && $submission->isPublished()) {
                 throw self::published();
+            }
+            if ($scan->page_no > 1) {
+                self::assertSameAsPageOne($scan, $versionNo);
             }
             $read = ExamSheetRead::query()->lockForUpdate()->findOrFail($scan->id);
             $read->forceFill(['version_no' => $versionNo, 'version_source' => ExamSheetRead::SOURCE_TEACHER])->save();
@@ -213,6 +217,26 @@ final class ExamSheetReview
         sort($options);
 
         return ['options' => $options, 'value' => null];
+    }
+
+    /**
+     * Every page of one sheet has the version of page 1: a later page may
+     * only be given another version while page 1's is not known.
+     *
+     * @throws ValidationException
+     */
+    private static function assertSameAsPageOne(Scan $scan, int $versionNo): void
+    {
+        $pageOne = ExamSheetRead::query()
+            ->whereIn('scan_id', Scan::query()->select('id')
+                ->where('submission_id', $scan->submission_id)
+                ->where('page_no', 1)
+                ->where('state', Scan::STATE_ACTIVE))
+            ->value('version_no');
+        if ($pageOne !== null && (int) $pageOne !== $versionNo) {
+            $label = ExamVersions::label((int) $pageOne);
+            throw ValidationException::withMessages(['version_no' => ["หน้า 1 ของนักเรียนคนนี้เป็นชุด {$label} ทุกหน้าต้องเป็นชุดเดียวกัน ถ้าชุดผิด ให้เลือกชุดที่หน้า 1"]]);
+        }
     }
 
     private static function published(): ApiException

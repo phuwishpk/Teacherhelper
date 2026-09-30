@@ -15,7 +15,9 @@ use App\Models\User;
  * scan screen.
  *
  *   {data: [{student_id, student_number, name, pages_received[], page_count,
- *            version_no, score, status, doubt_count, needs_version}],
+ *            version_no, score, status, doubt_count, needs_version,
+ *            pages: [{scan_id, page_no, version_no, version_source,
+ *                     version_doubtful}]}],
  *    summary: {scanned, total, missing_numbers[], page_count, max_score,
  *              published, ready_to_publish, waiting_review}}
  *
@@ -23,7 +25,9 @@ use App\Models\User;
  * every page of the current layout is in. score is the sum of the current
  * answer scores (null before any is written); status is the submission's,
  * or `missing` without one. doubt_count counts answers still waiting in the
- * review queue.
+ * review queue. pages are the active scans, so the app can open a page to
+ * pick its version (POST /exam-sheets/{scan_id}/version): version_no is
+ * null while unknown, version_doubtful marks an unclear version bubble.
  *
  * The publish counts are what "ประกาศผลทั้งห้อง" shows before the teacher
  * presses it (§22.11): published, ready_to_publish (every page in, every
@@ -62,6 +66,7 @@ final class ExamSheetStatus
             $number = (int) $student->pivot->student_number;
             $submission = $submissions->get($student->id);
             $pages = [];
+            $pageRows = [];
             $versionNo = null;
             $needsVersion = false;
             $score = null;
@@ -70,6 +75,14 @@ final class ExamSheetStatus
                 foreach ($scans->get($submission->id) ?? [] as $scan) {
                     $pages[] = (int) $scan->page_no;
                     $read = $reads->get($scan->id);
+                    $pageRows[] = [
+                        'scan_id' => (int) $scan->id,
+                        'page_no' => (int) $scan->page_no,
+                        'version_no' => $read?->version_no,
+                        'version_source' => $read?->version_source,
+                        'version_doubtful' => collect((array) ($read?->doubts ?? []))
+                            ->contains(fn ($d) => is_array($d) && ($d['reason'] ?? null) === ExamSheetScorer::VERSION_DOUBTFUL),
+                    ];
                     if ($read instanceof ExamSheetRead) {
                         if ($read->version_no === null) {
                             $needsVersion = true;
@@ -112,6 +125,7 @@ final class ExamSheetStatus
                 'status' => $submission?->status ?? 'missing',
                 'doubt_count' => $doubts,
                 'needs_version' => $needsVersion,
+                'pages' => collect($pageRows)->sortBy('page_no')->values()->all(),
             ];
         }
 
