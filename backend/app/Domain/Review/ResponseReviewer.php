@@ -227,7 +227,7 @@ final class ResponseReviewer
             $text = ['text' => $this->askGemini($response, $guidance, $teacher->id), 'source' => Response::EXPLANATION_AI];
         }
 
-        return DB::transaction(function () use ($response, $text) {
+        return DB::transaction(function () use ($response, $text, $guidance) {
             $scanId = $response->scan_id;
             $pageId = $response->submission_page_id;
             [, $locked] = self::lock($response);
@@ -240,7 +240,9 @@ final class ResponseReviewer
             $locked->ai_explanation = null; // what the student sees is the AI's (or a template) again
             self::clearExplanationError($locked);
             $locked->save();
-            if ($text['source'] === Response::EXPLANATION_AI) {
+            // Text written with the teacher's guidance for this one answer is
+            // not shared with other students' identical answers (§21.12).
+            if ($text['source'] === Response::EXPLANATION_AI && ($guidance === null || trim($guidance) === '')) {
                 $this->rememberExplanation($locked, $text['text'], ExplanationCache::SOURCE_AI, replaceAi: true);
             }
 
