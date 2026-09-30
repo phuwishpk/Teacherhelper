@@ -111,43 +111,50 @@ class RollupRadar extends StatelessWidget {
         for (final a in axes)
           '${a.label.replaceAll('\n', ' ')} ${pct(a.value)}',
       ].join(', '),
-      child: RadarChart(
-        RadarChartData(
-          isMinValueAtCenter: true,
-          radarShape: RadarShape.polygon,
-          tickCount: 4,
-          ticksTextStyle: ChartColors.axisText(
-            context,
-          )?.copyWith(fontSize: 9, color: Colors.transparent),
-          tickBorderData: grid,
-          gridBorderData: grid,
-          radarBorderData: grid,
-          titlePositionPercentageOffset: 0.12,
-          titleTextStyle: Theme.of(context).textTheme.labelSmall,
-          getTitle: (i, _) =>
-              RadarChartTitle(text: '${axes[i].label}\n${pct(axes[i].value)}'),
-          radarTouchData: RadarTouchData(
-            touchSpotThreshold: 24,
-            touchCallback: (event, response) {
-              final spot = response?.touchedSpot;
-              if (event is FlTapUpEvent && spot != null) {
-                axes[spot.touchedRadarEntryIndex].onTap?.call();
-              }
-            },
-          ),
-          dataSets: [
-            scale(0),
-            scale(100),
-            RadarDataSet(
-              dataEntries: [
-                for (final a in axes) RadarEntry(value: a.value * 100),
-              ],
-              fillColor: color.withValues(alpha: 0.18),
-              borderColor: color,
-              borderWidth: 2,
-              entryRadius: 4,
+      // Axis titles are painted outside the radar; the padding keeps the
+      // top and bottom titles (up to three lines) inside the chart box so
+      // they do not run into the caption or the list below.
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 8),
+        child: RadarChart(
+          RadarChartData(
+            isMinValueAtCenter: true,
+            radarShape: RadarShape.polygon,
+            tickCount: 4,
+            ticksTextStyle: ChartColors.axisText(
+              context,
+            )?.copyWith(fontSize: 9, color: Colors.transparent),
+            tickBorderData: grid,
+            gridBorderData: grid,
+            radarBorderData: grid,
+            titlePositionPercentageOffset: 0.12,
+            titleTextStyle: Theme.of(context).textTheme.labelSmall,
+            getTitle: (i, _) => RadarChartTitle(
+              text: '${axes[i].label}\n${pct(axes[i].value)}',
             ),
-          ],
+            radarTouchData: RadarTouchData(
+              touchSpotThreshold: 24,
+              touchCallback: (event, response) {
+                final spot = response?.touchedSpot;
+                if (event is FlTapUpEvent && spot != null) {
+                  axes[spot.touchedRadarEntryIndex].onTap?.call();
+                }
+              },
+            ),
+            dataSets: [
+              scale(0),
+              scale(100),
+              RadarDataSet(
+                dataEntries: [
+                  for (final a in axes) RadarEntry(value: a.value * 100),
+                ],
+                fillColor: color.withValues(alpha: 0.18),
+                borderColor: color,
+                borderWidth: 2,
+                entryRadius: 4,
+              ),
+            ],
+          ),
         ),
       ),
     );
