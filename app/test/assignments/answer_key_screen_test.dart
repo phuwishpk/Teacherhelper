@@ -7,6 +7,7 @@ import 'package:eduvision/features/assignments/answer_key_repository.dart';
 import 'package:eduvision/features/assignments/answer_key_screen.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
+import 'package:eduvision/features/assignments/class_regrade.dart';
 import 'package:eduvision/features/assignments/document_read_screen.dart';
 import 'package:eduvision/features/assignments/key_document_sources.dart';
 import 'package:eduvision/features/assignments/question.dart';
@@ -112,6 +113,7 @@ Future<void> _pumpKeyScreen(
   FakeDocumentPicker? picker,
   ScanCamera? camera,
   List<GoRoute> extraRoutes = const [],
+  FakeClassRegrade? regrade,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1;
@@ -131,6 +133,9 @@ Future<void> _pumpKeyScreen(
       ),
       answerKeyPollIntervalProvider.overrideWithValue(
         const Duration(seconds: 3),
+      ),
+      classRegradeRepositoryProvider.overrideWithValue(
+        regrade ?? FakeClassRegrade(),
       ),
     ],
     extraRoutes: extraRoutes,
@@ -255,6 +260,7 @@ void main() {
       'document_ids': [31],
       'page_from': null,
       'page_to': null,
+      'guidance': null,
     });
 
     await tester.tap(find.byKey(const ValueKey('send_key_request')));
@@ -444,6 +450,7 @@ void main() {
       'document_ids': <int>[],
       'page_from': null,
       'page_to': null,
+      'guidance': null,
     });
     await tester.tap(find.byKey(const ValueKey('send_key_request')));
     await _settleRoute(tester);
@@ -502,12 +509,326 @@ void main() {
     await unmountScreen(tester);
   });
 
+  testWidgets('shows the guidance used and prefills the next read', (
+    tester,
+  ) async {
+    final picker = FakeDocumentPicker([
+      PickedDocument(name: 'เฉลย.pdf', bytes: Uint8List.fromList([1])),
+    ]);
+    final keys = FakeAnswerKeys(
+      answerKeyState(
+        keyOrigin: 'document',
+        extraction: {
+          'id': 4,
+          'status': 'done',
+          'kind': 'answer_key_read',
+          'guidance': 'เฉลยอยู่หน้าสุดท้าย',
+        },
+        questions: _filled,
+      ),
+    )..uploadResult = const [_pdf];
+    await _pumpKeyScreen(tester, keys, picker: picker);
+    expect(find.text('คำแนะนำที่ใช้: เฉลยอยู่หน้าสุดท้าย'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'แนบไฟล์'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocumentReadScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('ai_guidance')))
+          .controller!
+          .text,
+      'เฉลยอยู่หน้าสุดท้าย',
+    );
+    expect(keys.estimates.single['guidance'], 'เฉลยอยู่หน้าสุดท้าย');
+
+    await unmountScreen(tester);
+  });
+
+  testWidgets('a queued draft shows its guidance; a read does not reuse it', (
+    tester,
+  ) async {
+    final picker = FakeDocumentPicker([
+      PickedDocument(name: 'เฉลย.pdf', bytes: Uint8List.fromList([1])),
+    ]);
+    final keys = FakeAnswerKeys(
+      answerKeyState(
+        extraction: {
+          'id': 5,
+          'status': 'failed',
+          'kind': 'answer_key_draft',
+          'error': 'AI ไม่ตอบ',
+          'guidance': 'ตอบเป็นเศษส่วน',
+        },
+      ),
+    )..uploadResult = const [_pdf];
+    await _pumpKeyScreen(tester, keys, picker: picker);
+    expect(find.text('คำแนะนำที่ใช้: ตอบเป็นเศษส่วน'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'แนบไฟล์'));
+    await tester.pumpAndSettle();
+    expect(keys.estimates.single['guidance'], isNull);
+
+    await unmountScreen(tester);
+  });
+
+  group('ตรวจใหม่ทั้งห้อง', () {
+    AnswerKeyState approvedKey() => answerKeyState(
+      status: 'ready',
+      keyOrigin: 'teacher',
+      complete: true,
+      approvedAt: '2026-09-30T03:00:00Z',
+      questions: [_filled[0], _filled[1]],
+    );
+
+    testWidgets('is offered only once something was graded', (tester) async {
+      final regrade = FakeClassRegrade();
+      await _pumpKeyScreen(
+        tester,
+        FakeAnswerKeys(approvedKey()),
+        regrade: regrade,
+      );
+      expect(regrade.estimates, [false]);
+      expect(find.byKey(const ValueKey('class_regrade')), findsNothing);
+      await unmountScreen(tester);
+    });
+
+    testWidgets('is not asked before the key is approved', (tester) async {
+      final regrade = FakeClassRegrade(
+        estimate: RegradeEstimate.fromJson(regradeEstimateJson(submissions: 2)),
+      );
+      await _pumpKeyScreen(
+        tester,
+        FakeAnswerKeys(answerKeyState(questions: _filled)),
+        regrade: regrade,
+      );
+      expect(regrade.estimates, isEmpty);
+      expect(find.byKey(const ValueKey('class_regrade')), findsNothing);
+      await unmountScreen(tester);
+    });
+
+    testWidgets('estimate, include overridden, confirm, summary', (
+      tester,
+    ) async {
+      final regrade =
+          FakeClassRegrade(
+              estimate: RegradeEstimate.fromJson(
+                regradeEstimateJson(
+                  submissions: 3,
+                  queued: 4,
+                  mcq: 6,
+                  pages: 2,
+                  overridden: 1,
+                  published: 1,
+                ),
+              ),
+              included: RegradeEstimate.fromJson(
+                regradeEstimateJson(
+                  submissions: 3,
+                  queued: 5,
+                  mcq: 6,
+                  thb: null,
+                ),
+              ),
+            )
+            ..outcome = const RegradeOutcome(
+              queuedSubmissions: 3,
+              queuedResponses: 5,
+              rescoredByCode: 2,
+              reopenedSubmissions: 1,
+            );
+      await _pumpKeyScreen(
+        tester,
+        FakeAnswerKeys(approvedKey()),
+        regrade: regrade,
+      );
+      expect(find.byKey(const ValueKey('class_regrade_card')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('class_regrade')));
+      await tester.pumpAndSettle();
+      expect(find.text('ตรวจใหม่ทั้งห้อง?'), findsOneWidget);
+      expect(find.text('งานที่จะตรวจใหม่: 3 งาน'), findsOneWidget);
+      expect(find.text('ข้อที่ AI อ่านใหม่: 4 ข้อ'), findsOneWidget);
+      expect(
+        find.textContaining('ด้วยโค้ด (ไม่เสียค่าใช้จ่าย): 6 ข้อ'),
+        findsOneWidget,
+      );
+      expect(find.text('หน้าที่ AI อ่านใหม่ทั้งหน้า: 2 หน้า'), findsOneWidget);
+      expect(
+        find.text('ข้อที่ครูแก้คะแนนเองซึ่งจะข้าม: 1 ข้อ'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('regrade_published')), findsOneWidget);
+      expect(find.textContaining('ประมาณ 0.35 บาท'), findsOneWidget);
+
+      await tester.tap(find.text('รวมข้อที่ครูแก้คะแนนเองด้วย'));
+      await tester.pumpAndSettle();
+      expect(regrade.estimates.last, isTrue);
+      expect(find.text('ข้อที่ AI อ่านใหม่: 5 ข้อ'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('regrade_skipped_overridden')),
+        findsNothing,
+      );
+      expect(find.textContaining('ยังไม่ได้ตั้งราคา'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('regrade_confirm')));
+      await tester.pumpAndSettle();
+      expect(regrade.regrades, [true]);
+      expect(find.textContaining('เริ่มตรวจใหม่ 3 งาน'), findsOneWidget);
+      expect(find.textContaining('คิดคะแนนปรนัยใหม่ 2 ข้อ'), findsOneWidget);
+      // The card asked the estimate again after the run.
+      expect(
+        regrade.estimates.where((e) => !e).length,
+        greaterThanOrEqualTo(3),
+      );
+
+      await unmountScreen(tester);
+    });
+
+    testWidgets('cancel sends nothing; a running regrade cannot start', (
+      tester,
+    ) async {
+      final regrade = FakeClassRegrade(
+        estimate: RegradeEstimate.fromJson(
+          regradeEstimateJson(submissions: 1, queued: 1),
+        ),
+      );
+      await _pumpKeyScreen(
+        tester,
+        FakeAnswerKeys(approvedKey()),
+        regrade: regrade,
+      );
+      await tester.tap(find.byKey(const ValueKey('class_regrade')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('regrade_include_overridden')),
+        findsNothing,
+      );
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(regrade.regrades, isEmpty);
+
+      regrade.estimateResult = RegradeEstimate.fromJson(
+        regradeEstimateJson(submissions: 1, queued: 1, inProgress: true),
+      );
+      await tester.tap(find.byKey(const ValueKey('class_regrade')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('regrade_in_progress')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('regrade_confirm')))
+            .onPressed,
+        isNull,
+      );
+
+      await unmountScreen(tester);
+    });
+
+    for (final (code, status, text) in [
+      ('regrade_in_progress', 409, 'กำลังตรวจใหม่ทั้งห้องอยู่'),
+      ('answer_key_not_approved', 409, 'อนุมัติเฉลยก่อน'),
+      ('ai_key_missing', 422, 'ยังไม่ได้ใส่ Gemini API key'),
+    ]) {
+      testWidgets('$code is explained in Thai', (tester) async {
+        final regrade = FakeClassRegrade(
+          estimate: RegradeEstimate.fromJson(
+            regradeEstimateJson(submissions: 1, queued: 1),
+          ),
+        )..regradeError = _apiError(status, code);
+        await _pumpKeyScreen(
+          tester,
+          FakeAnswerKeys(approvedKey()),
+          regrade: regrade,
+          extraRoutes: [
+            GoRoute(
+              path: '/settings',
+              builder: (_, _) => const Scaffold(body: Text('settings-page')),
+            ),
+          ],
+        );
+        await tester.tap(find.byKey(const ValueKey('class_regrade')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('regrade_confirm')));
+        await tester.pumpAndSettle();
+        expect(find.textContaining(text), findsOneWidget);
+        if (code == 'ai_key_missing') {
+          await tester.tap(find.text('ไปใส่ key'));
+          await tester.pumpAndSettle();
+          expect(find.text('settings-page'), findsOneWidget);
+        } else {
+          expect(find.text('ไปใส่ key'), findsNothing);
+        }
+        await unmountScreen(tester);
+      });
+    }
+
+    testWidgets('an estimate that fails is explained', (tester) async {
+      final regrade = FakeClassRegrade(
+        estimate: RegradeEstimate.fromJson(
+          regradeEstimateJson(submissions: 1, queued: 1),
+        ),
+      );
+      await _pumpKeyScreen(
+        tester,
+        FakeAnswerKeys(approvedKey()),
+        regrade: regrade,
+      );
+      regrade.estimateError = _apiError(409, 'answer_key_not_approved');
+      await tester.tap(find.byKey(const ValueKey('class_regrade')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('อนุมัติเฉลยก่อน'), findsOneWidget);
+      expect(find.text('ตรวจใหม่ทั้งห้อง?'), findsNothing);
+      await unmountScreen(tester);
+    });
+
+    testWidgets('approving a changed key suggests it', (tester) async {
+      final keys = FakeAnswerKeys(
+        answerKeyState(
+          keyOrigin: 'teacher',
+          complete: true,
+          questions: [_filled[0], _filled[1]],
+        ),
+      );
+      final regrade = FakeClassRegrade(
+        estimate: RegradeEstimate.fromJson(
+          regradeEstimateJson(submissions: 4, mcq: 4),
+        ),
+      );
+      await _pumpKeyScreen(tester, keys, regrade: regrade);
+      keys.state = approvedKey();
+      await tester.tap(find.byKey(const ValueKey('approve_key')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'อนุมัติ'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('regrade_suggestion')), findsOneWidget);
+      expect(find.textContaining('ตรวจด้วยเฉลยเดิม 4 งาน'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('regrade_suggestion')),
+          matching: find.text('ตรวจใหม่ทั้งห้อง'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('ตรวจใหม่ทั้งห้อง?'), findsOneWidget);
+      expect(find.text('ไม่เสียค่าใช้จ่าย'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('regrade_confirm')));
+      await tester.pumpAndSettle();
+      expect(regrade.regrades, [false]);
+      expect(find.text('ตรวจใหม่แล้ว ไม่มีคะแนนที่เปลี่ยน'), findsOneWidget);
+
+      await unmountScreen(tester);
+    });
+  });
+
   group('DocumentReadScreen', () {
     Future<FakeAnswerKeys> pumpRead(
       WidgetTester tester, {
       List<SourceDocument> documents = const [_book],
       KeyEstimate? estimate,
       Object? estimateError,
+      KeyRequestKind kind = KeyRequestKind.read,
+      String? initialGuidance,
     }) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1;
@@ -523,9 +844,10 @@ void main() {
         tester,
         DocumentReadScreen(
           assignmentId: 12,
-          kind: KeyRequestKind.read,
+          kind: kind,
           documents: documents,
           debounce: const Duration(milliseconds: 10),
+          initialGuidance: initialGuidance,
         ),
         overrides: [answerKeyRepositoryProvider.overrideWithValue(keys)],
       );
@@ -587,6 +909,7 @@ void main() {
         'document_ids': [32],
         'page_from': 3,
         'page_to': 7,
+        'guidance': null,
       });
       expect(find.text('stub-home'), findsOneWidget);
     });
@@ -652,6 +975,87 @@ void main() {
       expect(keys.requests, isEmpty);
     });
 
+    testWidgets('the guidance is counted, re-estimated and sent', (
+      tester,
+    ) async {
+      final keys = await pumpRead(tester, documents: const [_pdf]);
+      expect(find.byKey(const ValueKey('ai_guidance')), findsOneWidget);
+      expect(find.text('อย่าใส่ชื่อหรือข้อมูลของนักเรียน'), findsOneWidget);
+      expect(find.textContaining('วงกลมสีแดงคือคำตอบ'), findsOneWidget);
+      expect(find.text('0/500'), findsOneWidget);
+      expect(keys.estimates.single['guidance'], isNull);
+
+      keys.estimateResult = const KeyEstimate(
+        pages: 3,
+        cached: true,
+        estimate: CostEstimate(inputTokens: 1, outputTokens: 1),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('ai_guidance')),
+        '  เฉลยอยู่หน้าสุดท้าย  ',
+      );
+      await tester.pump();
+      expect(
+        keys.estimates,
+        hasLength(1),
+        reason: 'debounced: no estimate per keystroke',
+      );
+      await tester.pumpAndSettle();
+      expect(keys.estimates, hasLength(2));
+      expect(keys.estimates.last['guidance'], 'เฉลยอยู่หน้าสุดท้าย');
+      expect(find.text('เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย'), findsOneWidget);
+      expect(find.text('23/500'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('send_key_request')));
+      await tester.pumpAndSettle();
+      expect(keys.requests.single['guidance'], 'เฉลยอยู่หน้าสุดท้าย');
+    });
+
+    testWidgets('an AI draft starts from the last guidance', (tester) async {
+      final keys = await pumpRead(
+        tester,
+        documents: const [],
+        kind: KeyRequestKind.draft,
+        initialGuidance: 'ข้อ 3 รับเศษส่วน',
+      );
+      expect(find.text('ข้อ 3 รับเศษส่วน'), findsOneWidget);
+      expect(keys.estimates.single['guidance'], 'ข้อ 3 รับเศษส่วน');
+      expect(keys.estimates.single['kind'], 'draft');
+
+      await tester.enterText(find.byKey(const ValueKey('ai_guidance')), '   ');
+      await tester.pumpAndSettle();
+      expect(keys.estimates.last['guidance'], isNull);
+      await tester.tap(find.byKey(const ValueKey('send_key_request')));
+      await tester.pumpAndSettle();
+      expect(keys.requests.single['guidance'], isNull);
+    });
+
+    testWidgets('a refused guidance is shown under the field', (tester) async {
+      final options = RequestOptions(path: '/x');
+      final keys = await pumpRead(tester, documents: const [_pdf]);
+      keys.requestError = DioException(
+        requestOptions: options,
+        response: Response(
+          requestOptions: options,
+          statusCode: 422,
+          data: {
+            'message': 'คำแนะนำถึง AI ยาวได้ไม่เกิน 500 ตัวอักษร',
+            'errors': {
+              'guidance': ['คำแนะนำถึง AI ยาวได้ไม่เกิน 500 ตัวอักษร'],
+            },
+            'code': 'validation_failed',
+          },
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('send_key_request')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('คำแนะนำถึง AI ยาวได้ไม่เกิน 500 ตัวอักษร'),
+        findsNWidgets(2),
+      );
+      expect(find.byType(DocumentReadScreen), findsOneWidget);
+    });
+
     testWidgets('a refused read stays on the screen with the reason', (
       tester,
     ) async {
@@ -703,4 +1107,21 @@ void main() {
       'ยังไม่มีคำตอบตัวอย่าง (ตรวจตาม rubric)',
     );
   });
+}
+
+DioException _apiError(int status, String code, [String? message]) {
+  final options = RequestOptions(path: '/x');
+  return DioException(
+    requestOptions: options,
+    type: DioExceptionType.badResponse,
+    response: Response(
+      requestOptions: options,
+      statusCode: status,
+      data: {
+        'message': message ?? 'server says $code',
+        'errors': {},
+        'code': code,
+      },
+    ),
+  );
 }

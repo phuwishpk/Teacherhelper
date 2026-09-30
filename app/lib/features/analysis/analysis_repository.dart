@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_retry.dart';
+import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import 'analysis_models.dart';
@@ -16,10 +17,16 @@ abstract class AnalysisRepository {
   /// in that classroom yet.
   Future<StudentAnalysis?> student(int studentId, int classroomId);
 
-  /// `POST /students/{id}/analysis/run {classroom_id}`: "วิเคราะห์ตอนนี้",
-  /// synchronous. 422 `analysis_no_data` / `ai_key_missing` /
-  /// `ai_key_invalid`, 502 `ai_unavailable`.
-  Future<StudentAnalysis> runNow(int studentId, int classroomId);
+  /// `POST /students/{id}/analysis/run {classroom_id, guidance?}`:
+  /// "วิเคราะห์ตอนนี้", synchronous, with the teacher's "คำแนะนำถึง AI"
+  /// (DESIGN §21.12, echoed as `guidance`). 422 `analysis_no_data` /
+  /// `ai_key_missing` / `ai_key_invalid` / `validation_failed`, 502
+  /// `ai_unavailable`.
+  Future<StudentAnalysis> runNow(
+    int studentId,
+    int classroomId, {
+    String? guidance,
+  });
 
   /// `PATCH /analyses/{id} {teacher_text?, student_text?}`: edits only;
   /// sharing is [approve].
@@ -64,10 +71,17 @@ class ApiAnalysisRepository implements AnalysisRepository {
   }
 
   @override
-  Future<StudentAnalysis> runNow(int studentId, int classroomId) async {
+  Future<StudentAnalysis> runNow(
+    int studentId,
+    int classroomId, {
+    String? guidance,
+  }) async {
     final res = await _dio.post<Object?>(
       '/students/$studentId/analysis/run',
-      data: {'classroom_id': classroomId},
+      data: {
+        'classroom_id': classroomId,
+        'guidance': ?normalizeGuidance(guidance),
+      },
       // Gemini answers inside the request (DESIGN §20.5: up to 30 s).
       options: Options(receiveTimeout: const Duration(seconds: 75)),
     );
@@ -157,8 +171,9 @@ class StudentAnalysisNotifier extends AsyncNotifier<StudentAnalysis?> {
         .student(key.studentId, key.classroomId);
   }
 
-  Future<StudentAnalysis> runNow() =>
-      _write(() => _repo.runNow(key.studentId, key.classroomId));
+  Future<StudentAnalysis> runNow({String? guidance}) => _write(
+    () => _repo.runNow(key.studentId, key.classroomId, guidance: guidance),
+  );
 
   /// Saves the changed texts, then shares the draft when [share].
   Future<StudentAnalysis> edit({

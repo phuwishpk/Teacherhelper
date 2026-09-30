@@ -1,3 +1,4 @@
+import '../../core/api/teacher_guidance.dart';
 import '../../core/util/thai_date.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/question.dart';
@@ -623,6 +624,7 @@ class CourseExtraction {
     this.estimate,
     this.result,
     this.matches = const [],
+    this.guidance,
   });
 
   final int id;
@@ -636,6 +638,9 @@ class CourseExtraction {
   final CostEstimate? estimate;
   final CourseDocumentResult? result;
   final List<IndicatorMatch> matches;
+
+  /// "คำแนะนำถึง AI" sent with this read (DESIGN §21.12); null = none.
+  final String? guidance;
 
   bool get done => status == 'done' && result != null;
 
@@ -657,6 +662,7 @@ class CourseExtraction {
       id: (inner['id'] as num).toInt(),
       status: inner['status'] as String? ?? 'queued',
       error: _text(inner['error']),
+      guidance: normalizeGuidance(_text(inner['guidance'])),
       cached: json['cached'] == true,
       estimate: CostEstimate.maybe(json['estimate']),
       result: result is Map

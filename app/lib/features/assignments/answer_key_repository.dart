@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import 'answer_key_models.dart';
 
@@ -15,21 +16,27 @@ abstract class AnswerKeyRepository {
   Future<AnswerKeyState> answerKey(int assignmentId);
 
   /// `POST /assignments/{id}/answer-key/estimate`: free, queues nothing.
+  /// [guidance] ("คำแนะนำถึง AI", DESIGN §21.12) is part of the read-once
+  /// cache key, so `cached` is for exactly this guidance.
   Future<KeyEstimate> estimate(
     int assignmentId, {
     required KeyRequestKind kind,
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   });
 
-  /// `POST .../answer-key/extract` (read) or `.../draft` (AI drafts it).
+  /// `POST .../answer-key/extract` (read) or `.../draft` (AI drafts it),
+  /// with the teacher's optional [guidance] (echoed as
+  /// `answer_key.extraction.guidance`).
   Future<KeyRequestResult> request(
     int assignmentId, {
     required KeyRequestKind kind,
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   });
 
   /// `POST /assignments/{id}/answer-key/approve`. [courseId] (a course of
@@ -93,12 +100,13 @@ class ApiAnswerKeyRepository implements AnswerKeyRepository {
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments/$assignmentId/answer-key/estimate',
       data: {
         'kind': kind.apiValue,
-        ..._selection(documentIds, pageFrom, pageTo),
+        ..._selection(documentIds, pageFrom, pageTo, guidance),
       },
     );
     return KeyEstimate.fromJson(unwrapJson(res.data));
@@ -111,11 +119,12 @@ class ApiAnswerKeyRepository implements AnswerKeyRepository {
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     final action = kind == KeyRequestKind.read ? 'extract' : 'draft';
     final res = await _dio.post<Object?>(
       '/assignments/$assignmentId/answer-key/$action',
-      data: _selection(documentIds, pageFrom, pageTo),
+      data: _selection(documentIds, pageFrom, pageTo, guidance),
     );
     return KeyRequestResult.fromJson(unwrapJson(res.data));
   }
@@ -133,12 +142,14 @@ class ApiAnswerKeyRepository implements AnswerKeyRepository {
     List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   ) => {
     if (documentIds.isNotEmpty) 'document_ids': documentIds,
     if (pageFrom != null && pageTo != null) ...{
       'page_from': pageFrom,
       'page_to': pageTo,
     },
+    'guidance': ?normalizeGuidance(guidance),
   };
 }
 

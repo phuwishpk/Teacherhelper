@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
@@ -45,10 +46,21 @@ class _StudentAnalysisScreenState extends ConsumerState<StudentAnalysisScreen> {
   StudentAnalysisNotifier get _notifier =>
       ref.read(studentAnalysisProvider(_key).notifier);
 
-  Future<void> _runNow() async {
+  /// "วิเคราะห์ตอนนี้": a small dialog for the teacher's guidance
+  /// (prefilled with the last one), then Gemini writes both texts.
+  Future<void> _runNow(StudentAnalysis current) async {
+    final choice = await showGuidanceDialog(
+      context,
+      title: 'วิเคราะห์ตอนนี้',
+      message: 'AI เขียนข้อความฉบับครูและฉบับนักเรียนใหม่จากคะแนนล่าสุด',
+      hintText: kGuidanceHintAnalysis,
+      confirmLabel: 'วิเคราะห์',
+      initial: current.guidance,
+    );
+    if (choice == null || !mounted) return;
     setState(() => _running = true);
     try {
-      final a = await _notifier.runNow();
+      final a = await _notifier.runNow(guidance: choice.guidance);
       if (!mounted) return;
       showMessage(
         context,
@@ -182,7 +194,7 @@ class _StudentAnalysisScreenState extends ConsumerState<StudentAnalysisScreen> {
                     analysis: a,
                     running: _running,
                     busy: _running || _saving,
-                    onRun: _runNow,
+                    onRun: () => _runNow(a),
                     onEdit: () => _edit(a),
                     onApprove: _approve,
                   ),
@@ -261,6 +273,10 @@ class _TextsCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(_statusLine(a), style: muted),
+            if (a.guidance case final guidance?) ...[
+              const SizedBox(height: 4),
+              GuidanceUsedNote(guidance: guidance),
+            ],
             if (a.stale) ...[
               const SizedBox(height: 8),
               _Note(

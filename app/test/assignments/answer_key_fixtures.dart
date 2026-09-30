@@ -1,5 +1,6 @@
 import 'package:eduvision/features/assignments/answer_key_models.dart';
 import 'package:eduvision/features/assignments/answer_key_repository.dart';
+import 'package:eduvision/features/assignments/class_regrade.dart';
 import 'package:eduvision/features/assignments/key_document_sources.dart';
 
 /// A question as the API returns it (QuestionResource).
@@ -117,12 +118,14 @@ class FakeAnswerKeys implements AnswerKeyRepository {
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     estimates.add({
       'kind': kind.apiValue,
       'document_ids': documentIds,
       'page_from': pageFrom,
       'page_to': pageTo,
+      'guidance': guidance,
     });
     if (estimateError case final e?) throw e;
     return estimateResult;
@@ -135,12 +138,14 @@ class FakeAnswerKeys implements AnswerKeyRepository {
     List<int> documentIds = const [],
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     requests.add({
       'kind': kind.apiValue,
       'document_ids': documentIds,
       'page_from': pageFrom,
       'page_to': pageTo,
+      'guidance': guidance,
     });
     if (requestError case final e?) throw e;
     return requestResult!;
@@ -170,5 +175,72 @@ class FakeDocumentPicker implements DocumentFilePicker {
   }) async {
     calls.add(imagesOnly);
     return files;
+  }
+}
+
+/// `POST /assignments/{id}/regrade/estimate` as the server answers it.
+Map<String, dynamic> regradeEstimateJson({
+  int submissions = 0,
+  int queued = 0,
+  int mcq = 0,
+  int pages = 0,
+  int overridden = 0,
+  int inProgressCount = 0,
+  int missing = 0,
+  int published = 0,
+  bool inProgress = false,
+  double? thb = 0.35,
+}) => {
+  'submissions': submissions,
+  'queued_responses': queued,
+  'mcq_by_code': mcq,
+  'whole_page_pages': pages,
+  'skipped_overridden': overridden,
+  'skipped_in_progress': inProgressCount,
+  'skipped_missing_image': missing,
+  'published_submissions': published,
+  'in_progress': inProgress,
+  'estimate': {'input_tokens': 12000, 'output_tokens': 3500, 'thb': thb},
+};
+
+/// Records "ตรวจใหม่ทั้งห้อง" calls; answers come from the fields.
+class FakeClassRegrade implements ClassRegradeRepository {
+  FakeClassRegrade({RegradeEstimate? estimate, RegradeEstimate? included})
+    : estimateResult = estimate ?? const RegradeEstimate(),
+      includedResult = included;
+
+  /// The estimate without overridden answers.
+  RegradeEstimate estimateResult;
+
+  /// The estimate with `include_overridden` (defaults to [estimateResult]).
+  RegradeEstimate? includedResult;
+  RegradeOutcome outcome = const RegradeOutcome();
+  Object? estimateError;
+  Object? regradeError;
+
+  /// `include_overridden` of each call.
+  final estimates = <bool>[];
+  final regrades = <bool>[];
+
+  @override
+  Future<RegradeEstimate> estimate(
+    int assignmentId, {
+    bool includeOverridden = false,
+  }) async {
+    estimates.add(includeOverridden);
+    if (estimateError case final e?) throw e;
+    return includeOverridden
+        ? includedResult ?? estimateResult
+        : estimateResult;
+  }
+
+  @override
+  Future<RegradeOutcome> regrade(
+    int assignmentId, {
+    bool includeOverridden = false,
+  }) async {
+    regrades.add(includeOverridden);
+    if (regradeError case final e?) throw e;
+    return outcome;
   }
 }

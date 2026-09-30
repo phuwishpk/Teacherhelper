@@ -242,6 +242,8 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('run_analysis')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
       expect(repo.calls, contains('run:55:7'));
       expect(find.text('ข้อความใหม่สำหรับครู'), findsOneWidget);
       expect(find.text('ข้อความใหม่ให้กำลังใจ'), findsOneWidget);
@@ -249,11 +251,48 @@ void main() {
       expect(find.textContaining('AI เขียนข้อความแล้ว'), findsOneWidget);
     });
 
+    testWidgets('analyze now asks for guidance, shows and prefills it', (
+      tester,
+    ) async {
+      final repo = await pump(tester);
+      expect(find.byKey(const ValueKey('guidance_used')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('run_analysis')));
+      await tester.pumpAndSettle();
+      expect(find.text('อย่าใส่ชื่อหรือข้อมูลของนักเรียน'), findsOneWidget);
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(repo.runGuidance, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('run_analysis')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('ai_guidance')),
+        ' เน้นเรื่องเศษส่วน ',
+      );
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
+      expect(repo.runGuidance, ['เน้นเรื่องเศษส่วน']);
+      expect(find.text('คำแนะนำที่ใช้: เน้นเรื่องเศษส่วน'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('run_analysis')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('ai_guidance')))
+            .controller!
+            .text,
+        'เน้นเรื่องเศษส่วน',
+      );
+    });
+
     testWidgets('analyze now without a key points to settings', (tester) async {
       final repo = FakeAnalysisRepository()
         ..runError = apiError(422, 'ai_key_missing');
       await pump(tester, repo: repo);
       await tester.tap(find.byKey(const ValueKey('run_analysis')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
       await tester.pumpAndSettle();
       expect(find.textContaining('ยังไม่ได้ใส่ Gemini API key'), findsOne);
       await tester.tap(find.text('ไปตั้งค่า'));
@@ -267,6 +306,8 @@ void main() {
       await pump(tester, repo: repo);
       await tester.tap(find.byKey(const ValueKey('run_analysis')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
       expect(find.textContaining('กดวิเคราะห์บ่อยเกินไป'), findsOneWidget);
 
       repo.runError = apiError(
@@ -275,6 +316,8 @@ void main() {
         'ยังไม่มีตัวชี้วัดที่ประเมินแล้วในห้องนี้',
       );
       await tester.tap(find.byKey(const ValueKey('run_analysis')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
       await tester.pumpAndSettle();
       expect(
         find.text('ยังไม่มีตัวชี้วัดที่ประเมินแล้วในห้องนี้'),

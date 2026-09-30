@@ -43,6 +43,7 @@ Map<String, dynamic> _payload({
   int? dropped,
   List<Map<String, dynamic>>? questions,
   int? changed,
+  String? guidance,
 }) {
   final qs =
       questions ??
@@ -64,6 +65,7 @@ Map<String, dynamic> _payload({
     'error': error,
     'suggested_question_count': suggested,
     'dropped_code_count': dropped,
+    'guidance': guidance,
     'questions': qs,
     'unmapped_question_count': unmapped,
     'unmapped_warning': unmappedWarningText(unmapped),
@@ -78,7 +80,11 @@ class _Mapping implements IndicatorMappingRepository {
   final List<Map<String, dynamic>> gets;
   final saves = <Map<int, List<int>>>[];
   int requests = 0;
+  final requestGuidance = <String?>[];
   Object? requestError;
+
+  /// `guidance` of the round the POST answers (null = the sent one).
+  String? runningGuidance;
   Map<String, dynamic>? saveAnswer;
 
   @override
@@ -88,12 +94,17 @@ class _Mapping implements IndicatorMappingRepository {
       );
 
   @override
-  Future<SuggestState> requestSuggestions(int assignmentId) async {
+  Future<SuggestState> requestSuggestions(
+    int assignmentId, {
+    String? guidance,
+  }) async {
     requests++;
+    requestGuidance.add(guidance);
     if (requestError case final e?) throw e;
     return SuggestState.fromJson({
       'status': 'queued',
       'requested_at': '2026-09-30T01:00:00+00:00',
+      'guidance': runningGuidance ?? guidance,
     });
   }
 
@@ -413,9 +424,12 @@ void main() {
       expect(find.byKey(const ValueKey('mapping_accept_all')), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
       await tester.pump();
       await tester.pump();
       expect(mapping.requests, 1);
+      expect(mapping.requestGuidance, [null]);
       expect(find.byKey(const ValueKey('mapping_queued')), findsOneWidget);
       expect(
         tester
@@ -430,6 +444,60 @@ void main() {
       expect(find.byKey(const ValueKey('mapping_done')), findsOneWidget);
       expect(find.text('บวกเศษส่วน'), findsOneWidget);
       expect(find.byKey(const ValueKey('mapping_accept_all')), findsOneWidget);
+    });
+
+    testWidgets('the guidance is asked, sent, shown and prefilled', (
+      tester,
+    ) async {
+      final mapping = _Mapping([
+        _payload(status: 'done', suggested: 1, guidance: 'ข้อ 1 เรื่องบวก'),
+        _payload(status: 'queued', guidance: 'เน้นเหตุผล'),
+        _payload(status: 'done', suggested: 1, guidance: 'เน้นเหตุผล'),
+      ]);
+      await pump(tester, mapping);
+      expect(find.text('คำแนะนำที่ใช้: ข้อ 1 เรื่องบวก'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
+      await tester.pumpAndSettle();
+      expect(find.text('อย่าใส่ชื่อหรือข้อมูลของนักเรียน'), findsOneWidget);
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byKey(const ValueKey('ai_guidance')),
+      );
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        'ข้อ 1 เรื่องบวก',
+      );
+      await tester.enterText(field, 'เน้นเหตุผล');
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
+      expect(mapping.requestGuidance, ['เน้นเหตุผล']);
+      expect(find.text('คำแนะนำที่ใช้: เน้นเหตุผล'), findsOneWidget);
+
+      // Cancelling the dialog sends nothing.
+      await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(mapping.requests, 1);
+    });
+
+    testWidgets('a round still queued keeps its own guidance', (tester) async {
+      final mapping = _Mapping([_payload(status: 'done', suggested: 1)])
+        ..runningGuidance = 'ของรอบก่อน';
+      await pump(tester, mapping);
+      await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('ai_guidance')),
+        'ของใหม่',
+      );
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('ใช้คำแนะนำของรอบนั้น'), findsOneWidget);
+      expect(find.text('คำแนะนำที่ใช้: ของรอบก่อน'), findsOneWidget);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('a failed request shows its message; a 422 shows the error', (
@@ -462,7 +530,13 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('ยังไม่มี Gemini API key'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('ยังไม่ได้ใส่ Gemini API key'),
+        findsOneWidget,
+      );
+      expect(find.text('ไปใส่ key'), findsOneWidget);
     });
 
     testWidgets('without a plan the teacher picks indicators alone', (

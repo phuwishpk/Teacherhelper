@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../courses/course_picker.dart';
@@ -14,6 +15,7 @@ import 'answer_key_repository.dart';
 import 'assignment.dart';
 import 'assignment_detail_screen.dart';
 import 'assignments_providers.dart';
+import 'class_regrade.dart';
 import 'document_read_screen.dart';
 import 'key_document_sources.dart';
 import 'question.dart';
@@ -68,10 +70,20 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
     KeyRequestKind kind,
     List<SourceDocument> docs,
   ) async {
+    // The guidance of the last read (or draft) starts the next one.
+    final last = ref.read(answerKeyProvider(_id)).value?.extraction;
+    final initialGuidance =
+        last != null && last.isRead == (kind == KeyRequestKind.read)
+        ? last.guidance
+        : null;
     final result = await Navigator.of(context).push<KeyRequestResult>(
       MaterialPageRoute(
-        builder: (_) =>
-            DocumentReadScreen(assignmentId: _id, kind: kind, documents: docs),
+        builder: (_) => DocumentReadScreen(
+          assignmentId: _id,
+          kind: kind,
+          documents: docs,
+          initialGuidance: initialGuidance,
+        ),
       ),
     );
     if (result == null || !mounted) return;
@@ -186,10 +198,45 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
       );
       if (!ok || !mounted) return;
     }
+    var approved = false;
     await _run(() async {
       await _notifier.approve(courseId: courseId);
+      approved = true;
       if (mounted) showMessage(context, 'อนุมัติเฉลยแล้ว');
     });
+    if (approved && mounted) await _suggestRegrade();
+  }
+
+  /// After a changed key is approved (DESIGN §21.13): when work was graded
+  /// with the old key, offer "ตรวจใหม่ทั้งห้อง" in a snack bar. Never blocks
+  /// and stays silent when the estimate cannot be asked.
+  Future<void> _suggestRegrade() async {
+    ref.invalidate(regradeEstimateProvider(_id));
+    final RegradeEstimate estimate;
+    try {
+      estimate = await ref.read(classRegradeRepositoryProvider).estimate(_id);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || estimate.inProgress || estimate.nothingToDo) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const ValueKey('regrade_suggestion'),
+          duration: const Duration(seconds: 10),
+          content: Text(
+            'อนุมัติเฉลยแล้ว มีงานที่ตรวจด้วยเฉลยเดิม ${estimate.submissions} งาน '
+            'ตรวจใหม่ด้วยเฉลยนี้ไหม',
+          ),
+          action: SnackBarAction(
+            label: 'ตรวจใหม่ทั้งห้อง',
+            onPressed: () {
+              if (mounted) runClassRegrade(context, _id);
+            },
+          ),
+        ),
+      );
   }
 
   @override
@@ -224,6 +271,8 @@ class _AnswerKeyScreenState extends ConsumerState<AnswerKeyScreen> {
               child: ListView(
                 children: [
                   _StatusCard(answerKey: key),
+                  if (key.approved && !key.reading)
+                    ClassRegradeCard(assignmentId: _id),
                   if (assignment != null && assignment.fromClassroomWeb) ...[
                     const SizedBox(height: 12),
                     ClassroomWebKeyNote(assignment: assignment),
@@ -485,6 +534,7 @@ class _ExtractionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final what = extraction.isDraft ? 'ร่างเฉลย' : 'อ่านเฉลย';
+    final guidance = extraction.guidance;
     if (extraction.isQueued) {
       return Card(
         key: const ValueKey('extraction_queued'),
@@ -501,6 +551,10 @@ class _ExtractionCard extends StatelessWidget {
                 'ใช้เวลาประมาณ 1–2 นาที ปิดหน้านี้แล้วกลับมาดูทีหลังได้',
                 style: theme.textTheme.bodySmall,
               ),
+              if (guidance != null) ...[
+                const SizedBox(height: 8),
+                GuidanceUsedNote(guidance: guidance),
+              ],
             ],
           ),
         ),
@@ -511,21 +565,59 @@ class _ExtractionCard extends StatelessWidget {
         color: theme.colorScheme.errorContainer,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            '$whatไม่สำเร็จ: ${extraction.error ?? 'ไม่ทราบสาเหตุ'} '
-            'ลองส่งใหม่อีกครั้ง',
-            style: TextStyle(color: theme.colorScheme.onErrorContainer),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$whatไม่สำเร็จ: ${extraction.error ?? 'ไม่ทราบสาเหตุ'} '
+                'ลองส่งใหม่อีกครั้ง',
+                style: TextStyle(color: theme.colorScheme.onErrorContainer),
+              ),
+              if (guidance != null) ...[
+                const SizedBox(height: 8),
+                GuidanceUsedNote(
+                  guidance: guidance,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ],
+            ],
           ),
         ),
       );
     }
     final notes = extraction.notesTh;
-    if (notes == null || notes.trim().isEmpty) return const SizedBox.shrink();
+    final hasNotes = notes != null && notes.trim().isNotEmpty;
+    if (!hasNotes && guidance == null) return const SizedBox.shrink();
     return Card(
-      child: ListTile(
-        leading: const Icon(Icons.info_outline),
-        title: const Text('หมายเหตุจาก AI'),
-        subtitle: Text(notes),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (hasNotes)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'หมายเหตุจาก AI',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        Text(notes),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            if (hasNotes && guidance != null) const SizedBox(height: 8),
+            if (guidance != null) GuidanceUsedNote(guidance: guidance),
+          ],
+        ),
       ),
     );
   }

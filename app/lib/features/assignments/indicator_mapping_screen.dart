@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/indicator_widgets.dart';
+import '../settings/ai_key_errors.dart';
 import 'assignments_providers.dart';
 import 'indicator_mapping.dart';
 import 'question.dart';
@@ -77,12 +79,31 @@ class _IndicatorMappingScreenState
     });
   }
 
-  Future<void> _request() async {
+  /// Asks for the guidance first (prefilled with the last round's), then
+  /// queues the suggestion.
+  Future<void> _request(IndicatorSuggestions data) async {
+    final choice = await showGuidanceDialog(
+      context,
+      title: 'ให้ AI เสนอตัวชี้วัด',
+      message: 'AI เลือกได้เฉพาะตัวชี้วัดของแผนนี้ เพิ่มคำแนะนำได้ถ้าต้องการ',
+      hintText: kGuidanceHintIndicators,
+      initial: data.state.guidance,
+    );
+    if (choice == null || !mounted) return;
     setState(() => _requesting = true);
     try {
-      await ref.read(indicatorSuggestionsProvider(_id).notifier).request();
+      final state = await ref
+          .read(indicatorSuggestionsProvider(_id).notifier)
+          .request(guidance: choice.guidance);
+      if (mounted && state.queued && state.guidance != choice.guidance) {
+        showMessage(
+          context,
+          'AI กำลังเสนอรอบก่อนอยู่ รอบนี้ใช้คำแนะนำของรอบนั้น '
+          'รอให้เสร็จแล้วส่งใหม่ได้',
+        );
+      }
     } catch (e) {
-      if (mounted) showMessage(context, apiErrorMessage(e));
+      if (mounted) showAiError(context, e);
     } finally {
       if (mounted) setState(() => _requesting = false);
     }
@@ -181,7 +202,7 @@ class _IndicatorMappingScreenState
                   _PlanCard(
                     data: data,
                     requesting: _requesting,
-                    onRequest: _request,
+                    onRequest: () => _request(data),
                     onAcceptAll: () => _acceptAll(data),
                   ),
                   if (unmappedWarningText(
@@ -331,6 +352,11 @@ class _PlanCard extends StatelessWidget {
                 ].join(' · '),
                 key: const ValueKey('mapping_done'),
               ),
+            ],
+            if (state.status != SuggestStatus.none &&
+                state.guidance != null) ...[
+              const SizedBox(height: 6),
+              GuidanceUsedNote(guidance: state.guidance!),
             ],
             if (plan != null) ...[
               const SizedBox(height: 12),

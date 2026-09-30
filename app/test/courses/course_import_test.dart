@@ -70,9 +70,15 @@ CourseExtraction _extraction(
   List<Map<String, dynamic>> matches = const [],
   bool cached = false,
   String? error,
+  String? guidance,
 }) => CourseExtraction.fromJson({
   'cached': cached,
-  'extraction': {'id': 70, 'status': status, 'error': error},
+  'extraction': {
+    'id': 70,
+    'status': status,
+    'error': error,
+    'guidance': guidance,
+  },
   'result': result,
   'indicator_matches': matches,
 });
@@ -96,6 +102,70 @@ List<Override> _flowOverrides(
 ];
 
 void main() {
+  testWidgets('the guidance of a course read is sent, shown and remembered', (
+    tester,
+  ) async {
+    tall(tester);
+    const guidance = 'แผนอยู่หน้า 3 ถึง 5';
+    final courses = FakeCoursesRepository()
+      ..extractResult = _extraction('queued', guidance: guidance)
+      ..polls = [
+        _extraction(
+          'done',
+          result: _readCourse(),
+          matches: _matches(),
+          guidance: guidance,
+        ),
+      ];
+    final keys = FakeAnswerKeys(answerKeyState())..uploadResult = const [_pdf];
+    final picker = FakeDocumentPicker([
+      PickedDocument(name: 'คำอธิบายรายวิชา.pdf', bytes: Uint8List(4)),
+    ]);
+    await pumpScreen(
+      tester,
+      const CoursesScreen(),
+      overrides: _flowOverrides(courses, keys, picker),
+      extraRoutes: [stubRoute('/courses/:id', 'detail')],
+    );
+
+    Future<void> openRead() async {
+      await tester.tap(find.text('สร้างรายวิชา'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new_course_document')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('course_doc_file')));
+      await tester.pumpAndSettle();
+    }
+
+    await openRead();
+    expect(find.textContaining('แผนอยู่หน้า 3 ถึง 5" หรือ'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('ai_guidance')), guidance);
+    await tester.pumpAndSettle();
+    expect(courses.estimates.last['guidance'], guidance);
+
+    await tester.tap(find.byKey(const ValueKey('send_key_request')));
+    await tester.pump();
+    await tester.pump();
+    expect(courses.extracts.single['guidance'], guidance);
+    expect(find.text('คำแนะนำที่ใช้: $guidance'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byType(CourseImportScreen), findsOneWidget);
+    expect(find.text('คำแนะนำที่ใช้: $guidance'), findsOneWidget);
+
+    // Back without saving, then read again: the field starts from it.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openRead();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('ai_guidance')))
+          .controller!
+          .text,
+      guidance,
+    );
+    expect(courses.estimates.last['guidance'], guidance);
+  });
+
   testWidgets('a new course from a document: upload, cost, wait, resolve an '
       'unknown indicator, confirm', (tester) async {
     tall(tester);
@@ -137,6 +207,7 @@ void main() {
       'document_ids': [5],
       'page_from': null,
       'page_to': null,
+      'guidance': null,
     });
     await tester.tap(find.byKey(const ValueKey('send_key_request')));
     await tester.pump();

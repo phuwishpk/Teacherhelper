@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import 'review_models.dart';
 
@@ -14,9 +15,10 @@ abstract class ReviewRepository {
   /// `PATCH /responses/{id}`: saving also marks the response reviewed.
   Future<ResponseDetail> saveReview(int id, ReviewDecision decision);
 
-  /// Returns the new explanation when the server wrote it synchronously,
-  /// null when it was queued.
-  Future<String?> regenerateExplanation(int id);
+  /// `POST /responses/{id}/regenerate-explanation {guidance?}` with the
+  /// teacher's "คำแนะนำถึง AI" (DESIGN §21.12). Returns the new explanation
+  /// when the server wrote it synchronously, null when it was queued.
+  Future<String?> regenerateExplanation(int id, {String? guidance});
 
   /// Returns how many responses were approved.
   Future<int> approveConfident(int assignmentId);
@@ -92,9 +94,11 @@ class ApiReviewRepository implements ReviewRepository {
   }
 
   @override
-  Future<String?> regenerateExplanation(int id) async {
+  Future<String?> regenerateExplanation(int id, {String? guidance}) async {
+    final g = normalizeGuidance(guidance);
     final res = await _dio.post<Object?>(
       '/responses/$id/regenerate-explanation',
+      data: g == null ? null : {'guidance': g},
     );
     final body = res.data;
     if (body is Map) {
