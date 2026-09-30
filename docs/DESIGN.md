@@ -1675,11 +1675,12 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 
 หมายเหตุ #41 (J, §20.5) ชี้แจงเพิ่มที่ยอมรับแล้ว: input ของ prompt `student_analysis` มีระดับชั้น ชื่อวิชา รหัสตัวชี้วัด และจำนวนแบบฝึกที่มีด้วย ทุกค่าไม่มีข้อมูลที่ระบุตัวนักเรียน
 
-**รอบ 30 ก.ย. 2569: คำแนะนำถึง AI** (ผู้ใช้ยืนยันทุกข้อ)
+**รอบ 30 ก.ย. 2569: คำแนะนำถึง AI และตรวจใหม่ทั้งห้อง** (ผู้ใช้ยืนยันทุกข้อ)
 
 | # | เรื่อง | ตัดสินใจ | เหตุผลหลัก |
 |---|---|---|---|
 | 43 | คำแนะนำถึง AI | ช่อง `guidance` ไม่บังคับ (ไม่เกิน 500 ตัวอักษร) ทุกครั้งที่ Gemini อ่านเอกสารหรือร่างให้ครู (เฉลย, รายวิชา/แผน, เสนอตัวชี้วัด, เขียนคำอธิบายใหม่, วิเคราะห์ตอนนี้) ใส่ใน prompt เวอร์ชันใหม่เป็นกรอบ `<<< >>>` ที่ห้ามขัดกฎเดิม ไม่ถึง prompt ที่อ่านคำตอบนักเรียนหรือให้คะแนน เป็นส่วนหนึ่งของ key แคช (ไม่มีคำแนะนำ = key เดิม) และบันทึกใน `ai_calls` (§21.12) | ครูรู้บริบทของเอกสารที่ AI ไม่รู้ (หน้าไหนคือเฉลย, วิธีที่สอน) แก้ผลที่ผิดได้โดยไม่ต้องพิมพ์เอง ส่วนคะแนนยังมาจาก Fuzzy และปลอดจาก injection ผ่านช่องนี้ |
+| 44 | ตรวจใหม่ทั้งห้อง | `POST /assignments/{id}/regrade` หลังแก้เฉลยที่อนุมัติแล้ว: ปรนัยคิดใหม่ด้วยโค้ด ข้ออื่นอ่านใหม่ด้วย Gemini (ทางครอปรายสแกน ทางรูปทั้งหน้ารายหน้า) ข้ามข้อที่ครูแก้คะแนนเองเว้นแต่ `include_overridden` งานที่เผยแพร่แล้วถูกเปิดกลับมาตรวจทานแบบเดียวกับสแกนใหม่ (`SubmissionReopened`) มีหน้าประเมินราคาฟรี (§21.13) | เฉลยผิดแล้วต้องแก้คะแนนทั้งห้อง ครูไม่ควรต้องกดทีละคน และคะแนนที่เปลี่ยนต้องผ่านครูก่อนนักเรียนเห็นเหมือนทุกทางเดิม |
 
 ---
 
@@ -2224,6 +2225,8 @@ CREATE TABLE explanation_cache (
 | GET | `/document-extractions/{id}` | ครู | สถานะและผล (เฉพาะโรงเรียนของตัวเอง) พร้อม `guidance` ที่ใช้อ่าน (§21.12, `null` = ไม่มี) |
 | POST | `/assignments/{id}/students/{student_id}/pages` | ครู | multipart `files[]` (1–5 หน้า รูปหรือ PDF) ทาง whole-page ตอบ `201 {data: {submission_id, student_id, pages: [{id, position, mime_type, page_count, size_bytes, state}], grading, waiting_key, regrade_pending}}` เฉพาะครูของห้อง (อื่นๆ 404) นักเรียนต้องอยู่ในห้องของการบ้าน (404) เกินหน้า 422 `too_many_pages` ไฟล์ 422 `unsupported_file_type`/`file_too_large`/`pdf_unreadable` ไม่ใช้กติกาส่งช้า (คงป้าย "ส่งช้า" เดิมของนักเรียนไว้) throttle `page-upload` 60 ครั้ง/นาที/ครู |
 | POST | `/submissions/{id}/grade` | ครู | ตรวจงานที่ส่งใหม่ (`regrade_pending`) ตอบ `202` |
+| POST | `/assignments/{id}/regrade` | ครู (ของการบ้าน) | "ตรวจใหม่ทั้งห้อง" หลังแก้เฉลย (§21.13) `{include_overridden?: bool}` ตอบ `202 {data: {queued_submissions, skipped_overridden, queued_responses, rescored_by_code, skipped_in_progress, skipped_missing_image, reopened_submissions}}` (ไม่มีอะไรเปลี่ยน `200`) เฉลยยังไม่อนุมัติ 409 `answer_key_not_approved` รอบก่อนยังตรวจไม่เสร็จ 409 `regrade_in_progress` ไม่มี key 422 `ai_key_missing` throttle `regrade` 5 ครั้งต่อนาที |
+| POST | `/assignments/{id}/regrade/estimate` | ครู (ของการบ้าน) | body เดียวกับ `regrade` ตอบ `{data: {submissions, queued_responses, mcq_by_code, whole_page_pages, skipped_overridden, skipped_in_progress, skipped_missing_image, published_submissions, in_progress, estimate: {input_tokens, output_tokens, thb}}}` ไม่เปลี่ยนอะไร ไม่เรียก Gemini |
 | GET | `/submission-pages/{id}/image` | ครู / นักเรียนเจ้าของ (หลังเผยแพร่) | stream หลังตรวจสิทธิ์ |
 | GET | `/assignments/{id}/grade-conflicts` | ครู | รายการ "คะแนนไม่ตรงกัน" `{data: [{id, submission_id, import_id, student: {id, name, student_number}, app_score, classroom_score, status, reason, detected_at, resolved_by, resolved_at, can_push_app, alternate_link}]}` แถว `open` ก่อน แล้วใหม่สุดก่อน |
 | POST | `/grade-conflicts/{id}/resolve` | ครู | `{action: push_app\|accept_classroom\|dismiss}` `push_app` กับงานจากเว็บ 409 `coursework_not_owned` ผลต่อค่าฐานตาม §19.3 แถวที่ไม่ `open` แล้ว 409 `conflict_resolved` |
@@ -2237,7 +2240,7 @@ CREATE TABLE explanation_cache (
 
 `PATCH /responses/{id}` (§9.5) เดิม: เมื่อครูแก้ `explanation` ครั้งแรก server ย้ายข้อความของ Gemini ไป `ai_explanation`, ตั้ง `explanation_source = teacher` และอัปเดต `explanation_cache` เป็น `teacher`
 
-**error code ใหม่**: `course_already_linked`, `course_link_busy` (409 มีการนำเข้าหรือผูกคอร์สเดียวกันค้างอยู่ เพิ่ม build ข้อ 12), `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`, `nothing_to_grade` (409 ของ `POST /submissions/{id}/grade` เมื่อไม่มีงานส่งใหม่รอตรวจ เพิ่มตอน implement), `answer_key_incomplete` (422 อนุมัติเฉลยหรือสร้าง layout เมื่อเฉลยไม่ครบ), `assignment_freeform` (422 สร้าง layout ของงาน `freeform`), `document_missing` (422 ไฟล์ของครูถูกลบตามรอบเก็บแล้ว) สามตัวหลังเพิ่มตอน implement build ข้อ 3
+**error code ใหม่**: `regrade_in_progress` (§21.13), `course_already_linked`, `course_link_busy` (409 มีการนำเข้าหรือผูกคอร์สเดียวกันค้างอยู่ เพิ่ม build ข้อ 12), `coursework_not_owned`, `answer_key_not_approved`, `unsupported_file_type`, `file_too_large`, `too_many_pages`, `document_too_long`, `submission_late`, `pdf_unreadable`, `document_split_unsupported`, `course_required` (หลัง Phase 9), `google_scope_missing` (ใช้ซ้ำสำหรับ scope ประกาศ), `conflict_resolved`, `import_not_rejected`, `assignment_not_ready`, `nothing_to_grade` (409 ของ `POST /submissions/{id}/grade` เมื่อไม่มีงานส่งใหม่รอตรวจ เพิ่มตอน implement), `answer_key_incomplete` (422 อนุมัติเฉลยหรือสร้าง layout เมื่อเฉลยไม่ครบ), `assignment_freeform` (422 สร้าง layout ของงาน `freeform`), `document_missing` (422 ไฟล์ของครูถูกลบตามรอบเก็บแล้ว) สามตัวหลังเพิ่มตอน implement build ข้อ 3
 
 ### 19.10 Job, cron และ prompt
 
@@ -2861,4 +2864,22 @@ ALTER TABLE ai_calls
 - **เสนอตัวชี้วัด**: ระหว่างรอบที่ยัง `queued` (ไม่เกิน 15 นาที) คำขอใหม่ไม่เข้าคิวซ้ำและตอบสถานะของรอบที่รันอยู่พร้อมคำแนะนำของรอบนั้น เมื่อรอบจบ (`done`/`failed`) คำขอใหม่เริ่มรอบใหม่ด้วยคำแนะนำใหม่ได้ การเสนออัตโนมัติตอนอนุมัติเฉลยไม่มีคำแนะนำ
 - **บันทึก** (§21.8): ทุก call ที่มีคำแนะนำเก็บ `ai_calls.teacher_guidance` และ `guidance_by` (ครูที่ขอ งานอ่านเอกสารใช้ `requested_by` ของแถว) call อื่นเป็น `NULL`
 - **ความเป็นส่วนตัว** (§20.9): ข้อความถูกส่งให้ Gemini และเก็บใน DB แอปจึงแสดงคำเตือนใต้ช่องว่า "อย่าใส่ชื่อหรือข้อมูลของนักเรียน"
-- test: `TeacherGuidanceTest` (unit: ทำความสะอาด, ความยาว, กรอบ, key แคช; feature: เฉลย/ร่าง/รายวิชา แคชตามคำแนะนำ, key เดิมเมื่อไม่มี, validation), `PromptsAndSchemasTest` (มีช่องเฉพาะ prompt ที่ครูใช้ ไม่มีใน prompt ตรวจ), `IndicatorSuggestionTest`, `StudentAnalysisTest`, `ResponseReviewTest`
+- test: `TeacherGuidanceTest` (unit: ทำความสะอาด, ความยาว, กรอบ, key แคช; feature: เฉลย/ร่าง/รายวิชา แคชตามคำแนะนำ, key เดิมเมื่อไม่มี, validation), `PromptsAndSchemasTest` (มีช่องเฉพาะ prompt ที่ครูใช้ ไม่มีใน prompt ตรวจ), `IndicatorSuggestionTest`, `StudentAnalysisTest`, `ResponseReviewTest`, `ClassRegradeTest` (การอ่านซ้ำไม่มีคำแนะนำ)
+
+### 21.13 ตรวจใหม่ทั้งห้องหลังแก้เฉลย (เพิ่ม 30 ก.ย. 2569)
+
+เมื่อครูพบว่าเฉลยผิดหลังตรวจไปแล้ว ครูแก้เฉลยแล้วกด "ตรวจใหม่ทั้งห้อง" แทนการแก้ทีละคน
+
+- `POST /assignments/{id}/regrade {include_overridden?: bool}` เฉพาะครูของการบ้าน (อื่นๆ 404, policy `review`) throttle `regrade` 5 ครั้งต่อนาทีต่อคน เฉลยต้องอนุมัติแล้ว (409 `answer_key_not_approved`) ใช้เฉลยที่อนุมัติปัจจุบัน ตอบ `202 {data: {queued_submissions, skipped_overridden, queued_responses, rescored_by_code, skipped_in_progress, skipped_missing_image, reopened_submissions}}` (`200` เมื่อไม่มีอะไรเปลี่ยน) ต้องมี Gemini key เมื่อมีข้อที่ต้องอ่านใหม่ (422 `ai_key_missing` ก่อนเปลี่ยนอะไร)
+- `POST /assignments/{id}/regrade/estimate` body เดียวกัน ฟรี ไม่เปลี่ยนอะไร ตอบ `{submissions, queued_responses, mcq_by_code, whole_page_pages, skipped_overridden, skipped_in_progress, skipped_missing_image, published_submissions, in_progress, estimate: {input_tokens, output_tokens, thb}}` ราคาใช้หลักเดียวกับ `CostEstimate` (§19.5) และเป็นเพดาน: ข้อครอป = ภาพตามระดับ media resolution ของ part + 400 token ข้อความ ออก 150, หน้าทั้งหน้า = ทุกหน้าที่ระดับ page + 1,500 ต่อไฟล์ ออก 150 ต่อข้อ และนับว่าทุกข้อที่อ่านใหม่ต้องมีคำอธิบาย (เข้า 600 ออก 200) ปรนัยที่คิดด้วยโค้ดไม่เสียเงิน
+- **ขอบเขต**: ทุก submission ที่เคยตรวจแล้วอย่างน้อยหนึ่งข้อ (`scored` หรือ `manual`) รายข้อ:
+  - ปรนัยของทางครอป: คิดใหม่ด้วย `McqGrader` จาก `mcq_fill` ที่เก็บไว้ (§11.6) ไม่ใช้ Gemini ถ้าคะแนนและระดับความเข้าใจไม่เปลี่ยน (และครูไม่ได้แก้) ข้อนั้นคงเดิม ตรวจทานแล้วก็ยังตรวจทานแล้ว
+  - short / show_work / open ของทางครอป: กลับเป็น `queued` (ครอป, ค่าที่มือถืออ่านและ flag ที่ติดตัว เช่น `identity_mismatch` คงอยู่) แล้ว `GradeScanJob` หนึ่ง job ต่อสแกน
+  - ทางรูปทั้งหน้า: ข้อกลับเป็น `queued` แล้วอ่านหน้าของรอบปัจจุบันใหม่ทั้งหน้า (`restartCurrentRound`, `GradeSubmissionPageJob` ต่อหน้า รวมปรนัยที่ Gemini อ่านจากหน้า) การ merge เขียนเฉพาะข้อที่ `queued` ข้อที่ข้ามจึงคงคะแนนเดิม
+  - **ข้าม**: ข้อที่ครูตัดสินเอง (มี `final_score`/`final_understanding` ที่ต่างจาก AI, ตรวจมือเพราะ AI ไม่ได้ให้คะแนน หรือเปลี่ยนจากคำขอตรวจใหม่ ส่วน "อนุมัติทั้งหมดที่มั่นใจ" ไม่นับ) เว้นแต่ `include_overridden = true`, ข้อที่กำลังตรวจอยู่ (job ของมันอ่านเฉลยปัจจุบันอยู่แล้ว ข้อที่ค้างเกิน 30 นาทีถือว่าหายและถูกตั้งใหม่ด้วย), ข้อที่ภาพครอปหรือไฟล์หน้าถูกลบตามนโยบายแล้ว (`skipped_missing_image` เพราะตรวจใหม่จะกลายเป็น `manual`)
+- **score_events**: ข้อที่มีคะแนนแล้วถูกตั้งใหม่บันทึก `rescan` (actor `teacher`, reason `answer key changed: class regrade`) ปรนัยที่คิดใหม่บันทึก `ai_scored` ด้วย ใช้ค่า enum เดิม ไม่เพิ่ม action ใหม่ `total_override` ของ Classroom ถูกล้างตามกฎเดิมของ `rescan` (§19.3)
+- **งานที่เผยแพร่แล้ว**: เลือกใช้การเปิดกลับแบบเดียวกับสแกนใหม่ที่ยืนยันแล้ว (`SubmissionStatus::refresh(reopen: true)` + `SubmissionReopened`) แทนการคงสถานะเผยแพร่ไว้แล้วใส่คะแนนที่เปลี่ยนเข้าคิวตรวจทาน เหตุผล: ทางเปิดกลับมีอยู่แล้วและครบทุกผลข้างเคียง (mastery ลบ observation ของงานนั้นจนกว่าจะเผยแพร่ใหม่ §14.2, นักเรียนไม่เห็นคะแนนใหม่ก่อนครูตรวจ, เผยแพร่ใหม่แล้วประกาศ Classroom และส่งคะแนนตามปกติ §19.7) ส่วนอีกทางต้องมีสถานะ "เผยแพร่แต่มีคะแนนรอตรวจ" ใหม่ submission ที่ไม่มีข้อไหนเปลี่ยนไม่ถูกเปิดกลับ
+- **คำอธิบาย**: ไม่ต้องทำอะไรเพิ่ม fingerprint ของ `explanation_cache` (§21.7) มีเฉลย คำอธิบายที่เขียนกับเฉลยเก่าจึงไม่ถูกใช้ซ้ำ
+- **กดซ้ำ**: รอบที่เข้าคิว job แล้วทิ้ง marker ใน cache (`class-regrade:{assignment_id}`, 30 นาที) ระหว่างที่ marker ยังอยู่และยังมีข้อหรือหน้าของการบ้านกำลังตรวจ การกดอีกครั้งตอบ 409 `regrade_in_progress` (estimate บอก `in_progress = true`) ตรวจเสร็จแล้วกดใหม่ได้
+- ไม่มีคำแนะนำถึง AI ในการตรวจใหม่ (§21.12)
+- implement: `App\Domain\Grading\ClassRegrade`, `GradingController::regrade` / `regradeEstimate` test: `ClassRegradeTest` (ปรนัยด้วยโค้ด, อ่านใหม่ทางครอปและทั้งหน้า, ข้ามข้อที่ครูแก้, `include_overridden`, เปิดกลับงานที่เผยแพร่, 409 ทั้งสองแบบ, ไม่มี key, ภาพถูกลบ, สิทธิ์) `AuthorizationMatrixTest` และ `AuthHardeningTest` (limiter `regrade`)

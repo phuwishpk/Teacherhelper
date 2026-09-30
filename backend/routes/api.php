@@ -170,6 +170,10 @@ Route::prefix('v1')->group(function () {
                 Route::get('assignments/{id}/layouts', [LayoutController::class, 'index'])->name('api.assignments.layouts.index');
                 Route::post('assignments/{id}/worksheets', [WorksheetPrintController::class, 'store'])->name('api.assignments.worksheets.store');
                 Route::post('assignments/{id}/requeue-missing-key', [GradingController::class, 'requeueMissingKey'])->name('api.assignments.requeue-missing-key');
+                // "ตรวจใหม่ทั้งห้อง" after the answer key changed (§21.13): queues Gemini jobs, so it is throttled;
+                // the estimate is free.
+                Route::post('assignments/{id}/regrade', [GradingController::class, 'regrade'])->middleware('throttle:regrade')->name('api.assignments.regrade');
+                Route::post('assignments/{id}/regrade/estimate', [GradingController::class, 'regradeEstimate'])->name('api.assignments.regrade.estimate');
                 // Indicators of the questions (§20.3): Gemini suggests from the linked lesson plan
                 // (queues a job that costs money, so it is throttled), the teacher confirms.
                 Route::post('assignments/{id}/indicator-suggestions', [IndicatorSuggestionController::class, 'store'])->middleware('throttle:indicator-suggest')->name('api.assignments.indicator-suggestions.store');

@@ -36,7 +36,13 @@ final class CostEstimate
 
     public static function tokensPerPage(): int
     {
-        return self::TOKENS_PER_PAGE[MediaResolution::forPart(MediaResolution::PART_DOCUMENT)] ?? 560;
+        return self::tokensForPart(MediaResolution::PART_DOCUMENT);
+    }
+
+    /** Tokens of one image (a crop, a page, a PDF page) at the level of $part (MediaResolution::PART_*). */
+    public static function tokensForPart(string $part): int
+    {
+        return self::TOKENS_PER_PAGE[MediaResolution::forPart($part)] ?? 560;
     }
 
     /**
