@@ -519,3 +519,56 @@ class ScanPipelineApi {
     return pigeonVar_replyValue! as FrameDetection;
   }
 }
+
+/// Pages of a teacher's exam file for cropping its figures (DESIGN §22.4):
+/// the server cannot render a PDF or decode HEIC, so the phone does and
+/// uploads the page (`POST /exams/{id}/page-images`).
+class DocumentPageApi {
+  /// Constructor for [DocumentPageApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  DocumentPageApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
+
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  /// Renders page [pageNo] (1-based) of the PDF at [path] with
+  /// `PdfRenderer`, or decodes the photo at [path] (HEIC/HEIF, JPEG, PNG,
+  /// WebP; [pageNo] must be 1), on white, scaled so the long side is at most
+  /// [maxLongSide] px. Writes a JPEG (quality 90) to the app cache and
+  /// returns its path. Errors: `document_unreadable`, `page_out_of_range`,
+  /// `unsupported` (HEIC before Android 9), `storage_failed`.
+  Future<String> renderDocumentPage(
+    String path,
+    String mimeType,
+    int pageNo,
+    int maxLongSide,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.eduvision.DocumentPageApi.renderDocumentPage$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[path, mimeType, pageNo, maxLongSide],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
+  }
+}

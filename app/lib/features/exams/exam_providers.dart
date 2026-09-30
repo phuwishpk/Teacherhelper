@@ -6,6 +6,8 @@ import '../../core/auth/session.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/assignment.dart';
 import '../assignments/assignments_providers.dart';
+import 'exam_import_models.dart';
+import 'exam_import_repository.dart';
 import 'exam_models.dart';
 import 'exams_repository.dart';
 
@@ -127,6 +129,32 @@ class ExamDetailNotifier extends AsyncNotifier<ExamDetail> {
   Future<void> unlockStructure() async {
     _set(await _repo.unlockStructure(examId));
   }
+
+  /// Boxes the figure of a question or option again on [pageImageId]
+  /// (`box_2d` in 0–1000); the server crops it anew (§22.4).
+  Future<void> setFigure(
+    ExamImageKey target, {
+    required int pageImageId,
+    required List<int> box,
+  }) async {
+    await ref
+        .read(examImportRepositoryProvider)
+        .setFigure(target, pageImageId: pageImageId, box: box);
+    ref.invalidate(examImageProvider(target));
+    await _reload(versions: false);
+  }
+
+  /// Copies questions of the teacher's earlier exams into this one.
+  Future<ExamCopyResult> copyQuestions(
+    List<int> questionIds, {
+    int? sectionId,
+  }) async {
+    final result = await ref
+        .read(examImportRepositoryProvider)
+        .copyQuestions(examId, questionIds: questionIds, sectionId: sectionId);
+    _set(result.exam);
+    return result;
+  }
 }
 
 final examDetailProvider = AsyncNotifierProvider.autoDispose
@@ -161,3 +189,16 @@ final examImageProvider = FutureProvider.autoDispose
       watchSignedInUser(ref, keepAlive: false);
       return ref.watch(examsRepositoryProvider).image(key);
     });
+
+/// JPEG of a page of the exam file, for drawing a figure box.
+final examPageImageProvider = FutureProvider.autoDispose.family<Uint8List, int>(
+  (ref, id) {
+    watchSignedInUser(ref, keepAlive: false);
+    return ref.watch(examImportRepositoryProvider).pageImage(id);
+  },
+);
+
+/// How often a queued exam read is polled (shorter in tests).
+final examReadPollIntervalProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 3),
+);

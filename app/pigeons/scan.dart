@@ -143,3 +143,23 @@ abstract class ScanPipelineApi {
     int rotation,
   );
 }
+
+/// Pages of a teacher's exam file for cropping its figures (DESIGN §22.4):
+/// the server cannot render a PDF or decode HEIC, so the phone does and
+/// uploads the page (`POST /exams/{id}/page-images`).
+@HostApi()
+abstract class DocumentPageApi {
+  /// Renders page [pageNo] (1-based) of the PDF at [path] with
+  /// `PdfRenderer`, or decodes the photo at [path] (HEIC/HEIF, JPEG, PNG,
+  /// WebP; [pageNo] must be 1), on white, scaled so the long side is at most
+  /// [maxLongSide] px. Writes a JPEG (quality 90) to the app cache and
+  /// returns its path. Errors: `document_unreadable`, `page_out_of_range`,
+  /// `unsupported` (HEIC before Android 9), `storage_failed`.
+  @async
+  String renderDocumentPage(
+    String path,
+    String mimeType,
+    int pageNo,
+    int maxLongSide,
+  );
+}

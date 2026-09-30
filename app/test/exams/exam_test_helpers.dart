@@ -20,6 +20,8 @@ final examStubRoutes = [
   stubRoute('/exams/:id/results', 'results'),
   stubRoute('/exams/:id/questions/:qid', 'question'),
   stubRoute('/exams/:id/sections/:sid/questions/new', 'question-new'),
+  stubRoute('/exams/:id/read-review', 'read-review'),
+  stubRoute('/exams/:id/copy-questions', 'copy-questions'),
   stubRoute('/courses/:id/gradebook', 'gradebook'),
 ];
 

@@ -617,3 +617,55 @@ interface ScanPipelineApi {
     }
   }
 }
+/**
+ * Pages of a teacher's exam file for cropping its figures (DESIGN §22.4):
+ * the server cannot render a PDF or decode HEIC, so the phone does and
+ * uploads the page (`POST /exams/{id}/page-images`).
+ *
+ * Generated interface from Pigeon that represents a handler of messages from Flutter.
+ */
+interface DocumentPageApi {
+  /**
+   * Renders page [pageNo] (1-based) of the PDF at [path] with
+   * `PdfRenderer`, or decodes the photo at [path] (HEIC/HEIF, JPEG, PNG,
+   * WebP; [pageNo] must be 1), on white, scaled so the long side is at most
+   * [maxLongSide] px. Writes a JPEG (quality 90) to the app cache and
+   * returns its path. Errors: `document_unreadable`, `page_out_of_range`,
+   * `unsupported` (HEIC before Android 9), `storage_failed`.
+   */
+  suspend fun renderDocumentPage(path: String, mimeType: String, pageNo: Long, maxLongSide: Long): String
+
+  companion object {
+    /** The codec used by DocumentPageApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      ScanApiPigeonCodec()
+    }
+    /** Sets up an instance of `DocumentPageApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: DocumentPageApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.eduvision.DocumentPageApi.renderDocumentPage$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathArg = args[0] as String
+            val mimeTypeArg = args[1] as String
+            val pageNoArg = args[2] as Long
+            val maxLongSideArg = args[3] as Long
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.renderDocumentPage(pathArg, mimeTypeArg, pageNoArg, maxLongSideArg))
+              } catch (exception: Throwable) {
+                ScanApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}

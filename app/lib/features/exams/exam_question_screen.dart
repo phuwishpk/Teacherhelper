@@ -6,8 +6,10 @@ import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/answer_key_models.dart';
+import 'exam_figure_crop_screen.dart';
 import 'exam_image_field.dart';
 import 'exam_models.dart';
+import 'exam_page_renders.dart';
 import 'exam_providers.dart';
 import 'exams_repository.dart';
 
@@ -295,6 +297,65 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
     return o != null && o.hasImage ? (option: true, id: o.id) : null;
   }
 
+  /// The figure state of the prompt ([position] 0) or an option read from
+  /// the exam file, with "ลากกรอบจากหน้าเอกสาร" (DESIGN §22.4).
+  Widget? _figureTools(ThemeData theme, int position) {
+    final q = _question;
+    if (q == null) return null;
+    final option = position == 0 ? null : _optionOf(position);
+    if (position != 0 && option == null) return null;
+    final source = option == null ? q.figureSource : option.figureSource;
+    final status = figureStatus(
+      widget.detail,
+      source: source,
+      pending: option == null ? q.figurePending : option.figurePending,
+      hasImage: option == null ? q.hasPromptImage : option.hasImage,
+    );
+    // Options offer the box only for a figure from the file.
+    final canCrop =
+        widget.detail.availablePages.isNotEmpty &&
+        (option == null || source != null);
+    if (status != FigureStatus.missing &&
+        status != FigureStatus.cropping &&
+        !canCrop) {
+      return null;
+    }
+    final scheme = theme.colorScheme;
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (status == FigureStatus.missing)
+          StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.outline),
+        if (status == FigureStatus.cropping)
+          StatusChip(label: 'กำลังตัดภาพประกอบ', color: scheme.secondary),
+        if (canCrop)
+          TextButton.icon(
+            key: ValueKey(
+              option == null
+                  ? 'exam_prompt_recrop'
+                  : 'exam_option_recrop_$position',
+            ),
+            onPressed: _busy
+                ? null
+                : () => openFigureCrop(
+                    context,
+                    examId: widget.detail.exam.id,
+                    target: option == null
+                        ? (option: false, id: q.id)
+                        : (option: true, id: option.id),
+                    title: option == null
+                        ? 'ภาพโจทย์ข้อ ${q.position}'
+                        : 'ภาพตัวเลือก ${option.label} ข้อ ${q.position}',
+                    source: source,
+                  ),
+            icon: const Icon(Icons.crop, size: 18),
+            label: const Text('ลากกรอบจากหน้าเอกสาร'),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -354,6 +415,7 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
               onPick: (f) => _setImage(0, f),
               onRemove: () => _setImage(0, null),
             ),
+            ?_figureTools(theme, 0),
             if (_mcq) ...[
               const SizedBox(height: 16),
               Text('ตัวเลือก', style: theme.textTheme.titleSmall),
@@ -366,15 +428,21 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
                 _OptionRow(
                   position: p,
                   controller: _optionTexts[p - 1],
-                  image: ExamImageField(
-                    label: 'ภาพ',
-                    fieldKey: 'exam_option_image_$p',
-                    compact: true,
-                    savedKey: _savedImage(p),
-                    pending: _pending[p],
-                    enabled: !_busy,
-                    onPick: (f) => _setImage(p, f),
-                    onRemove: () => _setImage(p, null),
+                  image: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ExamImageField(
+                        label: 'ภาพ',
+                        fieldKey: 'exam_option_image_$p',
+                        compact: true,
+                        savedKey: _savedImage(p),
+                        pending: _pending[p],
+                        enabled: !_busy,
+                        onPick: (f) => _setImage(p, f),
+                        onRemove: () => _setImage(p, null),
+                      ),
+                      ?_figureTools(theme, p),
+                    ],
                   ),
                 ),
               const SizedBox(height: 8),

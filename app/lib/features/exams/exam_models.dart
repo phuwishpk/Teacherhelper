@@ -312,12 +312,21 @@ class ExamOption {
     required this.position,
     this.text,
     this.hasImage = false,
+    this.figureSource,
+    this.figurePending = false,
   });
 
   final int id;
   final int position;
   final String? text;
   final bool hasImage;
+
+  /// Where the picture was cropped from the exam file (§22.4); null for a
+  /// picture the teacher attached.
+  final FigureSource? figureSource;
+
+  /// The figure waits for its page image ("ยังไม่มีภาพประกอบ").
+  final bool figurePending;
 
   String get label => examOptionLabel(position);
 
@@ -326,6 +335,8 @@ class ExamOption {
     position: (json['position'] as num).toInt(),
     text: json['text'] as String?,
     hasImage: json['has_image'] == true,
+    figureSource: FigureSource.maybe(json['figure_source']),
+    figurePending: json['figure_pending'] == true,
   );
 }
 
@@ -349,6 +360,8 @@ class ExamQuestion {
     this.keyComplete = false,
     this.hasPrompt = false,
     this.updatedAt,
+    this.figureSource,
+    this.figurePending = false,
   });
 
   final int id;
@@ -377,7 +390,20 @@ class ExamQuestion {
   final bool hasPrompt;
   final String? updatedAt;
 
+  /// Where the prompt picture was cropped from the exam file (§22.4).
+  final FigureSource? figureSource;
+
+  /// The prompt figure waits for its page image.
+  final bool figurePending;
+
   bool get approved => approvedAt != null;
+
+  /// Read from the teacher's exam file (a draft until approved).
+  bool get fromDocument => origin == 'document';
+
+  /// The prompt or an option has a figure still waiting for its page.
+  bool get anyFigurePending =>
+      figurePending || options.any((o) => o.figurePending);
 
   factory ExamQuestion.fromJson(Map<String, dynamic> json) {
     final approved = json['approved_at'];
@@ -404,6 +430,8 @@ class ExamQuestion {
       keyComplete: json['key_complete'] == true,
       hasPrompt: json['has_prompt'] == true,
       updatedAt: json['updated_at'] as String?,
+      figureSource: FigureSource.maybe(json['figure_source']),
+      figurePending: json['figure_pending'] == true,
     );
   }
 }
@@ -547,6 +575,8 @@ class ExamDetail {
     this.structureLockedAt,
     this.sheetPages = 0,
     this.sheetOverflow = false,
+    this.pageImages = const [],
+    this.figuresPending = const [],
   });
 
   final Assignment exam;
@@ -562,6 +592,24 @@ class ExamDetail {
   /// Answer-sheet pages the questions need (at most 2, §22.7).
   final int sheetPages;
   final bool sheetOverflow;
+
+  /// Pages of the exam file figures are cropped from (build 5, §22.4).
+  final List<ExamPageImage> pageImages;
+
+  /// Pages whose figures wait for the app to render them.
+  final List<FigurePending> figuresPending;
+
+  /// Page images the teacher can draw a box on.
+  List<ExamPageImage> get availablePages => [
+    for (final p in pageImages)
+      if (p.available) p,
+  ];
+
+  /// Questions read from a file that the teacher has not approved yet.
+  List<ExamQuestion> get unapprovedDrafts => [
+    for (final q in questions)
+      if (q.fromDocument && !q.approved) q,
+  ];
 
   ExamGradingMethod get gradingMethod =>
       ExamGradingMethod.fromApi(exam.gradingMethod);
@@ -613,8 +661,121 @@ class ExamDetail {
       structureLockedAt: locked is String ? DateTime.tryParse(locked) : null,
       sheetPages: sheet is Map ? (sheet['pages'] as num?)?.toInt() ?? 0 : 0,
       sheetOverflow: sheet is Map && sheet['overflow'] == true,
+      pageImages: [
+        for (final p in (json['page_images'] as List?) ?? const [])
+          if (p is Map) ExamPageImage.fromJson(p.cast<String, dynamic>()),
+      ],
+      figuresPending: FigurePending.listOf(json['figures_pending']),
     );
   }
+}
+
+/// `figure_source` of a question or option (DESIGN §22.4): the page image
+/// and box a figure was cropped from; [pageImageId] null = the figure waits
+/// for the page image of ([sourceDocumentId], [pageNo]).
+class FigureSource {
+  const FigureSource({
+    this.pageImageId,
+    this.sourceDocumentId,
+    this.pageNo,
+    this.box,
+  });
+
+  final int? pageImageId;
+  final int? sourceDocumentId;
+  final int? pageNo;
+
+  /// `box_2d`: [ymin, xmin, ymax, xmax] in 0–1000 of the page.
+  final List<int>? box;
+
+  static FigureSource? maybe(Object? json) {
+    if (json is! Map) return null;
+    final box = json['box_2d'];
+    return FigureSource(
+      pageImageId: (json['page_image_id'] as num?)?.toInt(),
+      sourceDocumentId: (json['source_document_id'] as num?)?.toInt(),
+      pageNo: (json['page_no'] as num?)?.toInt(),
+      box: box is List && box.length == 4
+          ? [for (final v in box) (v as num).toInt()]
+          : null,
+    );
+  }
+}
+
+/// A page of the exam file kept for cropping figures (`page_images`).
+class ExamPageImage {
+  const ExamPageImage({
+    required this.id,
+    required this.sourceDocumentId,
+    required this.pageNo,
+    this.widthPx = 0,
+    this.heightPx = 0,
+    this.available = true,
+  });
+
+  final int id;
+  final int sourceDocumentId;
+  final int pageNo;
+
+  /// 0 until the server decoded a photo it keeps itself.
+  final int widthPx;
+  final int heightPx;
+
+  /// False once the file was deleted with the documents (30 days).
+  final bool available;
+
+  /// Width / height, A4 portrait while the size is unknown.
+  double get aspectRatio =>
+      widthPx > 0 && heightPx > 0 ? widthPx / heightPx : 210 / 297;
+
+  factory ExamPageImage.fromJson(Map<String, dynamic> json) => ExamPageImage(
+    id: (json['id'] as num).toInt(),
+    sourceDocumentId: (json['source_document_id'] as num?)?.toInt() ?? 0,
+    pageNo: (json['page_no'] as num?)?.toInt() ?? 1,
+    widthPx: (json['width_px'] as num?)?.toInt() ?? 0,
+    heightPx: (json['height_px'] as num?)?.toInt() ?? 0,
+    available: json['available'] != false,
+  );
+}
+
+/// A page whose figures wait for its page image (`figures_pending`).
+class FigurePending {
+  const FigurePending({
+    required this.sourceDocumentId,
+    required this.pageNo,
+    this.originalName,
+    this.mimeType,
+    this.figures = 0,
+    this.reason = 'needs_render',
+  });
+
+  final int sourceDocumentId;
+  final int pageNo;
+  final String? originalName;
+  final String? mimeType;
+
+  /// Figures (question and option pictures) cropped from this page.
+  final int figures;
+
+  /// `needs_render` (the app renders and uploads it) or
+  /// `document_missing` (the file was deleted: attach pictures by hand).
+  final String reason;
+
+  bool get needsRender => reason == 'needs_render';
+
+  static List<FigurePending> listOf(Object? json) => [
+    if (json is List)
+      for (final row in json)
+        if (row is Map)
+          FigurePending(
+            sourceDocumentId: (row['source_document_id'] as num).toInt(),
+            pageNo: (row['page_no'] as num?)?.toInt() ?? 1,
+            originalName: row['original_name'] as String?,
+            mimeType: row['mime_type'] as String?,
+            figures: (row['figures'] as num?)?.toInt() ?? 0,
+            reason: row['reason'] as String? ?? 'needs_render',
+          ),
+  ];
 }
 
 /// One question of one version (`GET /exams/{id}/versions` item).

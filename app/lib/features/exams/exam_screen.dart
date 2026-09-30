@@ -9,6 +9,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_page.dart';
 import '../assignments/assignments_providers.dart';
+import 'exam_import_flow.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
 import 'exam_section_dialog.dart';
@@ -213,6 +214,25 @@ class ExamScreen extends ConsumerWidget {
                     text:
                         'ข้อมากเกินกระดาษคำตอบ 2 หน้า ลดจำนวนข้อหรือจำนวนหลักของตอนเติมตัวเลข',
                   ),
+                if (d.unapprovedDrafts.isNotEmpty ||
+                    d.figuresPending.isNotEmpty)
+                  _Banner(
+                    icon: Icons.fact_check_outlined,
+                    color: Theme.of(context).colorScheme.tertiary,
+                    text: [
+                      if (d.unapprovedDrafts.isNotEmpty)
+                        'ข้อที่อ่านจากไฟล์ยังไม่อนุมัติ '
+                            '${d.unapprovedDrafts.length} ข้อ ตรวจและอนุมัติก่อนพิมพ์',
+                      if (d.figuresPending.isNotEmpty)
+                        'ยังไม่มีภาพประกอบจาก ${d.figuresPending.length} หน้าเอกสาร',
+                    ].join(' · '),
+                    action: TextButton(
+                      key: const ValueKey('exam_open_read_review'),
+                      onPressed: () =>
+                          context.push(AppRoutes.examReadReview(examId)),
+                      child: const Text('ตรวจข้อที่อ่านจากไฟล์'),
+                    ),
+                  ),
                 _KeyCard(detail: d, onApprove: () => _approveKey(context, ref)),
                 const SizedBox(height: 8),
                 Wrap(
@@ -290,7 +310,8 @@ class ExamScreen extends ConsumerWidget {
                     title: 'ยังไม่มีตอน',
                     message:
                         'กด "เพิ่มตอน" เลือกชนิดของข้อ (ปรนัย ถูก/ผิด เติมตัวเลข) '
-                        'และจำนวนข้อ แล้วกรอกโจทย์และเฉลยทีละข้อ',
+                        'และจำนวนข้อ แล้วกรอกโจทย์และเฉลยทีละข้อ '
+                        'หรือให้ AI อ่านไฟล์ข้อสอบเดิม หรือคัดลอกจากข้อสอบเดิม',
                   ),
                 for (final s in d.sections)
                   _SectionCard(
@@ -301,6 +322,31 @@ class ExamScreen extends ConsumerWidget {
                     onDelete: () => _deleteSection(context, ref, s),
                     onMove: (p) => _moveSection(context, ref, s, p),
                   ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('exam_import_file'),
+                      onPressed: d.structureLocked
+                          ? null
+                          : () => runExamImport(context, ref, examId: examId),
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('อ่านข้อจากไฟล์ข้อสอบ'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('exam_copy_questions'),
+                      onPressed: d.structureLocked
+                          ? null
+                          : () => context.push(
+                              AppRoutes.examCopyQuestions(examId),
+                            ),
+                      icon: const Icon(Icons.copy_all),
+                      label: const Text('คัดลอกจากข้อสอบเดิม'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -613,7 +659,12 @@ class _QuestionTile extends StatelessWidget {
       if (q.blank)
         StatusChip(label: 'ยังไม่ได้กรอก', color: scheme.outline)
       else if (!q.approved)
-        StatusChip(label: 'ยังไม่อนุมัติ', color: scheme.error),
+        StatusChip(
+          label: q.fromDocument ? 'ร่างจากไฟล์ ยังไม่อนุมัติ' : 'ยังไม่อนุมัติ',
+          color: scheme.error,
+        ),
+      if (q.anyFigurePending)
+        StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.outline),
       if (q.lockOptions)
         StatusChip(label: 'ห้ามสลับตัวเลือก', color: scheme.secondary),
       if (q.lockOptionsSuggested)
