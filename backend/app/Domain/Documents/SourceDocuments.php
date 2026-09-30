@@ -23,8 +23,12 @@ use Illuminate\Support\Str;
  *   PDF แล้วแนบใหม่"), as is anything else;
  * - at most eduvision.documents.max_file_mb per file (422 file_too_large);
  * - a PDF whose pages cannot be counted is unreadable (422 pdf_unreadable);
- * - the same file uploaded again in the school reuses its row (found by
- *   sha256), so the read-once cache (document_extractions) finds it.
+ * - the same file uploaded again by the same teacher reuses their row; a
+ *   colleague who uploads the same bytes gets a row of their own that shares
+ *   the stored file. The row id is the proof that the teacher holds the
+ *   file (DocumentSelection and the exam file download accept only the
+ *   teacher's own rows), while the read-once cache (document_extractions)
+ *   is keyed by sha256 and so is still shared by the whole school.
  *
  * The files are deleted after eduvision.documents.retention_days (purge());
  * what Gemini read from them stays.
@@ -120,7 +124,11 @@ final class SourceDocuments
         ];
     }
 
-    /** Deletes the files of documents older than the retention (eduvision:purge-images). */
+    /**
+     * Deletes the files of documents older than the retention
+     * (eduvision:purge-images). A file a colleague's newer row still shares
+     * stays until that row is due too.
+     */
     public static function purge(): int
     {
         $cutoff = now()->subDays((int) config('eduvision.documents.retention_days'));
@@ -129,9 +137,16 @@ final class SourceDocuments
         SourceDocument::query()
             ->whereNotNull('file_path')
             ->where('created_at', '<', $cutoff)
-            ->chunkById(200, function ($documents) use ($disk, &$count) {
+            ->chunkById(200, function ($documents) use ($disk, $cutoff, &$count) {
                 foreach ($documents as $document) {
-                    $disk->delete($document->file_path);
+                    $shared = SourceDocument::query()
+                        ->where('file_path', $document->file_path)
+                        ->where('id', '!=', $document->id)
+                        ->where('created_at', '>=', $cutoff)
+                        ->exists();
+                    if (! $shared) {
+                        $disk->delete($document->file_path);
+                    }
                     $document->file_path = null;
                     $document->save();
                     $count++;
@@ -192,12 +207,16 @@ final class SourceDocuments
         $path = self::path($schoolId, $sha, $item['mime_type']);
         $disk = self::disk();
 
-        $existing = SourceDocument::query()->where('school_id', $schoolId)->where('sha256', $sha)->orderByDesc('id')->first();
+        $existing = SourceDocument::query()->where('school_id', $schoolId)->where('sha256', $sha)
+            ->where('uploaded_by', $teacher->id)->orderByDesc('id')->first();
         if ($existing !== null && $existing->file_path !== null && $disk->exists($existing->file_path)) {
             return $existing;
         }
 
-        $disk->put($path, $item['bytes']);
+        if (! $disk->exists($path)) {
+            // Another teacher's row may hold the same bytes at the same path: it is shared, not written again.
+            $disk->put($path, $item['bytes']);
+        }
         if ($existing !== null) {
             // The file was purged: the same bytes come back under the same row.
             $existing->forceFill(['file_path' => $path, 'created_at' => now()])->save();

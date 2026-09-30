@@ -97,7 +97,8 @@ final class ExamFigures
 
     /**
      * Pages whose figures still wait for a page image (no exam_page_images
-     * row yet): the app renders them, or cannot because the file is gone.
+     * row yet, or only one whose file was purged): the app renders them, or
+     * cannot because the file is gone.
      *
      * @return list<array{source_document_id: int, page_no: int, original_name: string|null, mime_type: string|null, figures: int, reason: string}>
      */
@@ -111,7 +112,10 @@ final class ExamFigures
         if ($counts === []) {
             return [];
         }
-        $pages = ExamPageImage::query()->where('assignment_id', $exam->id)->get()
+        // A page image counts while it has its file, or while the server still decodes it (size 0);
+        // one whose file was purged (30 days) leaves its waiting figures pending again.
+        $pages = ExamPageImage::query()->where('assignment_id', $exam->id)
+            ->where(fn ($q) => $q->whereNotNull('file_path')->orWhere('width_px', 0))->get()
             ->mapWithKeys(fn (ExamPageImage $p) => [$p->source_document_id.':'.$p->page_no => true]);
         $documents = SourceDocument::query()
             ->whereIn('id', array_map(fn (string $k) => (int) explode(':', $k)[0], array_keys($counts)))
@@ -156,12 +160,14 @@ final class ExamFigures
         }
         $rows = ExamPageImage::query()->where('assignment_id', $exam->id)->get()
             ->keyBy(fn (ExamPageImage $p) => $p->source_document_id.':'.$p->page_no);
+        $imported = self::importedDocumentIds($exam);
         foreach (array_keys($keys) as $key) {
             [$documentId, $pageNo] = array_map('intval', explode(':', $key));
             $row = $rows->get($key);
             if ($row === null) {
                 $document = SourceDocument::query()->find($documentId);
                 $decodable = $document !== null && $pageNo === 1
+                    && in_array($documentId, $imported, true)
                     && in_array($document->mime_type, self::SERVER_TYPES, true)
                     && $document->size_bytes <= self::SERVER_MAX_BYTES
                     && $document->file_path !== null;
@@ -299,10 +305,22 @@ final class ExamFigures
         if ($info[0] < 1 || $info[1] < 1 || max($info[0], $info[1]) > self::SERVER_MAX_PX) {
             throw ValidationException::withMessages(['image' => 'ภาพหน้าเอกสารใหญ่เกินไป ด้านยาวต้องไม่เกิน '.number_format(self::SERVER_MAX_PX).' พิกเซล']);
         }
+        $size = [$info[0], $info[1]];
+        if (max($size) > self::PAGE_MAX_PX && self::fitsInMemory($size[0], $size[1])) {
+            // Larger than the app renders: kept at PAGE_MAX_PX like a page the server decodes.
+            $image = @imagecreatefromstring($bytes);
+            if (! $image instanceof GdImage) {
+                throw ValidationException::withMessages(['image' => 'ภาพหน้าเอกสารต้องเป็นไฟล์ JPEG']);
+            }
+            $scaled = ExamImages::scaled($image, self::PAGE_MAX_PX);
+            unset($image);
+            $bytes = ExamImages::jpeg($scaled);
+            $size = [imagesx($scaled), imagesy($scaled)];
+        }
 
-        $page = AssignmentLocked::run($exam->id, function (Assignment $exam) use ($teacher, $document, $pageNo, $bytes, $info) {
+        $page = AssignmentLocked::run($exam->id, function (Assignment $exam) use ($teacher, $document, $pageNo, $bytes, $size) {
             $page = ExamPageImage::query()->firstOrNew(['assignment_id' => $exam->id, 'source_document_id' => $document->id, 'page_no' => $pageNo]);
-            $page->fill(['school_id' => $exam->school_id, 'width_px' => $info[0], 'height_px' => $info[1], 'uploaded_by' => $teacher->id]);
+            $page->fill(['school_id' => $exam->school_id, 'width_px' => $size[0], 'height_px' => $size[1], 'uploaded_by' => $teacher->id]);
             $page->save();
             $path = self::pagePath($page);
             ExamImages::disk()->put($path, $bytes);
@@ -318,15 +336,29 @@ final class ExamFigures
     }
 
     /**
-     * Source documents the exam read (exam_imports), in import order.
+     * Source documents the exam read (exam_imports), in import order: only
+     * the files the teacher who asked for the read uploaded themselves
+     * (DESIGN §22.17), so a colleague's file never unlocks the download or
+     * a page upload even if an import names it.
      *
      * @return list<int>
      */
     public static function importedDocumentIds(Assignment $exam): array
     {
+        $imports = ExamImport::query()->where('assignment_id', $exam->id)->orderBy('id')->get();
+        $all = [];
+        foreach ($imports as $import) {
+            array_push($all, ...$import->documentIds());
+        }
+        $uploaders = SourceDocument::query()->whereIn('id', $all === [] ? [0] : array_values(array_unique($all)))->pluck('uploaded_by', 'id');
+
         $ids = [];
-        foreach (ExamImport::query()->where('assignment_id', $exam->id)->orderBy('id')->get() as $import) {
-            array_push($ids, ...$import->documentIds());
+        foreach ($imports as $import) {
+            foreach ($import->documentIds() as $id) {
+                if ((int) ($uploaders[$id] ?? 0) === (int) $import->requested_by) {
+                    $ids[] = $id;
+                }
+            }
         }
 
         return array_values(array_unique($ids));
@@ -405,6 +437,28 @@ final class ExamFigures
         return ExamImages::scaled($cut);
     }
 
+    /**
+     * Whether GD can decode a w x h picture (truecolor, about 5 bytes a
+     * pixel with the scaled copy) within the PHP memory_limit left, so a
+     * 6,000 px photo on shared hosting fails softly instead of fatally.
+     */
+    private static function fitsInMemory(int $width, int $height): bool
+    {
+        $limit = trim((string) ini_get('memory_limit'));
+        if ($limit === '' || $limit === '-1') {
+            return true;
+        }
+        $bytes = (int) $limit;
+        $bytes *= match (strtolower(substr($limit, -1))) {
+            'g' => 1024 ** 3,
+            'm' => 1024 ** 2,
+            'k' => 1024,
+            default => 1,
+        };
+
+        return $width * $height * 5 + 16 * 1024 * 1024 <= $bytes - memory_get_usage();
+    }
+
     private static function loadPage(ExamPageImage $page): ?GdImage
     {
         if ($page->file_path === null || ! ExamImages::disk()->exists($page->file_path)) {
@@ -428,7 +482,8 @@ final class ExamFigures
         $info = $bytes === '' || strlen($bytes) > self::SERVER_MAX_BYTES ? false : @getimagesizefromstring($bytes);
         $ok = $info !== false
             && in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)
-            && $info[0] >= 1 && $info[1] >= 1 && max($info[0], $info[1]) <= self::SERVER_MAX_PX;
+            && $info[0] >= 1 && $info[1] >= 1 && max($info[0], $info[1]) <= self::SERVER_MAX_PX
+            && self::fitsInMemory($info[0], $info[1]);
         $image = $ok ? @imagecreatefromstring($bytes) : false;
         if (! $image instanceof GdImage) {
             Log::info('exam_figures.server_decode_failed', ['page_image_id' => $page->id, 'source_document_id' => $page->source_document_id]);

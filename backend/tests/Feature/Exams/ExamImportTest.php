@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Exams;
 
+use App\Domain\Documents\SourceDocuments;
 use App\Domain\Exams\ExamDocuments;
 use App\Domain\Exams\ExamFigures;
 use App\Domain\Exams\ExamImages;
@@ -291,6 +292,27 @@ class ExamImportTest extends TestCase
         $unrelated = $this->upload([self::pdf(1, 'other.pdf')]);
         $this->asUser($this->teacher)->post("/api/v1/exams/{$exam->id}/page-images", ['source_document_id' => $unrelated[0], 'page_no' => 1, 'image' => self::renderedPage()], ['Accept' => 'application/json'])
             ->assertStatus(422)->assertJsonValidationErrors('source_document_id');
+
+        // A page image whose file was purged leaves its uncropped figures pending.
+        ExamPageImage::create([
+            'school_id' => $exam->school_id, 'assignment_id' => $exam->id, 'source_document_id' => $ids[0],
+            'page_no' => 3, 'width_px' => 700, 'height_px' => 1000, 'uploaded_by' => $this->teacher->id,
+        ]);
+        $this->assertSame([3], array_column($this->examJson($exam)['figures_pending'], 'page_no'));
+
+        // A page larger than the app renders is kept at 2,000 px on the long side.
+        $big = imagecreatetruecolor(4000, 2000);
+        imagefill($big, 0, 0, (int) imagecolorallocate($big, 0, 0, 220));
+        ob_start();
+        imagejpeg($big, null, 80);
+        $this->asUser($this->teacher)->post("/api/v1/exams/{$exam->id}/page-images", [
+            'source_document_id' => $ids[0], 'page_no' => 3, 'image' => UploadedFile::fake()->createWithContent('big.jpg', (string) ob_get_clean()),
+        ], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('data.page_image.width_px', 2000)
+            ->assertJsonPath('data.page_image.height_px', 1000)
+            ->assertJsonPath('data.figures_pending', []);
+        $stored = ExamPageImage::query()->where('page_no', 3)->sole();
+        $this->assertSame([2000, 1000], array_slice((array) getimagesizefromstring((string) ExamImages::disk()->get($stored->file_path)), 0, 2));
     }
 
     public function test_the_source_file_is_only_for_the_owner_of_an_exam_that_read_it(): void
@@ -300,8 +322,7 @@ class ExamImportTest extends TestCase
         $this->asUser($this->teacher)->postJson("/api/v1/exams/{$exam->id}/import", ['document_ids' => $ids])->assertStatus(202);
         $this->asUser($this->teacher)->get("/api/v1/exams/{$exam->id}/documents/{$ids[0]}/file")->assertOk();
 
-        // A colleague of the same school uploads the same file (same row, shared by SHA-256) but
-        // never read it into one of their exams: guessing the id through their own exam is a 404.
+        // A colleague of the same school guesses the id: a 404 through their own exam and through this one.
         $colleague = $this->makeTeacher($this->teacher->school);
         $theirClassroom = $this->makeClassroom($colleague);
         $theirCourse = $this->makeCourse($colleague, [$theirClassroom]);
@@ -310,6 +331,34 @@ class ExamImportTest extends TestCase
         ])->assertCreated()->json('data.id'));
         $this->asUser($colleague)->get("/api/v1/exams/{$theirs->id}/documents/{$ids[0]}/file")->assertNotFound();
         $this->asUser($colleague)->get("/api/v1/exams/{$exam->id}/documents/{$ids[0]}/file")->assertNotFound();
+
+        // Nor can they read the guessed id into their own exam first to unlock it: the id is not theirs.
+        $this->asUser($colleague)->postJson("/api/v1/exams/{$theirs->id}/import/estimate", ['document_ids' => $ids])
+            ->assertStatus(422)->assertJsonValidationErrors('document_ids');
+        $this->asUser($colleague)->postJson("/api/v1/exams/{$theirs->id}/import", ['document_ids' => $ids])
+            ->assertStatus(422)->assertJsonValidationErrors('document_ids');
+        $this->assertSame(0, ExamImport::query()->where('assignment_id', $theirs->id)->count());
+        $this->asUser($colleague)->get("/api/v1/exams/{$theirs->id}/documents/{$ids[0]}/file")->assertNotFound();
+        $this->asUser($colleague)->post("/api/v1/exams/{$theirs->id}/page-images", ['source_document_id' => $ids[0], 'page_no' => 1, 'image' => self::renderedPage()], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('source_document_id');
+
+        // An import row that names a colleague's file (made before this rule) unlocks nothing either.
+        ExamImport::create([
+            'assignment_id' => $theirs->id, 'extraction_id' => ExamImport::query()->firstOrFail()->extraction_id,
+            'documents' => [['source_document_id' => $ids[0], 'page_from' => 1, 'page_to' => 1]], 'requested_by' => $colleague->id,
+        ]);
+        $this->asUser($colleague)->get("/api/v1/exams/{$theirs->id}/documents/{$ids[0]}/file")->assertNotFound();
+        $this->assertSame([], ExamFigures::importedDocumentIds($theirs));
+
+        // Uploading the same bytes gives the colleague a row of their own that shares the stored file.
+        $bytes = (string) SourceDocuments::disk()->get(SourceDocument::query()->findOrFail($ids[0])->file_path);
+        $same = $this->upload([UploadedFile::fake()->createWithContent('exam.pdf', $bytes)], $colleague);
+        $this->assertNotSame($ids[0], $same[0]);
+        $mine = SourceDocument::query()->findOrFail($ids[0]);
+        $copy = SourceDocument::query()->findOrFail($same[0]);
+        $this->assertSame([$mine->sha256, $mine->file_path, $colleague->id], [$copy->sha256, $copy->file_path, $copy->uploaded_by]);
+        $this->asUser($colleague)->postJson("/api/v1/exams/{$theirs->id}/import", ['document_ids' => $same])->assertOk()->assertJsonPath('data.cached', true);
+        $this->asUser($colleague)->get("/api/v1/exams/{$theirs->id}/documents/{$same[0]}/file")->assertOk();
 
         // Another document of the school, not read into this exam: 404 as well.
         $other = $this->upload([self::pdf(2, 'plan.pdf')], $colleague);
@@ -320,6 +369,39 @@ class ExamImportTest extends TestCase
         $this->artisan('eduvision:purge-images')->assertSuccessful();
         $this->asUser($this->teacher)->get("/api/v1/exams/{$exam->id}/documents/{$ids[0]}/file")->assertNotFound()->assertJsonPath('code', 'document_missing');
         $this->assertSame(ExamFigures::DOCUMENT_MISSING, $this->examJson($exam)['figures_pending'][0]['reason']);
+    }
+
+    public function test_a_shared_file_stays_until_the_newest_upload_of_it_is_due(): void
+    {
+        $bytes = self::pagePhoto();
+        $ids = $this->upload([UploadedFile::fake()->createWithContent('exam.jpg', $bytes)]);
+        $this->travel(20)->days();
+        $colleague = $this->makeTeacher($this->teacher->school);
+        $theirs = $this->upload([UploadedFile::fake()->createWithContent('exam.jpg', $bytes)], $colleague);
+        $path = SourceDocument::query()->findOrFail($theirs[0])->file_path;
+
+        // Day 31: the first row is purged, the file stays for the colleague's row (day 20).
+        $this->travel(11)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNull(SourceDocument::query()->findOrFail($ids[0])->file_path);
+        $this->assertSame($path, SourceDocument::query()->findOrFail($theirs[0])->file_path);
+        SourceDocuments::disk()->assertExists($path);
+
+        // The first teacher uploads it again: their row comes back on the same file.
+        $again = $this->upload([UploadedFile::fake()->createWithContent('exam.jpg', $bytes)]);
+        $this->assertSame($ids, $again);
+        $this->assertSame($path, SourceDocument::query()->findOrFail($ids[0])->file_path);
+
+        // Day 51: the colleague's row is due, but the first teacher's revived row (day 31) keeps the file.
+        $this->travel(20)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        $this->assertNull(SourceDocument::query()->findOrFail($theirs[0])->file_path);
+        SourceDocuments::disk()->assertExists($path);
+
+        // Day 62: nobody's row holds it any more.
+        $this->travel(11)->days();
+        $this->artisan('eduvision:purge-images')->assertSuccessful();
+        SourceDocuments::disk()->assertMissing($path);
     }
 
     public function test_the_school_reads_a_file_once_and_a_colleague_gets_it_applied_at_once(): void

@@ -102,9 +102,9 @@ class ExamImportController extends Controller
 
     /**
      * GET /api/v1/exams/{id}/documents/{document_id}/file -> the source file
-     * for the app to render pages from. Only a file this exam read
-     * (exam_imports) of the caller's own exam: any other id is a 404, even a
-     * file of the same school (source_documents are shared by SHA-256).
+     * for the app to render pages from. Only a file the caller uploaded
+     * that this exam read (exam_imports) of the caller's own exam: any other
+     * id is a 404, even a file of the same school (DESIGN §22.17).
      * 404 document_missing once the file was deleted (30 days).
      */
     public function documentFile(Request $request, int $id, int $document_id): StreamedResponse
@@ -112,7 +112,8 @@ class ExamImportController extends Controller
         $exam = ExamController::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $exam);
         abort_unless(in_array($document_id, ExamFigures::importedDocumentIds($exam), true), 404);
-        $document = SourceDocument::query()->where('school_id', $exam->school_id)->findOrFail($document_id);
+        $document = SourceDocument::query()->where('school_id', $exam->school_id)
+            ->where('uploaded_by', $request->user()->id)->findOrFail($document_id);
         $disk = SourceDocuments::disk();
         if ($document->file_path === null || ! $disk->exists($document->file_path)) {
             throw new ApiException('ไฟล์นี้ถูกลบจากเครื่องแม่ข่ายแล้ว (เก็บไว้ 30 วัน) แนบไฟล์ใหม่อีกครั้ง', 'document_missing', 404);

@@ -123,7 +123,7 @@ final class ExamImages
         return $out;
     }
 
-    private static function jpeg(GdImage $image): string
+    public static function jpeg(GdImage $image): string
     {
         ob_start();
         imagejpeg($image, null, self::QUALITY);
