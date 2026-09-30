@@ -14,8 +14,9 @@ use App\Models\Question;
  *   column 2 … (25 rows per column, fewer when the page has digit bands);
  *   page 2 continues the numbers of page 1.
  * - Numeric questions are digit blocks, four per band, in the last 11 or 22
- *   rows of the grid; a page takes as many bands as the numeric questions
- *   still need (at most 2) and fills the rest with rows (ExamSheetCapacity).
+ *   rows of the grid. They follow the bubble rows: the last page of rows
+ *   takes the bands that fit under its rows, the rest go on the next page
+ *   (ExamSheetCapacity, which also has the compact fallback).
  * - Page 1 of an exam with more than one version carries the version
  *   bubbles; one version has none (it is version ก).
  *

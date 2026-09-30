@@ -105,10 +105,11 @@ class ExamSheetLayoutTest extends TestCase
         return [
             'no numeric' => [30, 0, [['rows' => 30, 'blocks' => 0, 'bands' => 0]]],
             'one band' => [56, 4, [['rows' => 56, 'blocks' => 4, 'bands' => 1]]],
-            'one band, rows spill' => [60, 3, [['rows' => 56, 'blocks' => 3, 'bands' => 1], ['rows' => 4, 'blocks' => 0, 'bands' => 0]]],
+            'no band fits under 60 rows' => [60, 3, [['rows' => 60, 'blocks' => 0, 'bands' => 0], ['rows' => 0, 'blocks' => 3, 'bands' => 1]]],
             'two bands' => [12, 8, [['rows' => 12, 'blocks' => 8, 'bands' => 2]]],
             'sixteen numeric on two pages' => [0, 16, [['rows' => 0, 'blocks' => 8, 'bands' => 2], ['rows' => 0, 'blocks' => 8, 'bands' => 2]]],
-            'second page one band' => [20, 10, [['rows' => 12, 'blocks' => 8, 'bands' => 2], ['rows' => 8, 'blocks' => 2, 'bands' => 1]]],
+            'one band under the rows, the rest on page 2' => [20, 10, [['rows' => 20, 'blocks' => 4, 'bands' => 1], ['rows' => 0, 'blocks' => 6, 'bands' => 2]]],
+            'compact fallback' => [60, 10, [['rows' => 12, 'blocks' => 8, 'bands' => 2], ['rows' => 48, 'blocks' => 2, 'bands' => 1]]],
         ];
     }
 
@@ -116,7 +117,7 @@ class ExamSheetLayoutTest extends TestCase
      * @param  list<array{rows: int, blocks: int, bands: int}>  $expected
      */
     #[DataProvider('bandCases')]
-    public function test_pages_take_zero_to_two_digit_bands_greedily(int $rows, int $numeric, array $expected): void
+    public function test_pages_take_zero_to_two_digit_bands_after_the_rows(int $rows, int $numeric, array $expected): void
     {
         $this->assertSame($expected, ExamSheetCapacity::split($rows, $numeric));
         $plan = ExamSheetLayout::plan(self::items($rows, $numeric), 1);
@@ -129,9 +130,39 @@ class ExamSheetLayoutTest extends TestCase
         $this->assertSame(ExamSheetCapacity::of($rows, $numeric)['pages'], $plan->pageCount());
     }
 
+    public function test_sixty_mcq_and_five_numeric_keep_question_order(): void
+    {
+        $plan = ExamSheetLayout::plan(self::items(60, 5), 1);
+
+        $this->assertSame(2, $plan->pageCount());
+        [$one, $two] = $plan->pages;
+        $this->assertSame(range(1, 60), array_column($one['rows'], 'sheet_no'));
+        $this->assertSame([], $one['blocks']);
+        $this->assertSame(0, $one['bands']);
+        $rows = collect($one['rows'])->keyBy('sheet_no');
+        $this->assertSame([1, 25], [$rows[25]['column'], $rows[25]['row']]);
+        $this->assertSame([2, 1], [$rows[26]['column'], $rows[26]['row']]);
+        $this->assertSame([3, 10], [$rows[60]['column'], $rows[60]['row']]);
+        $this->assertSame([], $two['rows']);
+        $this->assertSame(range(61, 65), array_column($two['blocks'], 'sheet_no'));
+        $this->assertSame([[1, 0], [2, 0], [3, 0], [4, 0], [1, 1]], array_map(fn (array $b) => [$b['column'], $b['band']], $two['blocks']));
+    }
+
+    public function test_blocks_under_the_rows_come_after_them(): void
+    {
+        $plan = ExamSheetLayout::plan(self::items(40, 7), 1);
+
+        [$one, $two] = $plan->pages;
+        $this->assertSame(range(1, 40), array_column($one['rows'], 'sheet_no'));
+        $this->assertSame([1, 14], [$one['rows'][13]['column'], $one['rows'][13]['row']]);
+        $this->assertSame([2, 1], [$one['rows'][14]['column'], $one['rows'][14]['row']]);
+        $this->assertSame(range(41, 44), array_column($one['blocks'], 'sheet_no'));
+        $this->assertSame(range(45, 47), array_column($two['blocks'], 'sheet_no'));
+    }
+
     public function test_rows_and_blocks_never_overlap(): void
     {
-        foreach ([[12, 8], [56, 4], [30, 2]] as [$rows, $numeric]) {
+        foreach ([[12, 8], [56, 4], [30, 2], [40, 7]] as [$rows, $numeric]) {
             $page = ExamSheetLayout::plan(self::items($rows, $numeric), 1)->pages[0];
             $lowestRow = max(array_map(fn (array $r) => $r['rect']['y'] + $r['rect']['h'], $page['rows']));
             $highestBlock = min(array_map(fn (array $b) => $b['rect']['y'], $page['blocks']));
