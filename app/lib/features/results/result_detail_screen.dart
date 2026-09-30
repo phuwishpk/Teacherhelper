@@ -7,6 +7,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
 import '../review/review_labels.dart';
+import '../review/review_models.dart';
 import 'results_repository.dart';
 import 'retake_notice.dart';
 import 'student_result.dart';
@@ -77,7 +78,9 @@ class ResultDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  if (d.answers.isEmpty)
+                  if (d.exam case final exam?)
+                    ..._examChildren(context, exam)
+                  else if (d.answers.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
@@ -85,13 +88,223 @@ class ResultDetailScreen extends ConsumerWidget {
                         textAlign: TextAlign.center,
                       ),
                     ),
-                  for (final a in d.answers)
-                    _AnswerCard(submissionId: submissionId, answer: a),
+                  if (d.exam == null)
+                    for (final a in d.answers)
+                      _AnswerCard(submissionId: submissionId, answer: a),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// The exam part (DESIGN §22.12): version, score per section, and the
+  /// per-question result only when the teacher shows the key.
+  List<Widget> _examChildren(BuildContext context, ExamStudentResult exam) {
+    final theme = Theme.of(context);
+    final items = exam.items;
+    return [
+      Card(
+        margin: const EdgeInsets.only(top: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (exam.versionLabel case final label?)
+                Text(
+                  'ชุด $label',
+                  key: const ValueKey('exam_version_label'),
+                  style: theme.textTheme.titleMedium,
+                ),
+              Text('คะแนนรายตอน', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              for (final s in exam.sections)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(s.title)),
+                      Text('${formatScore(s.score)}/${formatScore(s.max)}'),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      if (items == null)
+        const Padding(
+          key: ValueKey('exam_key_hidden'),
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'ครูยังไม่เปิดให้ดูเฉลยและผลรายข้อของข้อสอบนี้',
+            textAlign: TextAlign.center,
+          ),
+        )
+      else
+        for (final item in items)
+          _ExamItemCard(submissionId: submissionId, item: item),
+    ];
+  }
+}
+
+/// "ขอให้ครูตรวจใหม่" of one answer (once per answer).
+Future<void> _appeal(
+  BuildContext context,
+  WidgetRef ref, {
+  required int submissionId,
+  required int responseId,
+  required int number,
+}) async {
+  final reason = await showDialog<String>(
+    context: context,
+    builder: (_) => _AppealDialog(position: number),
+  );
+  if (reason == null || !context.mounted) return;
+  try {
+    await ref
+        .read(resultsRepositoryProvider)
+        .appeal(responseId, reason: reason.isEmpty ? null : reason);
+    ref.invalidate(studentResultDetailProvider(submissionId));
+    if (context.mounted) {
+      showMessage(context, 'ส่งคำขอแล้ว ครูจะตรวจข้อนี้อีกครั้ง');
+    }
+  } catch (e) {
+    if (!context.mounted) return;
+    showMessage(
+      context,
+      apiStatusCode(e) == 409 || apiErrorCode(e) == 'appeal_exists'
+          ? 'ข้อนี้ขอให้ครูตรวจใหม่ไปแล้ว'
+          : apiErrorMessage(e),
+    );
+    ref.invalidate(studentResultDetailProvider(submissionId));
+  }
+}
+
+/// The status of an appeal, or the button that sends one.
+class _AppealRow extends ConsumerWidget {
+  const _AppealRow({
+    required this.submissionId,
+    required this.responseId,
+    required this.number,
+    required this.appeal,
+    required this.canAppeal,
+  });
+
+  final int submissionId;
+  final int responseId;
+  final int number;
+  final Appeal? appeal;
+  final bool canAppeal;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    if (appeal case final appeal?) {
+      return Container(
+        key: const ValueKey('appeal_status'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.feedback_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text('คำขอให้ครูตรวจใหม่: ${appeal.statusLabel}'),
+              ],
+            ),
+            if (appeal.teacherNote case final note? when note.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('ครู: $note'),
+              ),
+          ],
+        ),
+      );
+    }
+    if (!canAppeal) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerRight,
+      child: OutlinedButton.icon(
+        onPressed: () => _appeal(
+          context,
+          ref,
+          submissionId: submissionId,
+          responseId: responseId,
+          number: number,
+        ),
+        icon: const Icon(Icons.feedback_outlined),
+        label: const Text('ขอให้ครูตรวจใหม่'),
+      ),
+    );
+  }
+}
+
+/// One exam question with the key shown (§22.12): prompt, what the student
+/// marked, the right answer and the score, in the student's own version.
+class _ExamItemCard extends StatelessWidget {
+  const _ExamItemCard({required this.submissionId, required this.item});
+
+  final int submissionId;
+  final ExamResultItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final i = item;
+    return Card(
+      key: ValueKey('exam_item_${i.responseId}'),
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'ข้อ ${i.number}',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  '${formatScore(i.score)}/${formatScore(i.maxPoints)} คะแนน',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: i.fullMarks ? Colors.green.shade700 : null,
+                  ),
+                ),
+              ],
+            ),
+            if (i.sectionTitle case final t? when t.isNotEmpty)
+              Text(t, style: theme.textTheme.bodySmall),
+            if (i.promptText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(i.promptText),
+              ),
+            const SizedBox(height: 8),
+            Text('คำตอบของเรา: ${i.markedText}'),
+            Text('คำตอบที่ถูก: ${i.correctText}'),
+            const SizedBox(height: 12),
+            _AppealRow(
+              submissionId: submissionId,
+              responseId: i.responseId,
+              number: i.number,
+              appeal: i.appeal,
+              canAppeal: i.canAppeal,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -102,32 +315,6 @@ class _AnswerCard extends ConsumerWidget {
 
   final int submissionId;
   final StudentAnswer answer;
-
-  Future<void> _appeal(BuildContext context, WidgetRef ref) async {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (_) => _AppealDialog(position: answer.position),
-    );
-    if (reason == null || !context.mounted) return;
-    try {
-      await ref
-          .read(resultsRepositoryProvider)
-          .appeal(answer.responseId, reason: reason.isEmpty ? null : reason);
-      ref.invalidate(studentResultDetailProvider(submissionId));
-      if (context.mounted) {
-        showMessage(context, 'ส่งคำขอแล้ว ครูจะตรวจข้อนี้อีกครั้ง');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      showMessage(
-        context,
-        apiStatusCode(e) == 409 || apiErrorCode(e) == 'appeal_exists'
-            ? 'ข้อนี้ขอให้ครูตรวจใหม่ไปแล้ว'
-            : apiErrorMessage(e),
-      );
-      ref.invalidate(studentResultDetailProvider(submissionId));
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -204,43 +391,13 @@ class _AnswerCard extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 12),
-            if (appeal != null)
-              Container(
-                key: const ValueKey('appeal_status'),
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.feedback_outlined, size: 18),
-                        const SizedBox(width: 8),
-                        Text('คำขอให้ครูตรวจใหม่: ${appeal.statusLabel}'),
-                      ],
-                    ),
-                    if (appeal.teacherNote case final note?
-                        when note.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text('ครู: $note'),
-                      ),
-                  ],
-                ),
-              )
-            else if (a.canAppeal)
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: () => _appeal(context, ref),
-                  icon: const Icon(Icons.feedback_outlined),
-                  label: const Text('ขอให้ครูตรวจใหม่'),
-                ),
-              ),
+            _AppealRow(
+              submissionId: submissionId,
+              responseId: a.responseId,
+              number: a.position,
+              appeal: appeal,
+              canAppeal: a.canAppeal,
+            ),
           ],
         ),
       ),

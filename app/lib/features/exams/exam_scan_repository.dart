@@ -10,6 +10,41 @@ import '../../platform/answer_sheet_pipeline.dart';
 import 'exam_models.dart';
 import 'exam_scan_models.dart';
 
+/// One active scanned page of a student (`pages[]` of sheet-status,
+/// DESIGN §22.15): what the teacher opens to pick its version.
+class ExamSheetPageStatus {
+  const ExamSheetPageStatus({
+    required this.scanId,
+    required this.pageNo,
+    this.versionNo,
+    this.versionSource,
+    this.versionDoubtful = false,
+  });
+
+  final int scanId;
+  final int pageNo;
+
+  /// Null while the version is unknown ("ให้ครูเลือกชุด").
+  final int? versionNo;
+
+  /// single | bubble | page_one | teacher.
+  final String? versionSource;
+
+  /// The version bubble was unclear (`version_doubtful`).
+  final bool versionDoubtful;
+
+  bool get needsVersion => versionNo == null;
+
+  factory ExamSheetPageStatus.fromJson(Map<String, dynamic> json) =>
+      ExamSheetPageStatus(
+        scanId: (json['scan_id'] as num).toInt(),
+        pageNo: (json['page_no'] as num?)?.toInt() ?? 1,
+        versionNo: (json['version_no'] as num?)?.toInt(),
+        versionSource: json['version_source'] as String?,
+        versionDoubtful: json['version_doubtful'] == true,
+      );
+}
+
 /// One student's row of `GET /exams/{id}/sheet-status` (DESIGN §22.10).
 class ExamSheetStudentStatus {
   const ExamSheetStudentStatus({
@@ -23,6 +58,7 @@ class ExamSheetStudentStatus {
     required this.status,
     required this.doubtCount,
     required this.needsVersion,
+    this.pages = const [],
   });
 
   final int studentId;
@@ -37,6 +73,29 @@ class ExamSheetStudentStatus {
   final String status;
   final int doubtCount;
   final bool needsVersion;
+
+  /// The active pages, in page order.
+  final List<ExamSheetPageStatus> pages;
+
+  bool get isMissing => status == 'missing' || pagesReceived.isEmpty;
+  bool get isPublished => status == 'published';
+  bool get isReady => status == 'reviewed';
+  bool get isComplete =>
+      pageCount > 0 &&
+      [for (var p = 1; p <= pageCount; p++) p].every(pagesReceived.contains);
+
+  /// Pages of the layout not scanned yet.
+  List<int> get missingPages => [
+    for (var p = 1; p <= pageCount; p++)
+      if (!pagesReceived.contains(p)) p,
+  ];
+
+  ExamSheetPageStatus? page(int pageNo) {
+    for (final p in pages) {
+      if (p.pageNo == pageNo) return p;
+    }
+    return null;
+  }
 
   factory ExamSheetStudentStatus.fromJson(Map<String, dynamic> json) =>
       ExamSheetStudentStatus(
@@ -53,23 +112,66 @@ class ExamSheetStudentStatus {
         status: json['status'] as String? ?? 'missing',
         doubtCount: (json['doubt_count'] as num?)?.toInt() ?? 0,
         needsVersion: json['needs_version'] as bool? ?? false,
+        pages: [
+          for (final p in (json['pages'] as List? ?? const []))
+            ExamSheetPageStatus.fromJson((p as Map).cast<String, dynamic>()),
+        ]..sort((a, b) => a.pageNo.compareTo(b.pageNo)),
       );
 }
 
 class ExamSheetStatus {
-  const ExamSheetStatus({required this.students, required this.maxScore});
+  const ExamSheetStatus({
+    required this.students,
+    required this.maxScore,
+    this.scanned = 0,
+    this.total = 0,
+    this.missingNumbers = const [],
+    this.pageCount = 0,
+    this.published = 0,
+    this.readyToPublish = 0,
+    this.waitingReview = 0,
+  });
 
   final List<ExamSheetStudentStatus> students;
   final double maxScore;
 
+  /// Students with every page in, of [total] in the class.
+  final int scanned;
+  final int total;
+  final List<int> missingNumbers;
+  final int pageCount;
+
+  /// The counts "ประกาศผลทั้งห้อง" shows before it runs (§22.11).
+  final int published;
+  final int readyToPublish;
+
+  /// Scanned but still needs review, a version or a page.
+  final int waitingReview;
+
+  /// Nothing is left to publish or review: every scanned student is
+  /// published (students without a sheet do not count).
+  bool get allPublished =>
+      published > 0 && readyToPublish == 0 && waitingReview == 0;
+
   factory ExamSheetStatus.fromJson(Map<String, dynamic> json) {
     final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    int count(String key) => (summary[key] as num?)?.toInt() ?? 0;
     return ExamSheetStatus(
       students: [
         for (final s in (json['data'] as List? ?? const []))
           ExamSheetStudentStatus.fromJson(s as Map<String, dynamic>),
       ],
       maxScore: (summary['max_score'] as num?)?.toDouble() ?? 0,
+      scanned: count('scanned'),
+      total: count('total'),
+      missingNumbers: [
+        for (final n in (summary['missing_numbers'] as List? ?? const []))
+          (n as num).toInt(),
+      ],
+      pageCount: count('page_count'),
+      published: count('published'),
+      readyToPublish: count('ready_to_publish'),
+      waitingReview: count('waiting_review'),
     );
   }
 
@@ -148,6 +250,59 @@ class KeySheetProposal {
       );
 }
 
+/// The server's reading of one answer-sheet page: the body of
+/// `POST /exam-sheets` and of `POST /exam-sheets/{scan_id}/version`
+/// (DESIGN §22.15). [score] and [maxScore] are of this page, null while
+/// the version is unknown.
+class ExamSheetPageResult {
+  const ExamSheetPageResult({
+    required this.scanId,
+    required this.pageNo,
+    required this.needsVersion,
+    this.submissionId,
+    this.state,
+    this.pageCount,
+    this.versionNo,
+    this.score,
+    this.maxScore,
+    this.doubts = const [],
+  });
+
+  final int scanId;
+  final int? submissionId;
+  final String? state;
+  final int pageNo;
+  final int? pageCount;
+  final int? versionNo;
+  final double? score;
+  final double? maxScore;
+
+  /// `{sheet_no, reason}` of each doubt; sheet_no is null for the version.
+  final List<({int? sheetNo, String reason})> doubts;
+  final bool needsVersion;
+
+  factory ExamSheetPageResult.fromJson(Map<String, dynamic> json) =>
+      ExamSheetPageResult(
+        scanId: (json['scan_id'] as num).toInt(),
+        submissionId: (json['submission_id'] as num?)?.toInt(),
+        state: json['state'] as String?,
+        pageNo: (json['page_no'] as num?)?.toInt() ?? 1,
+        pageCount: (json['page_count'] as num?)?.toInt(),
+        versionNo: (json['version_no'] as num?)?.toInt(),
+        score: (json['score'] as num?)?.toDouble(),
+        maxScore: (json['max_score'] as num?)?.toDouble(),
+        doubts: [
+          for (final d in (json['doubts'] as List? ?? const []))
+            if (d is Map)
+              (
+                sheetNo: (d['sheet_no'] as num?)?.toInt(),
+                reason: '${d['reason']}',
+              ),
+        ],
+        needsVersion: json['needs_version'] == true,
+      );
+}
+
 /// The exam scanning endpoints of build 3 (DESIGN §22.15). Answer-sheet
 /// pages themselves go up through the scan queue (`POST /exam-sheets`).
 abstract class ExamScanRepository {
@@ -156,6 +311,10 @@ abstract class ExamScanRepository {
 
   /// `GET /exams/{id}/sheet-status`.
   Future<ExamSheetStatus> sheetStatus(int examId);
+
+  /// `POST /exam-sheets/{scan_id}/version`: the teacher picks the version
+  /// of a page and the server scores the student at once (§22.11).
+  Future<ExamSheetPageResult> chooseVersion(int scanId, int versionNo);
 
   /// `POST /exams/{id}/key-sheet-read`: a proposal, nothing is saved.
   Future<KeySheetProposal> keySheetRead(
@@ -181,6 +340,15 @@ class ApiExamScanRepository implements ExamScanRepository {
   Future<ExamSheetStatus> sheetStatus(int examId) async {
     final res = await _dio.get<Object?>('/exams/$examId/sheet-status');
     return ExamSheetStatus.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ExamSheetPageResult> chooseVersion(int scanId, int versionNo) async {
+    final res = await _dio.post<Object?>(
+      '/exam-sheets/$scanId/version',
+      data: {'version_no': versionNo},
+    );
+    return ExamSheetPageResult.fromJson(unwrapJson(res.data));
   }
 
   @override

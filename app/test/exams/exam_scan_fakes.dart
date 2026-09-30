@@ -317,6 +317,13 @@ class FakeExamScanRepository implements ExamScanRepository {
   int statusCalls = 0;
   final keyReads = <({String qr, int? versionNo})>[];
 
+  /// Thrown by keySheetRead when set.
+  Object? keyReadError;
+
+  /// `POST /exam-sheets/{id}/version` calls; [versionError] is thrown.
+  final versionChoices = <({int scanId, int versionNo})>[];
+  Object? versionError;
+
   @override
   Future<ExamScanKit> scanKit(int examId) async {
     kitCalls++;
@@ -339,7 +346,26 @@ class FakeExamScanRepository implements ExamScanRepository {
     int? versionNo,
   }) async {
     keyReads.add((qr: qr, versionNo: versionNo));
+    if (keyReadError case final e?) throw e;
     return proposal!(qr, versionNo);
+  }
+
+  @override
+  Future<ExamSheetPageResult> chooseVersion(int scanId, int versionNo) async {
+    versionChoices.add((scanId: scanId, versionNo: versionNo));
+    if (versionError case final e?) throw e;
+    return ExamSheetPageResult.fromJson({
+      'scan_id': scanId,
+      'submission_id': 70,
+      'state': 'active',
+      'page_no': 1,
+      'page_count': 1,
+      'version_no': versionNo,
+      'score': 4,
+      'max_score': 5,
+      'doubts': [],
+      'needs_version': false,
+    });
   }
 }
 

@@ -305,6 +305,22 @@ void main() {
       );
     });
 
+    test('a failed server read still deletes the warped key page', () async {
+      pipeline.detection = detectionFor(sheetQr(student: 0));
+      repo.keyReadError = apiError(422, 'layout_unknown', 'พิมพ์ใหม่');
+      final path = await photo();
+      final r = await scanner.readKeySheet(
+        path,
+        examId,
+        layoutPages: pages,
+        repository: repo,
+      );
+      expect((r as KeySheetRejected).message, contains('พิมพ์ใหม่'));
+      expect(await File(path).exists(), isFalse);
+      final warped = File('${tmp.path}/scan_pipeline/w1/page.webp');
+      expect(await warped.exists(), isFalse);
+    });
+
     test('server errors become the rejection message', () async {
       pipeline.detection = detectionFor(sheetQr(student: 0));
       final r = await scanner.readKeySheet(

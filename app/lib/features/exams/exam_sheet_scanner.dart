@@ -257,14 +257,18 @@ class ExamSheetScanner {
         checked.detection!,
         jsonEncode(page),
       );
-      final proposal = await repository.keySheetRead(
-        examId,
-        qr: checked.detection!.qrPayload!,
-        reading: reading,
-        versionNo: versionNo,
-      );
-      await _files.discard([reading.warpedPagePath]);
-      return KeySheetRead(proposal);
+      try {
+        final proposal = await repository.keySheetRead(
+          examId,
+          qr: checked.detection!.qrPayload!,
+          reading: reading,
+          versionNo: versionNo,
+        );
+        return KeySheetRead(proposal);
+      } finally {
+        // The warped key page is not kept, whether the server answered or not.
+        await _files.discard([reading.warpedPagePath]);
+      }
     } on ScanPipelineException catch (e) {
       return KeySheetRejected(e.message);
     } on DioException catch (e) {

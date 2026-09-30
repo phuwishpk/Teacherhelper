@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
+import 'exam_answer.dart';
 import 'missing_key_banner.dart';
 import 'response_review_pane.dart';
 import 'review_labels.dart';
@@ -410,6 +411,12 @@ class ReviewItemTile extends StatelessWidget {
         StatusChip(label: 'ขอตรวจใหม่', color: Colors.orange.shade800),
       if (item.isGrading && !item.isManual)
         StatusChip(label: 'AI กำลังตรวจ', color: theme.colorScheme.outline),
+      if (item.examAnswer case final exam?) ...[
+        for (final d in exam.reviewDoubts)
+          StatusChip(label: examDoubtLabel(d), color: error),
+        if (exam.resolved)
+          StatusChip(label: 'ครูอ่านรอยฝนแล้ว', color: Colors.green.shade700),
+      ],
       if (item.isPublished)
         StatusChip(label: 'เผยแพร่แล้ว', color: theme.colorScheme.outline),
     ];
@@ -421,8 +428,8 @@ class ReviewItemTile extends StatelessWidget {
         leading: CircleAvatar(
           radius: 18,
           child: Text(
-            '${item.questionPosition}',
-            semanticsLabel: 'ข้อ ${item.questionPosition}',
+            '${item.displayNumber}',
+            semanticsLabel: 'ข้อ ${item.displayNumber}',
           ),
         ),
         title: Text(
@@ -434,7 +441,7 @@ class ReviewItemTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'ข้อ ${item.questionPosition} · ${questionTypeLabel(item.questionType)}'
+              'ข้อ ${item.displayNumber} · ${questionTypeLabel(item.questionType)}'
               '${item.currentUnderstanding == null ? '' : ' · ${item.currentUnderstanding!.label}'}',
             ),
             if (chips.isNotEmpty)

@@ -8,6 +8,7 @@ import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
 import '../../core/widgets/submission_page_image.dart';
 import '../settings/ai_key_errors.dart';
+import 'exam_answer_panel.dart';
 import 'extraction_view.dart';
 import 'fuzzy_trace.dart';
 import 'review_labels.dart';
@@ -243,7 +244,8 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'ข้อ ${q.position} · ${questionTypeLabel(q.type)} · '
+                    '${d.exam == null ? 'ข้อ ${q.position}' : 'ข้อ ${d.exam!.sheetNo}${d.exam!.versionLabel.isEmpty ? '' : ' ชุด ${d.exam!.versionLabel}'}'}'
+                    ' · ${questionTypeLabel(q.type)} · '
                     '${formatScore(q.maxPoints)} คะแนน',
                     style: theme.textTheme.titleMedium,
                   ),
@@ -351,101 +353,128 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
             if (q.keySummary != null) Text(q.keySummary!, style: muted),
           ],
         ),
-        _Section(
-          title: d.isWholePage ? 'ภาพงานทั้งหน้า' : 'ภาพคำตอบ',
-          children: [
-            if (d.submissionPageId case final pageId?) ...[
-              SubmissionPageImage(
-                key: ValueKey('page_$pageId'),
-                pageId: pageId,
-                mimeType: d.pageMimeType,
-                answerBox: d.answerBox,
+        if (d.isExam)
+          _Section(
+            title: 'กระดาษคำตอบ',
+            children: [
+              ExamAnswerPanel(
+                key: ValueKey('exam_panel_${d.id}'),
+                detail: d,
+                canAdvance: widget.onNext != null,
+                onResolved: widget.onSaved,
               ),
-              const SizedBox(height: 4),
-              Text(
-                d.answerBox != null
-                    ? 'กรอบสีแดงคือตำแหน่งคำตอบที่ AI พบ แตะภาพเพื่อขยาย'
-                    : d.answerNotFound
-                    ? 'AI ไม่พบตำแหน่งคำตอบของข้อนี้ในภาพ แตะภาพเพื่อขยาย'
-                    : 'แตะภาพเพื่อขยาย',
-                style: muted,
-              ),
-            ] else if (d.hasCrop)
-              ResponseCropImage(responseId: d.id)
-            else
-              Text('ไม่มีภาพของข้อนี้', style: muted),
-            if (d.hasFinalCrop) ...[
-              const SizedBox(height: 8),
-              Text('กรอบคำตอบสุดท้าย', style: muted),
-              ResponseCropImage(responseId: d.id, finalPart: true, height: 96),
             ],
-          ],
-        ),
-        _Section(
-          title: 'สิ่งที่อ่านได้',
-          children: [ExtractionView(detail: d)],
-        ),
-        _Section(
-          title: 'เหตุผลของคะแนน',
-          children: [
-            ScoreReasoningView(
-              trace: trace,
-              maxPoints: q.maxPoints,
-              aiScore: d.aiScore,
-              aiUnderstanding: d.aiUnderstanding,
-              band: d.band,
-              reviewPriority: d.reviewPriority,
-            ),
-          ],
-        ),
-        _Section(
-          title: 'คำอธิบายสำหรับนักเรียน',
-          children: [
-            TextField(
-              key: const ValueKey('explanation_field'),
-              controller: _explanation,
-              minLines: 3,
-              maxLines: null,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                helperText: d.explanationEdited
-                    ? 'แก้โดยครูแล้ว · ใช้แทนข้อความของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom'
-                    : 'แก้ได้ก่อนเผยแพร่ · ข้อความที่แก้ใช้แทนของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom',
-                helperMaxLines: 3,
+          )
+        else ...[
+          _Section(
+            title: d.isWholePage ? 'ภาพงานทั้งหน้า' : 'ภาพคำตอบ',
+            children: [
+              if (d.submissionPageId case final pageId?) ...[
+                SubmissionPageImage(
+                  key: ValueKey('page_$pageId'),
+                  pageId: pageId,
+                  mimeType: d.pageMimeType,
+                  answerBox: d.answerBox,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  d.answerBox != null
+                      ? 'กรอบสีแดงคือตำแหน่งคำตอบที่ AI พบ แตะภาพเพื่อขยาย'
+                      : d.answerNotFound
+                      ? 'AI ไม่พบตำแหน่งคำตอบของข้อนี้ในภาพ แตะภาพเพื่อขยาย'
+                      : 'แตะภาพเพื่อขยาย',
+                  style: muted,
+                ),
+              ] else if (d.hasCrop)
+                ResponseCropImage(responseId: d.id)
+              else
+                Text('ไม่มีภาพของข้อนี้', style: muted),
+              if (d.hasFinalCrop) ...[
+                const SizedBox(height: 8),
+                Text('กรอบคำตอบสุดท้าย', style: muted),
+                ResponseCropImage(
+                  responseId: d.id,
+                  finalPart: true,
+                  height: 96,
+                ),
+              ],
+            ],
+          ),
+          _Section(
+            title: 'สิ่งที่อ่านได้',
+            children: [ExtractionView(detail: d)],
+          ),
+          _Section(
+            title: 'เหตุผลของคะแนน',
+            children: [
+              ScoreReasoningView(
+                trace: trace,
+                maxPoints: q.maxPoints,
+                aiScore: d.aiScore,
+                aiUnderstanding: d.aiUnderstanding,
+                band: d.band,
+                reviewPriority: d.reviewPriority,
               ),
-            ),
-            if (d.hasAiOriginal)
-              _AiOriginal(
-                text: d.aiExplanation!,
-                onUse: _busy
-                    ? null
-                    : () {
-                        _explanation.text = d.aiExplanation!;
-                        showMessage(
-                          context,
-                          'ใส่ข้อความเดิมของ AI แล้ว กดบันทึกเพื่อใช้ข้อความนี้',
-                        );
-                      },
+            ],
+          ),
+          _Section(
+            title: 'คำอธิบายสำหรับนักเรียน',
+            children: [
+              TextField(
+                key: const ValueKey('explanation_field'),
+                controller: _explanation,
+                minLines: 3,
+                maxLines: null,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  helperText: d.explanationEdited
+                      ? 'แก้โดยครูแล้ว · ใช้แทนข้อความของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom'
+                      : 'แก้ได้ก่อนเผยแพร่ · ข้อความที่แก้ใช้แทนของ AI ในหน้าผลของนักเรียนและในประกาศ Classroom',
+                  helperMaxLines: 3,
+                ),
               ),
-            if (d.nextStep case final next? when next.isNotEmpty)
+              if (d.hasAiOriginal)
+                _AiOriginal(
+                  text: d.aiExplanation!,
+                  onUse: _busy
+                      ? null
+                      : () {
+                          _explanation.text = d.aiExplanation!;
+                          showMessage(
+                            context,
+                            'ใส่ข้อความเดิมของ AI แล้ว กดบันทึกเพื่อใช้ข้อความนี้',
+                          );
+                        },
+                ),
+              if (d.nextStep case final next? when next.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('ขั้นต่อไป: $next'),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const ValueKey('regenerate_explanation'),
+                  onPressed: _regenerating ? null : _regenerate,
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('ให้ AI เขียนคำอธิบายใหม่'),
+                ),
+              ),
+            ],
+          ),
+        ],
+        _Section(
+          title: d.isExam ? 'แก้คะแนนตรง' : 'ผลการตรวจ',
+          children: [
+            if (d.isExam)
               Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text('ขั้นต่อไป: $next'),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'ใช้เมื่อจะให้คะแนนต่างจากที่คิดด้วยเฉลย (ต้องมีเหตุผล) '
+                  'ถ้าแค่อ่านรอยฝน ใช้ "คำตอบที่นักเรียนตั้งใจ" ด้านบน',
+                  style: muted,
+                ),
               ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                key: const ValueKey('regenerate_explanation'),
-                onPressed: _regenerating ? null : _regenerate,
-                icon: const Icon(Icons.auto_fix_high_outlined),
-                label: const Text('ให้ AI เขียนคำอธิบายใหม่'),
-              ),
-            ),
-          ],
-        ),
-        _Section(
-          title: 'ผลการตรวจ',
-          children: [
             Text('คะแนน', style: theme.textTheme.labelLarge),
             ScoreStepper(
               value: _score,
@@ -459,7 +488,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
             Text(
               d.aiScore == null
                   ? 'AI ยังไม่ได้ให้คะแนนข้อนี้'
-                  : 'AI ให้ ${formatScore(d.aiScore)} คะแนน'
+                  : '${d.isExam ? 'คิดด้วยเฉลยได้' : 'AI ให้'} ${formatScore(d.aiScore)} คะแนน'
                         '${d.aiUnderstanding == null ? '' : ' · ${d.aiUnderstanding!.label}'}',
               style: muted,
             ),

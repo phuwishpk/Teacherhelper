@@ -230,6 +230,28 @@ void main() {
     expect(find.text('scan /exams/40/scan'), findsOneWidget);
   });
 
+  testWidgets('"ตรวจทานและประกาศผล" opens once the key is approved', (
+    tester,
+  ) async {
+    await pumpExamScreen(tester, const ExamScreen(examId: 40));
+    expect(find.byKey(const ValueKey('exam_open_results')), findsNothing);
+    await unmountScreen(tester);
+
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(
+        detail: examJson(
+          status: 'ready',
+          keyApprovedAt: '2026-10-01T02:00:00Z',
+          keyComplete: true,
+        ),
+      ),
+    );
+    await tapVisible(tester, find.byKey(const ValueKey('exam_open_results')));
+    expect(find.text('results /exams/40/results'), findsOneWidget);
+  });
+
   testWidgets('an exam graded by the teacher has no scanning', (tester) async {
     await pumpExamScreen(
       tester,
@@ -237,6 +259,7 @@ void main() {
       repo: FakeExamsRepository(detail: examJson(method: 'manual')),
     );
     expect(find.byKey(const ValueKey('exam_open_scan')), findsNothing);
+    expect(find.byKey(const ValueKey('exam_open_results')), findsNothing);
   });
 
   testWidgets('opens the key grid, the versions, a question and a new one', (

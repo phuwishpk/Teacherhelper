@@ -85,6 +85,136 @@ void main() {
       expect(status.of(99), isNull);
     });
 
+    test('sheetStatus parses the publish counts and the pages', () async {
+      body = {
+        'data': [
+          {
+            'student_id': 11,
+            'student_number': 1,
+            'name': 'หนึ่ง',
+            'pages_received': [2, 1],
+            'page_count': 2,
+            'version_no': null,
+            'score': null,
+            'status': 'needs_review',
+            'doubt_count': 0,
+            'needs_version': true,
+            'pages': [
+              {
+                'scan_id': 91,
+                'page_no': 2,
+                'version_no': null,
+                'version_source': null,
+                'version_doubtful': false,
+              },
+              {
+                'scan_id': 90,
+                'page_no': 1,
+                'version_no': null,
+                'version_source': null,
+                'version_doubtful': true,
+              },
+            ],
+          },
+          {
+            'student_id': 12,
+            'student_number': 2,
+            'name': 'สอง',
+            'pages_received': [1],
+            'page_count': 2,
+            'status': 'needs_review',
+          },
+          {
+            'student_id': 13,
+            'student_number': 3,
+            'name': 'สาม',
+            'pages_received': [],
+            'page_count': 2,
+            'status': 'missing',
+          },
+        ],
+        'summary': {
+          'scanned': 1,
+          'total': 3,
+          'missing_numbers': [2, 3],
+          'page_count': 2,
+          'max_score': 20,
+          'published': 4,
+          'ready_to_publish': 2,
+          'waiting_review': 1,
+        },
+      };
+      final status = await repo.sheetStatus(examId);
+      expect(
+        [
+          status.scanned,
+          status.total,
+          status.missingNumbers,
+          status.pageCount,
+          status.published,
+          status.readyToPublish,
+          status.waitingReview,
+          status.allPublished,
+        ],
+        [
+          1,
+          3,
+          [2, 3],
+          2,
+          4,
+          2,
+          1,
+          false,
+        ],
+      );
+      final one = status.of(11)!;
+      expect(one.pages.map((p) => p.scanId), [90, 91]);
+      expect(one.page(1)!.versionDoubtful, isTrue);
+      expect(one.page(2)!.needsVersion, isTrue);
+      expect(one.page(3), isNull);
+      expect(one.isComplete, isTrue);
+      expect(status.of(12)!.missingPages, [2]);
+      expect(status.of(12)!.pages, isEmpty);
+      expect(status.of(13)!.isMissing, isTrue);
+      expect(
+        ExamSheetStatus.fromJson({
+          'data': [],
+          'summary': {'published': 3},
+        }).allPublished,
+        isTrue,
+      );
+    });
+
+    test('chooseVersion POSTs /exam-sheets/{id}/version', () async {
+      body = {
+        'scan_id': 90,
+        'submission_id': 70,
+        'state': 'active',
+        'page_no': 1,
+        'page_count': 2,
+        'version_no': 2,
+        'score': 7.5,
+        'max_score': 10,
+        'doubts': [
+          {'sheet_no': 3, 'reason': 'double_mark'},
+          {'sheet_no': null, 'reason': 'version_doubtful'},
+        ],
+        'needs_version': false,
+      };
+      final r = await repo.chooseVersion(90, 2);
+      final req = adapter.requests.last;
+      expect(req.method, 'POST');
+      expect(req.uri.path, '/api/v1/exam-sheets/90/version');
+      expect(req.data, {'version_no': 2});
+      expect(
+        [r.scanId, r.versionNo, r.score, r.maxScore, r.needsVersion],
+        [90, 2, 7.5, 10.0, false],
+      );
+      expect(r.doubts.first.sheetNo, 3);
+      expect(r.doubts.last.sheetNo, isNull);
+      expect(r.doubts.last.reason, 'version_doubtful');
+    });
+
     test('keySheetRead POSTs the reading and parses the proposal', () async {
       body = {
         'data': {

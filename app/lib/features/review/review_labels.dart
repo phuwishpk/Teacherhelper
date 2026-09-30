@@ -92,6 +92,8 @@ enum OverrideReason {
 /// Thai label of a question type (`questions.type`).
 String questionTypeLabel(String type) => switch (type) {
   'mcq' => 'ปรนัย',
+  'true_false' => 'ถูก/ผิด',
+  'numeric' => 'เติมตัวเลข',
   'short' => 'ตอบสั้น',
   'show_work' => 'แสดงวิธีทำ',
   'open' => 'อัตนัย',

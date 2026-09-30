@@ -258,6 +258,15 @@ class ExamScreen extends ConsumerWidget {
                         icon: const Icon(Icons.document_scanner_outlined),
                         label: const Text('สแกนกระดาษคำตอบ'),
                       ),
+                    // Scanned sheets exist only after the key was approved.
+                    if (!d.isManual && d.keyApproved)
+                      FilledButton.tonalIcon(
+                        key: const ValueKey('exam_open_results'),
+                        onPressed: () =>
+                            context.push(AppRoutes.examResults(examId)),
+                        icon: const Icon(Icons.campaign_outlined),
+                        label: const Text('ตรวจทานและประกาศผล'),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 16),
