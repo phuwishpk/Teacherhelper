@@ -9,7 +9,7 @@
 
 | รายการ | Phase 1–7 (27 ก.ย.) | Phase 8–9 (30 ก.ย.) | ตอนนี้: Phase 10–11 (1 ต.ค.) |
 |---|---|---|---|
-| commit | 56 ใน `main` | `main` 62 (เพิ่มเอกสารออกแบบ Phase 8–9) + **57 บน `feat/phase-8-9`** (squash-merge เข้า `main` เป็น commit เดียว) | `main` 62 + **96 บน `feat/exams-gradebook`** (รวม PR #3, #4 ที่ merge เป็นฐาน, ยังไม่ merge เข้า `main`) |
+| commit | 56 ใน `main` | `main` 62 (เพิ่มเอกสารออกแบบ Phase 8–9) + **57 บน `feat/phase-8-9`** (squash-merge เข้า `main` เป็น commit เดียว) | `main` 62 + **ราว 95 บน `feat/exams-gradebook`** (รวม PR #3, #4 ที่ merge เป็นฐาน, ยังไม่ merge เข้า `main`) |
 | backend (Laravel 13): test | 706 tests (11,283 assertions) | 1,075 tests (20,909 assertions) | **1,412 tests ผ่าน** (26,318 assertions) ทั้งบน SQLite และ MariaDB 11 |
 | backend: line coverage | 94.9% | ยังไม่ได้วัด | ยังไม่ได้วัดรอบนี้ (เครื่องนี้ไม่มี pcov/xdebug) CI (`backend.yml`) วัดให้หลัง push |
 | backend: API endpoint | 85 route ภายใต้ `/api/v1` | 147 route | **200 route** |
