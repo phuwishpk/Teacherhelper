@@ -53,7 +53,9 @@ final class ExamAnswerScore
         if ($question->type === Question::TYPE_NUMERIC) {
             $accepted = array_map('strval', (array) ($key['accepted_values'] ?? []));
             $right = $answer['value'] !== null && in_array($answer['value'], $accepted, true);
-            $blank = $answer['value'] === null;
+            // Marks that make no number (invalid_number) are an answer, just a wrong one.
+            $blank = $answer['value'] === null
+                && ($answer['resolved'] || ! in_array(ExamSheetScorer::INVALID_NUMBER, (array) ($examAnswer['doubts'] ?? []), true));
         } else {
             $accepted = array_map('intval', (array) ($key['accepted_options'] ?? []));
             $right = count($answer['selected']) === 1 && in_array($answer['selected'][0], $accepted, true);

@@ -17,6 +17,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -135,6 +137,26 @@ class ExamSheetScanTest extends TestCase
         $read = ExamSheetRead::query()->findOrFail($body['scan_id']);
         $this->assertSame(3.0, $read->device_score); // the phone's score is kept, the server's counts
         Storage::disk('local')->assertExists(Scan::query()->findOrFail($body['scan_id'])->page_image_path);
+    }
+
+    public function test_a_failed_upload_leaves_no_empty_submission(): void
+    {
+        $exam = $this->printedExam(mcq: 2);
+        $reading = $this->reading($exam, 1, [1 => 1, 2 => 1], null);
+        // The page file cannot be written.
+        $disk = Mockery::mock(Storage::disk('local'))->makePartial();
+        $disk->shouldReceive('putFileAs')->andReturn(false);
+        Storage::set('local', $disk);
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->upload($exam, $this->students[0], 1, $reading);
+            $this->fail('the upload should fail');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('Could not store', $e->getMessage());
+        }
+        $this->assertSame(0, Submission::query()->where('assignment_id', $exam->id)->count());
+        $this->assertSame(0, Scan::query()->count());
     }
 
     public function test_a_clean_sheet_is_reviewed_and_a_retry_replays_the_same_answer(): void

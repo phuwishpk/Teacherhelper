@@ -176,7 +176,9 @@ final class ExamSheetGrader
         $score = (float) $item['score'];
         $understanding = Understanding::fromU($max > 0 ? $score / $max : 0.0);
         $doubtful = array_intersect($item['doubts'], ExamSheetScorer::REVIEW_DOUBTS) !== [];
-        $blank = $answer['selected'] === [] && $answer['value'] === null;
+        // An unreadable number (invalid_number) was marked, so it is wrong, not unanswered.
+        $blank = $answer['selected'] === [] && $answer['value'] === null
+            && ! in_array(ExamSheetScorer::INVALID_NUMBER, (array) $item['doubts'], true);
 
         $response->fill(ResponseWriter::RESET);
         $response->fill([

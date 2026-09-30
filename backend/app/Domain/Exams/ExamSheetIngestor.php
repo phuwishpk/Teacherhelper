@@ -228,10 +228,11 @@ final class ExamSheetIngestor
      */
     private function store(User $user, Assignment $exam, WorksheetQr $qr, array $meta, ExamSheetReading $reading, UploadedFile $file): Scan
     {
-        $submissionId = Submission::query()->createOrFirst([
+        $created = Submission::query()->createOrFirst([
             'assignment_id' => $exam->id,
             'student_id' => $qr->studentId,
-        ])->id;
+        ]);
+        $submissionId = $created->id;
 
         $written = null;
         try {
@@ -280,8 +281,32 @@ final class ExamSheetIngestor
             if ($written !== null) {
                 ScanFiles::disk()->delete($written);
             }
+            if ($created->wasRecentlyCreated) {
+                self::dropEmptySubmission($submissionId);
+            }
 
             throw $e;
+        }
+    }
+
+    /**
+     * The submission this upload created, when the upload failed and no
+     * other upload has given it a scan since: without it the student would
+     * count as handed in with nothing to show.
+     */
+    private static function dropEmptySubmission(int $submissionId): void
+    {
+        try {
+            DB::transaction(function () use ($submissionId) {
+                $submission = Submission::query()->lockForUpdate()->find($submissionId);
+                if ($submission !== null
+                    && ! Scan::query()->where('submission_id', $submissionId)->lockForUpdate()->exists()
+                    && ! $submission->responses()->exists()) {
+                    $submission->delete();
+                }
+            });
+        } catch (Throwable $cleanup) {
+            report($cleanup);
         }
     }
 

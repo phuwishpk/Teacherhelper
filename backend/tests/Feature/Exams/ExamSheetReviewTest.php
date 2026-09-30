@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Exams;
 
+use App\Domain\Exams\ExamAnswerScore;
 use App\Domain\Exams\ExamScanKit;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
@@ -139,6 +140,10 @@ class ExamSheetReviewTest extends TestCase
         $r = $this->responses($exam, $this->students[0]);
         $this->assertSame(0.0, $r[1]->ai_score);
         $this->assertSame(['invalid_number'], $r[4]->exam_answer['doubts']);
+        // Marks that make no number are a wrong answer, not a missing one (also when rescored by code).
+        $this->assertSame([], $r[4]->ai_error_types);
+        $this->assertFalse(ExamAnswerScore::of($r[4]->question, $r[4]->exam_answer)['blank']);
+        $this->assertTrue(ExamAnswerScore::of($r[4]->question, ['selected' => [], 'value' => null, 'doubts' => []])['blank']);
         $this->assertSame(Submission::STATUS_NEEDS_REVIEW, $this->submission($exam, $this->students[0])->status);
 
         // The review screen gets the row on the page and the bubbles in sheet order.
