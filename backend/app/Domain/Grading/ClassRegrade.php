@@ -38,7 +38,8 @@ use Illuminate\Support\Facades\Log;
  *
  * - mcq of the crop path: scored again by code from the stored bubble fill
  *   (McqGrader, §11.6), no Gemini; an answer whose score and understanding
- *   do not change is left as it is (reviewed stays reviewed);
+ *   do not change is left as it is (reviewed stays reviewed) and is not
+ *   counted in the estimate or the outcome;
  * - short / show_work / open of the crop path: reset to `queued` (crops,
  *   the phone's readings and the sticky review flags kept) and read again
  *   by GradeScanJob, one job per scan;
@@ -148,8 +149,7 @@ final class ClassRegrade
             'skipped_missing_image' => 0,
             'reopened_submissions' => 0,
         ];
-        $scanIds = [];
-        $pageIds = [];
+        $marked = false;
         foreach ($plan as $submissionId => $entry) {
             $outcome = DB::transaction(fn () => $this->applyTo($submissionId, $entry['pages'], $teacher, $includeOverridden));
             if ($outcome === null) {
@@ -162,19 +162,20 @@ final class ClassRegrade
                 $totals['queued_submissions']++;
                 $totals['reopened_submissions'] += $outcome['reopened'] ? 1 : 0;
             }
-            foreach ($outcome['scan_ids'] as $scanId) {
-                $scanIds[$scanId] = true;
+            if ($outcome['scan_ids'] === [] && $outcome['page_ids'] === []) {
+                continue;
             }
-            array_push($pageIds, ...$outcome['page_ids']);
+            // Right after this submission's commit (a scan and its pages belong to one submission): a run cut
+            // short later (an error, the host's time limit) never leaves committed `queued` answers without a job.
+            if (! $marked) {
+                Cache::put(self::markerKey($assignment->id), now()->toIso8601String(), now()->addMinutes(self::LOST_MINUTES));
+                $marked = true;
+            }
+            foreach ($outcome['scan_ids'] as $scanId) {
+                GradeScanJob::dispatch($scanId);
+            }
+            WholePageSubmissions::dispatch($outcome['page_ids']);
         }
-
-        if ($scanIds !== [] || $pageIds !== []) {
-            Cache::put(self::markerKey($assignment->id), now()->toIso8601String(), now()->addMinutes(self::LOST_MINUTES));
-        }
-        foreach (array_keys($scanIds) as $scanId) {
-            GradeScanJob::dispatch($scanId);
-        }
-        WholePageSubmissions::dispatch($pageIds);
 
         Log::info('grading.class_regrade', ['assignment_id' => $assignment->id, 'include_overridden' => $includeOverridden] + $totals);
 
@@ -297,7 +298,7 @@ final class ClassRegrade
                 return self::KIND_NONE; // the printed kind no longer fits the question: stays manual (layout_type_mismatch)
             }
             if ($isMcq) {
-                return self::KIND_MCQ;
+                return self::mcqUnchanged($response, $question) ? self::KIND_NONE : self::KIND_MCQ;
             }
             $disk = ScanFiles::disk();
             if ($response->crop_path === null || ! $disk->exists($response->crop_path)) {
@@ -396,18 +397,40 @@ final class ClassRegrade
     }
 
     /**
+     * Scoring the mcq answer again by code would leave it as it is: the
+     * same score and understanding (or still no usable key option), and no
+     * teacher decision to replace. Such an answer is not counted, so the
+     * estimate of an unchanged key says there is nothing to do.
+     */
+    private static function mcqUnchanged(Response $response, Question $question): bool
+    {
+        if (self::overridden($response)) {
+            return false;
+        }
+        $fill = (array) $response->mcq_fill;
+        $correct = $question->answer_key['correct'] ?? null;
+        if (! is_string($correct) || ! array_key_exists($correct, $fill)) {
+            return $response->manualReason() === 'answer_key_missing';
+        }
+        $grade = McqGrader::grade(array_map('floatval', $fill), $correct, (float) $question->max_points);
+
+        return $response->grading_state === Response::STATE_SCORED
+            && ! ScoreRules::differs($response->ai_score, $grade->score)
+            && $response->ai_understanding === $grade->understanding;
+    }
+
+    /**
      * The mcq answer scored again by code; false when nothing changed.
      */
     private static function rescoreMcq(Response $response, Question $question, User $teacher): bool
     {
+        if (self::mcqUnchanged($response, $question)) {
+            return false;
+        }
         $fill = (array) $response->mcq_fill;
         $correct = $question->answer_key['correct'] ?? null;
-        $overridden = self::overridden($response);
 
         if (! is_string($correct) || ! array_key_exists($correct, $fill)) {
-            if (! $overridden && $response->manualReason() === 'answer_key_missing') {
-                return false;
-            }
             $previous = self::previous($response);
             $trace = $response->fuzzy_trace;
             $response->fill(ResponseWriter::RESET);
@@ -419,13 +442,6 @@ final class ClassRegrade
         }
 
         $grade = McqGrader::grade(array_map('floatval', $fill), $correct, (float) $question->max_points);
-        if (! $overridden
-            && $response->grading_state === Response::STATE_SCORED
-            && ! ScoreRules::differs($response->ai_score, $grade->score)
-            && $response->ai_understanding === $grade->understanding) {
-            return false;
-        }
-
         $previous = self::previous($response);
         $trace = $response->fuzzy_trace;
         $response->fill(ResponseWriter::RESET);

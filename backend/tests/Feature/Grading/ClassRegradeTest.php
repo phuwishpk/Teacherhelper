@@ -213,6 +213,12 @@ class ClassRegradeTest extends TestCase
         $mcq->forceFill(['final_score' => $mcq->ai_score, 'final_understanding' => $mcq->ai_understanding, 'reviewed_at' => now(), 'reviewed_by' => $this->teacher->id])->save();
         Queue::fake();
 
+        // An mcq that code would score the same is not work: the key is unchanged, so nothing to do.
+        $this->estimate()->assertOk()
+            ->assertJsonPath('data.submissions', 0)
+            ->assertJsonPath('data.mcq_by_code', 0)
+            ->assertJsonPath('data.published_submissions', 0)
+            ->assertJsonPath('data.skipped_overridden', 1);
         $this->regrade()->assertOk()
             ->assertJsonPath('data.queued_submissions', 0)
             ->assertJsonPath('data.rescored_by_code', 0)
