@@ -5,7 +5,9 @@ namespace Tests\Feature\Console;
 use App\Jobs\QueueHeartbeatJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class QueueWorkCommandTest extends TestCase
@@ -26,6 +28,19 @@ class QueueWorkCommandTest extends TestCase
         $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
 
         Queue::assertPushed(QueueHeartbeatJob::class, 1);
+    }
+
+    public function test_an_error_in_a_periodic_step_does_not_stop_the_worker_pass(): void
+    {
+        config(['queue.default' => 'database']);
+        // PollAnalysisBatchJob::dispatchDue() queries analysis_batches: make that fail.
+        Schema::drop('analysis_batches');
+        Log::spy();
+
+        $this->artisan('eduvision:queue-work', self::MEMORY)->assertSuccessful();
+
+        $this->assertNotNull(Cache::get(QueueHeartbeatJob::CACHE_KEY), 'the worker pass still ran');
+        Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context) => $message === 'queue_work.dispatch_failed' && $context['step'] === 'analysis_poll');
     }
 
     public function test_one_cron_pass_processes_the_heartbeat_through_the_database_queue(): void

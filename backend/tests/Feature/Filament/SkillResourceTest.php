@@ -95,6 +95,12 @@ class SkillResourceTest extends TestCase
             ->callTableAction('edit', $added, data: ['code' => 'ค 1.1/ค1', 'name' => 'admin แก้ชื่อ', 'grade_level' => 5])
             ->assertHasNoTableActionErrors();
         $this->assertSame('admin แก้ชื่อ', $added->refresh()->name);
+
+        // A code the curriculum or the school already uses is refused, as for teachers.
+        Livewire::test(ManageSkills::class)
+            ->callTableAction('edit', $added, data: ['code' => 'ค 1.1', 'name' => 'admin แก้ชื่อ', 'grade_level' => 5])
+            ->assertHasTableActionErrors(['code']);
+        $this->assertSame('ค 1.1/ค1', $added->refresh()->code);
     }
 
     public function test_an_import_with_bad_rows_reports_them_and_keeps_the_good_ones(): void

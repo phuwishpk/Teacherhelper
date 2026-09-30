@@ -101,6 +101,24 @@ class CourseTest extends TestCase
         $this->asUser($this->teacher)->postJson('/api/v1/courses', $this->courseBody(['code' => 'ค1', 'academic_year' => 2026]))->assertStatus(422)->assertJsonValidationErrors(['academic_year']);
     }
 
+    public function test_a_create_racing_another_one_of_the_same_code_is_422_not_500(): void
+    {
+        // The other create commits between the code check and this insert.
+        $raced = false;
+        Course::creating(function (Course $course) use (&$raced) {
+            if (! $raced) {
+                $raced = true;
+                Course::withoutEvents(fn () => Course::query()->insert($course->getAttributes() + ['created_at' => now(), 'updated_at' => now()]));
+            }
+        });
+
+        $this->asUser($this->teacher)->postJson('/api/v1/courses', $this->courseBody())
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonValidationErrors(['code']);
+        $this->assertTrue($raced);
+    }
+
     public function test_course_indicators_are_indicators_or_sub_indicators_the_school_sees(): void
     {
         $course = $this->makeCourse($this->teacher);

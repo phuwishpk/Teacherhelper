@@ -125,6 +125,8 @@ class Assignment extends Model
             'key_extraction_id' => 'integer',
             'course_id' => 'integer',
             'lesson_plan_id' => 'integer',
+            // Compared strictly with courses.subject_id (AssignmentCourses): PDO may return strings.
+            'subject_id' => 'integer',
         ];
     }
 

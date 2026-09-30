@@ -6,7 +6,10 @@ use App\Jobs\BuildAnalysisBatchesJob;
 use App\Jobs\ClassroomSyncJob;
 use App\Jobs\PollAnalysisBatchJob;
 use App\Jobs\QueueHeartbeatJob;
+use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Wrapper the Plesk Scheduled Task runs every minute (no daemons on shared
@@ -31,10 +34,10 @@ class QueueWorkCommand extends Command
     {
         QueueHeartbeatJob::dispatch();
         // The Google Classroom sync round, at most every 5 minutes (DESIGN §19.3, §19.10).
-        ClassroomSyncJob::dispatchIfDue();
+        $this->safely('classroom_sync', fn () => ClassroomSyncJob::dispatchIfDue());
         // Phase 9 (DESIGN §20.8): the nightly Batch API round and its polls.
-        BuildAnalysisBatchesJob::dispatchIfDue();
-        PollAnalysisBatchJob::dispatchDue();
+        $this->safely('analysis_build', fn () => BuildAnalysisBatchesJob::dispatchIfDue());
+        $this->safely('analysis_poll', fn () => PollAnalysisBatchJob::dispatchDue());
 
         return $this->call('queue:work', [
             '--queue' => 'grading,default,pdf',
@@ -42,5 +45,19 @@ class QueueWorkCommand extends Command
             '--max-time' => 50,
             '--memory' => max(32, (int) $this->option('memory')),
         ]);
+    }
+
+    /**
+     * One periodic step that must never stop the rest: an error there (the
+     * batch poll queries and may recover stale batches, for instance) is
+     * logged, and grading still gets its worker pass this minute.
+     */
+    private function safely(string $step, Closure $dispatch): void
+    {
+        try {
+            $dispatch();
+        } catch (Throwable $e) {
+            Log::error('queue_work.dispatch_failed', ['step' => $step, 'exception' => $e]);
+        }
     }
 }

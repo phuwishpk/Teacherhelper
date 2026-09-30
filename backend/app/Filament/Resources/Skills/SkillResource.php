@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Skills;
 use App\Filament\Resources\Skills\Pages\ManageSkills;
 use App\Models\Skill;
 use BackedEnum;
+use Closure;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -56,7 +57,21 @@ class SkillResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('code')->label('รหัส')->required()->maxLength(40),
+            TextInput::make('code')->label('รหัส')->required()->maxLength(40)
+                // The same rule as a teacher's own codes (TeacherSkills): no DB constraint
+                // covers "curriculum or this school", so the form checks it.
+                ->rules([fn (?Skill $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record) {
+                    $code = trim((string) $value);
+                    $taken = Skill::query()
+                        ->visibleToSchool($record?->school_id)
+                        ->where('code', $code)
+                        ->when($record !== null, fn (Builder $q) => $q->whereKeyNot($record->id))
+                        ->pluck('code')
+                        ->contains(fn ($found) => (string) $found === $code);
+                    if ($taken) {
+                        $fail("รหัส \"{$code}\" มีอยู่แล้วในหลักสูตรหรือในโรงเรียน");
+                    }
+                }]),
             Textarea::make('name')->label('ชื่อ')->required()->rows(3),
             Select::make('grade_level')
                 ->label('ชั้น')

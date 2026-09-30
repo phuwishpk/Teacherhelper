@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\LessonPlan;
 use App\Models\Unit;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -45,7 +46,11 @@ final class CourseEditor
             $attributes = self::clean($data, self::COURSE_FIELDS);
             $attributes['semester'] ??= 0;
             $this->assertCodeFree($teacher, $attributes);
-            $course = Course::create($attributes + ['school_id' => $teacher->school_id, 'created_by' => $teacher->id]);
+            try {
+                $course = Course::create($attributes + ['school_id' => $teacher->school_id, 'created_by' => $teacher->id]);
+            } catch (UniqueConstraintViolationException) {
+                throw self::codeTaken(); // a create of the same code committed after the check (uq_course)
+            }
             $course->classrooms()->sync($classroomIds);
             $course->indicators()->sync($skillIds);
 
@@ -73,7 +78,11 @@ final class CourseEditor
             if ($course->isDirty('subject_id') && $course->assignments()->exists()) {
                 throw new ApiException('รายวิชานี้มีการบ้านแล้ว เปลี่ยนกลุ่มสาระไม่ได้', 'course_in_use', 409, ['subject_id' => ['รายวิชานี้มีการบ้านแล้ว เปลี่ยนกลุ่มสาระไม่ได้']]);
             }
-            $course->save();
+            try {
+                $course->save();
+            } catch (UniqueConstraintViolationException) {
+                throw self::codeTaken();
+            }
 
             return $course;
         });
@@ -284,10 +293,15 @@ final class CourseEditor
             ->when($exceptId !== null, fn ($q) => $q->whereKeyNot($exceptId))
             ->exists();
         if ($taken) {
-            $message = 'มีรายวิชารหัสนี้ในปีการศึกษาและภาคเรียนนี้แล้ว';
-
-            throw new ApiException($message, 'validation_failed', 422, ['code' => [$message]]);
+            throw self::codeTaken();
         }
+    }
+
+    private static function codeTaken(): ApiException
+    {
+        $message = 'มีรายวิชารหัสนี้ในปีการศึกษาและภาคเรียนนี้แล้ว';
+
+        return new ApiException($message, 'validation_failed', 422, ['code' => [$message]]);
     }
 
     /**
