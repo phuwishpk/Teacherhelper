@@ -20,7 +20,7 @@ void showExamError(BuildContext context, Object e) =>
 
 /// One exam (DESIGN §22.2–§22.5): settings summary, the key state and its
 /// approval, the structure lock, and the sections with their questions.
-/// Buttons lead to the key grid and the versions.
+/// Buttons lead to the key grid, the versions and the print screen.
 class ExamScreen extends ConsumerWidget {
   const ExamScreen({super.key, required this.examId});
 
@@ -236,6 +236,18 @@ class ExamScreen extends ConsumerWidget {
                           : () => context.push(AppRoutes.examVersions(examId)),
                       icon: const Icon(Icons.shuffle),
                       label: Text('ชุดข้อสอบ (${d.exam.versionCount} ชุด)'),
+                    ),
+                    FilledButton.icon(
+                      key: const ValueKey('exam_open_print'),
+                      onPressed: d.questionCount == 0
+                          ? null
+                          : () => context.push(AppRoutes.examPrint(examId)),
+                      icon: const Icon(Icons.print_outlined),
+                      label: Text(
+                        d.isManual
+                            ? 'พิมพ์เล่มข้อสอบ'
+                            : 'พิมพ์เล่มและกระดาษคำตอบ',
+                      ),
                     ),
                   ],
                 ),

@@ -7,7 +7,9 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/assignment.dart';
+import '../worksheets/print_job.dart';
 import 'exam_models.dart';
+import 'exam_print.dart';
 
 /// The teacher's exam endpoints of build 1 (DESIGN §22.15): the exam
 /// itself (`POST`/`PATCH /assignments` with the exam fields), sections,
@@ -52,6 +54,13 @@ abstract class ExamsRepository {
   Future<ExamVersions> versions(int examId);
   Future<ExamVersions> reshuffle(int examId);
   Future<ExamDetail> unlockStructure(int examId);
+
+  /// `POST /exams/{id}/prints` (build 2, §22.6): queues a booklet, the
+  /// answer sheets or the key sheet; the first print locks the structure.
+  Future<PrintJob> requestPrint(int examId, ExamPrintRequest request);
+
+  /// `GET /worksheet-prints/{id}` (or the job's `status_url`).
+  Future<PrintJob> printStatus(PrintJob job);
 }
 
 /// An image of a question (`option == false`) or of an mcq option.
@@ -253,6 +262,24 @@ class ApiExamsRepository implements ExamsRepository {
   Future<ExamDetail> unlockStructure(int examId) async {
     final res = await _dio.post<Object?>('/exams/$examId/unlock-structure');
     return ExamDetail.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<PrintJob> requestPrint(int examId, ExamPrintRequest request) async {
+    final res = await _dio.post<Object?>(
+      '/exams/$examId/prints',
+      data: request.toJson(),
+    );
+    return PrintJob.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<PrintJob> printStatus(PrintJob job) async {
+    final path = job.pollUrl != null
+        ? resolveApiPath(job.pollUrl!)
+        : '/worksheet-prints/${job.id}';
+    final res = await _dio.get<Object?>(path);
+    return PrintJob.fromJson(unwrapJson(res.data));
   }
 }
 

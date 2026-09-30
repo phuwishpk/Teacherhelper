@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:eduvision/features/assignments/answer_key_models.dart';
 import 'package:eduvision/features/exams/exam_models.dart';
+import 'package:eduvision/features/exams/exam_print.dart';
 import 'package:eduvision/features/exams/exams_repository.dart';
+import 'package:eduvision/features/worksheets/print_job.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fake_http_adapter.dart';
@@ -201,6 +203,62 @@ void main() {
     body = {'data': examJson()};
     await repo.unlockStructure(40);
     expect(last().uri.path, '/api/v1/exams/40/unlock-structure');
+  });
+
+  test('requestPrint POSTs /exams/{id}/prints; printStatus polls the '
+      'status_url or /worksheet-prints/{id}', () async {
+    body = {
+      'data': {
+        'id': 91,
+        'status': 'queued',
+        'kind': 'exam_booklet',
+        'assignment_id': 40,
+        'layout_version': null,
+        'version_no': 2,
+        'download_url': null,
+        'status_url': '/api/v1/worksheet-prints/91',
+        'error': null,
+      },
+    };
+    final job = await repo.requestPrint(40, const ExamPrintRequest.booklet(2));
+    expect(last().method, 'POST');
+    expect(last().uri.path, '/api/v1/exams/40/prints');
+    expect(last().data, {'kind': 'exam_booklet', 'version_no': 2});
+    expect(job.id, 91);
+    expect(job.kind, 'exam_booklet');
+    expect(job.versionNo, 2);
+    expect(job.layoutVersion, isNull);
+
+    await repo.requestPrint(
+      40,
+      const ExamPrintRequest.answerSheets(studentIds: [5, 9]),
+    );
+    expect(last().data, {
+      'kind': 'answer_sheet',
+      'student_ids': [5, 9],
+    });
+    await repo.requestPrint(40, const ExamPrintRequest.answerSheets());
+    expect(last().data, {'kind': 'answer_sheet'});
+    await repo.requestPrint(40, const ExamPrintRequest.keySheet());
+    expect(last().data, {'kind': 'key_sheet'});
+
+    body = {
+      'data': {
+        'id': 91,
+        'status': 'ready',
+        'kind': 'answer_sheet',
+        'layout_version': 4,
+        'download_url': '/api/v1/worksheet-prints/91/file',
+      },
+    };
+    final ready = await repo.printStatus(job);
+    expect(last().method, 'GET');
+    expect(last().uri.path, '/api/v1/worksheet-prints/91');
+    expect(ready.isReady, isTrue);
+    expect(ready.layoutVersion, 4);
+
+    await repo.printStatus(const PrintJob(id: 92, status: 'queued'));
+    expect(last().uri.path, '/api/v1/worksheet-prints/92');
   });
 
   test('apiFieldErrors reads the first message of each field', () async {

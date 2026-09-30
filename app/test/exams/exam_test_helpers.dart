@@ -15,6 +15,7 @@ final examStubRoutes = [
   stubRoute('/exams/:id/edit', 'exam-edit'),
   stubRoute('/exams/:id/answer-key', 'answer-key'),
   stubRoute('/exams/:id/versions', 'versions'),
+  stubRoute('/exams/:id/print', 'print'),
   stubRoute('/exams/:id/questions/:qid', 'question'),
   stubRoute('/exams/:id/sections/:sid/questions/new', 'question-new'),
 ];

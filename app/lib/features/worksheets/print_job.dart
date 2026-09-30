@@ -7,6 +7,9 @@ class PrintJob {
     this.downloadUrl,
     this.pollUrl,
     this.error,
+    this.kind,
+    this.versionNo,
+    this.layoutVersion,
   });
 
   final int id;
@@ -19,6 +22,16 @@ class PrintJob {
   final String? pollUrl;
   final String? error;
 
+  /// `worksheet`, `exam_booklet`, `answer_sheet` or `key_sheet` (DESIGN
+  /// §22.6); null on a login-card print.
+  final String? kind;
+
+  /// The version of an exam booklet (1 = ชุด ก); null for the others.
+  final int? versionNo;
+
+  /// The layout of the sheets; null for a booklet (never scanned).
+  final int? layoutVersion;
+
   bool get isReady => status == 'ready' && downloadUrl != null;
   bool get isFailed => status == 'failed';
   bool get isPending => !isReady && !isFailed;
@@ -30,6 +43,9 @@ class PrintJob {
         (json['download_url'] ?? json['file_url'] ?? json['url']) as String?,
     pollUrl: (json['status_url'] ?? json['poll_url']) as String?,
     error: json['error'] as String?,
+    kind: json['kind'] as String?,
+    versionNo: (json['version_no'] as num?)?.toInt(),
+    layoutVersion: (json['layout_version'] as num?)?.toInt(),
   );
 }
 

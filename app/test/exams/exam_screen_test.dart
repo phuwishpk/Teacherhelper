@@ -221,6 +221,12 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('exam_open_print')));
+    await tester.pumpAndSettle();
+    expect(find.text('print /exams/40/print'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('exam_question_11')));
     await tester.pumpAndSettle();
     expect(find.text('question /exams/40/questions/11'), findsOneWidget);

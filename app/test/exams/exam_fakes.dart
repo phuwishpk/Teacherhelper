@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:eduvision/features/assignments/answer_key_models.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/exams/exam_models.dart';
+import 'package:eduvision/features/exams/exam_print.dart';
 import 'package:eduvision/features/exams/exams_repository.dart';
+import 'package:eduvision/features/worksheets/print_job.dart';
 
 /// `GET /exams/{id}` as the server answers it (ExamPayload::of): an app
 /// exam with an mcq section (q11 keyed ค, q12 blank), a true_false
@@ -486,6 +488,48 @@ class FakeExamsRepository implements ExamsRepository {
     _check();
     detailJson = {...detailJson, 'structure_locked_at': null};
     return _detail;
+  }
+
+  var _nextPrintId = 900;
+
+  /// Overrides the `202` answer of `requestPrint` (default: queued).
+  PrintJob Function(ExamPrintRequest request)? printAnswer;
+
+  /// Overrides the poll answer (default: ready with a download URL).
+  Future<PrintJob> Function(PrintJob job)? statusAnswer;
+
+  @override
+  Future<PrintJob> requestPrint(int examId, ExamPrintRequest request) async {
+    calls.add(('requestPrint', request.toJson()));
+    _check();
+    // Like the server: the first print of any kind locks the structure.
+    detailJson = {
+      ...detailJson,
+      'structure_locked_at':
+          detailJson['structure_locked_at'] ?? '2026-10-01T02:00:00+00:00',
+    };
+    return printAnswer?.call(request) ??
+        PrintJob(
+          id: _nextPrintId++,
+          status: 'queued',
+          kind: request.kind.apiValue,
+          versionNo: request.versionNo,
+        );
+  }
+
+  @override
+  Future<PrintJob> printStatus(PrintJob job) async {
+    calls.add(('printStatus', job.id));
+    final answer = statusAnswer;
+    if (answer != null) return answer(job);
+    return PrintJob(
+      id: job.id,
+      status: 'ready',
+      downloadUrl: '/api/v1/worksheet-prints/${job.id}/file',
+      kind: job.kind,
+      versionNo: job.versionNo,
+      layoutVersion: job.kind == 'exam_booklet' ? null : 3,
+    );
   }
 
   /// The arguments of every call named [name].
