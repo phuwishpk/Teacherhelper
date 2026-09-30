@@ -225,6 +225,12 @@ class _ActionsRow extends ConsumerWidget {
           icon: const Icon(Icons.grid_on_outlined),
           label: const Text('ทักษะของห้อง'),
         ),
+        OutlinedButton.icon(
+          onPressed: () =>
+              context.push(AppRoutes.classroomAnalyses(classroom.id)),
+          icon: const Icon(Icons.auto_awesome_outlined),
+          label: const Text('วิเคราะห์รายคน'),
+        ),
       ],
     );
   }
@@ -331,6 +337,9 @@ class _StudentTile extends ConsumerWidget {
           'mastery' => context.push(
             AppRoutes.studentMastery(classroomId, student.studentId),
           ),
+          'analysis' => context.push(
+            AppRoutes.studentAnalysis(classroomId, student.studentId),
+          ),
           'card' => _reissueCard(context, ref),
           'pin' => _resetPin(context, ref),
           _ => null,
@@ -341,6 +350,13 @@ class _StudentTile extends ConsumerWidget {
             child: ListTile(
               leading: Icon(Icons.insights_outlined),
               title: Text('ทักษะและจุดอ่อน'),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'analysis',
+            child: ListTile(
+              leading: Icon(Icons.auto_awesome_outlined),
+              title: Text('วิเคราะห์รายคน (AI)'),
             ),
           ),
           PopupMenuItem(

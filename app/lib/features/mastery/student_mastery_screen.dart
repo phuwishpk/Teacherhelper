@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
@@ -34,6 +36,14 @@ class StudentMasteryScreen extends ConsumerWidget {
               ? 'ทักษะของนักเรียน'
               : '${student.studentNumber}. ${student.name}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'วิเคราะห์รายคน (AI)',
+            icon: const Icon(Icons.auto_awesome_outlined),
+            onPressed: () =>
+                context.push(AppRoutes.studentAnalysis(classroomId, studentId)),
+          ),
+        ],
       ),
       body: AsyncView(
         value: mastery,

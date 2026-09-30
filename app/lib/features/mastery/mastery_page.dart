@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../analysis/my_analysis_section.dart';
 import '../charts/course_charts_screen.dart';
 import 'mastery_models.dart';
 import 'mastery_repository.dart';
@@ -28,6 +29,7 @@ class MasteryPage extends ConsumerWidget {
             onRefresh: () => ref.refresh(myMasteryProvider.future),
             child: ListView(
               children: const [
+                MyAnalysisSection(),
                 MyCoursesSection(),
                 SizedBox(height: 48),
                 EmptyView(
@@ -54,6 +56,7 @@ class MasteryPage extends ConsumerWidget {
           child: ContentColumn(
             child: ListView(
               children: [
+                const MyAnalysisSection(),
                 const MyCoursesSection(),
                 Card(
                   child: Padding(

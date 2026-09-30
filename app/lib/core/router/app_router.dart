@@ -10,6 +10,8 @@ import '../../features/assignments/indicator_mapping_screen.dart';
 import '../../features/assignments/question.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
+import '../../features/analysis/classroom_analyses_screen.dart';
+import '../../features/analysis/student_analysis_screen.dart';
 import '../../features/appeals/appeals_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
@@ -41,6 +43,7 @@ import '../../features/mastery/student_mastery_screen.dart';
 import '../../features/practice/practice_attempt_screen.dart';
 import '../../features/practice/practice_bank_screen.dart';
 import '../../features/practice/practice_page.dart';
+import '../../features/practice/skill_practice_screen.dart';
 import '../../features/practice/skill_resources_screen.dart';
 import '../../features/results/result_detail_screen.dart';
 import '../../features/review/review_detail_screen.dart';
@@ -186,6 +189,14 @@ abstract final class AppRoutes {
   static String studentMastery(int classroomId, int studentId) =>
       '/classrooms/$classroomId/students/$studentId/mastery';
 
+  /// Every student's AI analysis in a classroom and its auto-share switch
+  /// (DESIGN §20.5).
+  static String classroomAnalyses(int id) => '/classrooms/$id/analyses';
+
+  /// One student's AI analysis in a classroom: texts, approve, edit, run.
+  static String studentAnalysis(int classroomId, int studentId) =>
+      '/classrooms/$classroomId/students/$studentId/analysis';
+
   /// The school's practice bank (§14.1).
   static const practiceBank = '/practice-bank';
 
@@ -194,6 +205,11 @@ abstract final class AppRoutes {
 
   /// Student: one practice item (§9.7).
   static String studentPractice(int itemId) => '/student/practice/$itemId';
+
+  /// Student: the practice of one indicator, from an analysis next step
+  /// (§20.5). `extra` may carry the [Skill].
+  static String studentSkillPractice(int skillId) =>
+      '/student/practice/skills/$skillId';
 
   /// Student: one published submission (§9.7).
   static String studentResult(int submissionId) =>
@@ -339,6 +355,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/student/practice/skills/:skillId',
+        builder: (context, state) => SkillPracticeScreen(
+          skillId: _id(state, 'skillId'),
+          skill: state.extra is Skill ? state.extra as Skill : null,
+        ),
+      ),
+      GoRoute(
         path: '/student/courses/:id',
         builder: (context, state) =>
             MyCourseChartsScreen(courseId: _id(state, 'id')),
@@ -405,6 +428,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'students/:sid/mastery',
             builder: (context, state) => StudentMasteryScreen(
+              classroomId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+            ),
+          ),
+          GoRoute(
+            path: 'analyses',
+            builder: (context, state) =>
+                ClassroomAnalysesScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'students/:sid/analysis',
+            builder: (context, state) => StudentAnalysisScreen(
               classroomId: _id(state, 'id'),
               studentId: _id(state, 'sid'),
             ),
