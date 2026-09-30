@@ -16,7 +16,7 @@ import 'progress_chart.dart';
 import 'rollup_chart.dart';
 
 /// The spider chart of a roll-up in a card: the standard/unit toggle, the
-/// chart (radar or bars), every node as a row, and the coverage under it
+/// chart (a radar of nodes or of indicators, or bars), every node as a row, and the coverage under it
 /// (DESIGN §20.4). Tapping an axis, a bar or a row opens the drill-down.
 class RollupCard extends StatelessWidget {
   const RollupCard({
@@ -74,7 +74,8 @@ class RollupCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      'แกนที่ประเมินแล้วมี ${s.assessedNodes.length} แกน '
+                      'ประเมินแล้ว ${s.assessedNodes.length} กลุ่ม '
+                      '${s.assessedIndicators.length} ตัวชี้วัด '
                       '(เรดาร์ใช้ $kRadarMinAxes–$kRadarMaxAxes แกน) จึงแสดงเป็นกราฟแท่ง',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),

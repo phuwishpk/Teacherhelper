@@ -8,7 +8,8 @@ import 'courses_providers.dart';
 import 'courses_screen.dart';
 
 /// "รายวิชา" on a classroom's page: the courses bound to it (an assignment
-/// of the classroom picks one of them, DESIGN §20.1) and "เพิ่มรายวิชา".
+/// of the classroom picks one of them, DESIGN §20.1), each with a link to
+/// its charts in this classroom (§20.4), and "เพิ่มรายวิชา".
 class ClassroomCoursesSection extends ConsumerWidget {
   const ClassroomCoursesSection({super.key, required this.classroomId});
 
@@ -74,6 +75,28 @@ class ClassroomCoursesSection extends ConsumerWidget {
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => context.push(AppRoutes.course(c.id)),
+                      ),
+                      ListTile(
+                        key: ValueKey('classroom_course_charts_${c.id}'),
+                        dense: true,
+                        contentPadding: const EdgeInsets.only(
+                          left: 72,
+                          right: 16,
+                        ),
+                        leading: const Icon(Icons.radar),
+                        title: Text(
+                          'กราฟรายวิชา ${c.code.isEmpty ? c.name : c.code}',
+                        ),
+                        subtitle: const Text(
+                          'เรดาร์ของห้อง ร้อยละที่ผ่าน และรายคน',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(
+                          AppRoutes.courseCharts(
+                            c.id,
+                            classroomId: classroomId,
+                          ),
+                        ),
                       ),
                     ],
                   ],

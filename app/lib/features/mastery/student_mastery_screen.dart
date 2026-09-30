@@ -6,13 +6,15 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../courses/courses_providers.dart';
 import 'mastery_models.dart';
 import 'mastery_page.dart';
 import 'mastery_repository.dart';
 import 'mastery_widgets.dart';
 
 /// Teacher view of one student: the three weakest skills (DESIGN §14.3
-/// "จุดอ่อนรายคน") and every skill below them.
+/// "จุดอ่อนรายคน"), a link to their charts of each course bound to the
+/// classroom (§20.4) and every skill below them.
 class StudentMasteryScreen extends ConsumerWidget {
   const StudentMasteryScreen({
     super.key,
@@ -50,10 +52,14 @@ class StudentMasteryScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(studentMasteryProvider(studentId)),
         data: (rows) {
           if (rows.isEmpty) {
-            return const EmptyView(
+            return EmptyView(
               icon: Icons.insights_outlined,
               title: 'ยังไม่มีข้อมูลทักษะ',
               message: 'จะแสดงหลังเผยแพร่ผลการบ้านของนักเรียนคนนี้',
+              action: StudentCourseChartLinks(
+                classroomId: classroomId,
+                studentId: studentId,
+              ),
             );
           }
           final sorted = SkillMastery.weakestFirst(rows);
@@ -105,6 +111,10 @@ class StudentMasteryScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  StudentCourseChartLinks(
+                    classroomId: classroomId,
+                    studentId: studentId,
+                  ),
                   const SizedBox(height: 12),
                   const MasteryLegend(),
                   const SizedBox(height: 12),
@@ -114,6 +124,60 @@ class StudentMasteryScreen extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// "กราฟตามรายวิชา": one link per course bound to the classroom, to the
+/// student's spider and progress in that course (DESIGN §20.4). Nothing
+/// while the courses load, when they fail, or when there are none.
+class StudentCourseChartLinks extends ConsumerWidget {
+  const StudentCourseChartLinks({
+    super.key,
+    required this.classroomId,
+    required this.studentId,
+  });
+
+  final int classroomId;
+  final int studentId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final courses =
+        ref.watch(classroomCoursesProvider(classroomId)).value ?? const [];
+    if (courses.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                'กราฟตามรายวิชา',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            for (final c in courses)
+              ListTile(
+                key: ValueKey('student_course_charts_${c.id}'),
+                leading: const Icon(Icons.radar),
+                title: Text('กราฟรายวิชา ${c.code.isEmpty ? c.name : c.code}'),
+                subtitle: Text(c.name),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(
+                  AppRoutes.studentCourseCharts(
+                    c.id,
+                    studentId,
+                    classroomId: classroomId,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -181,3 +181,28 @@ class FakeCourseMastery implements CourseMasteryRepository {
     return CourseMasterySummary.fromJson(summaryJson(axis: axis));
   }
 }
+
+/// A student roll-up by standard with one node per entry of
+/// [assessedPerNode]: node i is standard "ค 1.(i+1)" holding that many
+/// assessed indicators plus [unassessedPerNode] not yet assessed.
+Map<String, dynamic> summaryWithNodes(
+  List<int> assessedPerNode, {
+  int unassessedPerNode = 0,
+}) {
+  var id = 100;
+  return {
+    ...summaryJson(),
+    'nodes': [
+      for (final (i, n) in assessedPerNode.indexed)
+        _node('standard', 10 + i, 'มาตรฐาน ${i + 1}', [
+          for (var j = 0; j < n + unassessedPerNode; j++)
+            _indicator(
+              id++,
+              'ค 1.${i + 1} ป.5/${j + 1}',
+              j < n ? 0.4 + 0.05 * j : null,
+              classroom: false,
+            ),
+        ], code: 'ค 1.${i + 1}'),
+    ],
+  };
+}

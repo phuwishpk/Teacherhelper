@@ -36,9 +36,29 @@ enum MasteryAxis {
 }
 
 /// The radar chart needs this many assessed axes; otherwise the chart falls
-/// back to bars (DESIGN §20.4).
+/// back to the assessed indicators as axes, then to bars (DESIGN §20.4).
 const kRadarMinAxes = 3;
 const kRadarMaxAxes = 12;
+
+/// Whether [n] axes fit a radar (3–12).
+bool radarFits(int n) => n >= kRadarMinAxes && n <= kRadarMaxAxes;
+
+/// What the spider chart of a roll-up draws (DESIGN §20.4).
+enum RollupChartMode {
+  /// A radar of the assessed top-level nodes (standards or units).
+  nodes,
+
+  /// A radar of the assessed indicators of every node: fewer than 3
+  /// top-level nodes are assessed, but 3–12 indicators are.
+  indicators,
+
+  /// Bars of every planned node.
+  bars,
+}
+
+/// One indicator axis of the fallback radar, with the node it sits under
+/// (tapping the axis opens that node's drill-down).
+typedef IndicatorAxis = ({RollupNode node, RollupIndicator indicator});
 
 /// "ประเมินแล้ว x/y ตัวชี้วัด" under every chart (DESIGN §20.3).
 String coverageLabel(int assessed, int planned) =>
@@ -243,11 +263,31 @@ class CourseMasterySummary {
   List<RollupNode> get assessedNodes =>
       nodes.where((n) => n.assessed > 0).toList();
 
-  /// 3–12 assessed axes: radar; otherwise a bar chart of every planned node.
-  bool get useRadar {
-    final n = assessedNodes.length;
-    return n >= kRadarMinAxes && n <= kRadarMaxAxes;
+  /// The assessed indicators of every node in node order, each once (an
+  /// indicator planned in two units is counted under the first).
+  List<IndicatorAxis> get assessedIndicators {
+    final seen = <int>{};
+    return [
+      for (final n in nodes)
+        for (final i in n.indicators)
+          if (i.assessed && seen.add(i.skill.id)) (node: n, indicator: i),
+    ];
   }
+
+  /// 3–12 assessed nodes: a radar of them. Fewer than 3 but 3–12 assessed
+  /// indicators: a radar of the indicators. Otherwise a bar chart of every
+  /// planned node (DESIGN §20.4).
+  RollupChartMode get chartMode {
+    final n = assessedNodes.length;
+    if (radarFits(n)) return RollupChartMode.nodes;
+    if (n < kRadarMinAxes && radarFits(assessedIndicators.length)) {
+      return RollupChartMode.indicators;
+    }
+    return RollupChartMode.bars;
+  }
+
+  /// The chart is a radar (of nodes or of indicators).
+  bool get useRadar => chartMode != RollupChartMode.bars;
 
   factory CourseMasterySummary.fromJson(Map<String, dynamic> json) {
     final course = (json['course'] as Map? ?? const {}).cast<String, dynamic>();

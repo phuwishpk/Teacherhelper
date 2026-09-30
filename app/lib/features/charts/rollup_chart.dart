@@ -12,11 +12,18 @@ String nodeShortLabel(RollupNode n) =>
     n.code ??
     (n.type == 'unit' && n.position != null ? 'หน่วย ${n.position}' : n.title);
 
-/// The spider chart of a course roll-up (DESIGN §20.4): a radar of the
-/// nodes with at least one assessed indicator when there are 3–12 of them,
-/// otherwise bars of every planned node (the unassessed ones as faint
-/// placeholders labelled "ยังไม่ประเมิน"). Tapping an axis or a bar calls
-/// [onNode] (the drill-down). Values 0–100%.
+/// The caption under the fallback radar of indicators (DESIGN §20.4).
+const kIndicatorAxesNote =
+    'แสดงรายตัวชี้วัด เพราะมีกลุ่มที่ประเมินแล้วไม่ถึง $kRadarMinAxes กลุ่ม';
+
+/// The spider chart of a course roll-up (DESIGN §20.4), by
+/// [CourseMasterySummary.chartMode]: a radar of the nodes with at least one
+/// assessed indicator when there are 3–12 of them; with fewer than 3, a
+/// radar of the assessed indicators of every node when there are 3–12 of
+/// those (tapping an indicator opens its node); otherwise bars of every
+/// planned node (the unassessed ones as faint placeholders labelled
+/// "ยังไม่ประเมิน"). Tapping an axis or a bar calls [onNode] (the
+/// drill-down). Values 0–100%.
 class RollupChart extends StatelessWidget {
   const RollupChart({super.key, required this.summary, required this.onNode});
 
@@ -30,17 +37,61 @@ class RollupChart extends StatelessWidget {
         message: 'รายวิชานี้ยังไม่มีตัวชี้วัดที่วางแผนไว้',
       );
     }
-    return summary.useRadar
-        ? _Radar(axes: summary.assessedNodes, onNode: onNode)
-        : _Bars(nodes: summary.nodes, onNode: onNode);
+    return switch (summary.chartMode) {
+      RollupChartMode.nodes => RollupRadar(
+        key: const ValueKey('rollup_radar'),
+        axes: [
+          for (final n in summary.assessedNodes)
+            RadarAxis(
+              label: nodeShortLabel(n),
+              value: n.value ?? 0,
+              onTap: () => onNode(n),
+            ),
+        ],
+      ),
+      RollupChartMode.indicators => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RollupRadar(
+            key: const ValueKey('rollup_radar'),
+            axes: [
+              for (final a in summary.assessedIndicators)
+                RadarAxis(
+                  label: twoLineCode(a.indicator.skill.code),
+                  value: a.indicator.value ?? 0,
+                  onTap: () => onNode(a.node),
+                ),
+            ],
+          ),
+          Text(
+            kIndicatorAxesNote,
+            key: const ValueKey('rollup_indicator_axes_note'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      RollupChartMode.bars => _Bars(nodes: summary.nodes, onNode: onNode),
+    };
   }
 }
 
-class _Radar extends StatelessWidget {
-  const _Radar({required this.axes, required this.onNode});
+/// One axis of a [RollupRadar]: its label, its value 0–1 and what a tap
+/// on it does (nothing when null).
+class RadarAxis {
+  const RadarAxis({required this.label, required this.value, this.onTap});
 
-  final List<RollupNode> axes;
-  final ValueChanged<RollupNode> onNode;
+  final String label;
+  final double value;
+  final VoidCallback? onTap;
+}
+
+/// A radar of 3–12 [axes] on a fixed 0–100% scale, each axis titled with
+/// its label and value.
+class RollupRadar extends StatelessWidget {
+  const RollupRadar({super.key, required this.axes, this.height = 300});
+
+  final List<RadarAxis> axes;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -55,10 +106,10 @@ class _Radar extends StatelessWidget {
       entryRadius: 0,
     );
     return ChartViewport(
-      key: const ValueKey('rollup_radar'),
-      height: 300,
+      height: height,
       semanticsLabel: [
-        for (final n in axes) '${nodeShortLabel(n)} ${pct(n.value ?? 0)}',
+        for (final a in axes)
+          '${a.label.replaceAll('\n', ' ')} ${pct(a.value)}',
       ].join(', '),
       child: RadarChart(
         RadarChartData(
@@ -73,15 +124,14 @@ class _Radar extends StatelessWidget {
           radarBorderData: grid,
           titlePositionPercentageOffset: 0.12,
           titleTextStyle: Theme.of(context).textTheme.labelSmall,
-          getTitle: (i, _) => RadarChartTitle(
-            text: '${nodeShortLabel(axes[i])}\n${pct(axes[i].value ?? 0)}',
-          ),
+          getTitle: (i, _) =>
+              RadarChartTitle(text: '${axes[i].label}\n${pct(axes[i].value)}'),
           radarTouchData: RadarTouchData(
             touchSpotThreshold: 24,
             touchCallback: (event, response) {
               final spot = response?.touchedSpot;
               if (event is FlTapUpEvent && spot != null) {
-                onNode(axes[spot.touchedRadarEntryIndex]);
+                axes[spot.touchedRadarEntryIndex].onTap?.call();
               }
             },
           ),
@@ -90,7 +140,7 @@ class _Radar extends StatelessWidget {
             scale(100),
             RadarDataSet(
               dataEntries: [
-                for (final n in axes) RadarEntry(value: (n.value ?? 0) * 100),
+                for (final a in axes) RadarEntry(value: a.value * 100),
               ],
               fillColor: color.withValues(alpha: 0.18),
               borderColor: color,
@@ -259,7 +309,8 @@ class RollupNodeList extends StatelessWidget {
 }
 
 /// The drill-down of one axis (DESIGN §20.4 "แตะแกนเพื่อลงไปดูตัวชี้วัด"):
-/// its indicators with their values. For a student, [onProgress] adds an
+/// a radar of its assessed indicators when there are 3–12, then every
+/// indicator with its value. For a student, [onProgress] adds an
 /// assessed indicator to the progress chart; the sheet pops that skill.
 Future<Skill?> showNodeIndicators(
   BuildContext context,
@@ -290,6 +341,22 @@ Future<Skill?> showNodeIndicators(
           ].join(' · '),
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (radarFits(node.indicators.where((i) => i.assessed).length))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: RollupRadar(
+              key: const ValueKey('node_radar'),
+              height: 260,
+              axes: [
+                for (final i in node.indicators)
+                  if (i.assessed)
+                    RadarAxis(
+                      label: twoLineCode(i.skill.code),
+                      value: i.value!,
+                    ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
         for (final ind in node.indicators)
           _IndicatorRow(
