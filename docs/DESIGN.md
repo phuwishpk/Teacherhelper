@@ -3795,7 +3795,7 @@ CREATE TABLE gradebook_published_grades (
 - ตาราง: คอลัมน์มี `kind` (homework|exam) เพิ่ม ช่องของการบ้านที่ตรวจด้วยแอปมี `submission_id` (ให้แอปเปิดหน้าผล) แถวมี `counted_weight` (น้ำหนักรวมของหมวดที่คนนั้นมีค่า ใช้กับป้าย "คิดจาก x จาก y หมวด") `total_rounded` และ `grade` เป็น `null` เมื่อห้องยังไม่ครบ `missing_categories` เป็นชื่อหมวด ช่องที่ไม่นับยังแสดง `score` ถ้ามี
 - `GET .../export` ของรายวิชาที่ยังไม่ตั้งค่า 409 `gradebook_not_configured` ร/มส แสดงในคอลัมน์เกรดแม้ห้องยังไม่ครบ
 - `GET /student/courses/{id}/grade` ตอบ `{data: {course, classroom_id, published_at, grade, special, total, total_rounded, breakdown}}` ไม่มี `attendance_warning` (คำเตือนสำหรับครู) และไม่มีหมายเหตุของครู
-- FCM: ชนิด `grades_published` ข้อมูล `course_id` ส่งจาก queued listener ของ event `GradesPublished` (ไม่ใช่ job ตามรอบ) ถ้าถอนประกาศก่อน worker ทำงานจะไม่ส่ง
+- FCM: ชนิด `grades_published` ข้อมูล `course_id` ส่งจาก queued listener ของ event `GradesPublished` (ไม่ใช่ job ตามรอบ) ถ้าถอนประกาศก่อน worker ทำงานจะไม่ส่ง แตะแล้วแอปเปิดหน้าเกรดของรายวิชานั้น (`/student/courses/{course_id}/grade`) และโหลดรายการเกรดใหม่ (เพิ่ม 1 ต.ค. 2569)
 
 ### 23.12 ความเป็นส่วนตัวและสิทธิ์
 
