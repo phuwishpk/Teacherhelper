@@ -10,11 +10,13 @@ import '../../core/widgets/content_column.dart';
 import '../courses/classroom_courses_section.dart';
 import '../google_classroom/classroom_google_section.dart';
 import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
+import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import '../scan/offline_cache_repository.dart';
 import '../worksheets/print_flow.dart';
 import 'classroom.dart';
 import 'classrooms_providers.dart';
 import 'classrooms_repository.dart';
+import 'one_time_pins_view.dart';
 
 class ClassroomDetailScreen extends ConsumerWidget {
   const ClassroomDetailScreen({super.key, required this.classroomId});
@@ -84,16 +86,27 @@ class ClassroomDetailScreen extends ConsumerWidget {
                         ),
                       );
                     }
-                    return Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          for (final s in students) ...[
-                            _StudentTile(student: s, classroomId: c.id),
-                            if (s != students.last) const Divider(height: 1),
-                          ],
+                    final pending = students.where((s) => s.pinPending);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (pending.isNotEmpty) ...[
+                          _PendingPinsCard(classroom: c, count: pending.length),
+                          const SizedBox(height: 8),
                         ],
-                      ),
+                        Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              for (final s in students) ...[
+                                _StudentTile(student: s, classroomId: c.id),
+                                if (s != students.last)
+                                  const Divider(height: 1),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -236,6 +249,122 @@ class _ActionsRow extends ConsumerWidget {
   }
 }
 
+/// Students the background roster sync added (DESIGN §19.2): nobody saw
+/// their first PIN, so the teacher issues them here and sees them once.
+class _PendingPinsCard extends ConsumerStatefulWidget {
+  const _PendingPinsCard({required this.classroom, required this.count});
+
+  final Classroom classroom;
+  final int count;
+
+  @override
+  ConsumerState<_PendingPinsCard> createState() => _PendingPinsCardState();
+}
+
+class _PendingPinsCardState extends ConsumerState<_PendingPinsCard> {
+  bool _busy = false;
+
+  Future<void> _issue() async {
+    setState(() => _busy = true);
+    final List<EnrolledStudent> issued;
+    try {
+      issued = await ref
+          .read(classroomsRepositoryProvider)
+          .issuePendingPins(widget.classroom.id);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showMessage(context, apiErrorMessage(e));
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (issued.isNotEmpty) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => PendingPinsPage(
+            classroomName: widget.classroom.name,
+            enrolled: issued,
+          ),
+        ),
+      );
+    }
+    ref.invalidate(teacherAttentionProvider);
+    await ref.read(rosterProvider(widget.classroom.id).notifier).refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      key: const ValueKey('pending_pins_card'),
+      color: theme.colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'นักเรียนใหม่จาก Google Classroom ${widget.count} คนยังไม่ได้รับ PIN',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'ระบบเพิ่มชื่อให้อัตโนมัติตอนซิงก์ กดออก PIN แล้วจดให้นักเรียน '
+              'หรือพิมพ์บัตร QR ของห้อง',
+              style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              key: const ValueKey('issue_pending_pins'),
+              onPressed: _busy ? null : _issue,
+              icon: const Icon(Icons.password),
+              label: const Text('ออก PIN ให้นักเรียนใหม่'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The one-time PINs of [enrolled]; leaving asks first (DESIGN §9.2).
+class PendingPinsPage extends StatelessWidget {
+  const PendingPinsPage({
+    super.key,
+    required this.classroomName,
+    required this.enrolled,
+  });
+
+  final String classroomName;
+  final List<EnrolledStudent> enrolled;
+
+  Future<void> _leave(BuildContext context) async {
+    if (await confirmLeavePins(context) && context.mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave(context);
+      },
+      child: OneTimePinsView(
+        title: 'PIN ใหม่ $classroomName',
+        enrolled: enrolled,
+        onCopy: () => copyPins(context, enrolled),
+        onDone: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+}
+
 class _StudentTile extends ConsumerWidget {
   const _StudentTile({required this.student, required this.classroomId});
 
@@ -276,6 +405,11 @@ class _StudentTile extends ConsumerWidget {
           .read(classroomsRepositoryProvider)
           .resetPin(student.studentId);
       if (!context.mounted) return;
+      if (student.pinPending) {
+        // The reset gave the student their first PIN: the label goes.
+        ref.invalidate(rosterProvider(classroomId));
+        ref.invalidate(teacherAttentionProvider);
+      }
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -318,13 +452,26 @@ class _StudentTile extends ConsumerWidget {
         child: Text('${student.studentNumber}'),
       ),
       title: Text(student.name),
-      subtitle: student.leftCourse
+      subtitle: student.leftCourse || student.pinPending
           ? Align(
               alignment: AlignmentDirectional.centerStart,
-              child: StatusChip(
-                key: ValueKey('left_course_${student.studentId}'),
-                label: leftCourseLabel,
-                color: Theme.of(context).colorScheme.tertiary,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (student.leftCourse)
+                    StatusChip(
+                      key: ValueKey('left_course_${student.studentId}'),
+                      label: leftCourseLabel,
+                      color: Theme.of(context).colorScheme.tertiary,
+                    ),
+                  if (student.pinPending)
+                    StatusChip(
+                      key: ValueKey('pin_pending_${student.studentId}'),
+                      label: 'ยังไม่ได้รับ PIN',
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                ],
               ),
             )
           : null,

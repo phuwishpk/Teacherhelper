@@ -80,6 +80,7 @@ class DashboardPage extends ConsumerWidget {
             const SizedBox(height: 12),
             TeacherAttentionCard(
               onOpen: (target) => onNavigate(switch (target) {
+                AttentionTarget.classrooms => 1,
                 AttentionTarget.assignments => 2,
                 AttentionTarget.review => 3,
               }),

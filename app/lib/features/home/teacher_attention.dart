@@ -15,6 +15,7 @@ class TeacherAttention {
     this.gradeFailed = 0,
     this.feedbackFailed = 0,
     this.regradePending = 0,
+    this.pinsPending = 0,
     this.needsReconnect = false,
   });
 
@@ -35,6 +36,10 @@ class TeacherAttention {
   /// New hand-ins waiting for the teacher's "ตรวจ".
   final int regradePending;
 
+  /// Students the background roster sync added whose PIN nobody has seen
+  /// (DESIGN §19.2).
+  final int pinsPending;
+
   /// The teacher's Google account must be connected again.
   final bool needsReconnect;
 
@@ -44,6 +49,7 @@ class TeacherAttention {
       gradeFailed == 0 &&
       feedbackFailed == 0 &&
       regradePending == 0 &&
+      pinsPending == 0 &&
       !needsReconnect;
 
   factory TeacherAttention.fromJson(Map<String, dynamic> json) {
@@ -54,6 +60,7 @@ class TeacherAttention {
       gradeFailed: count('grade_failed'),
       feedbackFailed: count('feedback_failed'),
       regradePending: count('regrade_pending'),
+      pinsPending: count('pins_pending'),
       needsReconnect: json['needs_reconnect'] == true,
     );
   }
@@ -95,12 +102,12 @@ final teacherAttentionProvider = FutureProvider.autoDispose<TeacherAttention>((
 });
 
 /// Where a line of the card leads.
-enum AttentionTarget { assignments, review }
+enum AttentionTarget { classrooms, assignments, review }
 
 /// "รอดำเนินการ" on the teacher home (DESIGN §19.11): keys to approve,
 /// grades that differ from Classroom, grades or announcements that failed,
-/// and new hand-ins waiting for "ตรวจ". Each line opens the tab that holds
-/// it ([onOpen]).
+/// new hand-ins waiting for "ตรวจ" and new students without a PIN. Each
+/// line opens the tab that holds it ([onOpen]).
 class TeacherAttentionCard extends ConsumerWidget {
   const TeacherAttentionCard({super.key, required this.onOpen});
 
@@ -157,6 +164,15 @@ class TeacherAttentionCard extends ConsumerWidget {
                 icon: Icons.upload_file_outlined,
                 text: 'งานส่งใหม่รอกดตรวจ ${a.regradePending} งาน',
                 target: AttentionTarget.review,
+              ),
+            if (a.pinsPending > 0)
+              _Line(
+                key: 'attention_pins',
+                icon: Icons.password,
+                text: 'นักเรียนใหม่ยังไม่ได้รับ PIN ${a.pinsPending} คน',
+                detail:
+                    'ซิงก์จาก Google Classroom อัตโนมัติ เปิดห้องเรียนแล้วกด "ออก PIN ให้นักเรียนใหม่"',
+                target: AttentionTarget.classrooms,
               ),
           ];
 

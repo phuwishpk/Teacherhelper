@@ -98,11 +98,16 @@ class RosterStudent {
     required this.studentNumber,
     required this.name,
     this.leftCourseAt,
+    this.pinPending = false,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// Added by the background roster sync (DESIGN §19.2): nobody has seen
+  /// the student's first PIN yet, shown as "ยังไม่ได้รับ PIN".
+  final bool pinPending;
 
   /// When the student's Google account left the linked course (DESIGN
   /// §19.2): the student stays, shown as "ไม่อยู่ใน Classroom แล้ว".
@@ -118,6 +123,7 @@ class RosterStudent {
       String s => DateTime.tryParse(s),
       _ => null,
     },
+    pinPending: json['pin_pending'] == true,
   );
 }
 

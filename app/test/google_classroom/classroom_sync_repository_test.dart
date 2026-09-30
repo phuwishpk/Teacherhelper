@@ -172,6 +172,7 @@ void main() {
           'grade_conflicts': 3,
           'grade_failed': 1,
           'regrade_pending': 4,
+          'pins_pending': 3,
           'needs_reconnect': true,
         },
       }),
@@ -183,6 +184,7 @@ void main() {
     expect(a.gradeFailed, 1);
     expect(a.feedbackFailed, 0);
     expect(a.regradePending, 4);
+    expect(a.pinsPending, 3);
     expect(a.needsReconnect, isTrue);
     expect(a.isEmpty, isFalse);
     expect(const TeacherAttention().isEmpty, isTrue);

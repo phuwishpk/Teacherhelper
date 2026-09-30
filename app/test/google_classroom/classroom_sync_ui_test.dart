@@ -707,9 +707,11 @@ void main() {
           gradeConflicts: 1,
           gradeFailed: 3,
           regradePending: 4,
+          pinsPending: 2,
         ),
       );
       expect(find.text('เฉลยรออนุมัติ 2 งาน'), findsOneWidget);
+      expect(find.text('นักเรียนใหม่ยังไม่ได้รับ PIN 2 คน'), findsOneWidget);
       expect(find.text('คะแนนไม่ตรงกับ Classroom 1 รายการ'), findsOneWidget);
       expect(
         find.text('ส่งคะแนนกลับ Classroom ไม่สำเร็จ 3 คน'),
@@ -723,7 +725,8 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('attention_keys')));
       await tester.tap(find.byKey(const ValueKey('attention_regrade')));
-      expect(tabs, [2, 3]);
+      await tester.tap(find.byKey(const ValueKey('attention_pins')));
+      expect(tabs, [2, 3, 1]);
     });
 
     testWidgets('nothing waiting', (tester) async {

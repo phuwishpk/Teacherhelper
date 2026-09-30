@@ -9,7 +9,8 @@ import 'google_models.dart';
 const leftCourseLabel = 'ไม่อยู่ใน Classroom แล้ว';
 
 /// Tells the teacher what "ซิงก์รายชื่อ" changed. New students' PINs are
-/// shown once, so the dialog then closes only through its buttons.
+/// shown once, so the dialog then closes only through its buttons, and the
+/// Android back button asks first (like the import screen).
 Future<void> showRosterSyncResult(
   BuildContext context,
   RosterSyncResult result,
@@ -53,7 +54,7 @@ class RosterSyncResultDialog extends StatelessWidget {
       ),
     );
 
-    return AlertDialog(
+    final dialog = AlertDialog(
       title: const Text('ซิงก์รายชื่อแล้ว'),
       content: SizedBox(
         width: 420,
@@ -117,6 +118,17 @@ class RosterSyncResultDialog extends StatelessWidget {
             child: const Text('ปิด'),
           ),
       ],
+    );
+    if (added.isEmpty) return dialog;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (await confirmLeavePins(context) && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: dialog,
     );
   }
 }

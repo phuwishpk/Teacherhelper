@@ -472,6 +472,13 @@ void main() {
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
       expect(find.text('771100'), findsOneWidget);
+      // Nor does the Android back button without asking.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('ออกจากหน้านี้?'), findsOneWidget);
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(find.text('771100'), findsOneWidget);
       await tester.tap(find.text('จด PIN แล้ว'));
       await tester.pumpAndSettle();
 
