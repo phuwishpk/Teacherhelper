@@ -363,12 +363,20 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     if (!_supported) {
       return Scaffold(
         appBar: AppBar(title: const Text('สแกนใบงาน'), actions: [queueButton]),
-        body: const EmptyView(
+        body: EmptyView(
           icon: Icons.document_scanner_outlined,
           title: 'สแกนใบงานได้เฉพาะในแอป Android',
           message:
               'การหา marker, อ่าน QR และตัดภาพทำบนโทรศัพท์ Android '
-              'เปิดหน้านี้ในแอปบนมือถือหรือแท็บเล็ตของครู',
+              'บนเครื่องนี้ส่งรูปหรือ PDF ของงานให้ตรวจแทนได้ '
+              'โดยเลือกวิชา การบ้าน และนักเรียนเอง',
+          // The whole-page path works everywhere, the web included (§19.6).
+          action: FilledButton.icon(
+            key: const ValueKey('scan_teacher_upload'),
+            onPressed: () => context.push(AppRoutes.teacherUpload),
+            icon: const Icon(Icons.upload_file),
+            label: const Text('อัปโหลดรูปเพื่อตรวจ'),
+          ),
         ),
       );
     }

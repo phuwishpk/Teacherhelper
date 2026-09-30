@@ -195,7 +195,7 @@ void main() {
         GoRoute(
           path: '/hand-ins/upload',
           builder: (_, state) => Text(
-            'upload ${(state.extra! as TeacherUploadArgs).files.map((f) => f.name).join(',')}',
+            'upload ${(state.extra as TeacherUploadArgs?)?.files.map((f) => f.name).join(',') ?? ''}',
           ),
         ),
       ],
@@ -449,6 +449,11 @@ void main() {
     expect(find.text('สแกนใบงานได้เฉพาะในแอป Android'), findsOneWidget);
     expect(processor.needsLayoutRuns, 0);
     expect(camera.shots, 0);
+
+    // The whole-page upload is the way on from here (§19.6).
+    await tester.tap(find.byKey(const ValueKey('scan_teacher_upload')));
+    await tester.pumpAndSettle();
+    expect(find.text('upload '), findsOneWidget);
     await unmountScreen(tester);
   });
 }
