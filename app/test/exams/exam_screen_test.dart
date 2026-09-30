@@ -190,6 +190,12 @@ void main() {
     expect(find.byKey(const ValueKey('exam_approve_key')), findsNothing);
     expect(find.text('เต็ม 30 คะแนน'), findsOneWidget);
     expect(find.text('ตารางเฉลย (ไม่บังคับ)'), findsOneWidget);
+    // Ready from creation, yet deletable until printed or scored.
+    await tester.tap(find.byTooltip('ลบข้อสอบ'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('ยังไม่กรอกคะแนน'), findsOneWidget);
+    await tester.tap(find.text('ยกเลิก'));
+    await tester.pumpAndSettle();
 
     // "กรอกคะแนน" opens the exam's column of the gradebook (§23.9).
     await tapVisible(tester, find.byKey(const ValueKey('exam_open_gradebook')));

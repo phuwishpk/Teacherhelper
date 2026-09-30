@@ -148,8 +148,9 @@ class ExamScreen extends ConsumerWidget {
     final ok = await confirm(
       context,
       title: 'ลบข้อสอบ "${d.exam.title}"?',
-      message:
-          'ลบได้เฉพาะข้อสอบที่ยังเป็นร่างและยังไม่พิมพ์ ตอน ข้อ และภาพจะถูกลบด้วย',
+      message: d.isManual
+          ? 'ลบได้เมื่อยังไม่พิมพ์และยังไม่กรอกคะแนน ตอน ข้อ และภาพจะถูกลบด้วย'
+          : 'ลบได้เฉพาะข้อสอบที่ยังเป็นร่างและยังไม่พิมพ์ ตอน ข้อ และภาพจะถูกลบด้วย',
       confirmLabel: 'ลบ',
       destructive: true,
     );
@@ -178,7 +179,9 @@ class ExamScreen extends ConsumerWidget {
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => context.push(AppRoutes.examEdit(examId)),
             ),
-            if (d.exam.isDraft && !d.structureLocked)
+            // A manual exam is `ready` from creation (DESIGN §22.1).
+            if ((d.exam.isDraft || (d.isManual && d.exam.status == 'ready')) &&
+                !d.structureLocked)
               IconButton(
                 tooltip: 'ลบข้อสอบ',
                 icon: const Icon(Icons.delete_outline),
