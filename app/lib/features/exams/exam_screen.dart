@@ -9,6 +9,8 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_page.dart';
 import '../assignments/assignments_providers.dart';
+import '../assignments/indicator_mapping.dart';
+import '../assignments/indicator_mapping_screen.dart';
 import 'exam_import_flow.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
@@ -301,8 +303,39 @@ class ExamScreen extends ConsumerWidget {
                         icon: const Icon(Icons.campaign_outlined),
                         label: const Text('ตรวจทานและประกาศผล'),
                       ),
+                    // Option analysis and p / r of published results (§22.13).
+                    if (!d.isManual && d.keyApproved)
+                      FilledButton.tonalIcon(
+                        key: const ValueKey('exam_open_analytics'),
+                        onPressed: () =>
+                            context.push(AppRoutes.assignmentAnalytics(examId)),
+                        icon: const Icon(Icons.analytics_outlined),
+                        label: const Text('วิเคราะห์ผล'),
+                      ),
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('exam_open_indicators'),
+                      onPressed: d.questionCount == 0
+                          ? null
+                          : () => context.push(
+                              AppRoutes.indicatorMapping(examId),
+                            ),
+                      icon: const Icon(Icons.account_tree_outlined),
+                      label: const Text('จับคู่ตัวชี้วัด'),
+                    ),
                   ],
                 ),
+                // Manual exams have no per-question results, so no warning.
+                if (d.isManual ? null : unmappedWarningText(d.unmappedCount)
+                    case final warning?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: UnmappedWarning(
+                      key: const ValueKey('exam_unmapped'),
+                      text: warning,
+                      onTap: () =>
+                          context.push(AppRoutes.indicatorMapping(examId)),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 if (d.sections.isEmpty)
                   const EmptyView(

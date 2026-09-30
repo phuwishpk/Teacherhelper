@@ -42,8 +42,11 @@ class ProgressPoint {
   final double value;
   final double scoreRatio;
 
-  /// `homework` or `practice`.
+  /// `homework`, `exam` (a published exam answer, DESIGN §22.13) or
+  /// `practice`.
   final String source;
+
+  bool get fromExam => source == 'exam';
 
   factory ProgressPoint.fromJson(Map<String, dynamic> json) {
     final at = DateTime.tryParse(json['observed_at'] as String? ?? '');

@@ -172,6 +172,7 @@ Map<String, dynamic> questionJson({
   bool locked = false,
   bool image = false,
   double points = 1,
+  List<int> skillIds = const [],
 }) => {
   'id': id,
   'assignment_id': 40,
@@ -197,7 +198,7 @@ Map<String, dynamic> questionJson({
   'blank': blank,
   'lock_options': locked,
   'lock_options_suggested': suggested,
-  'skill_ids': [],
+  'skill_ids': skillIds,
   'key_complete': key != null,
   'has_prompt': prompt.isNotEmpty || image,
   'updated_at': '2026-09-30T10:00:00+00:00',

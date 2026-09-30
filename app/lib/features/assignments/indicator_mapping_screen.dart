@@ -14,7 +14,8 @@ import 'question.dart';
 import 'skills_picker.dart';
 
 /// "จับคู่ข้อกับตัวชี้วัด" (DESIGN §20.3): every question with its
-/// indicators and what Gemini suggests from the linked lesson plan. The
+/// indicators and what Gemini suggests from the linked lesson plan (or, for
+/// an exam without a plan, from its course's indicators, §22.13). The
 /// teacher accepts, removes or picks indicators, then saves the changed
 /// questions (`PUT …/indicator-mapping`). Questions left without an
 /// indicator are a warning only: their scores are not counted in the charts.
@@ -85,7 +86,9 @@ class _IndicatorMappingScreenState
     final choice = await showGuidanceDialog(
       context,
       title: 'ให้ AI เสนอตัวชี้วัด',
-      message: 'AI เลือกได้เฉพาะตัวชี้วัดของแผนนี้ เพิ่มคำแนะนำได้ถ้าต้องการ',
+      message:
+          'AI เลือกได้เฉพาะตัวชี้วัด${data.fromCourse ? 'ของรายวิชานี้' : 'ของแผนนี้'} '
+          'เพิ่มคำแนะนำได้ถ้าต้องการ',
       hintText: kGuidanceHintIndicators,
       initial: data.state.guidance,
     );
@@ -174,6 +177,7 @@ class _IndicatorMappingScreenState
     }
     final data = value.value;
     final dirty = data != null && _changedQuestions(data).isNotEmpty;
+    final isExam = assignment?.isExam ?? false;
 
     return PopScope(
       canPop: !dirty,
@@ -201,6 +205,7 @@ class _IndicatorMappingScreenState
                 children: [
                   _PlanCard(
                     data: data,
+                    isExam: isExam,
                     requesting: _requesting,
                     onRequest: () => _request(data),
                     onAcceptAll: () => _acceptAll(data),
@@ -219,11 +224,13 @@ class _IndicatorMappingScreenState
                   ],
                   const SizedBox(height: 8),
                   if (data.questions.isEmpty)
-                    const Card(
+                    Card(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
+                        padding: const EdgeInsets.all(24),
                         child: Text(
-                          'การบ้านนี้ยังไม่มีข้อ',
+                          isExam
+                              ? 'ข้อสอบนี้ยังไม่มีข้อ'
+                              : 'การบ้านนี้ยังไม่มีข้อ',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -282,22 +289,34 @@ class UnmappedWarning extends StatelessWidget {
 class _PlanCard extends StatelessWidget {
   const _PlanCard({
     required this.data,
+    required this.isExam,
     required this.requesting,
     required this.onRequest,
     required this.onAcceptAll,
   });
 
   final IndicatorSuggestions data;
+  final bool isExam;
   final bool requesting;
   final VoidCallback onRequest;
   final VoidCallback onAcceptAll;
 
+  String get _title {
+    final plan = data.lessonPlan;
+    if (plan != null) return 'แผน: ${plan.title}';
+    if (data.fromCourse) {
+      final label = data.course?.label ?? '';
+      return label.isEmpty ? 'ตัวชี้วัดของรายวิชา' : 'รายวิชา: $label';
+    }
+    return isExam ? 'ยังไม่ผูกรายวิชาหรือแผนการสอน' : 'ยังไม่ผูกแผนการสอน';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final plan = data.lessonPlan;
     final state = data.state;
     final busy = requesting || state.queued;
+    final course = data.fromCourse;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -305,23 +324,33 @@ class _PlanCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              plan == null ? 'ยังไม่ผูกแผนการสอน' : 'แผน: ${plan.title}',
+              _title,
+              key: const ValueKey('mapping_scope_title'),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            if (plan == null)
-              const Text(
-                'เลือกตัวชี้วัดของแต่ละข้อเองได้เลย หรือเลือกแผนการสอนที่หน้าแก้ไขการบ้าน '
-                'แล้วให้ AI เสนอตัวชี้วัดจากแผนนั้น',
+            if (!data.hasScope)
+              Text(
+                isExam
+                    ? 'เลือกตัวชี้วัดของแต่ละข้อเองได้เลย หรือเลือกรายวิชาหรือแผนการสอน'
+                          'ที่หน้าตั้งค่าข้อสอบ แล้วให้ AI เสนอตัวชี้วัด'
+                    : 'เลือกตัวชี้วัดของแต่ละข้อเองได้เลย หรือเลือกแผนการสอนที่หน้าแก้ไขการบ้าน '
+                          'แล้วให้ AI เสนอตัวชี้วัดจากแผนนั้น',
               )
             else if (data.planIndicators.isEmpty)
-              const Text(
-                'แผนนี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของแผนที่หน้ารายวิชาก่อน '
-                'จึงให้ AI เสนอได้',
+              Text(
+                course
+                    ? 'รายวิชานี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของรายวิชา หน่วย '
+                          'หรือแผนการสอนที่หน้ารายวิชาก่อน จึงให้ AI เสนอได้'
+                    : 'แผนนี้ยังไม่มีตัวชี้วัด เพิ่มตัวชี้วัดของแผนที่หน้ารายวิชาก่อน '
+                          'จึงให้ AI เสนอได้',
               )
             else ...[
               Text(
-                'AI เลือกได้เฉพาะตัวชี้วัดของแผนนี้',
+                course
+                    ? 'ข้อสอบนี้ไม่ผูกแผน AI เลือกได้จากตัวชี้วัดทั้งรายวิชา '
+                          '(ของรายวิชา หน่วย และทุกแผน)'
+                    : 'AI เลือกได้เฉพาะตัวชี้วัดของแผนนี้',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 6),
@@ -348,7 +377,8 @@ class _PlanCard extends StatelessWidget {
                 [
                   'AI เสนอตัวชี้วัดให้ ${state.suggestedQuestionCount ?? 0} ข้อ',
                   if ((state.droppedCodeCount ?? 0) > 0)
-                    'ตัดรหัสที่ไม่อยู่ในแผนออก ${state.droppedCodeCount} รหัส',
+                    'ตัดรหัสที่ไม่อยู่ใน${course ? 'รายวิชา' : 'แผน'}ออก '
+                        '${state.droppedCodeCount} รหัส',
                 ].join(' · '),
                 key: const ValueKey('mapping_done'),
               ),
@@ -358,7 +388,7 @@ class _PlanCard extends StatelessWidget {
               const SizedBox(height: 6),
               GuidanceUsedNote(guidance: state.guidance!),
             ],
-            if (plan != null) ...[
+            if (data.hasScope) ...[
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -424,8 +454,8 @@ class _QuestionCard extends StatelessWidget {
               children: [
                 CircleAvatar(radius: 14, child: Text('${q.position}')),
                 const SizedBox(width: 8),
-                if (q.type != null)
-                  Text(q.type!.label, style: theme.textTheme.labelMedium),
+                if (q.typeLabel case final label?)
+                  Text(label, style: theme.textTheme.labelMedium),
                 const Spacer(),
                 if (changed)
                   StatusChip(

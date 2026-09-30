@@ -374,4 +374,19 @@ void main() {
     expect(ExamIncomplete.reasonLabel('no_prompt'), 'ยังไม่มีโจทย์');
     expect(ExamGradingMethod.fromApi(null), ExamGradingMethod.app);
   });
+
+  test('ExamQuestion reads skill_ids; the detail counts unmapped', () {
+    final q = ExamQuestion.fromJson(
+      questionJson(id: 11, sectionId: 1, position: 1, skillIds: const [5, 6]),
+    );
+    expect(q.skillIds, [5, 6]);
+    expect(ExamDetail.fromJson(examJson()).unmappedCount, 4);
+    expect(
+      ExamQuestion.fromJson({
+        'id': 1,
+        'skill_ids': ['x', 2],
+      }).skillIds,
+      [2],
+    );
+  });
 }

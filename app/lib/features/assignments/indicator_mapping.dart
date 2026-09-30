@@ -7,6 +7,8 @@ import '../../core/api/api_client.dart';
 import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
+import '../exams/exam_providers.dart';
+import '../review/review_labels.dart';
 import 'assignments_providers.dart';
 import 'question.dart';
 
@@ -52,7 +54,8 @@ class SuggestState {
   final DateTime? requestedAt;
   final DateTime? finishedAt;
 
-  /// `ai_failed`, `ai_key_invalid`, `ai_key_missing` or `lesson_plan_required`.
+  /// `ai_failed`, `ai_key_invalid`, `ai_key_missing` or `lesson_plan_required`
+  /// (also when an exam lost its plan's or course's indicators).
   final String? errorCode;
   final String? errorMessage;
 
@@ -109,18 +112,28 @@ class QuestionIndicators {
     required this.position,
     required this.promptText,
     this.type,
+    this.apiType,
     this.skills = const [],
     this.suggestions = const [],
   });
 
   final int questionId;
   final int position;
+
+  /// The homework type; null for an exam's `true_false` / `numeric`.
   final QuestionType? type;
+
+  /// The server's `type`, exam types included.
+  final String? apiType;
   final String promptText;
   final List<Skill> skills;
   final List<IndicatorSuggestion> suggestions;
 
   bool get unmapped => skills.isEmpty;
+
+  /// "ปรนัย", "ถูก/ผิด", "เติมตัวเลข", "แสดงวิธีทำ", …; null when unknown.
+  String? get typeLabel =>
+      type?.label ?? (apiType == null ? null : questionTypeLabel(apiType!));
 
   factory QuestionIndicators.fromJson(Map<String, dynamic> json) =>
       QuestionIndicators(
@@ -129,6 +142,7 @@ class QuestionIndicators {
         type: QuestionType.values
             .where((t) => t.apiValue == json['type'])
             .firstOrNull,
+        apiType: json['type'] as String?,
         promptText: json['prompt_text'] as String? ?? '',
         skills: [
           for (final s in (json['skills'] as List?) ?? const [])
@@ -151,12 +165,43 @@ class LinkedPlan {
   final int? unitId;
 }
 
+/// The course whose indicators an exam without a plan picks from
+/// (`{id, code, name}`, DESIGN §22.13).
+class LinkedCourse {
+  const LinkedCourse({required this.id, this.code = '', this.name = ''});
+
+  final int id;
+  final String code;
+  final String name;
+
+  String get label => [code, name].where((s) => s.isNotEmpty).join(' ');
+}
+
+/// Where [IndicatorSuggestions.planIndicators] come from (§22.13).
+enum IndicatorSource {
+  /// The linked lesson plan (homework or exam).
+  lessonPlan,
+
+  /// The whole course of an exam not linked to a plan.
+  course;
+
+  static IndicatorSource? fromApi(Object? value) => switch (value) {
+    'lesson_plan' => lessonPlan,
+    'course' => course,
+    _ => null,
+  };
+}
+
 /// `GET /assignments/{id}/indicator-suggestions` (DESIGN §20.3, §20.7), also
 /// the answer of `PUT …/indicator-mapping` (+ `changed_question_count`).
+/// For an exam without a plan the list comes from its course
+/// (`indicator_source = course`, §22.13).
 class IndicatorSuggestions {
   const IndicatorSuggestions({
     required this.assignmentId,
     this.lessonPlan,
+    this.indicatorSource,
+    this.course,
     this.planIndicators = const [],
     this.state = const SuggestState(),
     this.questions = const [],
@@ -168,7 +213,15 @@ class IndicatorSuggestions {
   final int assignmentId;
   final LinkedPlan? lessonPlan;
 
-  /// The plan's indicators: the only ones Gemini may suggest.
+  /// Null when there is nothing to pick from (homework without a plan, an
+  /// exam without a plan or course).
+  final IndicatorSource? indicatorSource;
+
+  /// The exam's course when [indicatorSource] is [IndicatorSource.course].
+  final LinkedCourse? course;
+
+  /// The plan's (or the exam's course's) indicators: the only ones Gemini
+  /// may suggest.
   final List<Skill> planIndicators;
   final SuggestState state;
   final List<QuestionIndicators> questions;
@@ -176,16 +229,24 @@ class IndicatorSuggestions {
   final String? unmappedWarning;
   final int? changedQuestionCount;
 
-  /// "ให้ AI เสนอ" needs a plan with indicators (422 `lesson_plan_required`
-  /// / `lesson_plan_no_indicators`) and at least one question.
+  /// A plan, or an exam's course, to pick from.
+  bool get hasScope => indicatorSource != null || lessonPlan != null;
+
+  bool get fromCourse => indicatorSource == IndicatorSource.course;
+
+  /// "ให้ AI เสนอ" needs a plan (or an exam's course) with indicators (422
+  /// `lesson_plan_required` / `lesson_plan_no_indicators`) and at least one
+  /// question.
   bool get canSuggest =>
-      lessonPlan != null && planIndicators.isNotEmpty && questions.isNotEmpty;
+      hasScope && planIndicators.isNotEmpty && questions.isNotEmpty;
 
   bool get hasSuggestions => questions.any((q) => q.suggestions.isNotEmpty);
 
   IndicatorSuggestions withState(SuggestState next) => IndicatorSuggestions(
     assignmentId: assignmentId,
     lessonPlan: lessonPlan,
+    indicatorSource: indicatorSource,
+    course: course,
     planIndicators: planIndicators,
     state: next,
     questions: questions,
@@ -195,6 +256,7 @@ class IndicatorSuggestions {
 
   factory IndicatorSuggestions.fromJson(Map<String, dynamic> json) {
     final plan = json['lesson_plan'];
+    final course = json['course'];
     final questions = [
       for (final q in (json['questions'] as List?) ?? const [])
         if (q is Map) QuestionIndicators.fromJson(q.cast<String, dynamic>()),
@@ -209,6 +271,14 @@ class IndicatorSuggestions {
               id: (plan['id'] as num).toInt(),
               title: plan['title'] as String? ?? '',
               unitId: (plan['unit_id'] as num?)?.toInt(),
+            )
+          : null,
+      indicatorSource: IndicatorSource.fromApi(json['indicator_source']),
+      course: course is Map && course['id'] is num
+          ? LinkedCourse(
+              id: (course['id'] as num).toInt(),
+              code: course['code'] as String? ?? '',
+              name: course['name'] as String? ?? '',
             )
           : null,
       planIndicators: [
@@ -350,6 +420,8 @@ class IndicatorSuggestionsNotifier extends AsyncNotifier<IndicatorSuggestions> {
     state = AsyncData(saved);
     _pollIfQueued(saved);
     ref.invalidate(assignmentDetailProvider(assignmentId));
+    // An exam's page counts its unmapped questions from GET /exams/{id}.
+    ref.invalidate(examDetailProvider(assignmentId));
     return saved;
   }
 

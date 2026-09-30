@@ -174,7 +174,7 @@ Map<String, dynamic> progressJson({
               'date': '2026-09-05',
               'value': 0.3,
               'score_ratio': 0.3,
-              'source': 'homework',
+              'source': 'exam',
             },
           ],
         },

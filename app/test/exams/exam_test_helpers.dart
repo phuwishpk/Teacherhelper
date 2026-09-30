@@ -23,6 +23,8 @@ final examStubRoutes = [
   stubRoute('/exams/:id/read-review', 'read-review'),
   stubRoute('/exams/:id/copy-questions', 'copy-questions'),
   stubRoute('/courses/:id/gradebook', 'gradebook'),
+  stubRoute('/assignments/:id/analytics', 'analytics'),
+  stubRoute('/assignments/:id/indicators', 'indicators'),
 ];
 
 /// Pumps [screen] with [repo] behind `examsRepositoryProvider` on a tall
@@ -35,7 +37,7 @@ Future<FakeExamsRepository> pumpExamScreen(
   List<Override> overrides = const [],
   bool stubs = true,
 }) async {
-  tester.view.physicalSize = const Size(1080, 3000);
+  tester.view.physicalSize = const Size(1080, 3600);
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
   final r = repo ?? FakeExamsRepository();

@@ -362,6 +362,7 @@ class ExamQuestion {
     this.updatedAt,
     this.figureSource,
     this.figurePending = false,
+    this.skillIds = const [],
   });
 
   final int id;
@@ -392,6 +393,9 @@ class ExamQuestion {
 
   /// Where the prompt picture was cropped from the exam file (§22.4).
   final FigureSource? figureSource;
+
+  /// Indicators confirmed for this question (`question_skill`, §22.13).
+  final List<int> skillIds;
 
   /// The prompt figure waits for its page image.
   final bool figurePending;
@@ -432,6 +436,10 @@ class ExamQuestion {
       updatedAt: json['updated_at'] as String?,
       figureSource: FigureSource.maybe(json['figure_source']),
       figurePending: json['figure_pending'] == true,
+      skillIds: [
+        for (final id in (json['skill_ids'] as List?) ?? const [])
+          if (id is num) id.toInt(),
+      ],
     );
   }
 }
@@ -625,6 +633,10 @@ class ExamDetail {
   ];
 
   int get questionCount => sections.fold(0, (n, s) => n + s.questions.length);
+
+  /// Questions without an indicator: their results are not counted in the
+  /// charts (§20.3, a warning only).
+  int get unmappedCount => questions.where((q) => q.skillIds.isEmpty).length;
 
   double get totalPoints => questions.fold(0.0, (sum, q) => sum + q.maxPoints);
 

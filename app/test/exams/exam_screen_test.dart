@@ -304,4 +304,104 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('"วิเคราะห์ผล" opens once the key is approved; mapping always', (
+    tester,
+  ) async {
+    await pumpExamScreen(tester, const ExamScreen(examId: 40));
+    expect(find.byKey(const ValueKey('exam_open_analytics')), findsNothing);
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('exam_open_indicators')),
+    );
+    expect(find.text('indicators /assignments/40/indicators'), findsOneWidget);
+    await unmountScreen(tester);
+
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(
+        detail: examJson(
+          status: 'ready',
+          keyApprovedAt: '2026-10-01T02:00:00Z',
+          keyComplete: true,
+        ),
+      ),
+    );
+    await tapVisible(tester, find.byKey(const ValueKey('exam_open_analytics')));
+    expect(find.text('analytics /assignments/40/analytics'), findsOneWidget);
+  });
+
+  testWidgets('warns about questions without an indicator (§20.3)', (
+    tester,
+  ) async {
+    final base = examJson();
+    final sections = [
+      for (final s in (base['sections'] as List).cast<Map<String, dynamic>>())
+        {
+          ...s,
+          'questions': [
+            for (final q
+                in (s['questions'] as List).cast<Map<String, dynamic>>())
+              {
+                ...q,
+                'skill_ids': q['id'] == 11 ? [5] : <int>[],
+              },
+          ],
+        },
+    ];
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(detail: examJson(sections: sections)),
+    );
+    expect(
+      find.text('มี 3 ข้อยังไม่ผูกตัวชี้วัด คะแนนข้อเหล่านี้จะไม่นับในกราฟ'),
+      findsOneWidget,
+    );
+    await tapVisible(tester, find.byKey(const ValueKey('exam_unmapped')));
+    expect(find.text('indicators /assignments/40/indicators'), findsOneWidget);
+  });
+
+  testWidgets('no unmapped warning on a manual exam or when all are mapped', (
+    tester,
+  ) async {
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(detail: examJson(method: 'manual')),
+    );
+    expect(find.byKey(const ValueKey('exam_unmapped')), findsNothing);
+    expect(find.byKey(const ValueKey('exam_open_analytics')), findsNothing);
+    expect(find.byKey(const ValueKey('exam_open_indicators')), findsOneWidget);
+    await unmountScreen(tester);
+
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(
+        detail: examJson(
+          sections: [
+            {
+              ...(examJson()['sections'] as List).first as Map<String, dynamic>,
+              'questions': [
+                questionJson(
+                  id: 11,
+                  sectionId: 1,
+                  position: 1,
+                  prompt: '2 + 2',
+                  options: ['2', '3', '4', '5'],
+                  key: {
+                    'accepted_options': [3],
+                  },
+                  skillIds: const [5],
+                ),
+              ],
+            },
+          ],
+        ),
+      ),
+    );
+    expect(find.byKey(const ValueKey('exam_unmapped')), findsNothing);
+  });
 }
