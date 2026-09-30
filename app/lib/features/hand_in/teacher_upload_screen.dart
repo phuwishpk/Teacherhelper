@@ -11,6 +11,7 @@ import '../assignments/assignment.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import '../review/review_repository.dart';
 import 'hand_in_files.dart';
 import 'hand_in_models.dart';
@@ -151,6 +152,11 @@ class _TeacherUploadScreenState extends ConsumerState<TeacherUploadScreen> {
           .read(reviewRepositoryProvider)
           .gradeSubmission(result.submissionId);
       if (!mounted) return;
+      // The student's row is no longer "waiting for ตรวจ" (regrade_pending).
+      if (_assignment case final a?) ref.invalidate(handedInProvider(a.id));
+      ref
+        ..invalidate(assignmentsProvider)
+        ..invalidate(teacherAttentionProvider);
       setState(
         () => _result = TeacherUploadResult(
           submissionId: result.submissionId,

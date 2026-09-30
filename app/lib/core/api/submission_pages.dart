@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
@@ -76,12 +77,17 @@ abstract class PageFileOpener {
 }
 
 class LocalPageFileOpener implements PageFileOpener {
+  /// The Chrome preview runner has no files or other apps to hand to.
+  static const webUnsupported =
+      'บนเบราว์เซอร์ไม่มีแอปอื่นให้เปิดไฟล์นี้ ดูไฟล์ในแอปบนมือถือ Android';
+
   @override
   Future<String?> open(
     Uint8List bytes, {
     required String fileName,
     String? mimeType,
   }) async {
+    if (kIsWeb) return webUnsupported;
     final dir = await getTemporaryDirectory();
     final target = p.join(dir.path, 'pages', fileName);
     await Directory(p.dirname(target)).create(recursive: true);

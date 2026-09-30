@@ -61,9 +61,13 @@ class _Assignments extends Fake implements AssignmentsRepository {
   _Assignments(this.items);
 
   final List<Assignment> items;
+  int lists = 0;
 
   @override
-  Future<List<Assignment>> list({int? classroomId}) async => items;
+  Future<List<Assignment>> list({int? classroomId}) async {
+    lists++;
+    return items;
+  }
 }
 
 class _Classrooms extends Fake implements ClassroomsRepository {
@@ -82,6 +86,8 @@ class _Review extends Fake implements ReviewRepository {
       graded.add(submissionId);
 }
 
+late _Assignments _lastAssignments;
+
 PickedDocument _file(String name) =>
     PickedDocument(name: name, bytes: Uint8List(4));
 
@@ -96,14 +102,13 @@ Future<_Review> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final review = _Review();
+  _lastAssignments = _Assignments(assignments);
   await pumpScreen(
     tester,
     TeacherUploadScreen(args: args),
     overrides: [
       handInRepositoryProvider.overrideWithValue(handIn),
-      assignmentsRepositoryProvider.overrideWithValue(
-        _Assignments(assignments),
-      ),
+      assignmentsRepositoryProvider.overrideWithValue(_lastAssignments),
       classroomsRepositoryProvider.overrideWithValue(_Classrooms()),
       reviewRepositoryProvider.overrideWithValue(review),
       documentFilePickerProvider.overrideWithValue(
@@ -231,10 +236,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('รับงานใหม่แล้ว รอครูกดตรวจ'), findsOneWidget);
+    final lists = _lastAssignments.lists;
     await tester.tap(find.byKey(const ValueKey('upload_grade_now')));
     await tester.pumpAndSettle();
     expect(review.graded, [90]);
     expect(find.text('ส่งตรวจแล้ว'), findsOneWidget);
+    expect(
+      _lastAssignments.lists,
+      greaterThan(lists),
+      reason: 'the assignment list is loaded again after "ตรวจ"',
+    );
 
     await tester.tap(find.text('ไปหน้าตรวจทาน'));
     await tester.pumpAndSettle();
