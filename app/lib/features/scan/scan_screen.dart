@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -31,6 +32,10 @@ class ScanScreen extends ConsumerStatefulWidget {
 class _ScanScreenState extends ConsumerState<ScanScreen>
     with WidgetsBindingObserver {
   late final ScanProcessor _processor = ref.read(scanProcessorProvider);
+
+  /// The web preview never builds [_processor]: it needs the local database
+  /// and the native pipeline, neither of which exists in a browser.
+  late final bool _supported = !kIsWeb && _processor.isSupported;
   ScanCamera? _camera;
   bool _cameraReady = false;
   String? _cameraError;
@@ -44,16 +49,17 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
   @override
   void initState() {
     super.initState();
+    // Only the camera needs lifecycle events, so the observer is added once
+    // scanning is known to work.
+    if (!_supported) return;
     WidgetsBinding.instance.addObserver(this);
     // A newer digit model is fetched in the background; scanning goes on
     // with the cached one (or none) meanwhile.
     syncDigitModelInBackground(ref);
-    if (_processor.isSupported) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openCamera();
-      });
-      unawaited(_finishWaitingScans());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openCamera();
+    });
+    unawaited(_finishWaitingScans());
   }
 
   @override
@@ -67,7 +73,6 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_processor.isSupported) return;
     // The camera must be released while the app is in the background. A
     // camera that is still initialising is left alone: its permission
     // dialog also makes the app inactive.
@@ -235,7 +240,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
       ),
     );
 
-    if (!_processor.isSupported) {
+    if (!_supported) {
       return Scaffold(
         appBar: AppBar(title: const Text('สแกนใบงาน'), actions: [queueButton]),
         body: const EmptyView(
