@@ -153,11 +153,19 @@ final class ClassroomFeedback
      * Puts a failed row back in the queue with the student's current match
      * and course (the teacher's "ส่งประกาศอีกครั้ง"). False when there is
      * still nothing to send to (no match, or the classroom is not linked);
-     * the row then stays failed with the reason.
+     * the row then stays failed with the reason. A row whose publish is
+     * over (reopened or published again since) is dropped, as the job
+     * would drop it: it is not counted as queued.
      */
     public static function requeue(ClassroomFeedbackPost $post): bool
     {
         $submission = Submission::query()->with('assignment.classroom.googleLink')->find($post->submission_id);
+        if ($submission === null || ! $submission->isPublished() || $submission->published_at === null
+            || ! $submission->published_at->equalTo($post->published_at)) {
+            $post->delete();
+
+            return false;
+        }
         $link = $submission?->assignment?->classroom?->googleLink;
         $googleUserId = $submission !== null && $link !== null ? self::matchedAccount($submission->assignment->classroom_id, $submission->student_id) : null;
         if ($link === null || $googleUserId === null) {

@@ -1940,7 +1940,7 @@ ALTER TABLE scans
   - implement (build ข้อ 12): retry รายข้อเป็น call เดียวจริง (gateway ไม่ส่งซ้ำอีกรอบ) ถ้า retry ตอบถูกแต่ยังไม่มีข้อนั้น นับว่าไม่เจอในหน้านั้น (`answer_not_found` ถ้าไม่เจอทุกหน้า) ไม่ใช่ `invalid_output` การรวมผลของ submission หนึ่งทำทีละครั้งภายใต้ `Cache::lock('whole-page-merge:{submission_id}')` เพื่อไม่ให้ job สองหน้าที่เสร็จพร้อมกันจ่ายค่าคำอธิบายซ้ำ (รอไม่เกิน 100 วินาที ถ้าเกิน job ลองใหม่แล้วรวมผลอีกครั้ง)
 - **Fuzzy เหมือนเดิม** (§11) ทางนี้ไม่มี CNN และ `ink_ratio` ค่า `D` จึงมาจากความขัดกันระหว่างหน้าเท่านั้น
 - ครูเปิดดูทุกข้อได้ อนุมัติแบบกลุ่มใช้กติกาเดิมตาม band
-- **ข้อจำกัด (ตั้งใน `.env`)**: `SUBMISSION_MAX_PAGES=5` หน้าต่อ submission (นับหน้าของ PDF ด้วย `PdfPageCounter` ด้านล่าง), `SUBMISSION_MAX_FILE_MB=10` ต่อไฟล์ ต้องตั้ง PHP `upload_max_filesize ≥ 10M` และ `post_max_size ≥ 55M` บน hosting (บันทึกใน HOSTING.md)
+- **ข้อจำกัด (ตั้งใน `.env`)**: `SUBMISSION_MAX_PAGES=5` หน้าต่อ submission (นับหน้าของ PDF ด้วย `PdfPageCounter` ด้านล่าง), `SUBMISSION_MAX_FILE_MB=10` ต่อไฟล์ ต้องตั้ง PHP `upload_max_filesize ≥ 10M` และ `post_max_size ≥ 55M` บน hosting (บันทึกใน HOSTING.md) ถ้าคำขอใหญ่เกิน `post_max_size` (PHP ทิ้งไฟล์ทั้งหมด) API ตอบ 413 `file_too_large` "ไฟล์ที่ส่งรวมกันใหญ่เกินที่ระบบรับได้ …" ไม่ใช่ 422 "กรุณาแนบรูป…" (implement build ข้อ 12)
 - **นับหน้า PDF (`PdfPageCounter`)**: FPDI ฟรีที่มากับ mPDF อ่าน PDF ที่ใช้ cross-reference stream (PDF 1.5 ขึ้นไป เช่นไฟล์จาก Word "บันทึกเป็น PDF") ไม่ได้ (`CrossReferenceException::COMPRESSED_XREF`) จึงนับเป็นลำดับ
   1. FPDI `setSourceFile()` ถ้าอ่านได้
   2. ถ้า FPDI ล้ม: นับ `/Type /Page` (ไม่รวม `/Pages`) ในไบต์ของไฟล์ บวกในเนื้อของทุก `/Type /ObjStm` ที่คลายด้วย `gzuncompress` (extension `zlib` ของ PHP, ไฟล์ไม่เกิน 10 MB จึงเบา)

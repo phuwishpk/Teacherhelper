@@ -13,7 +13,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Mockery;
 use Mpdf\Mpdf;
+use RuntimeException;
 use Tests\Feature\Scans\ScanFixtures;
 use Tests\TestCase;
 
@@ -213,6 +215,37 @@ class WholePageUploadsTest extends TestCase
 
         // Five pages in all is the limit, not over it.
         $this->submit([self::pdf(4), self::photo()])->assertCreated()->assertJsonPath('data.pages', 5);
+    }
+
+    public function test_a_body_over_post_max_size_is_file_too_large(): void
+    {
+        // PHP drops every file of such a body; ValidatePostSize reads Content-Length.
+        $this->asUser($this->student)->call('POST', '/api/v1/student/assignments/'.$this->assignment->id.'/submission', [], [], [], [
+            'CONTENT_LENGTH' => (string) (PHP_INT_MAX >> 1),
+            'CONTENT_TYPE' => 'multipart/form-data; boundary=x',
+            'HTTP_ACCEPT' => 'application/json',
+        ])->assertStatus(413)
+            ->assertJsonPath('code', 'file_too_large')
+            ->assertJsonPath('errors.files.0', 'ไฟล์ที่ส่งรวมกันใหญ่เกินที่ระบบรับได้ ส่งทีละน้อยไฟล์ลงหรือย่อรูปก่อนส่ง');
+        $this->assertSame(0, Submission::query()->count());
+    }
+
+    public function test_a_storage_failure_leaves_no_empty_submission_behind(): void
+    {
+        $disk = Mockery::mock(Storage::disk('local'))->makePartial();
+        $disk->shouldReceive('put')->andThrow(new RuntimeException('disk full'));
+        Storage::set('local', $disk);
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->submit([self::photo()]);
+            $this->fail('the storage error should reach the caller');
+        } catch (RuntimeException $e) {
+            $this->assertSame('disk full', $e->getMessage());
+        }
+
+        $this->assertSame(0, Submission::query()->count(), 'no hand-in is counted for this student');
+        $this->assertSame(0, SubmissionPage::query()->count());
     }
 
     public function test_a_new_hand_in_after_grading_waits_for_the_teacher(): void

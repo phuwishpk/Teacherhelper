@@ -54,10 +54,11 @@ final class WholePageSubmissions
      */
     public function receive(Assignment $assignment, int $studentId, array $files, string $source, array $meta, bool $retake): array
     {
-        $submissionId = Submission::query()->createOrFirst([
+        $created = Submission::query()->createOrFirst([
             'assignment_id' => $assignment->id,
             'student_id' => $studentId,
-        ])->id;
+        ]);
+        $submissionId = $created->id;
 
         $written = [];
         $stale = [];
@@ -117,6 +118,18 @@ final class WholePageSubmissions
             });
         } catch (Throwable $e) {
             PageFiles::disk()->delete($written);
+            if ($created->wasRecentlyCreated) {
+                // The row made for this hand-in stays empty: without it GET /assignments
+                // counted a hand-in that never arrived. Only if still empty (a scan or
+                // another hand-in may have used it meanwhile).
+                try {
+                    Submission::query()->whereKey($submissionId)
+                        ->whereDoesntHave('pages')->whereDoesntHave('responses')->whereDoesntHave('scans')
+                        ->delete();
+                } catch (Throwable) {
+                    // Never hide the error that got us here.
+                }
+            }
 
             throw $e;
         }

@@ -352,6 +352,20 @@ class ClassroomFeedbackTest extends TestCase
         $this->assertStringContainsString('ยังไม่ได้จับคู่', (string) $post->last_error);
     }
 
+    public function test_a_retry_after_the_work_was_reopened_drops_the_stale_row(): void
+    {
+        $submission = $this->reviewedSubmission(0);
+        $this->fake([$this->announcementsUrl() => Http::response(self::googleError(404, 'NOT_FOUND', 'gone'), 404)]);
+        $this->publish($submission);
+        $this->assertSame(ClassroomFeedbackPost::STATE_FAILED, ClassroomFeedbackPost::query()->sole()->state);
+        Submission::query()->whereKey($submission->id)->update(['status' => Submission::STATUS_NEEDS_REVIEW]);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/google-feedback/retry")
+            ->assertStatus(202)
+            ->assertJsonPath('data.queued', 0);
+        $this->assertSame(0, ClassroomFeedbackPost::query()->count());
+    }
+
     public function test_feedback_routes_are_the_teachers_own(): void
     {
         $other = $this->makeTeacher();
