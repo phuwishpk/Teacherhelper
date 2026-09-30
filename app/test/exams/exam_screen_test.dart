@@ -190,6 +190,13 @@ void main() {
     expect(find.byKey(const ValueKey('exam_approve_key')), findsNothing);
     expect(find.text('เต็ม 30 คะแนน'), findsOneWidget);
     expect(find.text('ตารางเฉลย (ไม่บังคับ)'), findsOneWidget);
+
+    // "กรอกคะแนน" opens the exam's column of the gradebook (§23.9).
+    await tapVisible(tester, find.byKey(const ValueKey('exam_open_gradebook')));
+    expect(
+      find.text('gradebook /courses/3/gradebook?classroom=7&column=a40'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('an empty exam explains how to start', (tester) async {

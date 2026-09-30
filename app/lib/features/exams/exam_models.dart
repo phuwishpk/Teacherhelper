@@ -760,6 +760,8 @@ class ExamSettingsDraft {
     this.versionCount = 1,
     this.showKeyToStudents = false,
     this.manualFullMarks,
+    this.gradebookCategoryId,
+    this.excludedFromGrade = false,
   });
 
   final String title;
@@ -772,6 +774,13 @@ class ExamSettingsDraft {
   final int versionCount;
   final bool showKeyToStudents;
   final double? manualFullMarks;
+
+  /// The gradebook category (DESIGN §23.3): required once the course's
+  /// gradebook is set up.
+  final int? gradebookCategoryId;
+
+  /// "ไม่นับเกรด".
+  final bool excludedFromGrade;
 
   /// The create body: every exam field plus the classroom and course.
   Map<String, Object?> toCreateJson() => {
@@ -788,6 +797,8 @@ class ExamSettingsDraft {
     'show_key_to_students': showKeyToStudents,
     if (gradingMethod == ExamGradingMethod.manual)
       'manual_full_marks': manualFullMarks,
+    'gradebook_category_id': ?gradebookCategoryId,
+    if (excludedFromGrade) 'excluded_from_grade': true,
   };
 
   /// The PATCH body: only what differs from [current]. version_count is
@@ -811,6 +822,11 @@ class ExamSettingsDraft {
           manualFullMarks != current.manualFullMarks)
         'manual_full_marks': manualFullMarks,
       if (method != current.gradingMethod) 'grading_method': method,
+      if (gradebookCategoryId != null &&
+          gradebookCategoryId != current.gradebookCategoryId)
+        'gradebook_category_id': gradebookCategoryId,
+      if (excludedFromGrade != current.excludedFromGrade)
+        'excluded_from_grade': excludedFromGrade,
     };
   }
 }

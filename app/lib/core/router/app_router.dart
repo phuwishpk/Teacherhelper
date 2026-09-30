@@ -38,6 +38,9 @@ import '../../features/exams/exam_question_screen.dart';
 import '../../features/exams/exam_screen.dart';
 import '../../features/exams/exam_versions_screen.dart';
 import '../../features/google_classroom/classroom_feedback_screen.dart';
+import '../../features/gradebook/gradebook_screen.dart';
+import '../../features/gradebook/gradebook_settings_screen.dart';
+import '../../features/gradebook/student_grades.dart';
 import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/grade_conflicts_screen.dart';
@@ -122,6 +125,19 @@ abstract final class AppRoutes {
 
   static String course(int id) => '/courses/$id';
   static String courseEdit(int id) => '/courses/$id/edit';
+
+  /// The gradebook of a course (DESIGN §23.9), opened on [classroomId] and
+  /// scrolled to [column] (`a{assignment id}` or `i{item id}`) when given.
+  static String gradebook(int courseId, {int? classroomId, String? column}) {
+    final query = {'classroom': ?classroomId?.toString(), 'column': ?column};
+    return Uri(
+      path: '/courses/$courseId/gradebook',
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
+  }
+
+  static String gradebookSettings(int courseId) =>
+      '/courses/$courseId/gradebook/settings';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -211,6 +227,10 @@ abstract final class AppRoutes {
 
   /// Student: their own charts of one course (§20.4, §20.9).
   static String myCourseCharts(int courseId) => '/student/courses/$courseId';
+
+  /// Student: their own published grade of one course (§23.7).
+  static String myCourseGrade(int courseId) =>
+      '/student/courses/$courseId/grade';
 
   /// One student's skills and weaknesses, seen by the teacher.
   static String studentMastery(int classroomId, int studentId) =>
@@ -392,6 +412,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/student/courses/:id',
         builder: (context, state) =>
             MyCourseChartsScreen(courseId: _id(state, 'id')),
+        routes: [
+          GoRoute(
+            path: 'grade',
+            builder: (context, state) =>
+                StudentGradeScreen(courseId: _id(state, 'id')),
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.home,
@@ -492,6 +519,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             CourseDetailScreen(courseId: _id(state, 'id')),
         routes: [
+          GoRoute(
+            path: 'gradebook',
+            builder: (context, state) => GradebookScreen(
+              courseId: _id(state, 'id'),
+              initialClassroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+              focusColumn: state.uri.queryParameters['column'],
+            ),
+            routes: [
+              GoRoute(
+                path: 'settings',
+                builder: (context, state) =>
+                    GradebookSettingsScreen(courseId: _id(state, 'id')),
+              ),
+            ],
+          ),
           GoRoute(
             path: 'charts',
             builder: (context, state) => CourseChartsScreen(

@@ -20,6 +20,7 @@ final examStubRoutes = [
   stubRoute('/exams/:id/results', 'results'),
   stubRoute('/exams/:id/questions/:qid', 'question'),
   stubRoute('/exams/:id/sections/:sid/questions/new', 'question-new'),
+  stubRoute('/courses/:id/gradebook', 'gradebook'),
 ];
 
 /// Pumps [screen] with [repo] behind `examsRepositoryProvider` on a tall

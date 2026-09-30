@@ -27,6 +27,8 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
     AssignmentMode mode = AssignmentMode.worksheet,
     bool acceptLate = true,
     bool scoreOnly = false,
+    int? gradebookCategoryId,
+    bool excludedFromGrade = false,
   }) async {
     final created = await ref
         .read(assignmentsRepositoryProvider)
@@ -40,6 +42,8 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
           mode: mode,
           acceptLate: acceptLate,
           scoreOnly: scoreOnly,
+          gradebookCategoryId: gradebookCategoryId,
+          excludedFromGrade: excludedFromGrade,
         );
     state = AsyncData([created, ...state.value ?? const []]);
     return created;
@@ -88,6 +92,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     int? courseId,
     int? lessonPlanId,
     bool clearLessonPlan = false,
+    int? gradebookCategoryId,
+    bool clearGradebookCategory = false,
+    bool? excludedFromGrade,
   }) async {
     await ref
         .read(assignmentsRepositoryProvider)
@@ -104,6 +111,9 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
           courseId: courseId,
           lessonPlanId: lessonPlanId,
           clearLessonPlan: clearLessonPlan,
+          gradebookCategoryId: gradebookCategoryId,
+          clearGradebookCategory: clearGradebookCategory,
+          excludedFromGrade: excludedFromGrade,
         );
     await refresh();
     ref.invalidate(assignmentsProvider);

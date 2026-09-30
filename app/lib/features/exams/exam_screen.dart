@@ -249,6 +249,20 @@ class ExamScreen extends ConsumerWidget {
                             : 'พิมพ์เล่มและกระดาษคำตอบ',
                       ),
                     ),
+                    // "กรอกคะแนน": the exam's column of the gradebook (§23.9).
+                    if (d.isManual && d.exam.courseId != null)
+                      FilledButton.icon(
+                        key: const ValueKey('exam_open_gradebook'),
+                        onPressed: () => context.push(
+                          AppRoutes.gradebook(
+                            d.exam.courseId!,
+                            classroomId: d.exam.classroomId,
+                            column: 'a$examId',
+                          ),
+                        ),
+                        icon: const Icon(Icons.table_chart_outlined),
+                        label: const Text('กรอกคะแนน'),
+                      ),
                     if (!d.isManual)
                       FilledButton.icon(
                         key: const ValueKey('exam_open_scan'),

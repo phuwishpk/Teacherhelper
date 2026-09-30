@@ -13,7 +13,9 @@ abstract class AssignmentsRepository {
   Future<Assignment> get(int id);
 
   /// `POST /assignments`: [courseId] must be a course bound to the
-  /// classroom; the subject comes from it (DESIGN §20.1).
+  /// classroom; the subject comes from it (DESIGN §20.1). Without
+  /// [gradebookCategoryId] homework gets the course's homework default
+  /// category (§23.3).
   Future<Assignment> create({
     required int classroomId,
     required int courseId,
@@ -24,6 +26,8 @@ abstract class AssignmentsRepository {
     AssignmentMode mode = AssignmentMode.worksheet,
     bool acceptLate = true,
     bool scoreOnly = false,
+    int? gradebookCategoryId,
+    bool excludedFromGrade = false,
   });
   Future<Assignment> update(
     int id, {
@@ -38,6 +42,9 @@ abstract class AssignmentsRepository {
     int? courseId,
     int? lessonPlanId,
     bool clearLessonPlan = false,
+    int? gradebookCategoryId,
+    bool clearGradebookCategory = false,
+    bool? excludedFromGrade,
   });
   Future<void> delete(int id);
 
@@ -101,6 +108,8 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     AssignmentMode mode = AssignmentMode.worksheet,
     bool acceptLate = true,
     bool scoreOnly = false,
+    int? gradebookCategoryId,
+    bool excludedFromGrade = false,
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments',
@@ -114,6 +123,8 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'mode': mode.apiValue,
         'accept_late': acceptLate,
         'score_only': scoreOnly,
+        'gradebook_category_id': ?gradebookCategoryId,
+        if (excludedFromGrade) 'excluded_from_grade': true,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -133,6 +144,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     int? courseId,
     int? lessonPlanId,
     bool clearLessonPlan = false,
+    int? gradebookCategoryId,
+    bool clearGradebookCategory = false,
+    bool? excludedFromGrade,
   }) async {
     final res = await _dio.patch<Object?>(
       '/assignments/$id',
@@ -148,6 +162,9 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'mode': ?mode?.apiValue,
         'accept_late': ?acceptLate,
         'score_only': ?scoreOnly,
+        'gradebook_category_id': ?gradebookCategoryId,
+        if (clearGradebookCategory) 'gradebook_category_id': null,
+        'excluded_from_grade': ?excludedFromGrade,
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));

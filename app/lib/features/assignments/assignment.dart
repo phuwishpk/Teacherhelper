@@ -85,6 +85,8 @@ class Assignment {
     this.showKeyToStudents = false,
     this.manualFullMarks,
     this.structureLockedAt,
+    this.gradebookCategoryId,
+    this.excludedFromGrade = false,
   });
 
   static const kindHomework = 'homework';
@@ -185,6 +187,12 @@ class Assignment {
   /// Exams only: set by the first print; structural edits need an unlock.
   final DateTime? structureLockedAt;
 
+  /// The gradebook category (DESIGN §23.3); null = "ยังไม่ระบุหมวด".
+  final int? gradebookCategoryId;
+
+  /// "ไม่นับเกรด": practice work shown faint in the gradebook.
+  final bool excludedFromGrade;
+
   bool get isExam => kind == kindExam;
 
   bool get isManualExam => isExam && gradingMethod == 'manual';
@@ -228,6 +236,8 @@ class Assignment {
     showKeyToStudents: showKeyToStudents,
     manualFullMarks: manualFullMarks,
     structureLockedAt: structureLockedAt,
+    gradebookCategoryId: gradebookCategoryId,
+    excludedFromGrade: excludedFromGrade,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -295,6 +305,8 @@ class Assignment {
       showKeyToStudents: json['show_key_to_students'] == true,
       manualFullMarks: (json['manual_full_marks'] as num?)?.toDouble(),
       structureLockedAt: locked is String ? DateTime.tryParse(locked) : null,
+      gradebookCategoryId: (json['gradebook_category_id'] as num?)?.toInt(),
+      excludedFromGrade: json['excluded_from_grade'] == true,
     );
   }
 }

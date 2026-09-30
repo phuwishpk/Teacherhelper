@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../courses/course_fakes.dart';
+import '../gradebook/gradebook_fakes.dart';
 import 'exam_fakes.dart';
 import 'exam_test_helpers.dart';
 
@@ -36,10 +37,6 @@ void main() {
     );
 
     expect(find.text('สร้างข้อสอบ'), findsWidgets);
-    expect(
-      find.byKey(const ValueKey('exam_category_placeholder')),
-      findsOneWidget,
-    );
     await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
     expect(find.text('กรอกชื่อข้อสอบ'), findsOneWidget);
     expect(find.text('ข้อสอบต้องกำหนดวันสอบ'), findsOneWidget);
@@ -55,6 +52,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('ค15101 คณิตศาสตร์ 5').last);
     await tester.pumpAndSettle();
+    // The course's gradebook is not set up: no category to pick yet.
+    expect(
+      find.byKey(const ValueKey('gradebook_category_unconfigured')),
+      findsOneWidget,
+    );
     await _pickDate(tester);
     expect(find.textContaining('วันสอบ '), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('exam_duration')), '601');
@@ -188,5 +190,42 @@ void main() {
     repo.failNext = StateError('x');
     await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
     expect(find.text('เกิดข้อผิดพลาดที่ไม่คาดคิด'), findsOneWidget);
+  });
+
+  testWidgets('a configured course requires the exam category', (tester) async {
+    final repo = await pumpExamScreen(
+      tester,
+      const ExamFormScreen(initialClassroomId: 7),
+      overrides: overrides(
+        _courses(),
+        gradebook: FakeGradebookRepository(settings: settingsJson()),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('exam_title')),
+      'สอบกลางภาค',
+    );
+    await tester.tap(
+      find.widgetWithText(DropdownButtonFormField<int>, 'รายวิชา'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ค15101 คณิตศาสตร์ 5').last);
+    await tester.pumpAndSettle();
+    await _pickDate(tester);
+    expect(find.text('ยังไม่ระบุหมวด (ไม่นับ)'), findsNothing);
+    await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
+    expect(find.text('เลือกหมวดคะแนนของข้อสอบ'), findsOneWidget);
+    expect(repo.args('create'), isEmpty);
+
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('gradebook_category_3')),
+    );
+    await tester.tap(find.text('กลางภาค (20%)').last);
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
+    final body = repo.args('create').single as Map;
+    expect(body['gradebook_category_id'], 11);
+    expect(body.containsKey('excluded_from_grade'), isFalse);
   });
 }

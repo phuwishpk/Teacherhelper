@@ -12,6 +12,7 @@ import '../assignments/assignment.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/course_picker.dart';
+import '../gradebook/gradebook_category_field.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
 import 'exams_repository.dart';
@@ -46,8 +47,10 @@ class ExamEditScreen extends ConsumerWidget {
 /// Create an exam (DESIGN §22.1, §22.2): classroom and course, title, the
 /// exam date (required, the gradebook counts from it), its length, how it
 /// is graded (by the app or by the teacher, who then gives the full
-/// marks), 1–4 shuffled versions and "ให้นักเรียนดูเฉลย". Editing changes
-/// the same settings; the classroom stays.
+/// marks), 1–4 shuffled versions, "ให้นักเรียนดูเฉลย", and the gradebook
+/// category (required once the course's gradebook is set up) and
+/// "ไม่นับเกรด" (§23.3). Editing changes the same settings; the classroom
+/// stays.
 class ExamFormScreen extends ConsumerStatefulWidget {
   const ExamFormScreen({super.key, this.existing, this.initialClassroomId});
 
@@ -79,6 +82,8 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
   );
   late int _versions = widget.existing?.versionCount ?? 1;
   late bool _showKey = widget.existing?.showKeyToStudents ?? false;
+  late int? _categoryId = widget.existing?.gradebookCategoryId;
+  late bool _excluded = widget.existing?.excludedFromGrade ?? false;
   bool _busy = false;
   String? _error;
   bool _dateMissing = false;
@@ -127,6 +132,8 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
     manualFullMarks: _method == ExamGradingMethod.manual
         ? double.tryParse(_fullMarks.text.trim())
         : null,
+    gradebookCategoryId: _categoryId,
+    excludedFromGrade: _excluded,
   );
 
   Future<void> _submit() async {
@@ -236,7 +243,10 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
                 value: courseId,
                 isRequired: true,
                 onChanged: (c) => setState(() {
-                  if (c?.id != _courseId) _lessonPlanId = null;
+                  if (c?.id != _courseId) {
+                    _lessonPlanId = null;
+                    _categoryId = null;
+                  }
                   _courseId = c?.id;
                 }),
               ),
@@ -359,16 +369,18 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
               value: _showKey,
               onChanged: (v) => setState(() => _showKey = v),
             ),
-            // The gradebook (§23, build 4) adds the category picker here.
-            const InputDecorator(
-              key: ValueKey('exam_category_placeholder'),
-              decoration: InputDecoration(
-                labelText: 'หมวดคะแนน',
-                helperText: 'เลือกได้เมื่อเปิดสมุดคะแนนของรายวิชา (เร็ว ๆ นี้)',
-                enabled: false,
+            if (courseId != null) ...[
+              GradebookCategoryField(
+                courseId: courseId,
+                value: _categoryId,
+                isExam: true,
+                onChanged: (v) => setState(() => _categoryId = v),
               ),
-              child: Text('ยังไม่ระบุหมวด'),
-            ),
+              ExcludedFromGradeSwitch(
+                value: _excluded,
+                onChanged: (v) => setState(() => _excluded = v),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: TextStyle(color: theme.colorScheme.error)),

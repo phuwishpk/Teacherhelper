@@ -18,6 +18,7 @@ import 'indicator_widgets.dart';
 /// `/courses/:id`: a course with its classrooms, indicators, units and
 /// lesson plans (DESIGN §20.1). Units and plans are added in forms or read
 /// from lesson-plan documents; a plan is marked taught here (chart 5).
+/// "สมุดคะแนน" opens the course's gradebook (§23.9).
 class CourseDetailScreen extends ConsumerWidget {
   const CourseDetailScreen({super.key, required this.courseId});
 
@@ -242,6 +243,12 @@ class CourseDetailScreen extends ConsumerWidget {
                       onPressed: () => _planForm(context, ref, c),
                       icon: const Icon(Icons.add),
                       label: const Text('เพิ่มแผนการสอน'),
+                    ),
+                    FilledButton.icon(
+                      key: const ValueKey('course_gradebook'),
+                      onPressed: () => context.push(AppRoutes.gradebook(c.id)),
+                      icon: const Icon(Icons.table_chart_outlined),
+                      label: const Text('สมุดคะแนน'),
                     ),
                     FilledButton.icon(
                       key: const ValueKey('course_charts'),

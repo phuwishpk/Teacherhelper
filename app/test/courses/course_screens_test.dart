@@ -271,6 +271,21 @@ void main() {
       expect(courses.planSaves.last.$2.taughtOn, isNull);
     });
 
+    testWidgets('"สมุดคะแนน" opens the course gradebook (§23.9)', (
+      tester,
+    ) async {
+      tall(tester);
+      await pumpScreen(
+        tester,
+        const CourseDetailScreen(courseId: 4),
+        overrides: overrides(detail()),
+        extraRoutes: [stubRoute('/courses/:id/gradebook', 'gradebook')],
+      );
+      await tester.tap(find.byKey(const ValueKey('course_gradebook')));
+      await tester.pumpAndSettle();
+      expect(find.text('gradebook /courses/4/gradebook'), findsOneWidget);
+    });
+
     testWidgets('adds a unit and edits a plan through the forms', (
       tester,
     ) async {

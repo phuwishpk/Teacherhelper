@@ -1,0 +1,75 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../../core/api/api_retry.dart';
+import '../../core/auth/session.dart';
+import 'gradebook_models.dart';
+import 'gradebook_repository.dart';
+
+final gradebookTemplatesProvider =
+    FutureProvider.autoDispose<List<GradebookTemplate>>((ref) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(gradebookRepositoryProvider).templates();
+    }, retry: apiRetry);
+
+/// The settings of a course (also the category picker of the assignment
+/// and exam forms).
+final gradebookSettingsProvider = FutureProvider.autoDispose
+    .family<GradebookSettings, int>((ref, courseId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(gradebookRepositoryProvider).settings(courseId);
+    }, retry: apiRetry);
+
+typedef GradebookKey = ({int courseId, int classroomId});
+
+/// The live grid of one classroom in one course.
+final gradebookGridProvider = FutureProvider.autoDispose
+    .family<GradebookGrid, GradebookKey>((ref, key) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref
+          .watch(gradebookRepositoryProvider)
+          .grid(key.courseId, key.classroomId);
+    }, retry: apiRetry);
+
+/// Student: "เกรดของฉัน".
+final myGradesProvider = FutureProvider.autoDispose<List<StudentGradeSummary>>((
+  ref,
+) {
+  watchSignedInUser(ref, keepAlive: false);
+  return ref.watch(gradebookRepositoryProvider).myGrades();
+}, retry: apiRetry);
+
+/// Student: one course's published grade and breakdown.
+final myCourseGradeProvider = FutureProvider.autoDispose
+    .family<StudentGradeDetail, int>((ref, courseId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(gradebookRepositoryProvider).myCourseGrade(courseId);
+    }, retry: apiRetry);
+
+/// Hands the exported CSV to the share sheet (LINE, Drive, e-mail …) with
+/// the existing share_plus (§23.8). Behind a provider so tests can fake it.
+class GradebookFileSharer {
+  const GradebookFileSharer();
+
+  Future<void> share(CsvExport file, {required String subject}) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile.fromData(file.bytes, mimeType: 'text/csv', name: file.fileName),
+        ],
+        fileNameOverrides: [file.fileName],
+        subject: subject,
+      ),
+    );
+  }
+}
+
+final gradebookFileSharerProvider = Provider<GradebookFileSharer>(
+  (ref) => const GradebookFileSharer(),
+);
+
+/// After a change to a course's gradebook: settings and grids load again.
+void invalidateGradebook(WidgetRef ref) {
+  ref.invalidate(gradebookSettingsProvider);
+  ref.invalidate(gradebookGridProvider);
+}
