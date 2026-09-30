@@ -91,6 +91,17 @@ class WorksheetPrint extends Model
         return $this->status === self::STATUS_READY || $this->status === self::STATUS_FAILED;
     }
 
+    /** What the teacher calls this file, for Thai messages ("รวมไฟล์{noun}ไม่สำเร็จ"). */
+    public function fileNoun(): string
+    {
+        return match ($this->kind) {
+            self::KIND_EXAM_BOOKLET => 'เล่มข้อสอบ',
+            self::KIND_ANSWER_SHEET => 'กระดาษคำตอบ',
+            self::KIND_KEY_SHEET => 'กระดาษเฉลย',
+            default => 'ใบงาน',
+        };
+    }
+
     /**
      * Terminal failure with a Thai message the app shows to the teacher; the
      * batch parts rendered so far are removed.

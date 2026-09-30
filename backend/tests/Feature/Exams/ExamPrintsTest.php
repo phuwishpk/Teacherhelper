@@ -251,6 +251,26 @@ class ExamPrintsTest extends TestCase
             ->assertJsonPath('errors.questions.0', 'ข้อ 1: ยังไม่มีโจทย์');
     }
 
+    public function test_a_failed_merge_names_the_exam_file_not_a_worksheet(): void
+    {
+        $exam = $this->createExam();
+        $print = fn (string $kind) => WorksheetPrint::create(['assignment_id' => $exam->id, 'kind' => $kind, 'layout_version' => 1, 'requested_by' => $this->teacher->id, 'status' => WorksheetPrint::STATUS_RENDERING]);
+
+        $key = $print(WorksheetPrint::KIND_KEY_SHEET);
+        (new MergeWorksheetsJob($key->id, 1))->handle(app(PdfMerger::class));
+        $this->assertSame('ไม่พบไฟล์กระดาษเฉลยที่สร้างไว้ กรุณาสั่งพิมพ์ใหม่', $key->refresh()->error);
+
+        $sheets = $print(WorksheetPrint::KIND_ANSWER_SHEET);
+        (new MergeWorksheetsJob($sheets->id, 2))->handle(app(PdfMerger::class));
+        $this->assertSame('ห้องนี้ไม่มีนักเรียนแล้ว', $sheets->refresh()->error);
+
+        $late = $print(WorksheetPrint::KIND_ANSWER_SHEET);
+        (new MergeWorksheetsJob($late->id, 2))->failed(null);
+        $this->assertSame('รวมไฟล์กระดาษคำตอบไม่ทันเวลา กรุณาลองใหม่', $late->refresh()->error);
+        $this->assertSame('เล่มข้อสอบ', (new WorksheetPrint(['kind' => WorksheetPrint::KIND_EXAM_BOOKLET]))->fileNoun());
+        $this->assertSame('ใบงาน', (new WorksheetPrint)->fileNoun());
+    }
+
     public function test_a_manual_exam_prints_only_its_booklet(): void
     {
         $exam = $this->createExam(['grading_method' => 'manual', 'manual_full_marks' => 50]);
@@ -280,6 +300,10 @@ class ExamPrintsTest extends TestCase
         $this->print($exam, ['kind' => 'answer_sheet'])->assertStatus(503)->assertJsonPath('code', 'qr_key_missing');
         $this->print($exam, ['kind' => 'key_sheet'])->assertStatus(503)->assertJsonPath('code', 'qr_key_missing');
         $this->print($exam, ['kind' => 'exam_booklet'])->assertStatus(202);
+
+        // A manual exam never has sheets: that answer comes before the server setup.
+        $manual = $this->createExam(['grading_method' => 'manual', 'manual_full_marks' => 10]);
+        $this->print($manual, ['kind' => 'key_sheet'])->assertStatus(422)->assertJsonPath('code', 'exam_manual_grading');
     }
 
     public function test_homework_and_other_teachers_exams_are_not_found(): void

@@ -52,6 +52,10 @@ class ExamPrintService
             throw ValidationException::withMessages(['kind' => 'เลือกสิ่งที่จะพิมพ์: เล่มข้อสอบ กระดาษคำตอบ หรือกระดาษเฉลย']);
         }
         $sheet = $kind !== WorksheetPrint::KIND_EXAM_BOOKLET;
+        if ($sheet && $exam->isManualExam()) {
+            // Before the server-setup check: a manual exam never has sheets, whatever the server has.
+            throw new ApiException('ข้อสอบที่ครูตรวจเองไม่มีกระดาษคำตอบ พิมพ์ได้เฉพาะเล่มข้อสอบ', 'exam_manual_grading', 422);
+        }
         if ($sheet && ! QrSigner::isConfigured()) {
             Log::error('exams.qr_key_missing', ['assignment_id' => $exam->id]);
 
