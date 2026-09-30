@@ -13,8 +13,9 @@ use Illuminate\Support\Carbon;
  * strengths / areas are written by code (StudentAnalyses::record) as
  * [{skill_id, value, n_obs}] together with computed_input_hash, the hash
  * of the mastery input. generated_input_hash is the hash of the input the
- * current texts were written from (only when Gemini succeeded), so a row
- * whose two hashes differ, or that has no text yet, needs new texts.
+ * current texts were written from (when Gemini succeeded, or the
+ * computed_input_hash at the teacher's edit), so a row whose two hashes
+ * differ, or that has no text yet, needs new texts.
  * queued_input_hash is the input sent in the batch still pending.
  *
  * student_text is Gemini's (or the teacher's edited) draft for the

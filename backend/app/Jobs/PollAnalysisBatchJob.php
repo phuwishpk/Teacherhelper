@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Cache;
  * (AnalysisBatches::poll). Queued by eduvision:queue-work for each
  * submitted/running batch last polled over a minute ago, after failing
  * the stale building/succeeded ones (AnalysisBatches::recoverStale).
- * Carries the id only; not retried (the next minute polls again).
+ * Carries the id only; not retried (the next minute polls again). A
+ * second poll of the same batch (one that waited in the queue past the
+ * cache guard) is harmless: only the poll that claims the collection
+ * (AnalysisBatches::collect) writes and logs the replies.
  * $timeout stays below the database queue's retry_after (300 s).
  */
 class PollAnalysisBatchJob implements ShouldQueue

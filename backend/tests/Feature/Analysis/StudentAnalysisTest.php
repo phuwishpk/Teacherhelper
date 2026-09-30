@@ -7,6 +7,7 @@ use App\Models\Assignment;
 use App\Models\Question;
 use App\Models\StudentAnalysis;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -209,5 +210,29 @@ class StudentAnalysisTest extends TestCase
         $data = $this->asUser($this->teacher)->getJson($this->showUrl('A'))->assertOk()->json('data');
         $this->assertSame(['ค 1.1 ป.5/1'], array_column(array_column($data['strengths'], 'skill'), 'code'));
         $this->assertSame(['ค 1.1 ป.5/4'], array_column(array_column($data['areas'], 'skill'), 'code'));
+    }
+
+    public function test_a_row_created_by_another_request_in_between_is_updated_instead_of_failing(): void
+    {
+        $raced = false;
+        StudentAnalysis::creating(function (StudentAnalysis $row) use (&$raced) {
+            if ($raced) {
+                return;
+            }
+            $raced = true;
+            // The publish listener inserts the same (student, classroom) first.
+            DB::table('student_analyses')->insert([
+                'student_id' => $row->student_id, 'classroom_id' => $row->classroom_id, 'computed_input_hash' => str_repeat('0', 64),
+                'strengths' => '[]', 'areas' => '[]', 'status' => 'computed', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $data = $this->asUser($this->teacher)->getJson($this->showUrl('A'))->assertOk()->json('data');
+
+        $this->assertTrue($raced);
+        $row = StudentAnalysis::query()->sole();
+        $this->assertSame($row->id, $data['id']);
+        $this->assertNotSame(str_repeat('0', 64), $row->computed_input_hash);
+        $this->assertCount(2, $row->areas);
     }
 }

@@ -9,6 +9,7 @@ use App\Exceptions\ApiException;
 use App\Models\Classroom;
 use App\Models\StudentAnalysis;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,8 +22,9 @@ use Illuminate\Support\Facades\DB;
  * - applyText(): the texts of a successful call (now or from a batch),
  *   with generated_input_hash = the hash of the input they were written
  *   from, and the classroom's auto-share;
- * - edit() / approve(): the teacher's changes, and the copy of the student
- *   draft to what the student sees.
+ * - edit() / approve(): the teacher's changes (which count as texts for the
+ *   current input), and the copy of the student draft to what the student
+ *   sees.
  */
 final class StudentAnalyses
 {
@@ -43,10 +45,7 @@ final class StudentAnalyses
      */
     public function record(AnalysisInput $input): ?StudentAnalysis
     {
-        $row = StudentAnalysis::query()
-            ->where('student_id', $input->studentId)
-            ->where('classroom_id', $input->classroomId)
-            ->first();
+        $row = $this->find($input);
         if ($row === null && $input->isEmpty()) {
             return null;
         }
@@ -54,9 +53,27 @@ final class StudentAnalyses
         $row->computed_input_hash = $input->hash();
         $row->strengths = $input->strengths();
         $row->areas = $input->areas();
-        $row->save();
+        try {
+            $row->save();
+        } catch (UniqueConstraintViolationException $e) {
+            // Another request (the publish listener, the nightly round, a
+            // second GET) created the row in between: update that one.
+            $row = $this->find($input) ?? throw $e;
+            $row->computed_input_hash = $input->hash();
+            $row->strengths = $input->strengths();
+            $row->areas = $input->areas();
+            $row->save();
+        }
 
         return $row;
+    }
+
+    private function find(AnalysisInput $input): ?StudentAnalysis
+    {
+        return StudentAnalysis::query()
+            ->where('student_id', $input->studentId)
+            ->where('classroom_id', $input->classroomId)
+            ->first();
     }
 
     /** After a publish (or a changed published score): every classroom of the student. */
@@ -155,18 +172,33 @@ final class StudentAnalyses
      * PATCH /analyses/{id}: the teacher's own wording. Students still see
      * the shared text until the teacher approves.
      *
+     * The teacher's text counts as written for the current input
+     * (generated_input_hash = computed_input_hash, DESIGN §20.5): the
+     * nightly round does not overwrite it until the mastery changes. A row
+     * queued in a pending batch leaves it, like "วิเคราะห์ตอนนี้", so the
+     * batch reply is only logged, never written over the edit.
+     *
      * @param  array{teacher_text?: string, student_text?: string}  $fields
      */
     public function edit(StudentAnalysis $analysis, array $fields): StudentAnalysis
     {
-        foreach (['teacher_text', 'student_text'] as $field) {
-            if (array_key_exists($field, $fields)) {
-                $analysis->{$field} = trim((string) $fields[$field]);
+        return DB::transaction(function () use ($analysis, $fields) {
+            $row = StudentAnalysis::query()->lockForUpdate()->findOrFail($analysis->id);
+            foreach (['teacher_text', 'student_text'] as $field) {
+                if (array_key_exists($field, $fields)) {
+                    $row->{$field} = trim((string) $fields[$field]);
+                }
             }
-        }
-        $analysis->save();
+            $row->generated_input_hash = $row->computed_input_hash;
+            if ($row->status === StudentAnalysis::STATUS_QUEUED) {
+                $row->batch_id = null;
+                $row->queued_input_hash = null;
+            }
+            $row->status = StudentAnalysis::STATUS_DRAFTED;
+            $row->save();
 
-        return $analysis;
+            return $row;
+        });
     }
 
     /**

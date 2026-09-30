@@ -31,7 +31,9 @@ use Illuminate\Support\Str;
  * poll(): asks Gemini for the batch's state. When it succeeded, every
  * reply is checked like a call (schema, the forbidden word) and logged to
  * ai_calls with batch = TRUE; invalid output is asked once more as an
- * ordinary call. Texts are written with generated_input_hash =
+ * ordinary call (at most RETRY_MAX per collection, the rest fail and go
+ * again the next night). Only the poll that moves the batch from
+ * submitted/running to succeeded collects it. Texts are written with generated_input_hash =
  * queued_input_hash of that request, so a student whose mastery changed
  * while waiting is written again the next night. Failed, expired or
  * cancelled batches (and single failed requests) leave their rows failed
@@ -50,6 +52,9 @@ final class AnalysisBatches
 
     /** A 'building' or 'succeeded' batch untouched this long belongs to a job that died (their timeout is 240 s). */
     public const STALE_MINUTES = 10;
+
+    /** Plain-call retries of invalid batch replies per collection (each may take 30 s; the job has 240 s). */
+    public const RETRY_MAX = 5;
 
     public function __construct(
         private readonly AnalysisInputs $inputs,
@@ -202,7 +207,17 @@ final class AnalysisBatches
 
     private function collect(AnalysisBatch $batch, GeminiBatch $remote, GeminiKey $key): void
     {
-        $batch->forceFill(['state' => AnalysisBatch::STATE_SUCCEEDED])->save();
+        // Claim the collection: of two polls that both saw 'succeeded' (a
+        // poll job waited in the queue past the cache guard), only the one
+        // that moves the state collects, so nothing is logged or retried twice.
+        $claimed = AnalysisBatch::query()
+            ->whereKey($batch->id)
+            ->whereIn('state', [AnalysisBatch::STATE_SUBMITTED, AnalysisBatch::STATE_RUNNING])
+            ->update(['state' => AnalysisBatch::STATE_SUCCEEDED, 'updated_at' => now()]);
+        if ($claimed !== 1) {
+            return;
+        }
+        $batch->refresh();
 
         $rows = StudentAnalysis::query()
             ->where('batch_id', $batch->id)
@@ -210,6 +225,7 @@ final class AnalysisBatches
             ->with('classroom')
             ->get();
         $failed = 0;
+        $retries = 0;
         foreach ($rows as $row) {
             $classroom = $row->classroom;
             $input = $classroom === null ? null : $this->inputs->forStudent($row->student_id, $classroom);
@@ -224,8 +240,10 @@ final class AnalysisBatches
             $outcome = $this->gateway->judgeBatchReply($call, $reply, $key);
             $hash = (string) $row->queued_input_hash;
 
-            if ($outcome->status === CallOutcome::INVALID_OUTPUT && ! $input->isEmpty()) {
+            if ($outcome->status === CallOutcome::INVALID_OUTPUT && ! $input->isEmpty() && $retries < self::RETRY_MAX) {
                 // DESIGN §20.5: invalid output (e.g. "อ่อน" in the student text) is asked once more, now as a plain call.
+                // Past RETRY_MAX the row fails and goes in the next night's batch, so the job stays inside its timeout.
+                $retries++;
                 $outcome = $this->gateway->run(['retry' => $call], $key, passes: 1)['retry'];
                 $hash = $input->hash();
             }
