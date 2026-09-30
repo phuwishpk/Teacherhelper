@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Log;
  * eduvision:queue-work on its first run at or after 01:00 Asia/Bangkok
  * each day (Cache::add of the Thai date, 36 hours, is the once-a-day
  * guard), then AnalysisBatches::build() submits the students whose
- * mastery changed. Not retried: the next night is the retry.
+ * mastery changed. Not retried: the next night is the retry. $timeout
+ * stays below the database queue's retry_after (300 s).
  */
 class BuildAnalysisBatchesJob implements ShouldQueue
 {
@@ -29,7 +30,7 @@ class BuildAnalysisBatchesJob implements ShouldQueue
 
     public int $tries = 1;
 
-    public int $timeout = 300;
+    public int $timeout = 240;
 
     public function __construct()
     {

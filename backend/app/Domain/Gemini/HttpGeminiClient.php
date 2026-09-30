@@ -336,8 +336,10 @@ final class HttpGeminiClient implements GeminiBatchClient, GeminiClient
      * metadata.state (or state); the results of inline requests at
      * response.inlinedResponses, either a list or {inlinedResponses: [...]}
      * (both shapes seen in Google's documentation), each with the request's
-     * metadata.key and a response or an error. A result without a key takes
-     * its position.
+     * metadata.key and a response or an error. A result without a key is
+     * kept under its position ('0', '1', ...), which matches no request key,
+     * so the caller treats that request as missing (its row fails and the
+     * next round tries again).
      *
      * @param  array<mixed>  $json
      */

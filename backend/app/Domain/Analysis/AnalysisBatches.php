@@ -13,6 +13,7 @@ use App\Domain\Gemini\GeminiReply;
 use App\Models\AnalysisBatch;
 use App\Models\Classroom;
 use App\Models\StudentAnalysis;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -35,11 +36,20 @@ use Illuminate\Support\Str;
  * while waiting is written again the next night. Failed, expired or
  * cancelled batches (and single failed requests) leave their rows failed
  * with queued_input_hash cleared: the next night tries again.
+ *
+ * recoverStale(): a batch left 'building' (the build job died between
+ * creating it and the submit) or 'succeeded' (the collection died part
+ * way) for STALE_MINUTES, far past the jobs' 240 s timeout, is failed so
+ * its remaining queued rows are free for the next round. Called by
+ * build() and by the minute cron (PollAnalysisBatchJob::dispatchDue).
  */
 final class AnalysisBatches
 {
     /** A batch Gemini has not finished after this long is given up locally (Gemini itself expires them after 48 h). */
     public const GIVE_UP_HOURS = 72;
+
+    /** A 'building' or 'succeeded' batch untouched this long belongs to a job that died (their timeout is 240 s). */
+    public const STALE_MINUTES = 10;
 
     public function __construct(
         private readonly AnalysisInputs $inputs,
@@ -61,6 +71,7 @@ final class AnalysisBatches
     public function build(): array
     {
         $stats = ['recorded' => 0, 'queued' => 0, 'batches' => 0, 'skipped_no_key' => 0];
+        $this->recoverStale();
         $pendingBatchIds = AnalysisBatch::query()->whereIn('state', AnalysisBatch::PENDING_STATES)->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         /** @var array<string, array{key: GeminiKey, owner: int|null, rows: list<array{0: StudentAnalysis, 1: AnalysisInput}>}> $groups */
@@ -115,20 +126,25 @@ final class AnalysisBatches
             'request_count' => count($chunk),
         ]);
 
-        $requests = [];
-        foreach ($chunk as [$row, $input]) {
-            $row->forceFill([
-                'queued_input_hash' => $row->computed_input_hash,
-                'status' => StudentAnalysis::STATUS_QUEUED,
-                'batch_id' => $batch->id,
-            ])->save();
-            $requests[self::requestKey($row->id)] = $this->requests->call($input, StudentAnalyses::FEATURE_NIGHTLY)->request;
-        }
-
         try {
+            $requests = [];
+            foreach ($chunk as [$row, $input]) {
+                $row->forceFill([
+                    'queued_input_hash' => $row->computed_input_hash,
+                    'status' => StudentAnalysis::STATUS_QUEUED,
+                    'batch_id' => $batch->id,
+                ])->save();
+                $requests[self::requestKey($row->id)] = $this->requests->call($input, StudentAnalyses::FEATURE_NIGHTLY)->request;
+            }
             $remote = $this->client->submitBatch($requests, 'eduvision-analysis-'.$batch->id, $key->apiKey);
         } catch (GeminiException $e) {
             $this->fail($batch, AnalysisBatch::STATE_FAILED, $e->getMessage(), $key);
+
+            return false;
+        } catch (\Throwable $e) {
+            // Never leave a batch 'building': its rows would be skipped every night.
+            report($e);
+            $this->fail($batch, AnalysisBatch::STATE_FAILED, 'the batch could not be built: '.$e->getMessage(), $key);
 
             return false;
         }
@@ -222,11 +238,63 @@ final class AnalysisBatches
             }
         }
 
+        $this->logTakenOver($batch, $remote, $rows->pluck('id')->all(), $key);
+
         $batch->forceFill([
             'state' => AnalysisBatch::STATE_COLLECTED,
             'completed_at' => now(),
             'error' => $failed === 0 ? null : Str::limit("{$failed} of {$rows->count()} requests failed", 250),
         ])->save();
+    }
+
+    /**
+     * Google bills every reply of the batch, also those of rows that
+     * "วิเคราะห์ตอนนี้" took over (or a later batch re-queued) while it
+     * waited: they are only logged to ai_calls (§21.8), never written.
+     *
+     * @param  list<int>  $collectedIds
+     */
+    private function logTakenOver(AnalysisBatch $batch, GeminiBatch $remote, array $collectedIds, GeminiKey $key): void
+    {
+        $ids = [];
+        foreach (array_keys($remote->replies) as $requestKey) {
+            if (preg_match('/^analysis-(\d{1,19})$/', (string) $requestKey, $m) === 1 && ! in_array((int) $m[1], $collectedIds, true)) {
+                $ids[] = (int) $m[1];
+            }
+        }
+        if ($ids === []) {
+            return;
+        }
+        $rows = StudentAnalysis::query()->whereKey($ids)->with('classroom')->get();
+        foreach ($rows as $row) {
+            $input = $row->classroom === null ? null : $this->inputs->forStudent($row->student_id, $row->classroom);
+            if ($input === null) {
+                continue;
+            }
+            $this->gateway->judgeBatchReply($this->requests->call($input, StudentAnalyses::FEATURE_NIGHTLY), $remote->replies[self::requestKey($row->id)], $key);
+        }
+    }
+
+    /** The batches whose job died while they were 'building' or 'succeeded'. */
+    public static function staleQuery(): Builder
+    {
+        return AnalysisBatch::query()
+            ->whereIn('state', [AnalysisBatch::STATE_BUILDING, AnalysisBatch::STATE_SUCCEEDED])
+            ->where('updated_at', '<=', now()->subMinutes(self::STALE_MINUTES));
+    }
+
+    /** Fails every stale batch so its queued rows are tried again (DESIGN §20.8 step 4). */
+    public function recoverStale(): int
+    {
+        $count = 0;
+        foreach (self::staleQuery()->orderBy('id')->get() as $batch) {
+            $this->fail($batch, AnalysisBatch::STATE_FAILED, $batch->state === AnalysisBatch::STATE_BUILDING
+                ? 'the build stopped before the batch was sent'
+                : 'the collection stopped part way');
+            $count++;
+        }
+
+        return $count;
     }
 
     private function fail(AnalysisBatch $batch, string $state, string $error, ?GeminiKey $key = null): void

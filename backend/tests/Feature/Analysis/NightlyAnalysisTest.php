@@ -4,6 +4,8 @@ namespace Tests\Feature\Analysis;
 
 use App\Domain\Analysis\AnalysisBatches;
 use App\Domain\Analysis\StudentAnalyses;
+use App\Domain\Gemini\GeminiBatch;
+use App\Domain\Gemini\GeminiBatchClient;
 use App\Domain\Gemini\GeminiClient;
 use App\Domain\Gemini\HttpGeminiClient;
 use App\Jobs\BuildAnalysisBatchesJob;
@@ -207,6 +209,9 @@ class NightlyAnalysisTest extends TestCase
         $this->batches()->poll(AnalysisBatch::query()->sole()->id);
         $this->assertSame(StudentAnalysis::VIA_NOW, $this->row('A')->generated_via);
         $this->assertSame(StudentAnalysis::VIA_BATCH, $this->row('B')->generated_via);
+
+        // Google bills A's batch reply too: it is logged, not written (§21.8).
+        $this->assertSame(2, AiCall::query()->where('feature', 'analysis_nightly')->where('batch', true)->count());
     }
 
     /**
@@ -306,6 +311,70 @@ class NightlyAnalysisTest extends TestCase
         $batch = AnalysisBatch::query()->sole();
         $this->assertSame(AnalysisBatch::STATE_FAILED, $batch->state);
         $this->assertStringNotContainsString('testing-server-gemini-key-not-real', (string) $batch->error);
+        $this->assertSame(StudentAnalysis::STATUS_FAILED, $this->row('A')->status);
+    }
+
+    public function test_a_batch_left_building_by_a_dead_job_is_failed_and_its_rows_go_again(): void
+    {
+        $this->batches()->build();
+        $batch = AnalysisBatch::query()->sole();
+        // As if the job died after creating the batch and marking the rows, before the submit.
+        $batch->forceFill(['state' => AnalysisBatch::STATE_BUILDING, 'batch_name' => null, 'submitted_at' => null])->save();
+
+        $this->travel(AnalysisBatches::STALE_MINUTES - 1)->minutes();
+        $this->assertSame(0, $this->batches()->recoverStale(), 'a build may still be running');
+        $this->assertSame(0, $this->batches()->build()['queued'], 'rows of a live building batch wait');
+
+        $this->travel(2)->minutes();
+        Queue::fake();
+        PollAnalysisBatchJob::dispatchDue();
+
+        $this->assertSame(AnalysisBatch::STATE_FAILED, $batch->refresh()->state);
+        $this->assertSame('the build stopped before the batch was sent', $batch->error);
+        $this->assertSame([StudentAnalysis::STATUS_FAILED, null], [$this->row('A')->status, $this->row('A')->queued_input_hash]);
+        Queue::assertNothingPushed();
+        $this->assertSame(2, $this->batches()->build()['queued'], 'tried again');
+    }
+
+    public function test_a_collection_that_died_part_way_is_failed_by_the_next_round(): void
+    {
+        $this->batches()->build();
+        $batch = AnalysisBatch::query()->sole();
+        $this->batches()->poll($batch->id);
+        // As if the collection died after writing A: B is still queued in a 'succeeded' batch.
+        $b = $this->row('B');
+        $b->forceFill(['status' => StudentAnalysis::STATUS_QUEUED, 'queued_input_hash' => $b->computed_input_hash, 'generated_input_hash' => null, 'batch_id' => $batch->id])->save();
+        $batch->forceFill(['state' => AnalysisBatch::STATE_SUCCEEDED, 'completed_at' => null])->save();
+
+        $this->travel(AnalysisBatches::STALE_MINUTES + 1)->minutes();
+        $stats = $this->batches()->build();
+
+        $this->assertSame([AnalysisBatch::STATE_FAILED, 'the collection stopped part way'], [$batch->refresh()->state, $batch->error]);
+        $this->assertSame(StudentAnalysis::STATUS_DRAFTED, $this->row('A')->status, 'written texts stay');
+        $this->assertSame(1, $stats['queued'], 'B goes in the new batch');
+        $this->assertSame(StudentAnalysis::STATUS_QUEUED, $this->row('B')->status);
+        $this->assertNotSame($batch->id, $this->row('B')->batch_id);
+    }
+
+    public function test_an_unexpected_error_while_building_fails_the_batch_instead_of_leaving_it_building(): void
+    {
+        $this->app->instance(GeminiBatchClient::class, new class implements GeminiBatchClient
+        {
+            public function submitBatch(array $requests, string $displayName, #[\SensitiveParameter] string $apiKey): GeminiBatch
+            {
+                throw new \RuntimeException('boom');
+            }
+
+            public function batchStatus(string $name, #[\SensitiveParameter] string $apiKey): GeminiBatch
+            {
+                throw new \RuntimeException('boom');
+            }
+        });
+
+        $this->assertSame(0, $this->batches()->build()['queued']);
+
+        $batch = AnalysisBatch::query()->sole();
+        $this->assertSame([AnalysisBatch::STATE_FAILED, 'the batch could not be built: boom'], [$batch->state, $batch->error]);
         $this->assertSame(StudentAnalysis::STATUS_FAILED, $this->row('A')->status);
     }
 

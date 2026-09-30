@@ -14,6 +14,9 @@ use Illuminate\Support\Carbon;
  * building -> submitted -> running -> collected (results written), or
  * failed / expired / cancelled. succeeded is Gemini's state between the
  * poll that saw it and the collection (kept for the enum of §20.6).
+ * A building or succeeded batch untouched for
+ * AnalysisBatches::STALE_MINUTES belongs to a job that died and is failed
+ * by AnalysisBatches::recoverStale().
  *
  * @property int $id
  * @property int|null $key_owner_id
