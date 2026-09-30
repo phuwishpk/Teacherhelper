@@ -1,6 +1,6 @@
 # EduVision: คู่มือ deploy backend บน Plesk (Hostatom shared hosting)
 
-- **ฉบับ:** 27 ก.ย. 2569 (B7) เขียนจาก DESIGN §3.3, §7.2–§7.6 และ KICKOFF ส่วนที่ 3 (B7–B9) กับส่วนที่ 6 (Google Classroom)
+- **ฉบับ:** 27 ก.ย. 2569 (B7) เขียนจาก DESIGN §3.3, §7.2–§7.6 และ KICKOFF ส่วนที่ 3 (B7–B9) กับส่วนที่ 6 (Google Classroom) **ปรับ 30 ก.ย. 2569** สำหรับ Phase 8–9 (DESIGN §19–§21): งานรอบของ cron (§4.7), ค่า PHP (§4.1), ตัวแปร `.env` ใหม่ (§4.6) และ scope `classroom.announcements` (§6.3)
 - **สถานะ:** ยัง**ไม่เคย deploy จริง** ทุกข้อที่มี `⚠️ ต้องตรวจสอบ` คือสิ่งที่ยังไม่ได้ยืนยันกับหน้าจอ Plesk ของ Hostatom เมื่อทำจริงแล้วให้แก้เอกสารนี้ (และ DESIGN §7.2/§7.6 ถ้าค่าต่างจากที่เขียนไว้) ใน commit เดียวกัน ตาม KICKOFF Day 3 ข้อ 9
 - **กติกา:** ไฟล์นี้อยู่ใน repo สาธารณะ **ห้ามใส่รหัสผ่าน, key, token, ชื่อ database จริง หรือ path ที่บอกโครงสร้าง home ของ subscription เกินจำเป็น** ค่าจริงเก็บใน password manager ของทีม
 - **ผู้อ่าน:** คนที่มีสิทธิ์เข้า Plesk ของ `teacherhelper.phuwish.com` (ไม่ต้องเขียนโค้ดเป็น แต่ต้องใช้ terminal บน Mac ได้เพื่อ `curl` ตรวจผล)
@@ -30,7 +30,7 @@
 | โดเมน | `https://teacherhelper.phuwish.com` (subdomain ของ `phuwish.com`, DNS A → IP ของ Hostatom ที่มีอยู่แล้ว) |
 | สิ่งที่รัน | Laravel 13 API ที่ `/api/v1/*` และ Filament admin ที่ `/admin` จาก `backend/` ของ monorepo |
 | วิธี deploy | **Plesk Git** ดึง `main` ของ `github.com/phuwishpk/Teacherhelper` แบบ manual (Pull Updates → Deploy) แล้ว **PHP Composer extension** ติดตั้ง dependency ไม่มี CI/CD ที่ deploy ให้ (`.github/workflows/backend.yml` แค่รัน test) |
-| งานเบื้องหลัง | Plesk **Scheduled Task** 3 ตัว: worker ทุก 1 นาที (`eduvision:queue-work`), ลบไฟล์ตามนโยบายทุกวัน 02:00 (`eduvision:purge-images`) และ task "maintenance" ที่ใช้กด Run Now (migrate, optimize, ตรวจ key ฯลฯ) ไม่ใช้ `schedule:run` เพราะต้องใช้ `proc_open` |
+| งานเบื้องหลัง | Plesk **Scheduled Task** 3 ตัว: worker ทุก 1 นาที (`eduvision:queue-work` ซึ่งทำงานรอบด้วย: ซิงก์ Google Classroom ทุก 5 นาที, วิเคราะห์รายคนรอบกลางคืนหลัง 01:00 และถามผล batch ทุกนาที ดู §4.7), ลบไฟล์ตามนโยบายทุกวัน 02:00 (`eduvision:purge-images`) และ task "maintenance" ที่ใช้กด Run Now (migrate, optimize, ตรวจ key ฯลฯ) ไม่ใช้ `schedule:run` เพราะต้องใช้ `proc_open` |
 | Database | MariaDB ของ Plesk (สร้างจากหน้า Databases) queue, cache และ session ใช้ database ทั้งหมด ไม่มี Redis |
 | ไฟล์ | `storage/app/private/` ใต้ `backend/` (ภาพสแกน, crop, PDF, โมเดล) ไม่มี URL สาธารณะ โหลดผ่าน controller ที่ตรวจ policy เท่านั้น (DESIGN §7.3) |
 | PHP | 8.3 หรือ 8.4 ตามที่ probe รายงาน `composer.json` ล็อก `config.platform.php = 8.3.0` ห้ามใช้ syntax ใหม่กว่า 8.3 |
@@ -90,9 +90,9 @@ Websites & Domains > `teacherhelper.phuwish.com` > **PHP Settings**
 | PHP version | เวอร์ชันที่ probe รายงาน (≥ 8.3) | ต้องเป็นเวอร์ชันเดียวกับ Scheduled Task ทุกตัว (§4.7) |
 | Handler | แบบที่มี **Apache** อยู่ในสาย เช่น "FPM application served by Apache" | Laravel ใช้ `public/.htaccess` ส่งทุก request เข้า `index.php` ถ้าเป็น "served by nginx" ล้วน ทุก route จะ 404 ยกเว้น `/` (ดู §11) ⚠️ ต้องตรวจสอบ: ชื่อ handler ที่ Hostatom เปิดให้ |
 | `memory_limit` | ≥ 256M | mPDF ตอนสร้างใบงาน/บัตร QR และ worker (`queue:work --memory=128` เป็นเกณฑ์หยุดเองที่ต่ำกว่านี้) |
-| `max_execution_time` | ≥ 120 | POST /scans ที่มีไฟล์หลายสิบไฟล์ และหน้า Filament import CSV |
-| `upload_max_filesize` | ≥ 8M | หน้าเต็มของสแกน (`SCAN_MAX_PAGE_KB`), และการอัปโหลดโมเดลผ่าน Filament (§7) |
-| `post_max_size` | ≥ 16M | หน้า + crop ทุกข้อในหนึ่ง request |
+| `max_execution_time` | ≥ 120 (อย่างน้อย 90) | POST /scans ที่มีไฟล์หลายสิบไฟล์, หน้า Filament import CSV และ **"วิเคราะห์ตอนนี้"** (`POST /students/{id}/analysis/run` เรียก Gemini ใน request เอง ถ้าผลแรกใช้ไม่ได้ถามซ้ำอีกครั้ง ต้องได้อย่างน้อย 90 วินาที DESIGN §20.5) |
+| `upload_max_filesize` | ≥ 10M | ไฟล์งานที่ส่งแบบรูปทั้งหน้าและไฟล์เฉลย/เอกสารของครูไฟล์ละไม่เกิน 10 MB (`SUBMISSION_MAX_FILE_MB`, `DOCUMENT_MAX_FILE_MB`, DESIGN §19.4–§19.6), หน้าเต็มของสแกน (`SCAN_MAX_PAGE_KB`) และการอัปโหลดโมเดลผ่าน Filament (§7) ถ้าต่ำกว่านี้ไฟล์ใหญ่ถูก PHP ทิ้งก่อนถึงแอป |
+| `post_max_size` | ≥ 55M | งานส่งหนึ่งครั้งมีได้ 5 ไฟล์ × 10 MB (`SUBMISSION_MAX_PAGES`) บวกส่วนหัวของ multipart และหน้า + crop ทุกข้อของ POST /scans ถ้า body ใหญ่เกิน API ตอบ `413 payload_too_large` |
 | `max_file_uploads` | ≥ 100 | 1 หน้า + 2 ไฟล์ต่อข้อ ถ้าต่ำกว่านี้ PHP ทิ้งไฟล์ที่เกินเงียบๆ และ API ตอบ `503 too_many_files` |
 | `open_basedir` | `{WEBSPACEROOT}{/}{:}{TMP}{/}` | ต้องครอบ `<home>/eduvision/` ทั้งก้อน ไม่ใช่แค่ docroot |
 | `display_errors` | off | production |
@@ -207,6 +207,25 @@ WORKSHEET_BATCH_SIZE=10
 SCAN_MAX_PAGE_KB=4096
 SCAN_MAX_CROP_KB=1024
 
+# ---- Phase 8–9 (DESIGN §19–§21) ค่าตั้งต้นใช้ได้เลย คำอธิบายเต็มอยู่ใน backend/.env.example ----
+SUBMISSION_MAX_PAGES=5                # ไฟล์ต่องานส่งแบบรูปทั้งหน้า (หน้า PDF นับรวม)
+SUBMISSION_MAX_FILE_MB=10             # MB ต่อไฟล์ (ต้องไม่เกิน upload_max_filesize ใน §4.1)
+DOCUMENT_MAX_FILE_MB=10               # ไฟล์เฉลย/ใบโจทย์/เอกสารรายวิชาของครู MB ต่อไฟล์
+DOCUMENT_MAX_TOTAL_MB=20              # MB รวมต่อการอ่านหนึ่งครั้ง (ส่งให้ Gemini ใน call เดียว)
+DOCUMENT_MAX_PAGES=30                 # หน้าต่อการอ่านหนึ่งครั้ง เกินนี้ครูต้องเลือกช่วงหน้า
+DOCUMENT_RETENTION_DAYS=30            # วันที่เก็บไฟล์ของครู (ผลอ่านยังอยู่หลังลบไฟล์)
+CLASSROOM_SYNC_MAX_COURSEWORK=20      # การบ้านที่ซิงก์งานส่งได้ต่อรอบ cron
+CLASSROOM_SYNC_BUDGET_SECONDS=40      # รอบซิงก์หยุดเริ่มงานใหม่หลังเวลานี้ (worker รอบละ 50 วินาที)
+GEMINI_PRICE_INPUT_PER_M=0.50         # USD ต่อล้าน token ขาเข้า ใช้แสดงราคาก่อนอ่านเอกสาร ตรวจราคาปัจจุบันของ Google ก่อน
+GEMINI_PRICE_OUTPUT_PER_M=3.00        # USD ต่อล้าน token ขาออก (ว่างทั้งคู่ = แสดงเป็น token อย่างเดียว)
+USD_THB_RATE=33
+MASTERY_PASS_THRESHOLD=0.5            # ตัวชี้วัด "ผ่าน" เมื่อ mastery ถึงค่านี้ (§20.3)
+ANALYSIS_BATCH_MAX=200                # คำขอต่อ batch ของการวิเคราะห์รอบกลางคืน (§20.8)
+GRADING_BLANK_INK_MAX=0.005           # ช่องที่หมึกน้อยกว่านี้ = "ไม่ได้ตอบ" ไม่ส่ง Gemini (§21.3)
+GRADING_CNN_SKIP_ENABLED=false        # คง false จนกว่า calibration กับลายมือจริงผ่าน (§21.10)
+GRADING_CNN_SKIP_MIN_CONFIDENCE=0.97
+GRADING_CNN_SKIP_SAMPLE_RATE=0.10
+
 # ---- Gemini (§6.1) ----
 GEMINI_API_KEY=                       # key กลาง ไม่บังคับ: ครูใส่ key ของตัวเองในแอปได้
 GEMINI_MODEL=gemini-3.8-flash
@@ -215,6 +234,15 @@ GEMINI_TIMEOUT=30
 GEMINI_CONCURRENCY=8
 GEMINI_THINKING_LEVEL=low
 GEMINI_SEND_TEMPERATURE=false
+GEMINI_MEDIA_SHORT=high               # media resolution ต่อภาพ (§21.5) คง high จนกว่า calibration ผ่าน
+GEMINI_MEDIA_WORK=high
+GEMINI_MEDIA_PAGE=high                # ภาพทั้งหน้าของงานนักเรียน
+GEMINI_MEDIA_DOCUMENT=medium          # เอกสารของครูเท่านั้น
+GEMINI_MEDIA_PER_PART=false
+GEMINI_PAGE_MAX_QUESTIONS=15          # ข้อต่อ call ของ extract_page/extract_batch (§21.4) เกินนี้แบ่ง call
+GEMINI_CALIBRATION_MIN_SAMPLES=40     # เกณฑ์ของ eduvision:calibrate-gemini (§21.10)
+GEMINI_CALIBRATION_MAX_DROP=0.02
+GEMINI_CALIBRATION_MAX_SCORE_FLIPS=0
 
 # ---- Firebase Cloud Messaging (§6.2) ----
 FIREBASE_CREDENTIALS=                 # path เต็มของไฟล์ service account นอก docroot ว่าง = push ลง log เท่านั้น
@@ -249,11 +277,22 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 
 | ชื่อ | Script path | Arguments | ความถี่ (cron style) | หน้าที่ |
 |---|---|---|---|---|
-| `eduvision-queue-worker` | `eduvision/backend/artisan` | `eduvision:queue-work` | `* * * * *` | dispatch heartbeat แล้วรัน `queue:work --queue=grading,default,pdf --stop-when-empty --max-time=50` หนึ่งรอบ (DESIGN §7.2) ถ้าคิวว่างจบทันที เพิ่ม `--memory=256` ได้เฉพาะเมื่อ `memory_limit` ของ PHP ≥ 512M |
+| `eduvision-queue-worker` | `eduvision/backend/artisan` | `eduvision:queue-work` | `* * * * *` | dispatch heartbeat และงานรอบ (ตารางถัดไป) แล้วรัน `queue:work --queue=grading,default,pdf --stop-when-empty --max-time=50` หนึ่งรอบ (DESIGN §7.2) ถ้าคิวว่างจบทันที เพิ่ม `--memory=256` ได้เฉพาะเมื่อ `memory_limit` ของ PHP ≥ 512M |
 | `eduvision-purge-images` | `eduvision/backend/artisan` | `eduvision:purge-images` | `0 2 * * *` | ลบไฟล์ตามนโยบาย DESIGN §7.3: PDF ใบงานเกิน 30 วัน, ภาพหน้าเต็มของ submission ที่เผยแพร่แล้ว, crop หลัง `crop_retention_until`, สแกนซ้ำที่ไม่ยืนยันเกิน 30 วัน ⚠️ ต้องตรวจสอบ: เวลาของ cron เป็น timezone ของ server (คาดว่า Asia/Bangkok) |
 | `eduvision-maintenance` | `eduvision/backend/artisan` | เปลี่ยนตามงาน (ตารางถัดไป) | `0 4 1 1 *` (ไกลๆ) | ใช้ปุ่ม **Run Now** เท่านั้น |
 
 ⚠️ ต้องตรวจสอบ: ชื่อช่อง arguments และรูปแบบ path (สัมพัทธ์กับ home หรือ path เต็ม) ในหน้า Add Task ของ Hostatom; Run Now บอกทันทีถ้า path ผิด
+
+**งานรอบที่ `eduvision:queue-work` ทำเองทุกนาที** (ไม่ต้องเพิ่ม Scheduled Task และไม่ใช้ `schedule:run`) แต่ละข้อแยกกัน ข้อใดล้มจะเขียน `queue_work.dispatch_failed` ลง log แล้ว worker ยังตรวจงานต่อตามปกติ
+
+| งาน | เมื่อไร | ทำอะไร | อ้างอิง |
+|---|---|---|---|
+| heartbeat | ทุกนาที | เขียน `queue_last_run_at` ที่ `/health` แสดง | DESIGN §7.2 |
+| ซิงก์ Google Classroom (`ClassroomSyncJob`) | ทุก **5 นาที** (`Cache::add('classroom-sync:lock', 300 วินาที)` บน cache database) เฉพาะเมื่อมี `GOOGLE_OAUTH_CLIENT_ID` | ดึงงานใหม่ที่ครูสร้างในเว็บ Classroom (ร่างเฉลยด้วย AI รอครูอนุมัติ), งานที่นักเรียนส่ง (ดาวน์โหลดไฟล์จาก Drive บน server), คะแนนที่ครูแก้ใน Classroom (คะแนนไม่ตรงกัน) ข้ามครูที่ต้องเชื่อม Google ใหม่ จำกัดต่อรอบด้วย `CLASSROOM_SYNC_MAX_COURSEWORK` และ `CLASSROOM_SYNC_BUDGET_SECONDS` ปุ่ม "ซิงก์ตอนนี้" ในแอปเข้าคิวรอบของห้องนั้นทันที | DESIGN §19.3, §19.10 |
+| วิเคราะห์รายคนรอบกลางคืน (`BuildAnalysisBatchesJob`) | ครั้งแรกของวันหลัง **01:00 เวลาไทย** (`Cache::add('analysis-nightly:<วันที่>', 36 ชั่วโมง)`) | คำนวณจุดแข็ง/จุดที่ควรฝึกจาก mastery แล้วส่งเฉพาะนักเรียนที่ข้อมูลเปลี่ยนให้ Gemini Batch API (ราคาครึ่งหนึ่ง) batch ละ key หนึ่งตัว ห้องที่ไม่มี key ใดเลยถูกข้าม | DESIGN §20.8 |
+| ถามผล batch (`PollAnalysisBatchJob`) | ทุกนาที สำหรับ batch ที่ส่งแล้วและถามครั้งล่าสุดเกิน 1 นาที | เก็บผลที่เสร็จลง `student_analyses` (ครูอนุมัติก่อนนักเรียนเห็น) batch ที่ค้างเกิน 10 นาทีระหว่างสร้าง/เก็บผลถูกตั้งเป็นล้มเหลว และ batch ที่ไม่เสร็จใน 72 ชั่วโมงหมดอายุ แถวของนักเรียนจึงไปรอบคืนถัดไป | DESIGN §20.8 |
+
+ผลคือ worker รอบหนึ่งอาจใช้เวลาจนเกือบ 50 วินาทีเมื่อมีงานซิงก์ ปกติ และ cron ต้องค้างได้ ≥ 55 วินาที (§2 ข้อ 1) ถ้า cron ของ hosting ไม่ใช้ timezone ไทย ไม่มีผล เพราะโค้ดคิด 01:00 ตาม `Asia/Bangkok` เอง
 
 **Arguments ของ `eduvision-maintenance` ที่ใช้บ่อย** (แก้ค่าในช่อง arguments แล้วกด Run Now อ่าน output ในหน้าเดียวกัน)
 
@@ -275,7 +314,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 
 ลำดับครั้งแรก
 
-1. Run Now `migrate --force` → output ต้องขึ้น `DONE` ครบทุกไฟล์ใน `database/migrations/` (38 ไฟล์ ณ ฉบับนี้) phpMyAdmin เห็น table `schools`, `users`, `personal_access_tokens`, `jobs`, `cache`, `sessions`, `ai_calls`, `model_versions` ฯลฯ
+1. Run Now `migrate --force` → output ต้องขึ้น `DONE` ครบทุกไฟล์ใน `database/migrations/` (50 ไฟล์ ณ 30 ก.ย. 2569) phpMyAdmin เห็น table `schools`, `users`, `personal_access_tokens`, `jobs`, `cache`, `sessions`, `ai_calls`, `model_versions` ฯลฯ
 2. Run Now `db:seed --class=SchoolSeeder --force` (ถ้าต้องการโรงเรียนแรกจาก `.env`)
 3. ใส่ `ADMIN_EMAIL`/`ADMIN_PASSWORD` ใน `.env` → Run Now `db:seed --class=AdminSeeder --force` → ลบสองค่านั้นออกจาก `.env` → login `/admin` แล้วเปลี่ยนรหัสผ่านทันที
 4. Run Now `optimize` แล้ว `filament:optimize`
@@ -362,10 +401,12 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 ### 6.3 Google Classroom (DESIGN §18, KICKOFF ส่วนที่ 6)
 
 1. ทำ G1–G5 ใน KICKOFF ส่วนที่ 6: project เดียวกับ Firebase, เปิด Classroom API + Drive API, OAuth consent screen (โหมด Testing: refresh token หมดอายุ 7 วัน ครูต้องเชื่อมใหม่), OAuth client แบบ **Web application** (server ใช้แลก code) และแบบ **Android** (แอปใช้)
+   - **scope ที่ server ต้องได้ครบ 7 ตัว** (`GoogleScopes::REQUIRED`): `classroom.courses.readonly`, `classroom.rosters.readonly`, `classroom.profile.emails`, `classroom.coursework.students`, `drive.file`, `drive.readonly` และ **`classroom.announcements`** (ใหม่ใน Phase 8: ประกาศผลส่วนตัวรายคน DESIGN §19.7) ต้องเพิ่มใน consent screen ด้วย (KICKOFF G3)
+   - **ครูที่เชื่อมไว้ก่อน Phase 8 ต้องกด "เชื่อมใหม่"** (ตั้งค่า → Google Classroom) เพื่อให้สิทธิ์ประกาศ ระหว่างนั้น `GET /google/status` ตอบ `needs_reconnect: true` พร้อม `reconnect_message` แอปขึ้นแบนเนอร์ "ต้องเชื่อมบัญชี Google ใหม่" การซิงก์และประกาศของครูคนนั้นหยุดจนกว่าจะเชื่อมใหม่
 2. **ลงทะเบียน redirect URI ของการเชื่อมผ่านเบราว์เซอร์**: Google Cloud Console → APIs & Services → Credentials → client แบบ Web → *Authorized redirect URIs* → เพิ่ม `https://teacherhelper.phuwish.com/google/oauth/callback` (ตรงทุกตัวอักษรกับ `GOOGLE_OAUTH_REDIRECT_URI` หรือ `APP_URL` + `/google/oauth/callback` ถ้าเว้นว่าง; ไม่มี `/` ท้าย) → Save (มีผลภายในไม่กี่นาที) ใช้ตอนครูเชื่อมจากเว็บ (Flutter web) หรือจากแอปที่ไม่มี `GOOGLE_SERVER_CLIENT_ID`: server ส่งครูไปหน้า consent ของ Google แล้ว Google พาเบราว์เซอร์กลับมาที่ `GET /google/oauth/callback` ของเรา *Authorized JavaScript origins* ไม่ต้องใส่ ถ้าทดสอบบนเครื่อง dev ด้วย client เดียวกัน เพิ่ม `http://127.0.0.1:8000/google/oauth/callback` ด้วย
 3. `.env`: `GOOGLE_OAUTH_CLIENT_ID=` และ `GOOGLE_OAUTH_CLIENT_SECRET=` ของ client แบบ Web และ `GOOGLE_OAUTH_REDIRECT_URI=https://teacherhelper.phuwish.com/google/oauth/callback` (code จากแอป Android ผ่าน `POST /google/connect` ไม่ใช้ค่านี้) → `optimize:clear`/`optimize`
-4. client ID เดียวกันไปที่แอป Android เป็น `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` (ไม่บังคับ: ไม่ใส่ แอปเชื่อมผ่านเบราว์เซอร์แทน แต่ดาวน์โหลดและสแกนงานที่ส่งจาก Classroom ต้องมี)
-5. hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (probe ตรวจ `oauth2.googleapis.com` แล้ว)
+4. client ID เดียวกันไปที่แอป Android เป็น `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` (ไม่บังคับ: ไม่ใส่ แอปเชื่อมผ่านเบราว์เซอร์แทน ตั้งแต่ Phase 8 server ดาวน์โหลดไฟล์งานที่ส่งจาก Drive เอง แอปจึงไม่ต้องใช้ค่านี้เพื่อสแกนงานจาก Classroom)
+5. hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (probe ตรวจ `oauth2.googleapis.com` แล้ว) cron ซิงก์ทุก 5 นาทีและดาวน์โหลดไฟล์ที่นักเรียนแนบบน server (ไฟล์ละไม่เกิน `SUBMISSION_MAX_FILE_MB`)
 6. ทดสอบจากแอป: ตั้งค่า > เชื่อม Google Classroom → (ผ่านเบราว์เซอร์: หน้า "เชื่อม Google Classroom สำเร็จ" ที่ `/google/oauth/callback`) → `GET /api/v1/google/status` ตอบ `configured: true, connected: true` ถ้าหน้า Google ขึ้น `Error 400: redirect_uri_mismatch` แปลว่า URI ในข้อ 2 กับ `.env` ไม่ตรงกัน (ดู `redirect_uri` ในลิงก์ที่แอปเปิดได้)
 7. ถ้า secret หลุด: Credentials > เลือก Web client > **Reset secret** แล้วแก้ `.env`
 
@@ -408,7 +449,7 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 |---|---|
 | Authorization ทุก endpoint | ทุก route ใต้ `/api/v1` มีแถวใน `AuthorizationMatrixTest` (guest 401, ผิด role 403, ครูโรงเรียนอื่น/ครูร่วมโรงเรียนที่ไม่ใช่เจ้าของ 403/404, เพื่อนร่วมห้อง 404, บัญชี disabled 403 `account_not_active`, admin ไม่มีสิทธิ์ API) เพิ่ม route ใหม่โดยไม่เพิ่มแถว test จะแดง |
 | Role + ability | middleware `role:teacher` / `role:student` ตรวจทั้ง role ของบัญชีและ ability ของ token; policy ตรวจซ้ำที่ระดับแถว |
-| Rate limit | `/auth/teacher/*` (สมัคร + login รวมกัน) 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; `/google/oauth/callback` (ไม่ต้อง login) 20/นาที/IP; ต่อผู้ใช้แยก bucket กันต่อ endpoint: บันทึก Gemini key 10, สร้างคำอธิบายใหม่ 20, สร้างแบบฝึกด้วย AI 10, ขอตรวจใหม่ 30, ส่งคำตอบแบบฝึก 60 ครั้ง/นาที (ใช้ endpoint หนึ่งจนเต็มไม่ทำให้อีก endpoint โดนด้วย) ตอบ `429 too_many_requests` + `Retry-After` |
+| Rate limit | `/auth/teacher/*` (สมัคร + login รวมกัน) 10 ครั้ง/นาที/IP; `/auth/student/*` 120/นาที/IP + PIN 10/นาที/บัญชี; API ทั่วไป 120/นาที/ผู้ใช้; endpoint ที่เรียก Google 30/นาที/ครู; `/google/oauth/callback` (ไม่ต้อง login) 20/นาที/IP; ต่อผู้ใช้แยก bucket กันต่อ endpoint: บันทึก Gemini key 10, สร้างคำอธิบายใหม่ 20, สร้างแบบฝึกด้วย AI 10, ขอตรวจใหม่ 30, ส่งคำตอบแบบฝึก 60, อ่าน/ร่างเฉลย 10, อ่านเอกสารรายวิชา 10, เสนอตัวชี้วัด 10, วิเคราะห์ตอนนี้ 10, อัปโหลดเอกสาร 20, ครูอัปโหลดงานรูปทั้งหน้า 60, นักเรียนส่งงาน 10 ครั้ง/นาที (ใช้ endpoint หนึ่งจนเต็มไม่ทำให้อีก endpoint โดนด้วย) ตอบ `429 too_many_requests` + `Retry-After` |
 | PIN / QR | PIN ผิด 5 ครั้งล็อกบัญชี 15 นาที (นับที่บัญชี ไม่ใช่ IP); QR token 256 บิต เก็บเป็น hash; ออกบัตรใหม่/รีเซ็ต PIN ยกเลิก token เดิมทั้งหมด; QR บนใบงานมีลายเซ็น HMAC ปลอมไม่ได้ |
 | Token | Sanctum: ครู 30 วัน นักเรียน 180 วัน หมดอายุ/ถูกลบ/ปลอม → 401 ในรูปแบบเดียวกัน |
 | Security headers | ทุก response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`; API เพิ่ม `Cache-Control: no-store, private`, `X-Robots-Tag: noindex`, CSP `default-src 'none'` สำหรับ JSON; `Strict-Transport-Security` เฉพาะ HTTPS |
@@ -466,6 +507,11 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | ไม่มี `Strict-Transport-Security` ใน response ทั้งที่เรียกทาง https | PHP เห็น request เป็น http (proxy ภายในของ Plesk ไม่ส่ง `HTTPS=on`) | ⚠️ ต้องตรวจสอบ: ถ้าเกิดจริง เพิ่ม `$middleware->trustProxies(at: ['127.0.0.1'])` ใน `bootstrap/app.php` พร้อม test แล้ว deploy |
 | อัปโหลดโมเดลใน `/admin` ล้ม | เกิน `upload_max_filesize` | ใช้ `eduvision:register-model` (§7) |
 | อีเมลจาก Scheduled Task ทุกนาที | Notify ตั้งเป็นทุกครั้ง หรือ task ล้มจริง | ตั้ง Notify = Errors only; ถ้าล้ม อ่าน output |
+| ส่งงานรูปทั้งหน้า/เอกสารแล้วได้ `413` หรือ `422 file_too_large` ทั้งที่ไฟล์ไม่ถึง 10 MB | `upload_max_filesize` < 10M หรือ `post_max_size` < 55M | PHP Settings ตาม §4.1 |
+| งานจาก Classroom ไม่เข้าแอป / "ซิงก์ล่าสุด" ไม่ขยับ | ครูต้องเชื่อม Google ใหม่ (ดู `/teacher/attention` → `needs_reconnect`), cron ไม่รัน, หรือ log มี `queue_work.dispatch_failed` step `classroom_sync` | ให้ครูกด "เชื่อมใหม่"; ตรวจ `eduvision-queue-worker` ตามแถว `queue_last_run_at` ข้างบน; รอบซิงก์ห่างกัน 5 นาที |
+| ประกาศผลใน Classroom "ส่งไม่สำเร็จ" | ครูยังไม่ได้ให้ scope `classroom.announcements` หรือนักเรียนยังไม่ได้จับคู่บัญชี Google | เชื่อมใหม่ (§6.3) แล้วกด "ส่งประกาศอีกครั้ง" ในหน้าประกาศผลรายคน |
+| "วิเคราะห์ตอนนี้" ได้ 500/504 | `max_execution_time` < 90 | PHP Settings ตาม §4.1 |
+| ไม่มีการวิเคราะห์รอบกลางคืน | ห้องไม่มี Gemini key ใดเลย (ครูเจ้าของห้องและ key กลาง) หรือ worker ไม่รันหลัง 01:00 | ใส่ key; ดู `/admin` > AI calls (`feature = analysis_nightly`) |
 
 ---
 
