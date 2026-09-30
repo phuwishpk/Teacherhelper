@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -11,6 +13,13 @@ import 'chart_style.dart';
 String nodeShortLabel(RollupNode n) =>
     n.code ??
     (n.type == 'unit' && n.position != null ? 'หน่วย ${n.position}' : n.title);
+
+/// A one-line radar axis title: the standard code, the unit title or the
+/// node title, cut to [max] characters so it stays readable on a phone.
+String radarAxisLabel(RollupNode n, {int max = 18}) {
+  final raw = n.type == 'unit' ? n.title : (n.code ?? n.title);
+  return raw.length <= max ? raw : '${raw.substring(0, max - 1)}…';
+}
 
 /// The caption under the fallback radar of indicators (DESIGN §20.4).
 const kIndicatorAxesNote =
@@ -43,7 +52,7 @@ class RollupChart extends StatelessWidget {
         axes: [
           for (final n in summary.assessedNodes)
             RadarAxis(
-              label: nodeShortLabel(n),
+              label: radarAxisLabel(n),
               value: n.value ?? 0,
               onTap: () => onNode(n),
             ),
@@ -57,7 +66,7 @@ class RollupChart extends StatelessWidget {
             axes: [
               for (final a in summary.assessedIndicators)
                 RadarAxis(
-                  label: twoLineCode(a.indicator.skill.code),
+                  label: a.indicator.skill.code,
                   value: a.indicator.value ?? 0,
                   onTap: () => onNode(a.node),
                 ),
@@ -88,7 +97,7 @@ class RadarAxis {
 /// A radar of 3–12 [axes] on a fixed 0–100% scale, each axis titled with
 /// its label and value.
 class RollupRadar extends StatelessWidget {
-  const RollupRadar({super.key, required this.axes, this.height = 300});
+  const RollupRadar({super.key, required this.axes, this.height = 420});
 
   final List<RadarAxis> axes;
   final double height;
@@ -115,46 +124,76 @@ class RollupRadar extends StatelessWidget {
       // top and bottom titles (up to three lines) inside the chart box so
       // they do not run into the caption or the list below.
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 8),
-        child: RadarChart(
-          RadarChartData(
-            isMinValueAtCenter: true,
-            radarShape: RadarShape.polygon,
-            tickCount: 4,
-            ticksTextStyle: ChartColors.axisText(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // Same geometry as fl_chart's radar painter: centred, radius
+            // 80% of half the shorter side, rings every 1/5 of the radius.
+            final cx = box.maxWidth / 2;
+            final cy = box.maxHeight / 2;
+            final r = math.min(cx, cy) * 0.8;
+            final scaleStyle = ChartColors.axisText(
               context,
-            )?.copyWith(fontSize: 9, color: Colors.transparent),
-            tickBorderData: grid,
-            gridBorderData: grid,
-            radarBorderData: grid,
-            titlePositionPercentageOffset: 0.12,
-            titleTextStyle: Theme.of(context).textTheme.labelSmall,
-            getTitle: (i, _) => RadarChartTitle(
-              text: '${axes[i].label}\n${pct(axes[i].value)}',
-            ),
-            radarTouchData: RadarTouchData(
-              touchSpotThreshold: 24,
-              touchCallback: (event, response) {
-                final spot = response?.touchedSpot;
-                if (event is FlTapUpEvent && spot != null) {
-                  axes[spot.touchedRadarEntryIndex].onTap?.call();
-                }
-              },
-            ),
-            dataSets: [
-              scale(0),
-              scale(100),
-              RadarDataSet(
-                dataEntries: [
-                  for (final a in axes) RadarEntry(value: a.value * 100),
-                ],
-                fillColor: color.withValues(alpha: 0.18),
-                borderColor: color,
-                borderWidth: 2,
-                entryRadius: 4,
-              ),
-            ],
-          ),
+            )?.copyWith(fontSize: 10);
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: RadarChart(
+                    RadarChartData(
+                      isMinValueAtCenter: true,
+                      radarShape: RadarShape.polygon,
+                      // Five rings with the 0-100 scale printed along the first axis,
+                      // like a classic spider chart; each value is in the list below.
+                      tickCount: 5,
+                      // fl_chart prints ticks as "20.0"; they are hidden and the
+                      // whole-number scale is drawn over the rings instead.
+                      ticksTextStyle: const TextStyle(
+                        fontSize: 1,
+                        color: Colors.transparent,
+                      ),
+                      tickBorderData: grid,
+                      gridBorderData: grid,
+                      radarBorderData: grid,
+                      titlePositionPercentageOffset: 0.16,
+                      titleTextStyle: Theme.of(context).textTheme.bodySmall,
+                      getTitle: (i, _) => RadarChartTitle(text: axes[i].label),
+                      radarTouchData: RadarTouchData(
+                        touchSpotThreshold: 24,
+                        touchCallback: (event, response) {
+                          final spot = response?.touchedSpot;
+                          if (event is FlTapUpEvent && spot != null) {
+                            axes[spot.touchedRadarEntryIndex].onTap?.call();
+                          }
+                        },
+                      ),
+                      dataSets: [
+                        scale(0),
+                        scale(100),
+                        RadarDataSet(
+                          dataEntries: [
+                            for (final a in axes)
+                              RadarEntry(value: a.value * 100),
+                          ],
+                          fillColor: color.withValues(alpha: 0.18),
+                          borderColor: color,
+                          borderWidth: 2,
+                          entryRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                for (var k = 0; k <= 5; k++)
+                  Positioned(
+                    left: cx + 4,
+                    top: cy - r * k / 5 - 13,
+                    child: IgnorePointer(
+                      child: Text('${k * 20}', style: scaleStyle),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -357,10 +396,7 @@ Future<Skill?> showNodeIndicators(
               axes: [
                 for (final i in node.indicators)
                   if (i.assessed)
-                    RadarAxis(
-                      label: twoLineCode(i.skill.code),
-                      value: i.value!,
-                    ),
+                    RadarAxis(label: i.skill.code, value: i.value!),
               ],
             ),
           ),

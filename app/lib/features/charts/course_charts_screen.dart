@@ -318,11 +318,15 @@ class StudentCourseChartsBody extends ConsumerStatefulWidget {
     required this.courseId,
     this.studentId,
     this.classroomId,
+    this.studentName,
   });
 
   final int courseId;
   final int? studentId;
   final int? classroomId;
+
+  /// Shown in the spider chart's title in the teacher's per-student view.
+  final String? studentName;
 
   @override
   ConsumerState<StudentCourseChartsBody> createState() =>
@@ -354,7 +358,11 @@ class _StudentCourseChartsBodyState
         padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
           RollupCard(
-            title: _own ? 'ความเข้าใจของฉัน' : 'ความเข้าใจรายตัวชี้วัด',
+            title: _own
+                ? 'ความเข้าใจของฉัน'
+                : widget.studentName == null
+                ? 'ความเข้าใจรายตัวชี้วัด'
+                : 'ความเข้าใจของ ${widget.studentName}',
             summary: summary,
             axis: _axis,
             onAxis: (a) => setState(() => _axis = a),
@@ -426,6 +434,7 @@ class StudentCourseChartsScreen extends ConsumerWidget {
         courseId: courseId,
         studentId: studentId,
         classroomId: classroomId,
+        studentName: name,
       ),
     );
   }
