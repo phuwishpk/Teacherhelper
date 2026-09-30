@@ -14,6 +14,7 @@ use App\Http\Requests\Api\V1\UpdateAssignmentRequest;
 use App\Http\Resources\AssignmentResource;
 use App\Models\Assignment;
 use App\Models\Classroom;
+use App\Models\GradebookEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -213,11 +214,22 @@ class AssignmentController extends Controller
 
         DB::transaction(function () use ($assignment) {
             $assignment = Assignment::query()->lockForUpdate()->findOrFail($assignment->id);
-            if (! $assignment->isDraft()) {
-                throw new ApiException('ลบได้เฉพาะการบ้านที่ยังเป็นฉบับร่าง', 'assignment_not_draft', 409);
+            $exam = $assignment->isExam();
+            // A manual exam is `ready` from creation (DESIGN §22.1), so it is deletable while ready too.
+            if (! $assignment->isDraft() && ! ($assignment->isManualExam() && $assignment->isReady())) {
+                throw new ApiException($exam ? 'ลบได้เฉพาะข้อสอบที่ยังเป็นฉบับร่าง' : 'ลบได้เฉพาะการบ้านที่ยังเป็นฉบับร่าง', 'assignment_not_draft', 409);
             }
             if ($assignment->worksheetPrints()->exists()) {
-                throw new ApiException('การบ้านนี้พิมพ์ใบงานไปแล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_printed', 409);
+                throw new ApiException(
+                    $exam ? 'ข้อสอบนี้พิมพ์ไปแล้ว ลบไม่ได้' : 'การบ้านนี้พิมพ์ใบงานไปแล้ว ลบไม่ได้ ให้ปิดการบ้านแทน',
+                    'assignment_printed',
+                    409,
+                );
+            }
+            if ($assignment->isManualExam() && GradebookEntry::query()->where('assignment_id', $assignment->id)
+                ->where(fn ($q) => $q->whereNotNull('score')->orWhere('excused', true))->exists()) {
+                // The scores typed into the gradebook (§23.3) would go with the exam.
+                throw new ApiException('ข้อสอบนี้มีคะแนนในสมุดคะแนนแล้ว ลบไม่ได้', 'exam_scores_entered', 409);
             }
             if ($assignment->googleLink()->exists()) {
                 // The courseWork lives on in Classroom and its submissions refer to this row (§18.4).

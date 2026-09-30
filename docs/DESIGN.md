@@ -931,7 +931,7 @@ CREATE TABLE training_samples (
 |---|---|---|
 | GET | `/skills?subject=&grade=&q=` | ค้นทักษะเพื่อ tag |
 | POST / GET | `/assignments` | |
-| GET / PATCH / DELETE | `/assignments/{id}` | ลบได้เฉพาะสถานะ `draft` |
+| GET / PATCH / DELETE | `/assignments/{id}` | ลบได้เฉพาะสถานะ `draft` ยกเว้นข้อสอบ `manual` (เป็น `ready` ตั้งแต่สร้าง §22.1) ที่ลบได้ขณะ `ready` เมื่อยังไม่พิมพ์และยังไม่มีคะแนนในสมุดคะแนน (409 `exam_scores_entered`) |
 | POST | `/assignments/{id}/questions` | |
 | PATCH / DELETE | `/questions/{id}` | แก้หลังพิมพ์ไปแล้วทำให้ `layout_version` เพิ่ม |
 | POST | `/questions/{id}/rubric/draft` | queue `DraftRubricJob` |

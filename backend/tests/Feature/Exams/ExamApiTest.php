@@ -4,8 +4,10 @@ namespace Tests\Feature\Exams;
 
 use App\Models\Assignment;
 use App\Models\ExamSection;
+use App\Models\GradebookEntry;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\WorksheetPrint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -78,6 +80,34 @@ class ExamApiTest extends TestCase
         // Reopening a manual exam keeps it ready.
         $this->asUser($this->teacher)->patchJson("/api/v1/assignments/{$exam}", ['status' => 'draft'])
             ->assertOk()->assertJsonPath('data.status', 'ready');
+    }
+
+    public function test_a_manual_exam_can_be_deleted_until_it_is_printed_or_scored(): void
+    {
+        $manual = fn () => $this->createExam(['grading_method' => 'manual', 'manual_full_marks' => 20]);
+        $delete = fn (Assignment $exam) => $this->asUser($this->teacher)->deleteJson("/api/v1/assignments/{$exam->id}");
+
+        // Ready from creation, and still deletable.
+        $exam = $manual();
+        $this->assertSame('ready', $exam->status);
+        $delete($exam)->assertNoContent();
+        $this->assertNull(Assignment::query()->find($exam->id));
+
+        // A score typed into the gradebook keeps it.
+        $scored = $manual();
+        $student = $this->enrollStudent($this->classroom, 1, 'นักเรียนหนึ่ง')['student'];
+        GradebookEntry::create(['classroom_id' => $this->classroom->id, 'student_id' => $student->id, 'assignment_id' => $scored->id, 'score' => 15, 'excused' => false, 'updated_by' => $this->teacher->id]);
+        $delete($scored)->assertStatus(409)->assertJsonPath('code', 'exam_scores_entered');
+
+        // A printed exam keeps it, with exam wording.
+        $printed = $manual();
+        WorksheetPrint::create(['assignment_id' => $printed->id, 'layout_version' => 1, 'requested_by' => $this->teacher->id, 'status' => 'ready']);
+        $delete($printed)->assertStatus(409)->assertJsonPath('code', 'assignment_printed')->assertJsonPath('message', 'ข้อสอบนี้พิมพ์ไปแล้ว ลบไม่ได้');
+
+        // A ready app exam is still not deletable.
+        $app = $this->createExam();
+        $app->forceFill(['status' => 'ready'])->save();
+        $delete($app)->assertStatus(409)->assertJsonPath('code', 'assignment_not_draft')->assertJsonPath('message', 'ลบได้เฉพาะข้อสอบที่ยังเป็นฉบับร่าง');
     }
 
     public function test_exam_fields_are_validated(): void
@@ -483,9 +513,7 @@ class ExamApiTest extends TestCase
         ]);
         $this->asUser($this->teacher)->getJson("/api/v1/questions/{$homework->id}/image")->assertNotFound();
 
-        // Deleting the draft exam removes its figures.
-        $this->asUser($this->teacher)->deleteJson("/api/v1/assignments/{$exam->id}")->assertStatus(409); // manual exams are ready
-        $exam->forceFill(['status' => Assignment::STATUS_DRAFT])->save();
+        // Deleting the (manual, unprinted) exam removes its figures.
         $this->asUser($this->teacher)->deleteJson("/api/v1/assignments/{$exam->id}")->assertNoContent();
         $this->assertSame([], Storage::disk('local')->allFiles("exams/{$exam->school_id}/{$exam->id}"));
     }
