@@ -55,6 +55,7 @@ class ExamKindGuardTest extends TestCase
             'google feedback' => ['GET', 'assignments/{id}/google-feedback'],
             'google feedback retry' => ['POST', 'assignments/{id}/google-feedback/retry'],
             'grade conflicts' => ['GET', 'assignments/{id}/grade-conflicts'],
+            'requeue missing key' => ['POST', 'assignments/{id}/requeue-missing-key'],
         ];
     }
 
@@ -78,6 +79,18 @@ class ExamKindGuardTest extends TestCase
         $this->assertSame(0, WorksheetPrint::query()->count());
         $this->assertSame(0, AiCall::query()->count());
         $this->assertNull($this->exam->refresh()->current_layout_version);
+    }
+
+    public function test_an_exam_without_plan_or_course_is_told_to_pick_a_course(): void
+    {
+        $this->exam->forceFill(['course_id' => null, 'lesson_plan_id' => null])->save();
+
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->exam->id}/indicator-suggestions")
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'lesson_plan_required')
+            ->assertJsonPath('message', 'ผูกข้อสอบนี้กับรายวิชาหรือแผนการสอนที่หน้าตั้งค่าข้อสอบก่อน แล้วจึงให้ AI เสนอตัวชี้วัด')
+            ->assertJsonValidationErrors(['course_id']);
+        $this->assertSame(0, AiCall::query()->count());
     }
 
     public function test_grading_whole_pages_of_an_exam_submission_is_refused(): void

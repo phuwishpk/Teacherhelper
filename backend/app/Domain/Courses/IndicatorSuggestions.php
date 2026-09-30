@@ -75,12 +75,20 @@ final class IndicatorSuggestions
     {
         $scope = IndicatorScope::of($assignment);
         if ($scope === null) {
-            throw new ApiException(
-                'ผูกการบ้านนี้กับแผนการสอนก่อน แล้วจึงให้ AI เสนอตัวชี้วัด',
-                'lesson_plan_required',
-                422,
-                ['lesson_plan_id' => ['กรุณาเลือกแผนการสอน']],
-            );
+            // An exam without a plan uses its course's indicators (§22.13), so only one with neither lands here.
+            throw $assignment->isExam()
+                ? new ApiException(
+                    'ผูกข้อสอบนี้กับรายวิชาหรือแผนการสอนที่หน้าตั้งค่าข้อสอบก่อน แล้วจึงให้ AI เสนอตัวชี้วัด',
+                    'lesson_plan_required',
+                    422,
+                    ['course_id' => ['กรุณาเลือกรายวิชา']],
+                )
+                : new ApiException(
+                    'ผูกการบ้านนี้กับแผนการสอนก่อน แล้วจึงให้ AI เสนอตัวชี้วัด',
+                    'lesson_plan_required',
+                    422,
+                    ['lesson_plan_id' => ['กรุณาเลือกแผนการสอน']],
+                );
         }
         if ($scope->isEmpty()) {
             throw new ApiException(

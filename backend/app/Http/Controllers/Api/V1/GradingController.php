@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Exams\ExamRegrade;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Grading\ClassRegrade;
@@ -99,6 +100,8 @@ class GradingController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('review', $assignment);
+        // Exam answers are scored by code and never wait for a Gemini key (§22.1).
+        ExamGuard::homeworkOnly($assignment);
 
         if ($this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
