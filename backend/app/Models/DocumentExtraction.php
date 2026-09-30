@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $school_id
  * @property string $input_hash
- * @property string $purpose answer_key|coursework|course|lesson_plan
+ * @property string $purpose answer_key|coursework|course|lesson_plan|exam
  * @property string $status queued|done|failed
  * @property array<string, mixed>|null $result
  * @property string|null $model
@@ -40,6 +40,9 @@ use Illuminate\Support\Carbon;
 class DocumentExtraction extends Model
 {
     public const PURPOSE_ANSWER_KEY = 'answer_key';
+
+    /** An exam file read into sections and questions (DESIGN §22.4, ExamDocumentResult). */
+    public const PURPOSE_EXAM = 'exam';
 
     public const STATUS_QUEUED = 'queued';
 

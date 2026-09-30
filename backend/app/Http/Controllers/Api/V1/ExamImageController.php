@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Exams\ExamEditor;
+use App\Domain\Exams\ExamFigures;
 use App\Domain\Exams\ExamImages;
 use App\Domain\Exams\ExamPayload;
 use App\Http\Controllers\Controller;
@@ -109,6 +110,34 @@ class ExamImageController extends Controller
         Gate::authorize('update', $option->question);
 
         return self::stream($option->image_path);
+    }
+
+    /**
+     * PUT /api/v1/questions/{id}/figure {page_image_id, box_2d: [ymin, xmin,
+     * ymax, xmax] (0–1000)} -> {data: question}: the teacher boxes the figure
+     * again on a page image of the same exam; the server crops it with GD
+     * (DESIGN §22.4). 422 errors.page_image_id / errors.box_2d,
+     * document_missing once the page image was deleted.
+     */
+    public function figureQuestion(Request $request, int $id): JsonResponse
+    {
+        $question = self::ownQuestions($request)->findOrFail($id);
+        Gate::authorize('update', $question);
+
+        ExamFigures::recrop($question, $request->only(['page_image_id', 'box_2d']));
+
+        return response()->json(['data' => ExamPayload::question($question->refresh())]);
+    }
+
+    /** PUT /api/v1/question-options/{id}/figure (as figureQuestion) -> {data: question} */
+    public function figureOption(Request $request, int $id): JsonResponse
+    {
+        $option = self::ownOptions($request)->findOrFail($id);
+        Gate::authorize('update', $option->question);
+
+        ExamFigures::recrop($option, $request->only(['page_image_id', 'box_2d']));
+
+        return response()->json(['data' => ExamPayload::question(Question::query()->findOrFail($option->question_id))]);
     }
 
     private static function stream(?string $path): StreamedResponse

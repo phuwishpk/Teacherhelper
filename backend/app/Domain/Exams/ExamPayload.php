@@ -4,6 +4,7 @@ namespace App\Domain\Exams;
 
 use App\Http\Resources\AssignmentResource;
 use App\Models\Assignment;
+use App\Models\ExamPageImage;
 use App\Models\ExamSection;
 use App\Models\ExamVersion;
 use App\Models\Question;
@@ -18,13 +19,23 @@ use Illuminate\Support\Collection;
  *   default_points, first_number, last_number, questions: [question]}],
  *   key_complete, incomplete_questions: [{question_id, position, reasons[]}],
  *   booklet_incomplete_questions: [...], versions_ready, structure_locked_at,
- *   sheet: {pages, overflow}}
+ *   sheet: {pages, overflow}, page_images: [{id, source_document_id,
+ *   page_no, width_px, height_px, available}], figures_pending: [{
+ *   source_document_id, page_no, original_name, mime_type, figures,
+ *   reason: needs_render|document_missing}]}
  *
  * question: {id, section_id, position (the number on the ก version),
  *   type, prompt_text, has_prompt_image, max_points, options: [{id,
- *   position, label, text, has_image}], answer_key, approved_at, origin,
- *   blank, lock_options, lock_options_suggested, skill_ids, key_complete,
- *   has_prompt, updated_at}
+ *   position, label, text, has_image, figure_source, figure_pending}],
+ *   answer_key, approved_at, origin, blank, lock_options,
+ *   lock_options_suggested, skill_ids, key_complete, has_prompt,
+ *   figure_source, figure_pending, updated_at}
+ *
+ * figure_source: {page_image_id|null, source_document_id, page_no, box_2d}
+ * of a figure cropped (or waiting to be cropped, figure_pending) from the
+ * exam file (DESIGN §22.4); null for a picture the teacher attached.
+ * lock_options_suggested: the detector or Gemini's reading suggests
+ * "ห้ามสลับตัวเลือก" and the teacher has not set it.
  *
  * reasons: not_approved | no_key | no_prompt. blank = a question created
  * empty that the teacher has not filled in yet ("ยังไม่ได้กรอก").
@@ -54,6 +65,9 @@ final class ExamPayload
             'versions_ready' => ExamVersions::ready($exam),
             'structure_locked_at' => $exam->structure_locked_at?->toIso8601String(),
             'sheet' => ExamSheetCapacity::of($questions->count() - $numeric, $numeric),
+            'page_images' => ExamPageImage::query()->where('assignment_id', $exam->id)->orderBy('source_document_id')->orderBy('page_no')->get()
+                ->map(fn (ExamPageImage $p) => $p->toApi())->values()->all(),
+            'figures_pending' => ExamFigures::pending($exam),
         ];
     }
 
@@ -109,6 +123,8 @@ final class ExamPayload
                 'label' => QuestionOption::label($o->position),
                 'text' => $o->text,
                 'has_image' => $o->image_path !== null,
+                'figure_source' => self::figureSource($o->figure_source),
+                'figure_pending' => ExamFigures::isPending($o->figure_source),
             ])->values()->all(),
             'answer_key' => $question->answer_key,
             'approved_at' => $question->approved_at?->toIso8601String(),
@@ -116,11 +132,31 @@ final class ExamPayload
             'blank' => $question->approved_at === null && $question->origin === Question::ORIGIN_TEACHER,
             'lock_options' => (bool) $question->lock_options,
             'lock_options_suggested' => $question->type === Question::TYPE_MCQ && ! $question->lock_options
-                && LockOptionsDetector::suggests($options->pluck('text')->all()),
+                && ($question->lock_options_suggested || LockOptionsDetector::suggests($options->pluck('text')->all())),
             'skill_ids' => $question->skills->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             'key_complete' => ExamKeyCheck::hasKey($question),
             'has_prompt' => ExamKeyCheck::hasPrompt($question),
+            'figure_source' => self::figureSource($question->figure_source),
+            'figure_pending' => ExamFigures::isPending($question->figure_source),
             'updated_at' => $question->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $source
+     * @return array{page_image_id: int|null, source_document_id: int|null, page_no: int|null, box_2d: list<int>|null}|null
+     */
+    private static function figureSource(?array $source): ?array
+    {
+        if ($source === null) {
+            return null;
+        }
+
+        return [
+            'page_image_id' => isset($source['page_image_id']) ? (int) $source['page_image_id'] : null,
+            'source_document_id' => isset($source['source_document_id']) ? (int) $source['source_document_id'] : null,
+            'page_no' => isset($source['page_no']) ? (int) $source['page_no'] : null,
+            'box_2d' => is_array($source['box_2d'] ?? null) ? array_values(array_map('intval', $source['box_2d'])) : null,
         ];
     }
 

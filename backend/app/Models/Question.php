@@ -45,7 +45,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $approved_at
  * @property string|null $origin teacher|document|copied
  * @property int|null $copied_from_question_id
- * @property array<string, mixed>|null $figure_source
+ * @property array<string, mixed>|null $figure_source {page_image_id, box_2d} plus, for a figure read
+ *                                                    from a file (DESIGN §22.4), source_document_id and page_no;
+ *                                                    page_image_id is null while the page image is still missing
+ * @property bool $lock_options_suggested Gemini suggested "ห้ามสลับตัวเลือก" when reading the exam file (a suggestion only)
  */
 class Question extends Model
 {
@@ -106,6 +109,7 @@ class Question extends Model
         'origin',
         'copied_from_question_id',
         'figure_source',
+        'lock_options_suggested',
     ];
 
     protected $attributes = [
@@ -113,6 +117,7 @@ class Question extends Model
         'match_mode' => 'flexible',
         'rubric_status' => self::RUBRIC_NOT_NEEDED,
         'lock_options' => false,
+        'lock_options_suggested' => false,
     ];
 
     /**
@@ -131,6 +136,7 @@ class Question extends Model
             'approved_at' => 'datetime',
             'copied_from_question_id' => 'integer',
             'figure_source' => 'array',
+            'lock_options_suggested' => 'boolean',
         ];
     }
 

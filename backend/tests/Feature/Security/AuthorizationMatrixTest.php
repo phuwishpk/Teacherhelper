@@ -153,6 +153,18 @@ class AuthorizationMatrixTest extends TestCase
         'api.question-options.image.show' => ['GET', 'question-options/{exam_option}/image', 404, 404],
         'api.question-options.image.store' => ['POST', 'question-options/{exam_option}/image', 404, 404],
         'api.question-options.image.destroy' => ['DELETE', 'question-options/{exam_option}/image', 404, 404],
+        // Reading an exam file and copying questions (§22.4, §22.17): the owner's exams only.
+        'api.exams.import' => ['POST', 'exams/{exam}/import', 404, 404],
+        'api.exams.import.estimate' => ['POST', 'exams/{exam}/import/estimate', 404, 404],
+        'api.exams.page-images.store' => ['POST', 'exams/{exam}/page-images', 404, 404],
+        'api.exam-page-images.show' => ['GET', 'exam-page-images/{exam_page_image}', 404, 404],
+        // Even a teacher of the same school who guesses the document id gets 404 (§22.4).
+        'api.exams.documents.file' => ['GET', 'exams/{exam}/documents/{exam_document}/file', 404, 404],
+        'api.questions.figure' => ['PUT', 'questions/{exam_question}/figure', 404, 404],
+        'api.question-options.figure' => ['PUT', 'question-options/{exam_option}/figure', 404, 404],
+        // The library lists the caller's own exams only: anyone gets an answer, never others' questions.
+        'api.teacher.exam-questions' => ['GET', 'teacher/exam-questions', self::OK, self::OK],
+        'api.exams.copy-questions' => ['POST', 'exams/{exam}/copy-questions', 404, 404],
         'api.questions.update' => ['PATCH', 'questions/{question}', 404, 404],
         'api.questions.destroy' => ['DELETE', 'questions/{question}', 404, 404],
         'api.questions.rubric.draft' => ['POST', 'questions/{question}/rubric/draft', 404, 404],
@@ -452,6 +464,8 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_option}' => $this->examOptionA->id,
             '{exam_scan}' => $this->examScanA->id,
             '{exam_response}' => $this->examResponseA->id,
+            '{exam_page_image}' => $this->examPageImageA->id,
+            '{exam_document}' => $this->examDocumentA->id,
             '{gradebook_item}' => $this->gradebookItemA->id,
         ]);
 

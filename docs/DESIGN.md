@@ -3055,12 +3055,18 @@ ALTER TABLE ai_calls
      }
      ```
    - ทุกครั้งที่ครูสั่งอ่าน server บันทึกแถว `exam_imports` (ข้อสอบ, extraction, รายการไฟล์ตามลำดับที่ส่งพร้อมช่วงหน้า, ผู้สั่ง) ใช้แปลง `figure.file` เป็น `source_document_id` และเป็น**หลักฐานสิทธิ์**ของการโหลดไฟล์ต้นฉบับด้านล่าง
+   - **รายละเอียดที่ตัดสินตอน build 5** (1 ต.ค. 2569)
+     - ผลอ่านที่แคชใน `document_extractions.result` (`ExamDocumentResult`) อ้างภาพประกอบด้วย `{sha256, page, box_2d}` แทน `{file, page}` ของ Gemini: job แปลงลำดับไฟล์เป็น SHA-256 และเลขหน้าในช่วงที่ส่งเป็น**เลขหน้าในไฟล์ทั้งไฟล์** (ช่วงหน้า 2–3 หน้าแรกที่ส่ง = หน้า 2) เพราะ cache key ของ §19.5 เรียง hash ของไฟล์ ไฟล์ชุดเดียวกันที่ส่งคนละลำดับจึงได้ผลอ่านแถวเดียวกัน ตอนนำผลไปใช้ `exam_imports` ของการสั่งครั้งนั้นแปลง SHA-256 เป็น `source_document_id`
+     - ป้ายตัวเลือกของเฉลยที่พิมพ์ไว้ (ก–ฉ, A–F, 1–6, ถูก/ผิด) แปลงเป็นตำแหน่งต้นฉบับ ตัวเลขเป็นรูปมาตรฐาน เฉลยที่ไม่ลงช่องของตอนไม่ถูกเขียน (ครูกรอกเอง) ข้อ `mcq` ที่ Gemini ตอบ `lock_options: true` เก็บใน `questions.lock_options_suggested` (ข้อเสนอ ไม่ตั้ง `lock_options`)
+     - ผลอ่านที่เกินขีดจำกัด (200 ข้อ 10 ตอน) สร้างเท่าที่ใส่ได้ ข้อที่เหลืออยู่ใน `applied.skipped` พร้อมเหตุ ผลที่ยังไม่ถูกนำไปใช้ตอนอ่านเสร็จเพราะข้อสอบถูกพิมพ์ (ล็อก) หรือปิดไปแล้วค้างไว้ (`applied_at` ว่าง) ครูสั่งใหม่หลังปลดล็อกได้ฟรีจากแคช
+     - ภาพหน้าเอกสาร: ไฟล์รูปที่ server ถอดเองได้แถว `exam_page_images` ทันทีตอนนำผลไปใช้ (`uploaded_by = NULL`, ขนาด 0 จนกว่า `CropExamFiguresJob` ถอดและย่อด้านยาวไม่เกิน 2,000 px) ถอดไม่ได้ แถวถูกลบและหน้านั้นกลับเป็น "รอแอป render" หน้าที่รออยู่แสดงใน `figures_pending: [{source_document_id, page_no, original_name, mime_type, figures, reason: needs_render|document_missing}]` ของ `GET /exams/{id}` และของคำตอบ import
+     - ขยายขอบ 2% คือ 20 หน่วยของพิกัด 0–1000 ของหน้า (2% ของความกว้างและความสูงของหน้า) ทุกด้าน กรอบที่เล็กกว่า 5 หน่วยหรือกลับด้าน 422 `errors.box_2d`
    - ข้อที่ฝนไม่ได้ (อัตนัย เขียนตอบ) ไม่ถูกสร้าง และแสดงใน `skipped` ให้ครูเห็น ข้อความและภาพของนักเรียนไม่เกี่ยวกับทางนี้เลย
    - ผลเขียนเป็นตอนและข้อ**ร่าง** (`origin = document`, `approved_at = NULL`) ต่อท้ายตอนที่มีอยู่ ครู**ต้องตรวจและอนุมัติทุกข้อและทุกเฉลย** (ปุ่ม "อนุมัติข้อนี้" หรือ "อนุมัติที่เลือก") ก่อนพิมพ์ ข้อที่ยังไม่อนุมัติทำให้เฉลยไม่ครบ (§22.3)
    - **ตัดภาพประกอบ**: server ตัดด้วย GD เบาๆ จากภาพหน้าเอกสาร (`exam_page_images`) ตาม `box_2d` ขยายขอบ 2% ย่อด้านยาวไม่เกิน 1,600 px บันทึก JPEG คุณภาพ 85 ที่ `exams/{school}/{assignment}/figures/q{question_id}.jpg` (ภาพโจทย์) หรือ `o{option_id}.jpg` (ภาพตัวเลือก) คำนำหน้า q/o กัน id ของข้อและตัวเลือกชนกัน (build 1) ภาพหน้าเอกสารได้มาจาก
      - ไฟล์ JPEG/PNG/WebP: server ถอดด้วย GD เอง (ไฟล์ไม่เกิน 10 MB, ด้านยาวไม่เกิน 6,000 px ไม่อย่างนั้นไม่ตัดและแจ้ง)
      - PDF และ HEIC (GD อ่านไม่ได้ และ server ไม่มี CPU ให้ render PDF): **แอป Android render หน้าที่มีภาพประกอบ** ด้วย `PdfRenderer`/`BitmapFactory` ของ Android ผ่าน Pigeon (`renderDocumentPage`, ด้านยาวไม่เกิน 2,000 px, JPEG จาก Kotlin) แล้วอัปโหลดทีละหน้า (`POST /exams/{id}/page-images`) ถ้าในเครื่องไม่มีไฟล์ แอปโหลดจาก `GET /exams/{id}/documents/{document_id}/file` ได้**เฉพาะไฟล์ที่อยู่ใน `exam_imports` ของข้อสอบนั้น และข้อสอบเป็นของครูผู้เรียก** (policy ของการบ้าน) นอกนั้น 404 แม้อยู่โรงเรียนเดียวกัน (`source_documents` ใช้ร่วมกันทั้งโรงเรียนด้วย SHA-256 และ id เรียงลำดับ การเปิดตาม "โรงเรียนเดียวกัน" จะให้ครูโหลดไฟล์ของครูคนอื่น เช่นข้อสอบที่มีเฉลยหรือแผนการสอนได้) ไฟล์ถูกลบตามรอบ 30 วันแล้วตอบ 404 `document_missing` บนเว็บ (Chrome) render ไม่ได้ ข้อจะมีป้าย "ยังไม่มีภาพประกอบ" ให้ครูแนบรูปเอง
-   - ครู**ลากกรอบใหม่บนภาพหน้าเอกสาร**ได้ทุกภาพ (`PUT /questions/{id}/figure`, `PUT /question-options/{id}/figure`) server ตัดใหม่จากภาพหน้าเดิม ที่มาของภาพเก็บใน `figure_source` (`{page_image_id, box_2d}`) ภาพที่ครูแนบเองมี `figure_source = NULL`
+   - ครู**ลากกรอบใหม่บนภาพหน้าเอกสาร**ได้ทุกภาพ (`PUT /questions/{id}/figure`, `PUT /question-options/{id}/figure`) server ตัดใหม่จากภาพหน้าเดิม ที่มาของภาพเก็บใน `figure_source` (`{page_image_id, box_2d}` และ `source_document_id`, `page_no` ของหน้า; `page_image_id = null` = ภาพยังรอภาพหน้าเอกสาร build 5) ภาพที่ครูแนบเองมี `figure_source = NULL`
 3. **คัดลอกจากข้อสอบเดิมของครู**: ค้นข้อจากข้อสอบที่ครูคนนี้สร้าง (`created_by` = ครู, โรงเรียนเดียวกัน) กรองด้วยรายวิชา คำค้น หรือข้อสอบ แล้วเลือกข้อหรือทั้งตอน ระบบคัดลอกข้อความ ตัวเลือก ภาพ (คัดลอกไฟล์) เฉลย "ห้ามสลับตัวเลือก" และตัวชี้วัดที่โรงเรียนยังเห็น ข้อที่คัดลอกคงการอนุมัติของต้นฉบับ (`origin = copied`, `copied_from_question_id`) ข้อ `mcq` ที่จำนวนตัวเลือกไม่ตรงกับตอนปลายทางถูกข้ามและรายงาน (`skipped`) คัดลอกไปตอนใหม่จะสร้างตอนด้วยค่าของตอนต้นทาง
 
 ### 22.5 ชุดข้อสอบ (สลับข้อและตัวเลือก)
@@ -3311,7 +3317,8 @@ ALTER TABLE questions
   ADD COLUMN approved_at              TIMESTAMP NULL,                  -- ครูอนุมัติข้อ (ข้อสอบ); NULL = ร่างจากไฟล์
   ADD COLUMN origin                   ENUM('teacher','document','copied') NULL,
   ADD COLUMN copied_from_question_id  BIGINT UNSIGNED NULL REFERENCES questions(id) ON DELETE SET NULL,
-  ADD COLUMN figure_source            JSON NULL;                       -- {page_image_id, box_2d} ของ prompt_image_path
+  ADD COLUMN figure_source            JSON NULL,                       -- {page_image_id, box_2d} ของ prompt_image_path (+ source_document_id, page_no build 5)
+  ADD COLUMN lock_options_suggested   BOOLEAN NOT NULL DEFAULT FALSE;  -- build 5: Gemini เสนอ "ห้ามสลับตัวเลือก" ตอนอ่านไฟล์ (ข้อเสนอเท่านั้น)
 -- ข้อสอบ: position = เลขข้อต้นฉบับต่อเนื่องทั้งฉบับ (uq_question_position เดิม), answer_key ตาม §22.3
 
 CREATE TABLE question_options (
@@ -3418,7 +3425,7 @@ ALTER TABLE skill_observations
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
 | POST / PATCH | `/assignments`, `/assignments/{id}` | ครู | รับ field ใหม่ `kind` (ตั้งได้ตอนสร้างเท่านั้น), `grading_method`, `version_count`, `duration_minutes`, `show_key_to_students`, `manual_full_marks` (บังคับเมื่อ `manual`) และ `gradebook_category_id`, `excluded_from_grade` (§23) `GET /assignments` กรองด้วย `kind` ได้ |
-| GET | `/exams/{id}` | ครู | โครงสร้างเต็ม `{exam, sections: [{…, questions: [{…, options[], answer_key, approved_at, blank, lock_options, lock_options_suggested, skill_ids}]}], key_complete, incomplete_questions, booklet_incomplete_questions, versions_ready, structure_locked_at, sheet: {pages, overflow}}` รายการข้อที่ยังไม่ครบเป็น `{question_id, position, reasons[]}` เหตุคือ `not_approved`, `no_key` (กติกาเฉลยครบ) หรือ `no_prompt` (กติกาของเล่ม §22.4) |
+| GET | `/exams/{id}` | ครู | โครงสร้างเต็ม `{exam, sections: [{…, questions: [{…, options[], answer_key, approved_at, blank, lock_options, lock_options_suggested, skill_ids}]}], key_complete, incomplete_questions, booklet_incomplete_questions, versions_ready, structure_locked_at, sheet: {pages, overflow}}` รายการข้อที่ยังไม่ครบเป็น `{question_id, position, reasons[]}` เหตุคือ `not_approved`, `no_key` (กติกาเฉลยครบ) หรือ `no_prompt` (กติกาของเล่ม §22.4) build 5 เพิ่ม `page_images: [{id, source_document_id, page_no, width_px, height_px, available}]`, `figures_pending[]` (§22.4) และ `figure_source`, `figure_pending` ของข้อและตัวเลือก `lock_options_suggested` = ตัวตรวจข้อความ **หรือ** ข้อเสนอของ Gemini (และครูยังไม่ตั้ง) |
 | POST | `/exams/{id}/sections` | ครู | `{title?, instructions?, type, option_count?, numeric?: {digits, allow_negative, allow_decimal}, default_points?, question_count?}` (สร้างข้อว่างได้ทีละไม่เกิน 100 ข้อว่าง `approved_at = NULL` จนกว่าจะกรอกตาม §22.4) |
 | PATCH / DELETE | `/exam-sections/{id}` | ครู | ย้ายตำแหน่งด้วย `position` เลขข้อทั้งฉบับเรียงใหม่ โครงสร้างล็อกอยู่ 409 `exam_structure_locked` ชนิดของตอนเปลี่ยนไม่ได้ (422 ลบแล้วสร้างใหม่) ลด `option_count` ลบตัวเลือกท้ายและตัดตัวเลือกนั้นออกจากเฉลย เปลี่ยน `default_points` ใช้กับข้อที่ยังเป็นคะแนนตั้งต้นเดิม ตอนเกิน 10 ตอน 422 `validation_failed` ข้อรวมเกิน 200 ข้อ 422 `too_many_questions` (รหัสเดิม) |
 | POST | `/exam-sections/{id}/questions` | ครู | `{prompt_text, options?: [{text}], max_points?, answer_key?, lock_options?, position?}` |
@@ -3441,14 +3448,14 @@ ALTER TABLE skill_observations
 | POST | `/assignments/{id}/publish` | ครู | เดิม = "ประกาศผลทั้งห้อง" |
 | POST | `/assignments/{id}/regrade` · `/regrade/estimate` | ครู | เดิม (§21.13) ข้อสอบคิดใหม่ด้วยโค้ดทั้งหมด ไม่ต้องมี key ข้อที่ `resolve` ใช้คำตอบของครู ข้ามเฉพาะข้อที่แก้คะแนนตรง (§22.3) |
 | GET | `/exams/{id}/option-analysis` | ครู | `{published_count, groups_ready, questions: [{question_id, position, p, r, options: [{position, label, correct, count, pct, top, bottom, flags[]}], blank, multiple}]}` (build 6) |
-| POST | `/exams/{id}/import` | ครู | `{document_ids[], page_from?, page_to?, guidance?}` อ่านไฟล์ข้อสอบ (§22.4) แคชเจอ `200` พร้อม `{applied: {sections, questions, skipped[]}, figures_pending}` ไม่เจอ `202` (build 5) ข้อผิดพลาดเดียวกับ `answer-key/extract` (`document_too_long`, `ai_key_missing`, `document_missing`) |
+| POST | `/exams/{id}/import` | ครู | `{document_ids[], page_from?, page_to?, guidance?}` อ่านไฟล์ข้อสอบ (§22.4) แคชเจอ `200` พร้อม `{applied: {sections, questions, skipped[]}, figures_pending}` ไม่เจอ `202` (build 5) ข้อผิดพลาดเดียวกับ `answer-key/extract` (`document_too_long`, `ai_key_missing`, `document_missing`) build 5: คำตอบทั้งสองแบบเป็น `{cached, estimate, extraction, import, applied, figures_pending}` (`202` มี `applied: null` แอป poll `GET /document-extractions/{id}` แล้วโหลด `GET /exams/{id}` ใหม่) โครงสร้างล็อก 409 `exam_structure_locked` |
 | POST | `/exams/{id}/import/estimate` | ครู | ค่าใช้จ่ายโดยประมาณเหมือน `answer-key/estimate` |
-| POST | `/exams/{id}/page-images` | ครู | multipart `{source_document_id, page_no, image}` (JPEG ไม่เกิน 10 MB) ตัดภาพประกอบที่รอหน้านี้ทันที |
+| POST | `/exams/{id}/page-images` | ครู | multipart `{source_document_id, page_no, image}` (JPEG ไม่เกิน 10 MB) ตัดภาพประกอบที่รอหน้านี้ทันที (ผ่าน `CropExamFiguresJob`) ตอบ `201 {page_image, figures_pending}` ไฟล์ที่ไม่อยู่ใน `exam_imports` ของข้อสอบนี้ 422 `errors.source_document_id` หน้าเดิมซ้ำแทนภาพเดิม |
 | GET | `/exam-page-images/{id}` | ครู | stream ภาพหน้า (ใช้ลากกรอบ) |
 | PUT | `/questions/{id}/figure`, `/question-options/{id}/figure` | ครู | `{page_image_id, box_2d: [ymin, xmin, ymax, xmax]}` (0–1000) ตัดใหม่ด้วย GD |
 | GET | `/exams/{id}/documents/{document_id}/file` | ครู (เจ้าของข้อสอบ) | ไฟล์ต้นฉบับให้แอป render เฉพาะไฟล์ที่อยู่ใน `exam_imports.documents` ของข้อสอบนี้ นอกนั้น 404 (รวมไฟล์ของครูคนอื่นในโรงเรียนเดียวกัน) ลบแล้ว 404 `document_missing` |
-| GET | `/teacher/exam-questions?course_id=&exam_id=&q=&exclude_exam=` | ครู | ข้อจากข้อสอบของครูคนนี้เท่านั้น cursor pagination |
-| POST | `/exams/{id}/copy-questions` | ครู | `{question_ids[], section_id?}` (ไม่ส่ง `section_id` = สร้างตอนตามต้นทาง) ตอบ `{created, skipped: [{question_id, reason}]}` ข้อของครูคนอื่น 422 |
+| GET | `/teacher/exam-questions?course_id=&exam_id=&q=&exclude_exam=` | ครู | ข้อจากข้อสอบของครูคนนี้เท่านั้น cursor pagination build 5: `{data: [ข้อแบบ GET /exams/{id} + exam: {id, title, course_id}, section: {id, title, type, option_count, numeric}], meta: {per_page, next_cursor}}` เรียงข้อสอบใหม่ก่อน แล้วตามเลขข้อ |
+| POST | `/exams/{id}/copy-questions` | ครู | `{question_ids[], section_id?}` (ไม่ส่ง `section_id` = สร้างตอนตามต้นทาง) ตอบ `{created, skipped: [{question_id, reason}]}` ข้อของครูคนอื่น 422 build 5: ตอบ `201 {created (จำนวน), question_ids[], skipped: [{question_id, reason: type_mismatch\|option_count_mismatch, reason_th}], exam}` ค่าตัวเลขของเฉลยที่ไม่ลงช่องของตอนปลายทางถูกตัดทิ้ง ตัวชี้วัดคัดลอกเฉพาะที่โรงเรียนเห็นและเป็นวิชาของข้อสอบ |
 | GET | `/student/results/{submission_id}` | นักเรียน | เดิม ข้อสอบตอบ `{kind: exam, version_label, total, max, sections: [{title, score, max}], items: [...] \| null}` `items` มีเฉพาะเมื่อ `show_key_to_students` |
 
 **error code ใหม่**: `exam_structure_locked` (409), `exam_sheets_scanned` (409), `exam_sheet_overflow` (422), `exam_manual_grading` (422), `exam_kind_unsupported` (422, route เดิมที่ใช้กับการบ้านเท่านั้นถูกเรียกกับข้อสอบ §22.3), `version_unknown` (422 ของกระดาษเฉลย) รหัสเดิมที่ใช้ซ้ำ: `answer_key_not_approved`, `answer_key_incomplete`, `qr_invalid`, `layout_unknown`, `page_mismatch`, `document_too_long`, `document_missing`, `ai_key_missing`
@@ -3460,7 +3467,7 @@ ALTER TABLE skill_observations
 | `RenderExamBookletJob(print)` | pdf | เล่มของชุดหนึ่ง (§22.6) |
 | `RenderAnswerSheetsJob(print, chunk)` | pdf | กระดาษคำตอบทีละ 20 คน (หรือกระดาษเฉลย) แล้วต่อด้วย `MergeWorksheetsJob` เดิม |
 | `ReadExamDocumentJob(extraction)` | default | อ่านไฟล์ข้อสอบด้วย `exam_read` เขียนผลลง `document_extractions` แล้วสร้างตอนและข้อร่างของข้อสอบที่รอผลนั้น (แบบ `key_extraction_id` ของ §19.5) |
-| `CropExamFiguresJob(page_image)` | default | ตัดภาพประกอบที่อ้างหน้านั้นด้วย GD (งานเบา แยก job ไว้เพื่อไม่ให้ request อัปโหลดช้า) |
+| `CropExamFiguresJob(page_image)` | default | ตัดภาพประกอบที่อ้างหน้านั้นด้วย GD (งานเบา แยก job ไว้เพื่อไม่ให้ request อัปโหลดช้า) ถ้าเป็นหน้าของไฟล์รูปที่ server ถอดเองและยังไม่มีไฟล์ job ถอดและย่อภาพหน้าก่อน (build 5) |
 | `RescoreExamJob(assignment)` | grading | "ตรวจใหม่ทั้งห้อง" ของข้อสอบ ทุกข้อคิดกับเฉลยใหม่จาก `exam_answer.resolved` เมื่อครูอ่านรอยฝนไว้ ไม่อย่างนั้นจาก `exam_sheet_reads` ข้ามเฉพาะข้อที่ครูแก้คะแนนตรง (เว้นแต่ `include_overridden`) |
 
 - การรับกระดาษคำตอบ (`POST /exam-sheets`) คิดคะแนนใน request ไม่เข้าคิว ไม่มีงานตามรอบใหม่ใน `eduvision:queue-work`

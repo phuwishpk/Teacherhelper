@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExamController;
 use App\Http\Controllers\Api\V1\ExamImageController;
+use App\Http\Controllers\Api\V1\ExamImportController;
+use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\ExamSheetController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
@@ -69,6 +71,7 @@ Route::pattern('id', '[0-9]{1,18}');
 Route::pattern('submission_id', '[0-9]{1,18}');
 Route::pattern('item_id', '[0-9]{1,18}');
 Route::pattern('student_id', '[0-9]{1,18}');
+Route::pattern('document_id', '[0-9]{1,18}');
 
 // All endpoints live under /api/v1 (DESIGN §9).
 Route::prefix('v1')->group(function () {
@@ -244,6 +247,16 @@ Route::prefix('v1')->group(function () {
                 Route::get('question-options/{id}/image', [ExamImageController::class, 'showOption'])->name('api.question-options.image.show');
                 Route::post('question-options/{id}/image', [ExamImageController::class, 'storeOption'])->middleware('throttle:exam-images')->name('api.question-options.image.store');
                 Route::delete('question-options/{id}/image', [ExamImageController::class, 'destroyOption'])->name('api.question-options.image.destroy');
+                // Exams from files and earlier exams (§22.4): read once, crop figures, copy questions.
+                Route::post('exams/{id}/import', [ExamImportController::class, 'import'])->name('api.exams.import');
+                Route::post('exams/{id}/import/estimate', [ExamImportController::class, 'estimate'])->name('api.exams.import.estimate');
+                Route::post('exams/{id}/page-images', [ExamImportController::class, 'storePageImage'])->middleware('throttle:exam-images')->name('api.exams.page-images.store');
+                Route::get('exam-page-images/{id}', [ExamImportController::class, 'showPageImage'])->name('api.exam-page-images.show');
+                Route::get('exams/{id}/documents/{document_id}/file', [ExamImportController::class, 'documentFile'])->name('api.exams.documents.file');
+                Route::put('questions/{id}/figure', [ExamImageController::class, 'figureQuestion'])->middleware('throttle:exam-images')->name('api.questions.figure');
+                Route::put('question-options/{id}/figure', [ExamImageController::class, 'figureOption'])->middleware('throttle:exam-images')->name('api.question-options.figure');
+                Route::get('teacher/exam-questions', [ExamQuestionLibraryController::class, 'index'])->name('api.teacher.exam-questions');
+                Route::post('exams/{id}/copy-questions', [ExamQuestionLibraryController::class, 'copy'])->name('api.exams.copy-questions');
 
                 Route::patch('questions/{id}', [QuestionController::class, 'update'])->name('api.questions.update');
                 Route::delete('questions/{id}', [QuestionController::class, 'destroy'])->name('api.questions.destroy');

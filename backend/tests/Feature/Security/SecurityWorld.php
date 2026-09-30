@@ -13,6 +13,8 @@ use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\Course;
 use App\Models\DocumentExtraction;
+use App\Models\ExamImport;
+use App\Models\ExamPageImage;
 use App\Models\ExamSection;
 use App\Models\ExamSheetRead;
 use App\Models\GoogleAccount;
@@ -33,6 +35,7 @@ use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
 use App\Models\Skill;
+use App\Models\SourceDocument;
 use App\Models\StudentAnalysis;
 use App\Models\Subject;
 use App\Models\Submission;
@@ -106,6 +109,11 @@ trait SecurityWorld
     protected Question $examQuestionA;
 
     protected QuestionOption $examOptionA;
+
+    /** A photo of the exam file examA read (§22.4) and the page image its figures come from. */
+    protected SourceDocument $examDocumentA;
+
+    protected ExamPageImage $examPageImageA;
 
     /** A scanned answer-sheet page of the exam and its answer (§22.11), not published. */
     protected Scan $examScanA;
@@ -311,6 +319,23 @@ trait SecurityWorld
         $this->examOptionA->forceFill(['image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/o{$this->examOptionA->id}.jpg"])->save();
         $disk->put($this->examQuestionA->prompt_image_path, 'jpeg-bytes');
         $disk->put($this->examOptionA->image_path, 'jpeg-bytes');
+        // The exam read a photo of its paper (§22.4): the import row lets the owner download it again.
+        $this->examDocumentA = SourceDocument::create([
+            'school_id' => $this->schoolA->id, 'uploaded_by' => $this->teacherA->id, 'sha256' => str_repeat('e', 64),
+            'original_name' => 'exam.jpg', 'mime_type' => 'image/jpeg', 'size_bytes' => 10, 'page_count' => 1,
+            'file_path' => "documents/{$this->schoolA->id}/".str_repeat('e', 64).'.jpg',
+        ]);
+        $disk->put($this->examDocumentA->file_path, 'jpeg-bytes');
+        ExamImport::create([
+            'assignment_id' => $this->examA->id, 'documents' => [['source_document_id' => $this->examDocumentA->id, 'page_from' => 1, 'page_to' => 1]],
+            'requested_by' => $this->teacherA->id, 'applied_at' => now(),
+        ]);
+        $this->examPageImageA = ExamPageImage::create([
+            'school_id' => $this->schoolA->id, 'assignment_id' => $this->examA->id, 'source_document_id' => $this->examDocumentA->id,
+            'page_no' => 1, 'width_px' => 10, 'height_px' => 10, 'uploaded_by' => $this->teacherA->id,
+        ]);
+        $this->examPageImageA->forceFill(['file_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/pages/{$this->examPageImageA->id}.jpg"])->save();
+        $disk->put($this->examPageImageA->file_path, 'jpeg-bytes');
         $examSubmission = Submission::create(['assignment_id' => $this->examA->id, 'student_id' => $this->studentA->id, 'status' => Submission::STATUS_NEEDS_REVIEW]);
         $this->examScanA = Scan::create([
             'client_scan_id' => (string) Str::uuid(), 'submission_id' => $examSubmission->id, 'page_no' => 1, 'layout_version' => 1,

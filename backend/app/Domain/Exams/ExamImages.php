@@ -81,7 +81,13 @@ final class ExamImages
             self::fail('อ่านรูปภาพนี้ไม่ได้ ลองบันทึกเป็น JPEG แล้วแนบใหม่');
         }
 
-        self::disk()->put($path, self::jpeg(self::scaled($image)));
+        self::writeJpeg(self::scaled($image), $path);
+    }
+
+    /** Writes $image as a JPEG (quality 85) at $path on the private disk. */
+    public static function writeJpeg(GdImage $image, string $path): void
+    {
+        self::disk()->put($path, self::jpeg($image));
     }
 
     public static function delete(?string $path): void
@@ -97,12 +103,15 @@ final class ExamImages
         self::disk()->deleteDirectory(self::directory($exam));
     }
 
-    /** White background (PNG/WebP transparency) and the long side scaled down to the limit. */
-    private static function scaled(GdImage $source): GdImage
+    /**
+     * White background (PNG/WebP transparency) and the long side scaled down
+     * to $maxPx (default eduvision.exams.image_max_px).
+     */
+    public static function scaled(GdImage $source, ?int $maxPx = null): GdImage
     {
         $width = imagesx($source);
         $height = imagesy($source);
-        $maxPx = (int) config('eduvision.exams.image_max_px');
+        $maxPx ??= (int) config('eduvision.exams.image_max_px');
         $scale = min(1.0, $maxPx / max($width, $height));
         $w = max(1, (int) round($width * $scale));
         $h = max(1, (int) round($height * $scale));
