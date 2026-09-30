@@ -51,6 +51,9 @@ class _ExamImportReviewScreenState
   late ExamRead? _read = widget.result?.read;
   Timer? _poll;
 
+  /// Reloads the exam while the server crops figures (no pull needed).
+  Timer? _cropPoll;
+
   final _selected = <int>{};
   bool _busy = false;
 
@@ -80,7 +83,23 @@ class _ExamImportReviewScreenState
   @override
   void dispose() {
     _poll?.cancel();
+    _cropPoll?.cancel();
     super.dispose();
+  }
+
+  /// While a figure shows "กำลังตัดภาพ", reload the exam every
+  /// [examCropPollIntervalProvider]; each reload rebuilds and checks again.
+  void _pollWhileCropping(ExamDetail? d) {
+    if (d == null || _cropPoll != null || !anyFigureCropping(d)) return;
+    _cropPoll = Timer(ref.read(examCropPollIntervalProvider), () async {
+      try {
+        await _notifier.refresh();
+      } catch (_) {
+        // A network blip: the next build schedules another reload.
+      }
+      _cropPoll = null;
+      if (mounted) setState(() {});
+    });
   }
 
   void _schedulePoll() {
@@ -182,6 +201,7 @@ class _ExamImportReviewScreenState
   Widget build(BuildContext context) {
     final detail = ref.watch(examDetailProvider(widget.examId));
     final d = detail.value;
+    _pollWhileCropping(d);
     final drafts = d?.unapprovedDrafts ?? const <ExamQuestion>[];
     _selected.retainAll(drafts.map((q) => q.id));
     return Scaffold(

@@ -202,3 +202,9 @@ final examPageImageProvider = FutureProvider.autoDispose.family<Uint8List, int>(
 final examReadPollIntervalProvider = Provider<Duration>(
   (ref) => const Duration(seconds: 3),
 );
+
+/// How often the read review reloads the exam while the server crops
+/// figures (the queue worker runs once a minute; shorter in tests).
+final examCropPollIntervalProvider = Provider<Duration>(
+  (ref) => const Duration(seconds: 20),
+);

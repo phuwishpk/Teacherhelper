@@ -57,6 +57,9 @@ void main() {
         examReadPollIntervalProvider.overrideWithValue(
           const Duration(milliseconds: 10),
         ),
+        examCropPollIntervalProvider.overrideWithValue(
+          const Duration(milliseconds: 10),
+        ),
       ],
     );
     return (exams, imp, r);
@@ -126,6 +129,46 @@ void main() {
     // Page 2 now has an image: the option figure is being cropped.
     expect(find.text('ภาพตัวเลือก ข: กำลังตัดภาพ'), findsOneWidget);
     expect(find.byKey(const ValueKey('read_review_crop_41')), findsOneWidget);
+  });
+
+  testWidgets('reloads the exam while the server crops a figure', (
+    tester,
+  ) async {
+    final bothPages = [
+      for (final (id, no) in [(801, 1), (802, 2)])
+        {
+          'id': id,
+          'source_document_id': 501,
+          'page_no': no,
+          'width_px': 1000,
+          'height_px': 1400,
+          'available': true,
+        },
+    ];
+    final exams = FakeExamsRepository(
+      detail: importedExamJson(pending: false, pages: bothPages),
+    );
+    await pump(tester, examsRepo: exams);
+    await tester.pumpAndSettle();
+    expect(find.text('ภาพตัวเลือก ข: กำลังตัดภาพ'), findsOneWidget);
+
+    // The worker cropped it: the next reload shows the figure.
+    final cropped = importedExamJson(pending: false, pages: bothPages);
+    final q41 = ((cropped['sections'] as List).last['questions'] as List).first;
+    final option = (q41['options'] as List)[1] as Map<String, dynamic>;
+    option['figure_pending'] = false;
+    option['has_image'] = true;
+    exams.detailJson = cropped;
+    final gets = exams.args('get').length;
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pumpAndSettle();
+
+    expect(exams.args('get').length, greaterThan(gets));
+    expect(find.text('ภาพตัวเลือก ข: กำลังตัดภาพ'), findsNothing);
+    // Nothing is cropping any more, so no further reloads are scheduled.
+    final settled = exams.args('get').length;
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(exams.args('get').length, settled);
   });
 
   testWidgets('approves one question, then the selected ones', (tester) async {

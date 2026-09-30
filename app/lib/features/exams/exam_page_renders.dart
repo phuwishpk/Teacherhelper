@@ -140,3 +140,27 @@ FigureStatus figureStatus(
   );
   return hasPage ? FigureStatus.cropping : FigureStatus.missing;
 }
+
+/// Whether any figure of the exam is being cropped by the server (the
+/// per-minute queue worker, §22.4), so a screen showing it polls.
+bool anyFigureCropping(ExamDetail detail) {
+  for (final q in detail.questions) {
+    final prompt = figureStatus(
+      detail,
+      source: q.figureSource,
+      pending: q.figurePending,
+      hasImage: q.hasPromptImage,
+    );
+    if (prompt == FigureStatus.cropping) return true;
+    for (final o in q.options) {
+      final option = figureStatus(
+        detail,
+        source: o.figureSource,
+        pending: o.figurePending,
+        hasImage: o.hasImage,
+      );
+      if (option == FigureStatus.cropping) return true;
+    }
+  }
+  return false;
+}
