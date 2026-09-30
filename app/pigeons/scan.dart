@@ -89,6 +89,22 @@ class PageCrops {
   List<RegionCrop> regions;
 }
 
+/// What one downscaled camera frame shows (DESIGN §22.10): enough to decide
+/// whether to take the full photo, nothing is warped or cropped.
+class FrameDetection {
+  FrameDetection({required this.markersFound, required this.blurScore});
+
+  /// Number of the corner markers id 0..3 found (0..4).
+  int markersFound;
+
+  /// Raw QR text, or null when no QR could be read.
+  String? qrPayload;
+
+  /// Variance of the Laplacian of the marker frame warped at the frame's
+  /// own resolution (0 when fewer than four markers were found).
+  double blurScore;
+}
+
 @HostApi()
 abstract class ScanPipelineApi {
   /// Finds the markers, reads the QR and measures blur on a full photo.
@@ -102,5 +118,28 @@ abstract class ScanPipelineApi {
     String imagePath,
     PageDetection detection,
     String layoutJson,
+  );
+
+  /// Exam answer sheets (DESIGN §22.9): warps the marker frame like
+  /// [cropPage] and measures every bubble of the `version_bubbles`,
+  /// `omr_row` and `digit_block` regions of [layoutJson] (one page, sheet
+  /// `exam`). Returns JSON: {warped_page_path, blur_score, baseline,
+  /// version_fill, rows, digits}, fills after the page baseline.
+  @async
+  String readAnswerSheet(
+    String imagePath,
+    PageDetection detection,
+    String layoutJson,
+  );
+
+  /// Markers, QR and blur of one camera frame (the Y plane of a YUV_420
+  /// image, [bytesPerRow] per row) for continuous scanning (§22.10).
+  @async
+  FrameDetection detectFrame(
+    Uint8List yPlane,
+    int width,
+    int height,
+    int bytesPerRow,
+    int rotation,
   );
 }

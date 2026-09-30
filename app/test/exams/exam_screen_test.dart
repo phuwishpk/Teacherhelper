@@ -2,6 +2,7 @@ import 'package:eduvision/features/exams/exam_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/pump_screen.dart';
 import 'exam_fakes.dart';
 import 'exam_test_helpers.dart';
 
@@ -202,6 +203,40 @@ void main() {
       find.byKey(const ValueKey('exam_open_key')),
     );
     expect(key.onPressed, isNull);
+  });
+
+  testWidgets('"สแกนกระดาษคำตอบ" opens once the key is approved', (
+    tester,
+  ) async {
+    await pumpExamScreen(tester, const ExamScreen(examId: 40));
+    final disabled = tester.widget<ButtonStyleButton>(
+      find.byKey(const ValueKey('exam_open_scan')),
+    );
+    expect(disabled.onPressed, isNull);
+    await unmountScreen(tester);
+
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(
+        detail: examJson(
+          status: 'ready',
+          keyApprovedAt: '2026-10-01T02:00:00Z',
+          keyComplete: true,
+        ),
+      ),
+    );
+    await tapVisible(tester, find.byKey(const ValueKey('exam_open_scan')));
+    expect(find.text('scan /exams/40/scan'), findsOneWidget);
+  });
+
+  testWidgets('an exam graded by the teacher has no scanning', (tester) async {
+    await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: FakeExamsRepository(detail: examJson(method: 'manual')),
+    );
+    expect(find.byKey(const ValueKey('exam_open_scan')), findsNothing);
   });
 
   testWidgets('opens the key grid, the versions, a question and a new one', (

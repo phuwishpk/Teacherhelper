@@ -392,6 +392,62 @@ data class PageCrops (
     return "PageCrops(warpedPagePath=$warpedPagePath, regions=$regions)"
   }
 }
+
+/**
+ * What one downscaled camera frame shows (DESIGN §22.10): enough to decide
+ * whether to take the full photo, nothing is warped or cropped.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class FrameDetection (
+  /** Number of the corner markers id 0..3 found (0..4). */
+  val markersFound: Long,
+  /** Raw QR text, or null when no QR could be read. */
+  val qrPayload: String? = null,
+  /**
+   * Variance of the Laplacian of the marker frame warped at the frame's
+   * own resolution (0 when fewer than four markers were found).
+   */
+  val blurScore: Double
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): FrameDetection {
+      val markersFound = pigeonVar_list[0] as Long
+      val qrPayload = pigeonVar_list[1] as String?
+      val blurScore = pigeonVar_list[2] as Double
+      return FrameDetection(markersFound, qrPayload, blurScore)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      markersFound,
+      qrPayload,
+      blurScore,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as FrameDetection
+    return ScanApiPigeonUtils.deepEquals(this.markersFound, other.markersFound) && ScanApiPigeonUtils.deepEquals(this.qrPayload, other.qrPayload) && ScanApiPigeonUtils.deepEquals(this.blurScore, other.blurScore)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + ScanApiPigeonUtils.deepHash(this.markersFound)
+    result = 31 * result + ScanApiPigeonUtils.deepHash(this.qrPayload)
+    result = 31 * result + ScanApiPigeonUtils.deepHash(this.blurScore)
+    return result
+  }
+  override fun toString(): String {
+    return "FrameDetection(markersFound=$markersFound, qrPayload=$qrPayload, blurScore=$blurScore)"
+  }
+}
 private open class ScanApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -408,6 +464,11 @@ private open class ScanApiPigeonCodec : StandardMessageCodec() {
       131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           PageCrops.fromList(it)
+        }
+      }
+      132.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          FrameDetection.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -427,6 +488,10 @@ private open class ScanApiPigeonCodec : StandardMessageCodec() {
         stream.write(131)
         writeValue(stream, value.toList())
       }
+      is FrameDetection -> {
+        stream.write(132)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
@@ -442,6 +507,19 @@ interface ScanPipelineApi {
    * [layoutJson] (one page of the layout JSON, DESIGN §5.3).
    */
   suspend fun cropPage(imagePath: String, detection: PageDetection, layoutJson: String): PageCrops
+  /**
+   * Exam answer sheets (DESIGN §22.9): warps the marker frame like
+   * [cropPage] and measures every bubble of the `version_bubbles`,
+   * `omr_row` and `digit_block` regions of [layoutJson] (one page, sheet
+   * `exam`). Returns JSON: {warped_page_path, blur_score, baseline,
+   * version_fill, rows, digits}, fills after the page baseline.
+   */
+  suspend fun readAnswerSheet(imagePath: String, detection: PageDetection, layoutJson: String): String
+  /**
+   * Markers, QR and blur of one camera frame (the Y plane of a YUV_420
+   * image, [bytesPerRow] per row) for continuous scanning (§22.10).
+   */
+  suspend fun detectFrame(yPlane: ByteArray, width: Long, height: Long, bytesPerRow: Long, rotation: Long): FrameDetection
 
   companion object {
     /** The codec used by ScanPipelineApi. */
@@ -482,6 +560,50 @@ interface ScanPipelineApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.cropPage(imagePathArg, detectionArg, layoutJsonArg))
+              } catch (exception: Throwable) {
+                ScanApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.eduvision.ScanPipelineApi.readAnswerSheet$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val imagePathArg = args[0] as String
+            val detectionArg = args[1] as PageDetection
+            val layoutJsonArg = args[2] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.readAnswerSheet(imagePathArg, detectionArg, layoutJsonArg))
+              } catch (exception: Throwable) {
+                ScanApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.eduvision.ScanPipelineApi.detectFrame$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val yPlaneArg = args[0] as ByteArray
+            val widthArg = args[1] as Long
+            val heightArg = args[2] as Long
+            val bytesPerRowArg = args[3] as Long
+            val rotationArg = args[4] as Long
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.detectFrame(yPlaneArg, widthArg, heightArg, bytesPerRowArg, rotationArg))
               } catch (exception: Throwable) {
                 ScanApiPigeonUtils.wrapError(exception)
               }

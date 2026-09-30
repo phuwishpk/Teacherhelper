@@ -6,6 +6,7 @@ import '../../core/db/app_database.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../exams/exam_scan_models.dart';
 import '../scan/scan_processor.dart';
 import 'queued_scan.dart';
 import 'scan_queue_repository.dart';
@@ -108,9 +109,12 @@ class _ScanTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final qr = scan.qr;
-    final title = qr == null
-        ? 'สแกน ${scan.clientScanId.substring(0, 8)}'
-        : 'การบ้าน #${qr.assignmentId} นักเรียน #${qr.studentId} หน้า ${qr.page}';
+    final sheet = ExamQr.tryParse(scan.qrPayload);
+    final title = qr != null
+        ? 'การบ้าน #${qr.assignmentId} นักเรียน #${qr.studentId} หน้า ${qr.page}'
+        : sheet != null
+        ? 'กระดาษคำตอบ ข้อสอบ #${sheet.assignmentId} นักเรียน #${sheet.studentId} หน้า ${sheet.page}'
+        : 'สแกน ${scan.clientScanId.substring(0, 8)}';
     final actions = ref.read(uploadQueueActionsProvider.notifier);
     // An `uploading` row this old belongs to an isolate that died; the
     // teacher may retry or discard it instead of waiting for WorkManager.

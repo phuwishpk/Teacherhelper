@@ -80,6 +80,30 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         }
     }
 
+    override suspend fun readAnswerSheet(
+        imagePath: String,
+        detection: PageDetection,
+        layoutJson: String,
+    ): String = withContext(dispatcher) {
+        guarded {
+            val page = AnswerSheetPageParser.parse(layoutJson)
+            MatScope().use { s -> readSheet(s, imagePath, detection, page) }
+        }
+    }
+
+    override suspend fun detectFrame(
+        yPlane: ByteArray,
+        width: Long,
+        height: Long,
+        bytesPerRow: Long,
+        rotation: Long,
+    ): FrameDetection = withContext(dispatcher) {
+        // The rotation is not needed: markers are told apart by their ids and
+        // a rotation keeps their clockwise order, and ML Kit reads a QR at
+        // any angle.
+        guarded { MatScope().use { s -> frame(s, yPlane, width.toInt(), height.toInt(), bytesPerRow.toInt()) } }
+    }
+
     override fun close() {
         executor.execute {
             scanner?.close()
@@ -194,7 +218,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         return sd * sd
     }
 
-    /** ML Kit QR reader; prefers a worksheet payload when several QRs are visible. */
+    /** ML Kit QR reader; prefers a worksheet or answer-sheet payload when several QRs are visible. */
     private fun readQr(s: MatScope, image: Mat, longSide: Int): String? {
         val size = RegionMath.scaleToLongSide(image.cols(), image.rows(), longSide)
         val src = if (size.width != image.cols()) {
@@ -212,7 +236,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
                 TimeUnit.SECONDS,
             )
             val values = codes.mapNotNull { it.rawValue }
-            values.firstOrNull { it.startsWith("EV1.") } ?: values.firstOrNull()
+            values.firstOrNull { FrameMath.isEduVisionQr(it) } ?: values.firstOrNull()
         } catch (e: Exception) {
             Log.w(TAG, "QR reading failed", e)
             null
@@ -304,21 +328,98 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
         val threshold = inkThreshold(s, sub(s, gray, rect))
         val fill = LinkedHashMap<String, Double>()
         for (b in region.bubbles) {
-            val circle = RegionMath.bubbleCircle(b.cx, b.cy, b.r, gray.cols(), gray.rows())
-            val inner = PixelCircle(circle.cx, circle.cy, circle.r * RegionMath.INNER_BUBBLE)
-            val x0 = floor(inner.cx - inner.r).toInt().coerceIn(0, gray.cols())
-            val x1 = ceil(inner.cx + inner.r).toInt().coerceIn(0, gray.cols())
-            val y0 = floor(inner.cy - inner.r).toInt().coerceIn(0, gray.rows())
-            val y1 = ceil(inner.cy + inner.r).toInt().coerceIn(0, gray.rows())
-            val box = PixelRect(x0, y0, max(x0, x1), max(y0, y1))
-            fill[b.option] = if (box.isEmpty) {
-                0.0
-            } else {
-                val bytes = bytesOf(s, sub(s, gray, box))
-                CircleFill.darkShare(bytes, box.width, box.height, x0, y0, inner, threshold)
-            }
+            fill[b.option] = circleFill(s, gray, b.cx, b.cy, b.r, threshold)
         }
         return fill
+    }
+
+    /** Dark share inside 70% of one bubble's radius on the warped [gray] frame. */
+    private fun circleFill(s: MatScope, gray: Mat, cx: Double, cy: Double, r: Double, threshold: Double): Double {
+        val circle = RegionMath.bubbleCircle(cx, cy, r, gray.cols(), gray.rows())
+        val inner = PixelCircle(circle.cx, circle.cy, circle.r * RegionMath.INNER_BUBBLE)
+        val x0 = floor(inner.cx - inner.r).toInt().coerceIn(0, gray.cols())
+        val x1 = ceil(inner.cx + inner.r).toInt().coerceIn(0, gray.cols())
+        val y0 = floor(inner.cy - inner.r).toInt().coerceIn(0, gray.rows())
+        val y1 = ceil(inner.cy + inner.r).toInt().coerceIn(0, gray.rows())
+        val box = PixelRect(x0, y0, max(x0, x1), max(y0, y1))
+        if (box.isEmpty) return 0.0
+        val bytes = bytesOf(s, sub(s, gray, box))
+        return CircleFill.darkShare(bytes, box.width, box.height, x0, y0, inner, threshold)
+    }
+
+    // --------------------------------------------------------- answer sheets
+
+    /**
+     * DESIGN §22.9: warp like [crop], one Otsu split over the whole
+     * `answer_area` capped at [AnswerSheetReader.MAX_THRESHOLD] (the grey
+     * labels are never ink), every bubble's dark share, then the page
+     * baseline ([AnswerSheetReader.read]).
+     */
+    private fun readSheet(s: MatScope, imagePath: String, detection: PageDetection, page: AnswerSheetPage): String {
+        val corners = detection.markerCorners
+        if (corners.size != 8 || corners.any { it == null }) {
+            throw FlutterError("markers_missing", "All four corner markers are needed to read the sheet")
+        }
+        val pts = DoubleArray(8) { corners[it]!! }
+        val color = readImage(s, imagePath)
+        val size = RegionMath.warpedSize(page.frameWmm, page.frameHmm)
+        val warped = warp(s, color, pts, size)
+        val gray = s.track(Mat())
+        Imgproc.cvtColor(warped, gray, Imgproc.COLOR_BGR2GRAY)
+
+        val area = RegionMath.cropRect(page.answerArea, size.width, size.height, 0.0)
+        if (area.isEmpty) throw FlutterError("layout_invalid", "answer_area lies outside the marker frame")
+        val otsu = Imgproc.threshold(sub(s, gray, area), s.track(Mat()), 0.0, 255.0, Imgproc.THRESH_BINARY_INV or Imgproc.THRESH_OTSU)
+        val threshold = AnswerSheetReader.threshold(otsu)
+        val reading = AnswerSheetReader.read(page) { b -> circleFill(s, gray, b.cx, b.cy, b.r, threshold) }
+
+        val outDir = File(cacheRoot, UUID.randomUUID().toString())
+        if (!outDir.mkdirs()) throw FlutterError("storage_failed", "Cannot create ${outDir.path}")
+        val pageSize = RegionMath.scaleToLongSide(size.width, size.height, RegionMath.WARPED_PAGE_LONG_SIDE)
+        val small = s.track(Mat())
+        Imgproc.resize(warped, small, Size(pageSize.width.toDouble(), pageSize.height.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+        val pageFile = File(outDir, "page.webp")
+        writeWebp(s, small, pageFile)
+
+        return AnswerSheetReader.toJson(reading, pageFile.path, laplacianVariance(s, gray))
+    }
+
+    /** Markers, QR and blur of one camera frame (DESIGN §22.10); nothing is written. */
+    private fun frame(s: MatScope, yPlane: ByteArray, width: Int, height: Int, bytesPerRow: Int): FrameDetection {
+        if (width <= 0 || height <= 0 || bytesPerRow < width || yPlane.size < bytesPerRow.toLong() * (height - 1) + width) {
+            throw FlutterError("frame_invalid", "The Y plane does not match ${width}x$height ($bytesPerRow bytes per row)")
+        }
+        val gray = s.track(Mat(height, width, CvType.CV_8UC1))
+        if (bytesPerRow == width) {
+            gray.put(0, 0, yPlane.copyOf(width * height))
+        } else {
+            val row = ByteArray(width)
+            for (y in 0 until height) {
+                System.arraycopy(yPlane, y * bytesPerRow, row, 0, width)
+                gray.put(y, 0, row)
+            }
+        }
+
+        val scale = min(1.0, DETECT_LONG_SIDE.toDouble() / max(width, height))
+        val small = if (scale < 1.0) resize(s, gray, scale) else gray
+        val found = findMarkers(s, small, scale)
+        var blur = 0.0
+        if (found.size == 4) {
+            val pts = DoubleArray(8)
+            for ((id, p) in found) {
+                pts[2 * id] = p.x
+                pts[2 * id + 1] = p.y
+            }
+            if (RegionMath.isClockwiseConvex(pts)) {
+                val size = FrameMath.nativeWarpSize(pts, RegionMath.DEFAULT_FRAME_W_MM, RegionMath.DEFAULT_FRAME_H_MM)
+                blur = laplacianVariance(s, warp(s, gray, pts, size))
+            }
+        }
+        return FrameDetection(
+            markersFound = found.size.toLong(),
+            qrPayload = readQr(s, gray, QR_LONG_SIDE),
+            blurScore = blur,
+        )
     }
 
     /**

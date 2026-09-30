@@ -30,7 +30,9 @@ import '../../features/courses/courses_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
 import '../../features/exams/exam_answer_key_screen.dart';
 import '../../features/exams/exam_form_screen.dart';
+import '../../features/exams/exam_key_sheet_scan_screen.dart';
 import '../../features/exams/exam_print_screen.dart';
+import '../../features/exams/exam_scan_screen.dart';
 import '../../features/exams/exam_question_screen.dart';
 import '../../features/exams/exam_screen.dart';
 import '../../features/exams/exam_versions_screen.dart';
@@ -145,6 +147,8 @@ abstract final class AppRoutes {
   static String examAnswerKey(int id) => '/exams/$id/answer-key';
   static String examVersions(int id) => '/exams/$id/versions';
   static String examPrint(int id) => '/exams/$id/print';
+  static String examScan(int id) => '/exams/$id/scan';
+  static String examKeySheetScan(int id) => '/exams/$id/key-sheet-scan';
   static String examQuestion(int examId, int questionId) =>
       '/exams/$examId/questions/$questionId';
   static String examQuestionNew(int examId, int sectionId) =>
@@ -652,6 +656,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'print',
             builder: (context, state) =>
                 ExamPrintScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'scan',
+            builder: (context, state) =>
+                ExamScanScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'key-sheet-scan',
+            builder: (context, state) =>
+                ExamKeySheetScanScreen(examId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'questions/:qid',

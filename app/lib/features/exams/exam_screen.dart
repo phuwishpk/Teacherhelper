@@ -249,6 +249,15 @@ class ExamScreen extends ConsumerWidget {
                             : 'พิมพ์เล่มและกระดาษคำตอบ',
                       ),
                     ),
+                    if (!d.isManual)
+                      FilledButton.icon(
+                        key: const ValueKey('exam_open_scan'),
+                        onPressed: d.keyApproved
+                            ? () => context.push(AppRoutes.examScan(examId))
+                            : null,
+                        icon: const Icon(Icons.document_scanner_outlined),
+                        label: const Text('สแกนกระดาษคำตอบ'),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 16),

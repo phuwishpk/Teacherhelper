@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import 'exam_key_sheet_scan_screen.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
 import 'exams_repository.dart';
@@ -13,6 +16,9 @@ import 'exams_repository.dart';
 /// type the accepted numbers separated by commas. "บันทึก" sends the
 /// changed rows with `PUT /exams/{id}/answer-key`; "อนุมัติเฉลย" follows
 /// once the key is complete (exams graded by the app only).
+/// "สแกนกระดาษเฉลย" fills the grid from the teacher's key sheet; the rows
+/// that differ from the saved key or were read unclearly are marked until
+/// the teacher saves.
 class ExamAnswerKeyScreen extends ConsumerWidget {
   const ExamAnswerKeyScreen({super.key, required this.examId});
 
@@ -57,6 +63,9 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
 
   /// Messages by question id: the server's 422 of the last save.
   var _serverErrors = <int, String>{};
+
+  /// Notes of the last key-sheet scan by question id.
+  var _scanNotes = <int, ({String text, bool doubtful})>{};
   bool _busy = false;
 
   ExamDetail get _d => widget.detail;
@@ -152,7 +161,10 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
         for (final q in changed)
           (questionId: q.id, type: q.type, key: _typed(q).key),
       ]);
-      if (mounted) showMessage(context, 'บันทึกเฉลย ${changed.length} ข้อแล้ว');
+      if (mounted) {
+        setState(() => _scanNotes = {});
+        showMessage(context, 'บันทึกเฉลย ${changed.length} ข้อแล้ว');
+      }
     } catch (e) {
       if (!mounted) return;
       // errors.answers.{i}.… name the entry i of the list sent.
@@ -170,6 +182,49 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Opens the key-sheet scanner and fills the grid with its proposal.
+  Future<void> _scanKeySheet() async {
+    final result = await context.push<KeySheetScanResult>(
+      AppRoutes.examKeySheetScan(_d.exam.id),
+    );
+    if (result == null || !mounted) return;
+    final notes = <int, ({String text, bool doubtful})>{};
+    var filled = 0;
+    setState(() {
+      for (final item in result.items) {
+        final q = _d.question(item.questionId);
+        if (q == null) continue;
+        final key = item.key;
+        if (key != null) {
+          filled++;
+          if (q.type == ExamSectionType.numeric) {
+            _values[q.id]?.text = key.values.join(', ');
+          } else {
+            _options[q.id] = {...key.options};
+          }
+          _serverErrors.remove(q.id);
+        }
+        if (item.doubtful) {
+          notes[q.id] = (
+            text: key == null
+                ? 'อ่านจากกระดาษเฉลยไม่ได้ ตรวจแล้วกรอกเอง'
+                : 'รอยฝนบนกระดาษเฉลยไม่ชัด ตรวจอีกครั้ง',
+            doubtful: true,
+          );
+        } else if (item.differs) {
+          notes[q.id] = (text: 'ต่างจากเฉลยที่บันทึกไว้', doubtful: false);
+        }
+      }
+      _scanNotes = notes;
+    });
+    showMessage(
+      context,
+      'เติมจากกระดาษเฉลยชุด ${examVersionLabel(result.versionNo)} $filled ข้อ '
+      '(อ่านไม่ชัด ${notes.values.where((n) => n.doubtful).length} ข้อ) '
+      'ตรวจแล้วกดบันทึก',
+    );
   }
 
   Future<void> _approve() async {
@@ -209,7 +264,18 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
         if (leave && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('ตารางเฉลย')),
+        appBar: AppBar(
+          title: const Text('ตารางเฉลย'),
+          actions: [
+            if (!_d.isManual)
+              IconButton(
+                key: const ValueKey('key_grid_scan'),
+                tooltip: 'สแกนกระดาษเฉลย',
+                onPressed: _busy ? null : _scanKeySheet,
+                icon: const Icon(Icons.document_scanner_outlined),
+              ),
+          ],
+        ),
         body: ContentColumn(
           padding: EdgeInsets.zero,
           child: ListView.builder(
@@ -244,6 +310,7 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
                 selected: _options[q.id],
                 values: _values[q.id],
                 dirty: _dirty(q),
+                note: _scanNotes[q.id],
                 error: _serverErrors[q.id] ?? _typed(q).error,
                 enabled: !_busy,
                 onToggle: (p) => setState(() {
@@ -306,6 +373,7 @@ class _KeyRow extends StatelessWidget {
     required this.selected,
     required this.values,
     required this.dirty,
+    this.note,
     required this.error,
     required this.enabled,
     required this.onToggle,
@@ -317,6 +385,9 @@ class _KeyRow extends StatelessWidget {
   final Set<int>? selected;
   final TextEditingController? values;
   final bool dirty;
+
+  /// What the key-sheet scan said about this row.
+  final ({String text, bool doubtful})? note;
   final String? error;
   final bool enabled;
   final ValueChanged<int> onToggle;
@@ -374,6 +445,10 @@ class _KeyRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
+        color: note == null
+            ? null
+            : (note!.doubtful ? scheme.errorContainer : scheme.primaryContainer)
+                  .withValues(alpha: 0.35),
         border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       ),
       child: Row(
@@ -395,7 +470,23 @@ class _KeyRow extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(child: input),
+          Expanded(
+            child: note == null
+                ? input
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      input,
+                      Text(
+                        note!.text,
+                        key: ValueKey('key_note_${q.id}'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: note!.doubtful ? scheme.error : scheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           if (!q.approved)
             Tooltip(
               message: q.blank ? 'ข้อว่าง ยังไม่ได้กรอก' : 'ยังไม่อนุมัติ',

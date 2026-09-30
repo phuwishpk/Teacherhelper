@@ -34,6 +34,7 @@ class ScanQueueRepository {
     required Map<String, dynamic> meta,
     required Map<String, String> files,
     ScanState state = ScanState.pending,
+    ScanKind kind = ScanKind.worksheet,
   }) async {
     final now = _clock();
     await _db
@@ -42,6 +43,7 @@ class ScanQueueRepository {
           ScanQueueCompanion.insert(
             clientScanId: clientScanId,
             state: state,
+            kind: Value(kind),
             metaJson: jsonEncode(meta),
             filesJson: jsonEncode(files),
             createdAt: now,
