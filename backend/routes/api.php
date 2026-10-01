@@ -173,6 +173,7 @@ Route::prefix('v1')->group(function () {
                 // The gradebook of a course (§23.11): settings shared by its classrooms, and per
                 // classroom the live grid, typed scores, ร/มส, publishing and the CSV export.
                 Route::get('gradebook/templates', [GradebookController::class, 'templates'])->name('api.gradebook.templates');
+                Route::get('gradebook/overview', [GradebookController::class, 'overview'])->name('api.gradebook.overview');
                 Route::get('courses/{id}/gradebook/settings', [GradebookController::class, 'settings'])->name('api.courses.gradebook.settings');
                 Route::put('courses/{id}/gradebook/categories', [GradebookController::class, 'categories'])->name('api.courses.gradebook.categories');
                 Route::put('courses/{id}/gradebook/cutoffs', [GradebookController::class, 'cutoffs'])->name('api.courses.gradebook.cutoffs');

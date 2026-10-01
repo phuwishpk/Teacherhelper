@@ -41,21 +41,39 @@ final class ClassroomGradebook
     /** @var list<int> */
     public readonly array $cutoffs;
 
+    /** The submission columns the gradebook reads. */
+    public const SUBMISSION_COLUMNS = ['id', 'assignment_id', 'student_id', 'status', 'total_score', 'total_override'];
+
+    /**
+     * @param  Collection<int, GradebookCategory>  $categories  the course's, in position order
+     * @param  Collection<int, User>  $students  the classroom's roster in student_number order, pivot loaded
+     * @param  Collection<int, GradebookSpecialGrade>  $specialGrades  ร/มส of the course in the classroom
+     * @param  Collection<int, Assignment>  $assignments  the classroom's assignments of the course, questions_sum_max_points loaded
+     * @param  Collection<int, GradebookItem>  $items  the course's items in the classroom
+     * @param  Collection<int, Submission>  $submissions  of those assignments
+     * @param  Collection<int, GradebookEntry>  $entries  of the classroom on those assignments and items
+     */
     private function __construct(
         public readonly Course $course,
         public readonly Classroom $classroom,
         public readonly CarbonInterface $now,
+        Collection $categories,
+        Collection $students,
+        Collection $specialGrades,
+        Collection $assignments,
+        Collection $items,
+        Collection $submissions,
+        Collection $entries,
     ) {
-        $this->categories = $course->gradebookCategories()->get();
+        $this->categories = $categories;
         $this->cutoffs = GradeCutoffs::of($course);
-        $this->students = $classroom->students()->get();
+        $this->students = $students;
         $studentIds = $this->students->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $this->specials = GradebookSpecialGrade::query()
-            ->where('course_id', $course->id)->where('classroom_id', $classroom->id)->get()
+        $this->specials = $specialGrades
             ->mapWithKeys(fn (GradebookSpecialGrade $g) => [$g->student_id => ['special' => $g->special, 'note' => $g->note]])
             ->all();
 
-        [$columns, $cells] = $this->load($studentIds);
+        [$columns, $cells] = $this->load($studentIds, $assignments, $items, $submissions, $entries);
         $this->columns = $columns;
 
         $calculator = new GradebookCalculator(
@@ -68,7 +86,55 @@ final class ClassroomGradebook
 
     public static function of(Course $course, Classroom $classroom, ?CarbonInterface $now = null): self
     {
-        return new self($course, $classroom, $now ?? now());
+        $assignments = Assignment::query()
+            ->where('course_id', $course->id)
+            ->where('classroom_id', $classroom->id)
+            ->withSum('questions', 'max_points')
+            ->get();
+        $items = GradebookItem::query()->where('course_id', $course->id)->where('classroom_id', $classroom->id)->get();
+
+        return new self(
+            $course,
+            $classroom,
+            $now ?? now(),
+            $course->gradebookCategories()->get(),
+            $classroom->students()->get(),
+            GradebookSpecialGrade::query()->where('course_id', $course->id)->where('classroom_id', $classroom->id)->get(),
+            $assignments,
+            $items,
+            Submission::query()->whereIn('assignment_id', $assignments->pluck('id'))->get(self::SUBMISSION_COLUMNS),
+            GradebookEntry::query()->where('classroom_id', $classroom->id)
+                ->where(fn ($q) => $q->whereIn('assignment_id', $assignments->pluck('id'))->orWhereIn('gradebook_item_id', $items->pluck('id')))
+                ->get(),
+        );
+    }
+
+    /**
+     * The same gradebook from records the caller loaded in bulk for many
+     * classrooms at once (GradebookOverview), with the filters of of(), so
+     * the numbers are those of the grid without a query per classroom.
+     *
+     * @param  Collection<int, GradebookCategory>  $categories
+     * @param  Collection<int, User>  $students
+     * @param  Collection<int, GradebookSpecialGrade>  $specialGrades
+     * @param  Collection<int, Assignment>  $assignments
+     * @param  Collection<int, GradebookItem>  $items
+     * @param  Collection<int, Submission>  $submissions
+     * @param  Collection<int, GradebookEntry>  $entries
+     */
+    public static function fromLoaded(
+        Course $course,
+        Classroom $classroom,
+        CarbonInterface $now,
+        Collection $categories,
+        Collection $students,
+        Collection $specialGrades,
+        Collection $assignments,
+        Collection $items,
+        Collection $submissions,
+        Collection $entries,
+    ): self {
+        return new self($course, $classroom, $now, $categories, $students, $specialGrades, $assignments, $items, $submissions, $entries);
     }
 
     public function configured(): bool
@@ -234,23 +300,16 @@ final class ClassroomGradebook
 
     /**
      * @param  list<int>  $studentIds
+     * @param  Collection<int, Assignment>  $assignments
+     * @param  Collection<int, GradebookItem>  $items
+     * @param  Collection<int, Submission>  $submissions
+     * @param  Collection<int, GradebookEntry>  $entries
      * @return array{0: list<GradebookColumn>, 1: array<int, array<string, GradebookCell>>}
      */
-    private function load(array $studentIds): array
+    private function load(array $studentIds, Collection $assignments, Collection $items, Collection $submissions, Collection $entries): array
     {
         $roster = array_flip($studentIds);
         $positions = $this->categories->mapWithKeys(fn (GradebookCategory $c) => [$c->id => $c->position])->all();
-        $assignments = Assignment::query()
-            ->where('course_id', $this->course->id)
-            ->where('classroom_id', $this->classroom->id)
-            ->withSum('questions', 'max_points')
-            ->get();
-        $items = GradebookItem::query()->where('course_id', $this->course->id)->where('classroom_id', $this->classroom->id)->get();
-        $submissions = Submission::query()->whereIn('assignment_id', $assignments->pluck('id'))
-            ->get(['id', 'assignment_id', 'student_id', 'status', 'total_score', 'total_override']);
-        $entries = GradebookEntry::query()->where('classroom_id', $this->classroom->id)
-            ->where(fn ($q) => $q->whereIn('assignment_id', $assignments->pluck('id'))->orWhereIn('gradebook_item_id', $items->pluck('id')))
-            ->get();
 
         $cells = [];
         $anyPublished = [];

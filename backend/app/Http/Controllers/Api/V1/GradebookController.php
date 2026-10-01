@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Gradebook\ClassroomGradebook;
 use App\Domain\Gradebook\GradebookAccess;
 use App\Domain\Gradebook\GradebookCsv;
+use App\Domain\Gradebook\GradebookOverview;
 use App\Domain\Gradebook\GradebookPublisher;
 use App\Domain\Gradebook\GradebookSettings;
 use App\Http\Controllers\Controller;
@@ -35,6 +36,34 @@ class GradebookController extends Controller
         Gate::authorize('viewAny', Course::class);
 
         return response()->json(['data' => GradebookSettings::templates()]);
+    }
+
+    /**
+     * GET /api/v1/gradebook/overview?academic_year=&semester= -> {data:
+     * {courses: [{id, code, name, grade_level, semester, academic_year,
+     * configured, category_count, classrooms: [{id, name, student_count,
+     * status, empty_categories, published_at, stale, at_risk_ms_count,
+     * special_counts: {ร, มส}}]}]}} for the "ตัดเกรด" page (§23.9, §23.11).
+     */
+    public function overview(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Course::class);
+        $data = $request->validate([
+            'academic_year' => ['sometimes', 'nullable', 'integer', 'min:2500', 'max:2700'],
+            'semester' => ['sometimes', 'nullable', 'integer', Rule::in(Course::SEMESTERS)],
+        ], [
+            'academic_year.*' => 'ปีการศึกษาต้องเป็น พ.ศ.',
+            'semester.*' => 'ภาคเรียนต้องเป็น 1, 2 หรือ 0 (ทั้งปี)',
+        ]);
+        $query = CourseController::ownQuery($request);
+        if (isset($data['academic_year'])) {
+            $query->where('academic_year', (int) $data['academic_year']);
+        }
+        if (isset($data['semester'])) {
+            $query->where('semester', (int) $data['semester']);
+        }
+
+        return response()->json(['data' => ['courses' => GradebookOverview::of($request->user(), $query)]]);
     }
 
     /** GET /api/v1/courses/{id}/gradebook/settings -> {data: settings} */

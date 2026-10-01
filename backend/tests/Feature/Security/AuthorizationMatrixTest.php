@@ -89,6 +89,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.courses.plan-progress' => ['GET', 'courses/{own_course}/plan-progress', 404, 404],
         // The gradebook (§23.11, §23.12): the owner's courses and items only; another teacher gets 404.
         'api.gradebook.templates' => ['GET', 'gradebook/templates', self::OK, self::OK],
+        'api.gradebook.overview' => ['GET', 'gradebook/overview', self::OK, self::OK],
         'api.courses.gradebook.settings' => ['GET', 'courses/{own_course}/gradebook/settings', 404, 404],
         'api.courses.gradebook.categories' => ['PUT', 'courses/{own_course}/gradebook/categories', 404, 404],
         'api.courses.gradebook.cutoffs' => ['PUT', 'courses/{own_course}/gradebook/cutoffs', 404, 404],

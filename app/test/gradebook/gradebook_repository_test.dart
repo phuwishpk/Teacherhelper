@@ -66,6 +66,74 @@ void main() {
     expect(s.uncategorisedCount, 3);
   });
 
+  test('the overview parses every course and classroom status', () async {
+    answer = (_, _) async => jsonResponse(200, {
+      'data': {'courses': overviewJson()},
+    });
+    final r = repo();
+
+    final courses = await r.overview();
+    expect(sent.single.method, 'GET');
+    expect(sent.single.path, '/gradebook/overview');
+    expect(sent.single.query, isEmpty);
+    expect(courses.map((c) => c.id), [4, 5, 6]);
+    final math = courses.first;
+    expect(math.title, 'ค15101 คณิตศาสตร์ 5');
+    expect(math.configured, isTrue);
+    expect(math.categoryCount, 4);
+    expect((math.semester, math.academicYear, math.gradeLevel), (1, 2569, 5));
+    expect(math.classrooms.map((c) => c.status), [
+      GradebookRoomStatus.missingScores,
+      GradebookRoomStatus.ready,
+      GradebookRoomStatus.published,
+      GradebookRoomStatus.publishedStale,
+    ]);
+    final first = math.classrooms.first;
+    expect(first.name, 'ป.5/1');
+    expect(first.studentCount, 30);
+    expect(first.emptyCategories, ['กลางภาค', 'ปลายภาค']);
+    expect((first.atRiskMsCount, first.rCount, first.msCount), (2, 1, 1));
+    expect(first.publishedAt, isNull);
+    expect(math.classrooms[2].publishedAt, DateTime.utc(2026, 9, 30, 3));
+    expect(math.classrooms[3].stale, isTrue);
+    expect(courses[1].configured, isFalse);
+    expect(
+      courses[1].classrooms.single.status,
+      GradebookRoomStatus.notConfigured,
+    );
+
+    await r.overview(academicYear: 2569, semester: 0);
+    expect(sent.last.query, {'academic_year': '2569', 'semester': '0'});
+  });
+
+  test(
+    'an unknown status or a missing list does not break the overview',
+    () async {
+      answer = (_, _) async => jsonResponse(200, {
+        'data': {
+          'courses': [
+            {
+              'id': 1,
+              'classrooms': [
+                {'id': 2, 'status': 'something_new'},
+              ],
+            },
+          ],
+        },
+      });
+      final courses = await repo().overview();
+      expect(courses.single.code, '');
+      expect(
+        courses.single.classrooms.single.status,
+        GradebookRoomStatus.notConfigured,
+      );
+      expect(courses.single.classrooms.single.rCount, 0);
+
+      answer = (_, _) async => jsonResponse(200, {'data': <String, Object>{}});
+      expect(await repo().overview(), isEmpty);
+    },
+  );
+
   test('template, categories and cutoffs are PUT as the API expects', () async {
     final r = repo();
     await r.applyTemplate(4, 'collect_final');

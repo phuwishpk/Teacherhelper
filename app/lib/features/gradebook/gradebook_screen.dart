@@ -334,13 +334,13 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
   Future<void> _export(GradebookGrid grid) async {
     setState(() => _busy = true);
     try {
-      final file = await _repo.exportCsv(_courseId, grid.classroomId);
-      await ref
-          .read(gradebookFileSharerProvider)
-          .share(
-            file,
-            subject: 'สมุดคะแนน ${grid.courseCode} ${grid.classroomName}',
-          );
+      await shareGradebookCsv(
+        ref,
+        courseId: _courseId,
+        classroomId: grid.classroomId,
+        courseCode: grid.courseCode,
+        classroomName: grid.classroomName,
+      );
     } catch (e) {
       if (mounted) showMessage(context, apiErrorMessage(e));
     } finally {

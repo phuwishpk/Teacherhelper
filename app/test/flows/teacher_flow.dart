@@ -381,6 +381,39 @@ Future<void> openReviewQueue(
   expect(queue.authorization, 'Bearer ${app.server.teacherToken}');
 }
 
+/// Back to the shell, then the 5th destination "ตัดเกรด" -> `GET
+/// /gradebook/overview` -> the course with its classroom, not set up yet.
+Future<void> openGradesTab(
+  WidgetTester tester,
+  TeacherFlowApp app, {
+  required String courseCode,
+  required String classroomName,
+}) async {
+  while (app.location != AppRoutes.home) {
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+  }
+  final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+  expect(
+    [for (final d in bar.destinations) (d as NavigationDestination).label],
+    ['หน้าหลัก', 'ห้องเรียน', 'การบ้าน', 'ตรวจทาน', 'ตัดเกรด'],
+  );
+  expect(
+    app.server.requests.where((r) => r.path == '/gradebook/overview'),
+    isEmpty,
+    reason: '"ตัดเกรด" loads only once opened',
+  );
+
+  await tester.tap(_navDestination('ตัดเกรด'));
+  await tester.pumpAndSettle();
+
+  expect(app.lastRequest('GET', '/gradebook/overview').status, 200);
+  expect(find.textContaining(courseCode), findsOneWidget);
+  expect(find.text('$classroomName · 0 คน'), findsOneWidget);
+  expect(find.text('ยังไม่ตั้งหมวดคะแนน'), findsNWidgets(2));
+  expect(find.text('ตั้งค่าหมวดคะแนน'), findsOneWidget);
+}
+
 /// Back to the shell, then "ออกจากระบบ" -> `POST /auth/logout` -> login.
 Future<void> signOutFromShell(WidgetTester tester, TeacherFlowApp app) async {
   while (app.location != AppRoutes.home) {
@@ -429,6 +462,12 @@ Future<void> runTeacherFlow(WidgetTester tester) async {
   await addShortQuestion(tester, app, assignmentId);
   await createLayout(tester, app, assignmentId);
   await openReviewQueue(tester, app, assignmentId, title: 'เศษส่วน ชุดที่ 1');
+  await openGradesTab(
+    tester,
+    app,
+    courseCode: 'ค15101',
+    classroomName: 'ป.5/2',
+  );
   await signOutFromShell(tester, app);
   expectApiContractHeld(app);
   await app.stop(tester);

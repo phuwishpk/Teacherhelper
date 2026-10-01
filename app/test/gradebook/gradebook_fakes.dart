@@ -367,6 +367,94 @@ Map<String, dynamic> myGradeJson() => {
   ],
 };
 
+Map<String, dynamic> overviewRoomJson(
+  int id,
+  String name,
+  String status, {
+  int students = 30,
+  List<String> empty = const [],
+  String? publishedAt,
+  int atRisk = 0,
+  int r = 0,
+  int ms = 0,
+}) => {
+  'id': id,
+  'name': name,
+  'student_count': students,
+  'status': status,
+  'empty_categories': empty,
+  'published_at': publishedAt,
+  'stale': status == 'published_stale',
+  'at_risk_ms_count': atRisk,
+  'special_counts': {'ร': r, 'มส': ms},
+};
+
+Map<String, dynamic> overviewCourseJson({
+  int id = 4,
+  String code = 'ค15101',
+  String name = 'คณิตศาสตร์ 5',
+  int semester = 1,
+  int year = 2569,
+  bool configured = true,
+  List<Map<String, dynamic>> classrooms = const [],
+}) => {
+  'id': id,
+  'code': code,
+  'name': name,
+  'grade_level': 5,
+  'semester': semester,
+  'academic_year': year,
+  'configured': configured,
+  'category_count': configured ? 4 : 0,
+  'classrooms': classrooms,
+};
+
+/// `GET /gradebook/overview` of a teacher with every classroom status:
+/// two courses in 2569 (semesters 1 and 2), one in 2568.
+List<Map<String, dynamic>> overviewJson() => [
+  overviewCourseJson(
+    classrooms: [
+      overviewRoomJson(
+        7,
+        'ป.5/1',
+        'missing_scores',
+        empty: ['กลางภาค', 'ปลายภาค'],
+        atRisk: 2,
+        r: 1,
+        ms: 1,
+      ),
+      overviewRoomJson(8, 'ป.5/2', 'ready', students: 28),
+      overviewRoomJson(
+        9,
+        'ป.5/3',
+        'published',
+        publishedAt: '2026-09-30T03:00:00+00:00',
+      ),
+      overviewRoomJson(
+        10,
+        'ป.5/4',
+        'published_stale',
+        publishedAt: '2026-09-29T03:00:00+00:00',
+      ),
+    ],
+  ),
+  overviewCourseJson(
+    id: 5,
+    code: 'ว15101',
+    name: 'วิทยาศาสตร์ 5',
+    semester: 2,
+    configured: false,
+    classrooms: [overviewRoomJson(7, 'ป.5/1', 'not_configured')],
+  ),
+  overviewCourseJson(
+    id: 6,
+    code: 'ค14101',
+    name: 'คณิตศาสตร์ 4',
+    year: 2568,
+    classrooms: [overviewRoomJson(11, 'ป.4/1', 'ready')],
+  ),
+];
+
 /// In-memory [GradebookRepository]: records every call as (name, args).
 class FakeGradebookRepository implements GradebookRepository {
   FakeGradebookRepository({
@@ -396,6 +484,10 @@ class FakeGradebookRepository implements GradebookRepository {
     },
   ];
   Map<String, dynamic>? myGradeBody = myGradeJson();
+  List<Map<String, dynamic>> overviewBody = overviewJson();
+
+  /// Thrown by the next `overview()` instead of answering.
+  Object? failOverview;
   CsvExport csv = CsvExport(
     fileName: 'gradebook-ค15101-ป.5/1.csv',
     bytes: Uint8List.fromList(utf8.encode('﻿เลขที่,ชื่อ\r\n')),
@@ -422,6 +514,20 @@ class FakeGradebookRepository implements GradebookRepository {
   @override
   Future<List<GradebookTemplate>> templates() async =>
       templatesJson.map(GradebookTemplate.fromJson).toList();
+
+  @override
+  Future<List<GradebookOverviewCourse>> overview({
+    int? academicYear,
+    int? semester,
+  }) async {
+    calls.add(('overview', (academicYear, semester)));
+    final f = failOverview;
+    if (f != null) {
+      failOverview = null;
+      throw f;
+    }
+    return overviewBody.map(GradebookOverviewCourse.fromJson).toList();
+  }
 
   @override
   Future<GradebookSettings> settings(int courseId) async {

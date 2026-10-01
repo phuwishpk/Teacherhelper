@@ -15,6 +15,13 @@ abstract class GradebookRepository {
   /// `GET /gradebook/templates`.
   Future<List<GradebookTemplate>> templates();
 
+  /// `GET /gradebook/overview`: every own course with each bound
+  /// classroom's grading status (the "ตัดเกรด" page).
+  Future<List<GradebookOverviewCourse>> overview({
+    int? academicYear,
+    int? semester,
+  });
+
   /// `GET /courses/{id}/gradebook/settings`.
   Future<GradebookSettings> settings(int courseId);
 
@@ -86,6 +93,24 @@ class ApiGradebookRepository implements GradebookRepository {
   Future<List<GradebookTemplate>> templates() async {
     final res = await _dio.get<Object?>('/gradebook/templates');
     return unwrapList(res.data).map(GradebookTemplate.fromJson).toList();
+  }
+
+  @override
+  Future<List<GradebookOverviewCourse>> overview({
+    int? academicYear,
+    int? semester,
+  }) async {
+    final query = {'academic_year': ?academicYear, 'semester': ?semester};
+    final res = await _dio.get<Object?>(
+      '/gradebook/overview',
+      queryParameters: query.isEmpty ? null : query,
+    );
+    final courses = unwrapJson(res.data)['courses'];
+    return [
+      for (final c in courses is List ? courses : const [])
+        if (c is Map)
+          GradebookOverviewCourse.fromJson(c.cast<String, dynamic>()),
+    ];
   }
 
   @override

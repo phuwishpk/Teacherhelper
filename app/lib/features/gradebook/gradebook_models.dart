@@ -855,3 +855,123 @@ String cellStateLabel(CellState state, ColumnType type) => switch (state) {
   CellState.notCounted => 'ไม่นับ',
   CellState.scored => '',
 };
+
+/// Where a classroom stands in the grading flow (`GET /gradebook/overview`,
+/// DESIGN §23.11).
+enum GradebookRoomStatus {
+  notConfigured('not_configured'),
+  missingScores('missing_scores'),
+  ready('ready'),
+  published('published'),
+  publishedStale('published_stale');
+
+  const GradebookRoomStatus(this.apiValue);
+
+  final String apiValue;
+
+  static GradebookRoomStatus fromApi(Object? value) => values.firstWhere(
+    (s) => s.apiValue == value,
+    orElse: () => GradebookRoomStatus.notConfigured,
+  );
+}
+
+/// One classroom of a course on the "ตัดเกรด" page.
+class GradebookOverviewRoom {
+  const GradebookOverviewRoom({
+    required this.id,
+    required this.name,
+    required this.studentCount,
+    required this.status,
+    this.emptyCategories = const [],
+    this.publishedAt,
+    this.stale = false,
+    this.atRiskMsCount = 0,
+    this.rCount = 0,
+    this.msCount = 0,
+  });
+
+  final int id;
+  final String name;
+  final int studentCount;
+  final GradebookRoomStatus status;
+
+  /// Names of the categories without a counted item in the classroom.
+  final List<String> emptyCategories;
+  final DateTime? publishedAt;
+  final bool stale;
+
+  /// Students with "อาจติด มส" (attendance below 80 %).
+  final int atRiskMsCount;
+  final int rCount;
+  final int msCount;
+
+  factory GradebookOverviewRoom.fromJson(Map<String, dynamic> json) {
+    final specials =
+        (json['special_counts'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return GradebookOverviewRoom(
+      id: _int(json['id']) ?? 0,
+      name: json['name'] as String? ?? '',
+      studentCount: _int(json['student_count']) ?? 0,
+      status: GradebookRoomStatus.fromApi(json['status']),
+      emptyCategories: [
+        for (final n in (json['empty_categories'] as List?) ?? const [])
+          if (n is String) n,
+      ],
+      publishedAt: _date(json['published_at']),
+      stale: json['stale'] == true,
+      atRiskMsCount: _int(json['at_risk_ms_count']) ?? 0,
+      rCount: _int(specials['ร']) ?? 0,
+      msCount: _int(specials['มส']) ?? 0,
+    );
+  }
+}
+
+/// One course of the "ตัดเกรด" page with every classroom bound to it.
+class GradebookOverviewCourse {
+  const GradebookOverviewCourse({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.gradeLevel,
+    required this.semester,
+    required this.academicYear,
+    required this.configured,
+    required this.categoryCount,
+    this.classrooms = const [],
+  });
+
+  final int id;
+  final String code;
+  final String name;
+  final int gradeLevel;
+
+  /// 1, 2 or 0 = the whole year.
+  final int semester;
+
+  /// Buddhist year (พ.ศ.).
+  final int academicYear;
+
+  /// Categories exist and their weights total 100.
+  final bool configured;
+  final int categoryCount;
+  final List<GradebookOverviewRoom> classrooms;
+
+  String get title => [code, name].where((s) => s.isNotEmpty).join(' ');
+
+  factory GradebookOverviewCourse.fromJson(Map<String, dynamic> json) =>
+      GradebookOverviewCourse(
+        id: _int(json['id']) ?? 0,
+        code: json['code'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        gradeLevel: _int(json['grade_level']) ?? 0,
+        semester: _int(json['semester']) ?? 0,
+        academicYear: _int(json['academic_year']) ?? 0,
+        configured: json['configured'] == true,
+        categoryCount: _int(json['category_count']) ?? 0,
+        classrooms: [
+          for (final r in (json['classrooms'] as List?) ?? const [])
+            if (r is Map)
+              GradebookOverviewRoom.fromJson(r.cast<String, dynamic>()),
+        ],
+      );
+}
