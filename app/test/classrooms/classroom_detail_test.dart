@@ -4,6 +4,7 @@ import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../courses/course_fakes.dart';
 import '../helpers/pump_screen.dart';
@@ -167,5 +168,35 @@ void main() {
     await tester.tap(find.text('จดแล้ว'));
     await tester.pumpAndSettle();
     expect(find.text('048213'), findsNothing, reason: 'shown once only');
+  });
+
+  testWidgets('each bound course links to its charts in this classroom', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpScreen(
+      tester,
+      const ClassroomDetailScreen(classroomId: 7),
+      overrides: [
+        classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
+        coursesRepositoryProvider.overrideWithValue(
+          FakeCoursesRepository([course(id: 4)]),
+        ),
+      ],
+      extraRoutes: [
+        GoRoute(
+          path: '/courses/:id/charts',
+          builder: (_, s) => Text(
+            'charts-${s.pathParameters['id']}-${s.uri.queryParameters['classroom']}',
+          ),
+        ),
+      ],
+    );
+    expect(find.text('กราฟรายวิชา ค15101'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('classroom_course_charts_4')));
+    await tester.pumpAndSettle();
+    expect(find.text('charts-4-7'), findsOneWidget);
   });
 }

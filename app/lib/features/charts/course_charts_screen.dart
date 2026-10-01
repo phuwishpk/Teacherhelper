@@ -16,7 +16,7 @@ import 'progress_chart.dart';
 import 'rollup_chart.dart';
 
 /// The spider chart of a roll-up in a card: the standard/unit toggle, the
-/// chart (radar or bars), every node as a row, and the coverage under it
+/// chart (a radar of nodes or of indicators, or bars), every node as a row, and the coverage under it
 /// (DESIGN §20.4). Tapping an axis, a bar or a row opens the drill-down.
 class RollupCard extends StatelessWidget {
   const RollupCard({
@@ -74,7 +74,8 @@ class RollupCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      'แกนที่ประเมินแล้วมี ${s.assessedNodes.length} แกน '
+                      'ประเมินแล้ว ${s.assessedNodes.length} กลุ่ม '
+                      '${s.assessedIndicators.length} ตัวชี้วัด '
                       '(เรดาร์ใช้ $kRadarMinAxes–$kRadarMaxAxes แกน) จึงแสดงเป็นกราฟแท่ง',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -317,11 +318,15 @@ class StudentCourseChartsBody extends ConsumerStatefulWidget {
     required this.courseId,
     this.studentId,
     this.classroomId,
+    this.studentName,
   });
 
   final int courseId;
   final int? studentId;
   final int? classroomId;
+
+  /// Shown in the spider chart's title in the teacher's per-student view.
+  final String? studentName;
 
   @override
   ConsumerState<StudentCourseChartsBody> createState() =>
@@ -353,7 +358,11 @@ class _StudentCourseChartsBodyState
         padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
           RollupCard(
-            title: _own ? 'ความเข้าใจของฉัน' : 'ความเข้าใจรายตัวชี้วัด',
+            title: _own
+                ? 'ความเข้าใจของฉัน'
+                : widget.studentName == null
+                ? 'ความเข้าใจรายตัวชี้วัด'
+                : 'ความเข้าใจของ ${widget.studentName}',
             summary: summary,
             axis: _axis,
             onAxis: (a) => setState(() => _axis = a),
@@ -425,6 +434,7 @@ class StudentCourseChartsScreen extends ConsumerWidget {
         courseId: courseId,
         studentId: studentId,
         classroomId: classroomId,
+        studentName: name,
       ),
     );
   }

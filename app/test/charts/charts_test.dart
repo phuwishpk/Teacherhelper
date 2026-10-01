@@ -7,6 +7,7 @@ import 'package:eduvision/features/charts/rollup_chart.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/mastery/course_mastery.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -182,13 +183,168 @@ void main() {
       expect(find.byKey(const ValueKey('rollup_bars')), findsNothing);
     });
 
-    testWidgets('2 assessed axes: bars of every planned node', (tester) async {
+    int radarAxes(WidgetTester tester, Finder radar) => tester
+        .widget<RadarChart>(
+          find.descendant(of: radar, matching: find.byType(RadarChart)),
+        )
+        .data
+        .dataSets
+        .last
+        .dataEntries
+        .length;
+
+    testWidgets('2 assessed nodes, 3 indicators: a radar of the indicators', (
+      tester,
+    ) async {
       await pumpChart(tester, summaryJson(axis: MasteryAxis.unit));
+      await tester.pumpAndSettle();
+      final radar = find.byKey(const ValueKey('rollup_radar'));
+      expect(radar, findsOneWidget);
+      expect(radarAxes(tester, radar), 3);
+      expect(find.byKey(const ValueKey('rollup_bars')), findsNothing);
+      expect(find.text(kIndicatorAxesNote), findsOneWidget);
+    });
+
+    testWidgets('2 standards with 4 assessed indicators: 4 indicator axes', (
+      tester,
+    ) async {
+      await pumpChart(tester, summaryWithNodes([2, 2], unassessedPerNode: 1));
+      final radar = find.byKey(const ValueKey('rollup_radar'));
+      expect(radar, findsOneWidget);
+      expect(radarAxes(tester, radar), 4);
+      expect(find.text(kIndicatorAxesNote), findsOneWidget);
+      expect(find.byKey(const ValueKey('rollup_bars')), findsNothing);
+    });
+
+    testWidgets('1 node with 2 indicators: bars of every planned node', (
+      tester,
+    ) async {
+      await pumpChart(tester, summaryWithNodes([2]));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('rollup_radar')), findsNothing);
       expect(find.byKey(const ValueKey('rollup_bars')), findsOneWidget);
-      expect(find.text('หน่วย 1'), findsOneWidget);
-      expect(find.text('หน่วย 2\nยังไม่ประเมิน'), findsOneWidget);
+      expect(find.text(kIndicatorAxesNote), findsNothing);
+    });
+
+    testWidgets('13 assessed indicators: bars, with the unassessed faint', (
+      tester,
+    ) async {
+      await pumpChart(tester, summaryWithNodes([7, 6, 0]));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rollup_radar')), findsNothing);
+      expect(find.byKey(const ValueKey('rollup_bars')), findsOneWidget);
+      expect(find.text('ค 1.3\nยังไม่ประเมิน'), findsOneWidget);
+    });
+
+    testWidgets('the card says why there is no radar', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RollupCard(
+                title: 'ภาพรวมของห้อง',
+                summary: AsyncValue.data(
+                  CourseMasterySummary.fromJson(summaryWithNodes([2])),
+                ),
+                axis: MasteryAxis.standard,
+                onAxis: (_) {},
+                onNode: (_) {},
+                onRetry: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rollup_bars')), findsOneWidget);
+      expect(
+        find.text(
+          'ประเมินแล้ว 1 กลุ่ม 2 ตัวชี้วัด (เรดาร์ใช้ 3–12 แกน) จึงแสดงเป็นกราฟแท่ง',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('3 assessed nodes keep the node radar, no note', (
+      tester,
+    ) async {
+      await pumpChart(tester, summaryWithNodes([1, 1, 3]));
+      final radar = find.byKey(const ValueKey('rollup_radar'));
+      expect(radarAxes(tester, radar), 3);
+      expect(find.text(kIndicatorAxesNote), findsNothing);
+    });
+
+    test('indicator axes: in node order, each once, with their node', () {
+      final s = CourseMasterySummary.fromJson(
+        summaryWithNodes([2, 1], unassessedPerNode: 1),
+      );
+      expect(s.chartMode, RollupChartMode.indicators);
+      expect(s.useRadar, isTrue);
+      expect(
+        s.assessedIndicators.map(
+          (a) => '${a.node.code}:${a.indicator.skill.code}',
+        ),
+        ['ค 1.1:ค 1.1 ป.5/1', 'ค 1.1:ค 1.1 ป.5/2', 'ค 1.2:ค 1.2 ป.5/1'],
+      );
+
+      // The same indicator planned in two units counts once.
+      final unit = summaryJson(axis: MasteryAxis.unit);
+      final nodes = unit['nodes'] as List;
+      (nodes[1] as Map)['indicators'] = (nodes[0] as Map)['indicators'];
+      (nodes[1] as Map)['assessed'] = 2;
+      final dup = CourseMasterySummary.fromJson(unit);
+      expect(dup.assessedNodes, hasLength(3));
+      expect(dup.chartMode, RollupChartMode.nodes);
+      expect(dup.assessedIndicators, hasLength(3));
+
+      final bars = CourseMasterySummary.fromJson(summaryWithNodes([13]));
+      expect(bars.chartMode, RollupChartMode.bars);
+      expect(bars.useRadar, isFalse);
+    });
+
+    Future<void> openSheet(WidgetTester tester, RollupNode node) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showNodeIndicators(context, node),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('drill-down: a radar of 3–12 assessed indicators', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final node = CourseMasterySummary.fromJson(
+        summaryWithNodes([3], unassessedPerNode: 1),
+      ).nodes.single;
+      await openSheet(tester, node);
+      final radar = find.byKey(const ValueKey('node_radar'));
+      expect(radar, findsOneWidget);
+      expect(radarAxes(tester, radar), 3);
+      // The list stays under the radar, the unassessed one included.
+      expect(find.text('ค 1.1 ป.5/4 ตัวชี้วัด ค 1.1 ป.5/4'), findsOneWidget);
+    });
+
+    testWidgets('drill-down: no radar under 3 assessed indicators', (
+      tester,
+    ) async {
+      final node = CourseMasterySummary.fromJson(
+        summaryWithNodes([2], unassessedPerNode: 2),
+      ).nodes.single;
+      await openSheet(tester, node);
+      expect(find.byKey(const ValueKey('node_indicators')), findsOneWidget);
+      expect(find.byKey(const ValueKey('node_radar')), findsNothing);
     });
 
     testWidgets('nothing planned: an empty message', (tester) async {
@@ -287,12 +443,9 @@ void main() {
       await tester.tap(find.text('ตามหน่วย'));
       await tester.pumpAndSettle();
       expect(mastery.calls.last.axis, MasteryAxis.unit);
-      expect(find.byKey(const ValueKey('rollup_bars')), findsOneWidget);
-      expect(
-        find.textContaining('จึงแสดงเป็นกราฟแท่ง'),
-        findsOneWidget,
-        reason: 'why there is no radar',
-      );
+      // 2 assessed units but 3 assessed indicators: the indicator radar.
+      expect(find.byKey(const ValueKey('rollup_radar')), findsOneWidget);
+      expect(find.text(kIndicatorAxesNote), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('rollup_node_0')));
       await tester.pumpAndSettle();

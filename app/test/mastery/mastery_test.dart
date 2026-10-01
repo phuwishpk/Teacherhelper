@@ -1,5 +1,6 @@
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
+import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/mastery/classroom_mastery_screen.dart';
 import 'package:eduvision/features/mastery/mastery_models.dart';
 import 'package:eduvision/features/mastery/mastery_page.dart';
@@ -10,7 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../courses/course_fakes.dart';
 import '../helpers/fake_http_adapter.dart';
+import '../helpers/pump_screen.dart';
 
 Map<String, dynamic> classroomMasteryJson() => {
   'skills': [
@@ -73,7 +76,7 @@ class _FakeMastery implements MasteryRepository {
 
   @override
   Future<List<SkillMastery>> student(int studentId) async =>
-      studentRows().map(SkillMastery.fromJson).toList();
+      available ? studentRows().map(SkillMastery.fromJson).toList() : [];
 }
 
 class _FakeClassrooms extends Fake implements ClassroomsRepository {
@@ -187,24 +190,83 @@ void main() {
   });
 
   testWidgets('teacher sees a student\'s three weakest skills', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          masteryRepositoryProvider.overrideWithValue(_FakeMastery()),
-          classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
-        ],
-        child: const MaterialApp(
-          home: StudentMasteryScreen(classroomId: 1, studentId: 4003),
+    tester.view.physicalSize = const Size(390, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpScreen(
+      tester,
+      const StudentMasteryScreen(classroomId: 1, studentId: 4003),
+      overrides: [
+        masteryRepositoryProvider.overrideWithValue(_FakeMastery()),
+        classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
+        coursesRepositoryProvider.overrideWithValue(
+          FakeCoursesRepository([
+            course(
+              classrooms: const [
+                {'id': 1, 'name': 'ป.4/1'},
+              ],
+            ),
+            course(id: 5, code: 'ค16101'),
+          ]),
         ),
-      ),
+      ],
+      extraRoutes: [
+        GoRoute(
+          path: '/courses/:id/students/:sid/charts',
+          builder: (_, s) => Text(
+            'charts-${s.pathParameters['id']}-${s.pathParameters['sid']}-'
+            '${s.uri.queryParameters['classroom']}',
+          ),
+        ),
+      ],
     );
-    await tester.pumpAndSettle();
     expect(find.text('3. ด.ช. สมชาย'), findsOneWidget);
     expect(find.text('จุดอ่อน 3 อันดับ'), findsOneWidget);
     // Only partial / not-yet skills with enough data are weaknesses.
     expect(find.text('ค 1.2 ทศนิยม'), findsOneWidget);
     expect(find.text('ค 2.1 การวัด'), findsOneWidget);
     expect(find.text('ค 1.3 ร้อยละ'), findsNothing);
+
+    // Each course bound to the classroom links to the student's charts.
+    expect(find.text('กราฟตามรายวิชา'), findsOneWidget);
+    expect(find.text('กราฟรายวิชา ค15101'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('student_course_charts_5')),
+      findsNothing,
+      reason: 'course 5 is not bound to this classroom',
+    );
+    await tester.tap(find.byKey(const ValueKey('student_course_charts_4')));
+    await tester.pumpAndSettle();
+    expect(find.text('charts-4-4003-1'), findsOneWidget);
+  });
+
+  testWidgets('a student without skills still links to the course charts', (
+    tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      const StudentMasteryScreen(classroomId: 1, studentId: 4003),
+      overrides: [
+        masteryRepositoryProvider.overrideWithValue(
+          _FakeMastery(available: false),
+        ),
+        classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
+        coursesRepositoryProvider.overrideWithValue(
+          FakeCoursesRepository([
+            course(
+              classrooms: const [
+                {'id': 1, 'name': 'ป.4/1'},
+              ],
+            ),
+          ]),
+        ),
+      ],
+    );
+    expect(find.text('ยังไม่มีข้อมูลทักษะ'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('student_course_charts_4')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('student mastery tab: levels and "ข้อมูลยังน้อย"', (
