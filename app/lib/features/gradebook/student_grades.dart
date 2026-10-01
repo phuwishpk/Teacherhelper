@@ -10,8 +10,8 @@ import '../../core/widgets/content_column.dart';
 import 'gradebook_models.dart';
 import 'gradebook_providers.dart';
 
-/// Student "เกรดของฉัน" (DESIGN §23.7, §23.9): the courses whose grades the
-/// teacher published, newest first. Only the student's own grade; no class
+/// Student "เกรดของฉัน" (DESIGN §23.7, §23.9, §24.11): the courses whose
+/// grades the teacher published, newest first, each with its classroom. Only the student's own grade; no class
 /// average or ranking (§23.12).
 class MyGradesPage extends ConsumerWidget {
   const MyGradesPage({super.key});
@@ -39,20 +39,29 @@ class MyGradesPage extends ConsumerWidget {
                 for (final g in list)
                   Card(
                     child: ListTile(
-                      key: ValueKey('my_grade_${g.courseId}'),
+                      key: ValueKey(
+                        g.classroomId == null
+                            ? 'my_grade_${g.courseId}'
+                            : 'my_grade_${g.courseId}_${g.classroomId}',
+                      ),
                       leading: const Icon(Icons.school_outlined),
                       title: Text(g.courseTitle),
                       subtitle: Text(
                         [
+                          ?g.classroom?.text,
                           if (g.totalRounded != null)
                             'คะแนนรวม ${g.totalRounded}',
                           if (g.publishedAt != null)
                             'ประกาศ ${formatThaiDate(g.publishedAt!)}',
                         ].join(' · '),
                       ),
-                      trailing: _GradeBadge(text: g.gradeText),
-                      onTap: () =>
-                          context.push(AppRoutes.myCourseGrade(g.courseId)),
+                      trailing: GradeBadge(text: g.gradeText),
+                      onTap: () => context.push(
+                        AppRoutes.myCourseGrade(
+                          g.courseId,
+                          classroomId: g.classroomId,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -64,8 +73,21 @@ class MyGradesPage extends ConsumerWidget {
   }
 }
 
-class _GradeBadge extends StatelessWidget {
-  const _GradeBadge({required this.text});
+/// `/student/grades`: [MyGradesPage] on its own screen, opened from
+/// "วิชาของฉัน" (DESIGN §24.13).
+class MyGradesScreen extends StatelessWidget {
+  const MyGradesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('เกรดของฉัน')),
+    body: const MyGradesPage(),
+  );
+}
+
+/// A grade ("3", "ร", "–") in a filled box.
+class GradeBadge extends StatelessWidget {
+  const GradeBadge({super.key, required this.text});
 
   final String text;
 
@@ -91,77 +113,104 @@ class _GradeBadge extends StatelessWidget {
   }
 }
 
-/// `/student/courses/:id/grade`: the student's published grade of one
-/// course with each category (percent and weighted points) and its items
-/// (score out of full marks, "ยกเว้น", "ตัดออก").
+/// `/student/courses/:id/grade?classroom=`: the student's published grade
+/// of one course with each category (percent and weighted points) and its
+/// items (score out of full marks, "ยกเว้น", "ตัดออก").
 class StudentGradeScreen extends ConsumerWidget {
-  const StudentGradeScreen({super.key, required this.courseId});
+  const StudentGradeScreen({
+    super.key,
+    required this.courseId,
+    this.classroomId,
+  });
 
   final int courseId;
 
+  /// One classroom's publication; null = the newest (DESIGN §24.26).
+  final int? classroomId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detail = ref.watch(myCourseGradeProvider(courseId));
-    final theme = Theme.of(context);
+    final detail = ref.watch(
+      myCourseGradeProvider((courseId: courseId, classroomId: classroomId)),
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(detail.value?.summary.courseTitle ?? 'เกรดของฉัน'),
       ),
-      body: detail.when(
-        skipLoadingOnRefresh: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => apiStatusCode(e) == 404
-            ? const EmptyView(
-                icon: Icons.hourglass_empty,
-                title: 'ยังไม่ได้ประกาศเกรด',
-                message: 'ครูยังไม่ได้ประกาศเกรดของรายวิชานี้',
-              )
-            : ErrorView(
-                message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(myCourseGradeProvider(courseId)),
-              ),
-        data: (d) => ContentColumn(
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 24),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      _GradeBadge(text: d.summary.gradeText),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+      body: StudentGradeBody(courseId: courseId, classroomId: classroomId),
+    );
+  }
+}
+
+/// The grade card and the breakdown of one course, also the "เกรด" tab of
+/// a subject in "วิชาของฉัน" (DESIGN §24.13).
+class StudentGradeBody extends ConsumerWidget {
+  const StudentGradeBody({super.key, required this.courseId, this.classroomId});
+
+  final int courseId;
+  final int? classroomId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final query = (courseId: courseId, classroomId: classroomId);
+    final detail = ref.watch(myCourseGradeProvider(query));
+    final theme = Theme.of(context);
+    return detail.when(
+      skipLoadingOnRefresh: true,
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => apiStatusCode(e) == 404
+          ? const EmptyView(
+              icon: Icons.hourglass_empty,
+              title: 'ยังไม่ได้ประกาศเกรด',
+              message: 'ครูยังไม่ได้ประกาศเกรดของรายวิชานี้',
+            )
+          : ErrorView(
+              message: apiErrorMessage(e),
+              onRetry: () => ref.invalidate(myCourseGradeProvider(query)),
+            ),
+      data: (d) => ContentColumn(
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    GradeBadge(text: d.summary.gradeText),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            d.summary.gradeText.isEmpty
+                                ? 'ยังไม่มีเกรด'
+                                : 'เกรด ${d.summary.gradeText}',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          if (d.total != null)
                             Text(
-                              d.summary.gradeText.isEmpty
-                                  ? 'ยังไม่มีเกรด'
-                                  : 'เกรด ${d.summary.gradeText}',
-                              style: theme.textTheme.titleMedium,
+                              'คะแนนรวม ${formatGbNumber(d.total)} '
+                              '(ปัดเป็น ${d.summary.totalRounded ?? '–'})',
+                              key: const ValueKey('my_grade_total'),
                             ),
-                            if (d.total != null)
-                              Text(
-                                'คะแนนรวม ${formatGbNumber(d.total)} '
-                                '(ปัดเป็น ${d.summary.totalRounded ?? '–'})',
-                                key: const ValueKey('my_grade_total'),
-                              ),
-                            if (d.summary.publishedAt != null)
-                              Text(
-                                'ประกาศ ${formatThaiDateTime(d.summary.publishedAt!)}',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                          ],
-                        ),
+                          if (d.summary.classroom != null)
+                            Text('ห้อง ${d.summary.classroom!.text}'),
+                          if (d.summary.publishedAt != null)
+                            Text(
+                              'ประกาศ ${formatThaiDateTime(d.summary.publishedAt!)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              for (final c in d.breakdown) _CategoryCard(category: c),
-            ],
-          ),
+            ),
+            for (final c in d.breakdown) _CategoryCard(category: c),
+          ],
         ),
       ),
     );

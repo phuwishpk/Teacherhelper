@@ -8,7 +8,8 @@ import 'analysis_models.dart';
 import 'analysis_repository.dart';
 
 /// The student's "ข้อความจากครู" at the top of the "ทักษะ" tab: only the
-/// texts the teacher approved (or auto-shared), one per classroom, with
+/// texts the teacher approved (or auto-shared), one per classroom of every
+/// classroom the student is in (DESIGN §24.11), with
 /// links to practise the next steps (DESIGN §20.5, §20.9). No teacher
 /// version, no class average, no ranking. Nothing when there is none.
 class MyAnalysisSection extends ConsumerWidget {
@@ -50,9 +51,10 @@ class _MyAnalysisCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    a.classroomName.isEmpty
-                        ? 'ข้อความจากครู'
-                        : 'ข้อความจากครู · ${a.classroomName}',
+                    switch (a.classroom?.text ?? a.classroomName) {
+                      '' => 'ข้อความจากครู',
+                      final room => 'ข้อความจากครู · $room',
+                    },
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: scheme.onPrimaryContainer,
                     ),

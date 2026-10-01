@@ -1,5 +1,6 @@
 import '../../core/api/teacher_guidance.dart';
 import '../assignments/question.dart';
+import '../student/student_labels.dart';
 
 DateTime? _time(Object? v) => v is String ? DateTime.tryParse(v) : null;
 
@@ -293,10 +294,14 @@ class MyAnalysis {
     required this.text,
     this.sharedAt,
     this.nextSteps = const [],
+    this.classroom,
   });
 
   final int classroomId;
   final String classroomName;
+
+  /// The classroom label (DESIGN §24.26), "ป.5/1 · 2569".
+  final ClassroomLabel? classroom;
   final String text;
   final DateTime? sharedAt;
 
@@ -313,6 +318,7 @@ class MyAnalysis {
       text: json['text'] as String? ?? '',
       sharedAt: _time(json['shared_at']),
       nextSteps: _nextSteps(json['next_steps']),
+      classroom: ClassroomLabel.fromJson(json['classroom']),
     );
   }
 }

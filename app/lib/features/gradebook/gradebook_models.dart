@@ -6,6 +6,8 @@ library;
 
 import 'dart:typed_data';
 
+import '../student/student_labels.dart';
+
 /// `[80, 75, 70, 65, 60, 55, 50]`: the lowest total of grade 4 … 1 (§23.2).
 const kDefaultCutoffs = [80, 75, 70, 65, 60, 55, 50];
 
@@ -731,6 +733,7 @@ class StudentGradeSummary {
     required this.courseCode,
     required this.courseName,
     this.classroomId,
+    this.classroom,
     this.publishedAt,
     this.grade,
     this.special,
@@ -741,6 +744,9 @@ class StudentGradeSummary {
   final String courseCode;
   final String courseName;
   final int? classroomId;
+
+  /// The classroom the grade was published for (DESIGN §24.26).
+  final ClassroomLabel? classroom;
   final DateTime? publishedAt;
   final double? grade;
   final String? special;
@@ -753,11 +759,13 @@ class StudentGradeSummary {
 
   factory StudentGradeSummary.fromJson(Map<String, dynamic> json) {
     final course = (json['course'] as Map?)?.cast<String, dynamic>() ?? {};
+    final classroom = ClassroomLabel.fromJson(json['classroom']);
     return StudentGradeSummary(
       courseId: _int(course['id']) ?? 0,
       courseCode: course['code'] as String? ?? '',
       courseName: course['name'] as String? ?? '',
-      classroomId: _int(json['classroom_id']),
+      classroomId: _int(json['classroom_id']) ?? _int(classroom?.id),
+      classroom: classroom,
       publishedAt: _date(json['published_at']),
       grade: _double(json['grade']),
       special: json['special'] as String?,

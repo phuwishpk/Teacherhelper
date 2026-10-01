@@ -80,8 +80,10 @@ abstract class GradebookRepository {
   /// `GET /student/grades`.
   Future<List<StudentGradeSummary>> myGrades();
 
-  /// `GET /student/courses/{id}/grade` (404 until published).
-  Future<StudentGradeDetail> myCourseGrade(int courseId);
+  /// `GET /student/courses/{id}/grade?classroom_id=` (404 until
+  /// published). Without [classroomId] the newest publication of the
+  /// course among the student's classrooms (DESIGN §24.26).
+  Future<StudentGradeDetail> myCourseGrade(int courseId, {int? classroomId});
 }
 
 class ApiGradebookRepository implements GradebookRepository {
@@ -296,8 +298,14 @@ class ApiGradebookRepository implements GradebookRepository {
   }
 
   @override
-  Future<StudentGradeDetail> myCourseGrade(int courseId) async {
-    final res = await _dio.get<Object?>('/student/courses/$courseId/grade');
+  Future<StudentGradeDetail> myCourseGrade(
+    int courseId, {
+    int? classroomId,
+  }) async {
+    final res = await _dio.get<Object?>(
+      '/student/courses/$courseId/grade',
+      queryParameters: {'classroom_id': ?classroomId},
+    );
     return StudentGradeDetail.fromJson(unwrapJson(res.data));
   }
 

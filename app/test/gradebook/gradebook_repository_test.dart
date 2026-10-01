@@ -464,10 +464,16 @@ void main() {
 
     final d = await r.myCourseGrade(4);
     expect(sent.last.path, '/student/courses/4/grade');
+    expect(sent.last.query, isEmpty);
+    expect(d.summary.classroom?.text, 'ป.5/1 · 2569');
     expect(d.total, 73.8);
     expect(d.summary.gradeText, '3');
     expect(d.breakdown.first.items[1].dropped, isTrue);
     expect(d.breakdown.first.items[2].state, CellState.excused);
     expect(d.breakdown.last.percent, isNull);
+
+    // One classroom's publication (DESIGN §24.26).
+    await r.myCourseGrade(4, classroomId: 7);
+    expect(sent.last.query, {'classroom_id': '7'});
   });
 }

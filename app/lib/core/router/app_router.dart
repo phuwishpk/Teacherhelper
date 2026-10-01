@@ -75,6 +75,7 @@ import '../../features/scan/scan_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/student/student_account_screen.dart';
 import '../../features/student/student_shell.dart';
+import '../../features/student/student_subject_screen.dart';
 import '../../features/upload_queue/upload_queue_screen.dart';
 import '../auth/session.dart';
 
@@ -303,8 +304,20 @@ abstract final class AppRoutes {
   static String myCourseCharts(int courseId) => '/student/courses/$courseId';
 
   /// Student: their own published grade of one course (§23.7).
-  static String myCourseGrade(int courseId) =>
-      '/student/courses/$courseId/grade';
+  /// [classroomId] picks one classroom's publication (DESIGN §24.26).
+  static String myCourseGrade(int courseId, {int? classroomId}) =>
+      '/student/courses/$courseId/grade'
+      '${classroomId == null ? '' : '?classroom=$classroomId'}';
+
+  /// Student: every published grade ("เกรดของฉัน", §23.9), opened from
+  /// "วิชาของฉัน".
+  static const myGrades = '/student/grades';
+
+  /// Student: one subject of "วิชาของฉัน" (DESIGN §24.11, §24.13): its work
+  /// to hand in, results, grade and charts. [key] is a subject tag key.
+  static const studentSubjectPath = '/student/subject';
+  static String studentSubject(String key) =>
+      '$studentSubjectPath?key=${Uri.encodeQueryComponent(key)}';
 
   /// One student's skills and weaknesses, seen by the teacher.
   /// A subject teacher passes their [courseId] (DESIGN §24.20).
@@ -350,6 +363,8 @@ abstract final class AppRoutes {
   static bool isStudentArea(String location) =>
       location == student ||
       location == studentAccount ||
+      location == myGrades ||
+      location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/') ||
@@ -536,6 +551,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const StudentAccountScreen(),
       ),
       GoRoute(
+        path: AppRoutes.myGrades,
+        builder: (context, state) => const MyGradesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentSubjectPath,
+        builder: (context, state) => StudentSubjectScreen(
+          initialKey: state.uri.queryParameters['key'] ?? '',
+        ),
+      ),
+      GoRoute(
         path: '/student/results/:sid',
         builder: (context, state) =>
             ResultDetailScreen(submissionId: _id(state, 'sid')),
@@ -572,8 +597,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'grade',
-            builder: (context, state) =>
-                StudentGradeScreen(courseId: _id(state, 'id')),
+            builder: (context, state) => StudentGradeScreen(
+              courseId: _id(state, 'id'),
+              classroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
           ),
         ],
       ),

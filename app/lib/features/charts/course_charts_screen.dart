@@ -488,7 +488,7 @@ class MyCoursesSection extends ConsumerWidget {
                 key: ValueKey('my_course_${c.id}'),
                 leading: const Icon(Icons.radar),
                 title: Text(c.title),
-                subtitle: c.subjectName == null ? null : Text(c.subjectName!),
+                subtitle: _courseSubtitle(c),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push(AppRoutes.myCourseCharts(c.id)),
               ),
@@ -497,4 +497,13 @@ class MyCoursesSection extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The subject and the classrooms of a student's course (DESIGN §24.11).
+Widget? _courseSubtitle(StudentCourse c) {
+  final text = [
+    ?c.subjectName,
+    for (final room in c.classrooms) room.text,
+  ].join(' · ');
+  return text.isEmpty ? null : Text(text);
 }

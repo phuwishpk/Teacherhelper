@@ -72,6 +72,7 @@ void main() {
 
       final mine = myAnalysesJson().map(MyAnalysis.fromJson).toList();
       expect(mine.first.classroomName, 'ป.5/1');
+      expect(mine.first.classroom?.text, 'ป.5/1 · 2569');
       expect(mine.first.nextSteps.single.code, 'ค 1.1 ป.4/2');
       expect(mine.last.sharedAt, isNull);
     });
@@ -86,7 +87,7 @@ void main() {
             'data': classroomAnalysesJson(),
           }),
           '/students/57/analysis' => jsonResponse(200, {'data': null}),
-          '/student/analysis' => jsonResponse(200, {'data': myAnalysesJson()}),
+          '/student/analyses' => jsonResponse(200, {'data': myAnalysesJson()}),
           '/classrooms/7' => jsonResponse(200, {'data': <String, Object>{}}),
           _ => jsonResponse(200, {'data': teacherAnalysisJson()}),
         };
@@ -121,7 +122,7 @@ void main() {
       expect(last().jsonBody, {'auto_share_analysis': true});
 
       expect(await repo.mine(), hasLength(2));
-      expect(last().path, '/student/analysis');
+      expect(last().path, '/student/analyses');
     });
   });
 
@@ -448,7 +449,7 @@ void main() {
         ],
       );
       expect(repo.calls, ['mine']);
-      expect(find.text('ข้อความจากครู · ป.5/1'), findsOneWidget);
+      expect(find.text('ข้อความจากครู · ป.5/1 · 2569'), findsOneWidget);
       expect(find.text('ข้อความจากครู · ชุมนุมคณิต'), findsOneWidget);
       expect(
         find.text('หนูทำเศษส่วนได้ดีมาก ลองฝึกทศนิยมอีกนิดนะ'),

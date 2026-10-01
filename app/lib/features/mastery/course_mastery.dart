@@ -6,6 +6,7 @@ import '../../core/api/api_retry.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import '../assignments/question.dart';
+import '../student/student_labels.dart';
 import 'mastery_models.dart';
 
 double? _double(Object? v) => switch (v) {
@@ -330,6 +331,7 @@ class StudentCourse {
     this.semester,
     this.academicYear,
     this.classroomIds = const [],
+    this.classrooms = const [],
   });
 
   final int id;
@@ -340,6 +342,9 @@ class StudentCourse {
   final int? semester;
   final int? academicYear;
   final List<int> classroomIds;
+
+  /// The student's classrooms this course is taught in (DESIGN §24.26).
+  final List<ClassroomLabel> classrooms;
 
   String get title => [code, name].where((s) => s.isNotEmpty).join(' ');
 
@@ -357,6 +362,7 @@ class StudentCourse {
         for (final id in (json['classroom_ids'] as List?) ?? const [])
           ?_int(id),
       ],
+      classrooms: ClassroomLabel.listFromJson(json['classrooms']),
     );
   }
 }

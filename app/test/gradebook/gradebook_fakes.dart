@@ -317,6 +317,12 @@ Map<String, dynamic> _column(
 Map<String, dynamic> myGradeJson() => {
   'course': {'id': 4, 'code': 'ค15101', 'name': 'คณิตศาสตร์ 5'},
   'classroom_id': 7,
+  'classroom': {
+    'id': 7,
+    'name': 'ป.5/1',
+    'academic_year': 2569,
+    'closed': false,
+  },
   'published_at': '2026-09-30T03:00:00+00:00',
   'grade': 3.0,
   'special': null,
@@ -469,6 +475,12 @@ class FakeGradebookRepository implements GradebookRepository {
     {
       'course': {'id': 4, 'code': 'ค15101', 'name': 'คณิตศาสตร์ 5'},
       'classroom_id': 7,
+      'classroom': {
+        'id': 7,
+        'name': 'ป.5/1',
+        'academic_year': 2569,
+        'closed': false,
+      },
       'published_at': '2026-09-30T03:00:00+00:00',
       'grade': 3.0,
       'special': null,
@@ -494,6 +506,9 @@ class FakeGradebookRepository implements GradebookRepository {
   );
 
   final calls = <(String, Object?)>[];
+
+  /// The `classroom_id` of each `myCourseGrade` call.
+  final gradeClassroomIds = <int?>[];
 
   /// Thrown by the next mutating call instead of answering.
   Object? failNext;
@@ -673,8 +688,12 @@ class FakeGradebookRepository implements GradebookRepository {
       myGradesBody.map(StudentGradeSummary.fromJson).toList();
 
   @override
-  Future<StudentGradeDetail> myCourseGrade(int courseId) async {
+  Future<StudentGradeDetail> myCourseGrade(
+    int courseId, {
+    int? classroomId,
+  }) async {
     calls.add(('myCourseGrade', courseId));
+    gradeClassroomIds.add(classroomId);
     final body = myGradeBody;
     if (body == null) throw gradebookError(404, 'ไม่พบ', code: 'not_found');
     return StudentGradeDetail.fromJson(body);

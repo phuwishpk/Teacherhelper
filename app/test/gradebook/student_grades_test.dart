@@ -34,9 +34,20 @@ void main() {
     expect(find.text('3'), findsOneWidget);
     expect(find.text('ร'), findsOneWidget);
     expect(find.textContaining('คะแนนรวม 74'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('my_grade_4')));
+    // The classroom label of the publication (DESIGN §24.11).
+    expect(find.textContaining('ป.5/1 · 2569 · คะแนนรวม 74'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('my_grade_4_7')));
     await tester.pumpAndSettle();
-    expect(find.text('grade /student/courses/4/grade'), findsOneWidget);
+    expect(
+      find.text('grade /student/courses/4/grade?classroom=7'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('"เกรดของฉัน" has its own screen', (tester) async {
+    await _pump(tester, const MyGradesScreen());
+    expect(find.text('เกรดของฉัน'), findsOneWidget);
+    expect(find.text('ค15101 คณิตศาสตร์ 5'), findsOneWidget);
   });
 
   testWidgets('no published grade yet', (tester) async {
@@ -64,6 +75,15 @@ void main() {
     expect(find.textContaining('ตัดออก'), findsOneWidget);
     final dropped = tester.widget<Text>(find.text('0/10'));
     expect(dropped.style?.decoration, TextDecoration.lineThrough);
+  });
+
+  testWidgets('one classroom\'s grade asks for that classroom', (tester) async {
+    final repo = await _pump(
+      tester,
+      const StudentGradeScreen(courseId: 4, classroomId: 7),
+    );
+    expect(repo.gradeClassroomIds, [7]);
+    expect(find.text('ห้อง ป.5/1 · 2569'), findsOneWidget);
   });
 
   testWidgets('a course without a published grade says so', (tester) async {

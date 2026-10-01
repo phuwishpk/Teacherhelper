@@ -11,6 +11,7 @@ import '../../features/gradebook/gradebook_providers.dart';
 import '../../features/home/teacher_attention.dart';
 import '../../features/results/results_repository.dart';
 import '../../features/review/review_providers.dart';
+import '../../features/student/student_overview.dart';
 import '../auth/session.dart';
 import '../auth/user.dart';
 import '../router/app_router.dart';
@@ -175,12 +176,14 @@ final pushCoordinatorProvider = Provider<PushCoordinator>((ref) {
         ref.invalidate(openAppealsProvider);
       case 'results_published' || 'appeal_resolved':
         ref.invalidate(studentResultsProvider);
+        ref.invalidate(studentOverviewProvider);
       case 'retake_requested':
         ref.invalidate(studentRetakeRequestsProvider);
       case 'grades_published':
         ref.invalidate(myGradesProvider);
-        final courseId = int.tryParse(data['course_id'] ?? '');
-        if (courseId != null) ref.invalidate(myCourseGradeProvider(courseId));
+        // Every classroom's grade of the course (DESIGN §24.26).
+        ref.invalidate(myCourseGradeProvider);
+        ref.invalidate(studentOverviewProvider);
       case 'classroom_work_imported':
         ref.invalidate(assignmentsProvider);
         ref.invalidate(teacherAttentionProvider);
