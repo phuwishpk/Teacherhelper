@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../google_signin/google_signin_config.dart';
 import 'google_config.dart';
 
 /// What `POST /google/connect` needs (DESIGN §18.5).
@@ -266,9 +267,11 @@ class DisabledGoogleAuth implements GoogleAuthGateway {
 
 /// google_sign_in on the web cannot give a server auth code
 /// (`supportsAuthenticate()` is false), so the web always uses the
-/// browser flow.
+/// browser flow. `google_sign_in` initializes once per app run: a build
+/// with GOOGLE_SIGNIN_CLIENT_ID gives the plugin to Google sign-in and
+/// connects Classroom through the browser too (DESIGN §24.9.4).
 final googleAuthProvider = Provider<GoogleAuthGateway>(
-  (ref) => googleNativeSignInBuild
+  (ref) => googleNativeSignInBuild && !googleSignInNativeBuild
       ? PluginGoogleAuth(serverClientId: googleServerClientId)
       : const DisabledGoogleAuth(),
 );

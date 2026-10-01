@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/push/push_messaging.dart';
 import '../google_classroom/google_classroom_card.dart';
+import '../google_signin/google_identity_card.dart';
 import 'ai_key_section.dart';
 
-/// Teacher settings: the Gemini key (DESIGN §10.1) and, when the build has
-/// a Google client id, the Google Classroom connection (§18.7).
+/// Teacher settings: the Google account for sign-in (DESIGN §24.9.5), the
+/// Gemini key (§10.1) and the Google Classroom connection (§18.7).
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -36,6 +37,8 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                  const SizedBox(height: 8),
+                  const GoogleIdentityCard(),
                   const SizedBox(height: 8),
                   const AiKeySection(),
                   const SizedBox(height: 8),

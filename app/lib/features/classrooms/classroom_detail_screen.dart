@@ -11,6 +11,8 @@ import '../courses/classroom_courses_section.dart';
 import '../courses/courses_providers.dart' show classroomTeachingProvider;
 import '../google_classroom/classroom_google_section.dart';
 import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
+import '../google_signin/google_signin_errors.dart';
+import '../google_signin/google_signin_repository.dart';
 import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import '../scan/offline_cache_repository.dart';
 import '../worksheets/print_flow.dart';
@@ -473,6 +475,33 @@ class _StudentTile extends ConsumerWidget {
     }
   }
 
+  /// "ยกเลิกการเชื่อม Google" (DESIGN §24.9.5): the homeroom teacher
+  /// removes the student's Google sign-in; PIN and card keep working.
+  Future<void> _unlinkGoogle(BuildContext context, WidgetRef ref) async {
+    final ok = await confirm(
+      context,
+      title: 'ยกเลิกการเชื่อม Google ของ ${student.name}?',
+      message:
+          'นักเรียนจะเข้าสู่ระบบด้วยปุ่ม Google ไม่ได้จนกว่าจะเชื่อมใหม่ '
+          'ยังเข้าสู่ระบบด้วยบัตร QR หรือ PIN ได้ตามเดิม '
+          'เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้ ถ้าต้องการให้ออกทุกเครื่องให้รีเซ็ต PIN',
+      confirmLabel: 'ยกเลิกการเชื่อม',
+      destructive: true,
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      await ref
+          .read(googleSignInRepositoryProvider)
+          .unlinkStudent(student.studentId);
+      await ref.read(rosterProvider(classroomId).notifier).refresh();
+      if (context.mounted) {
+        showMessage(context, 'ยกเลิกการเชื่อม Google ของ ${student.name} แล้ว');
+      }
+    } catch (e) {
+      if (context.mounted) showMessage(context, googleSignInErrorMessage(e));
+    }
+  }
+
   Future<void> _reissueCard(BuildContext context, WidgetRef ref) async {
     final ok = await confirm(
       context,
@@ -619,6 +648,7 @@ class _StudentTile extends ConsumerWidget {
           'merge' => context.push(
             AppRoutes.studentMerge(classroomId, student.studentId),
           ),
+          'google' => _unlinkGoogle(context, ref),
           'remove' => _remove(context, ref),
           _ => null,
         },
@@ -664,6 +694,14 @@ class _StudentTile extends ConsumerWidget {
               ),
             ),
           ],
+          if (classroom.canManageStudents && student.googleLinked == true)
+            const PopupMenuItem(
+              value: 'google',
+              child: ListTile(
+                leading: Icon(Icons.link_off),
+                title: Text('ยกเลิกการเชื่อม Google'),
+              ),
+            ),
           if (classroom.isHomeroom)
             const PopupMenuItem(
               value: 'merge',

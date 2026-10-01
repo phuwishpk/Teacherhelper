@@ -7,11 +7,14 @@ import 'user.dart';
 
 /// The auth endpoints in DESIGN §9.1. Interface so tests can inject a fake.
 abstract class AuthRepository {
+  /// [googleLinkTicket] links the Google account of a 404
+  /// `google_not_linked` as the account is created (DESIGN §24.9.5).
   Future<void> register({
     required String schoolCode,
     required String name,
     required String email,
     required String password,
+    String? googleLinkTicket,
   });
 
   /// Returns the plain-text Sanctum token.
@@ -43,6 +46,7 @@ class ApiAuthRepository implements AuthRepository {
     required String name,
     required String email,
     required String password,
+    String? googleLinkTicket,
   }) async {
     await _dio.post<Object?>(
       '/auth/teacher/register',
@@ -51,6 +55,7 @@ class ApiAuthRepository implements AuthRepository {
         'name': name,
         'email': email,
         'password': password,
+        'google_link_ticket': ?googleLinkTicket,
       },
     );
   }

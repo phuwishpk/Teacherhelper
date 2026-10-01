@@ -213,6 +213,31 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
   `configured` และกล่องเชื่อมผ่านเบราว์เซอร์กับ clock ปลอมของ widget test), `test/results/retake_notice_test.dart`,
   JVM `AttachmentRasterizerTest.kt` ไม่มี test ไหนต่อ Google จริง ของจริงทดสอบตาม KICKOFF ส่วนที่ 6 ข้อ G7
 
+## เข้าสู่ระบบด้วย Google (DESIGN §24.9, build 3)
+
+ปุ่ม **"เข้าสู่ระบบด้วย Google"** อยู่ทั้งสองแท็บของหน้า login และการ์ด "บัญชี Google สำหรับเข้าสู่ระบบ" อยู่ในหน้าตั้งค่าครู,
+"บัญชีของฉัน" ของนักเรียน (`/student/account` ไอคอนบนแถบด้านบน) และหน้า `/admin-home` โค้ดอยู่ที่ `lib/features/google_signin/`
+แสดงเมื่อ **ทั้ง** build ใช้ Google ได้ **และ** server เปิด (`GET /auth/google/config` → `enabled`, บนเว็บต้องมี `web_flow` ด้วย)
+
+```bash
+# Android: Web client ID ของ project sign-in (ไม่ใช่ของ Classroom) เป็น serverClientId
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
+            --dart-define=GOOGLE_SIGNIN_CLIENT_ID=yyyyyyyy.apps.googleusercontent.com
+# Chrome: ทาง redirect ผ่าน server ต้องใช้พอร์ตคงที่ให้ตรงกับ GOOGLE_SIGNIN_APP_URL ของ backend
+flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+- **Android**: `google_sign_in` 7 `initialize(serverClientId)` → `authenticate()` → ID token → `POST /auth/google` แล้ว
+  `signOut()` ของ plugin ทันที (เครื่องประจำห้องใช้หลายคน) plugin initialize ได้ครั้งเดียวต่อการเปิดแอป build ที่มี
+  `GOOGLE_SIGNIN_CLIENT_ID` จึง **เชื่อม Google Classroom ผ่านเบราว์เซอร์เสมอ** (`googleAuthProvider` เป็น `DisabledGoogleAuth`)
+- **เว็บ**: `POST /auth/google/web-url` แล้วเปิดหน้าของ Google ในแท็บเดิม server ส่งกลับมาที่ `/#/login/google?ticket=…`
+  (แลกด้วย `POST /auth/google/ticket`) หรือ `/#/google-link?status=…` หลังเชื่อม router เก็บสองที่นี้ไว้ระหว่าง restore session
+- `google_not_linked` แท็บครู: ถาม "สมัครใช้งานครู" (หน้าสมัครเติมชื่อและอีเมลจาก Google แล้วส่ง `google_link_ticket`) หรือ
+  login ด้วยรหัสผ่าน แท็บนักเรียน: หน้า "ยืนยันตัวตนครั้งแรก" (`/login/google/confirm`) ต้องติ๊กยอมรับข้อความ PDPA ก่อน
+  แล้วใช้ PIN หรือสแกนบัตร (`/login/google/confirm/qr`) link ticket อยู่ในหน่วยความจำเท่านั้น
+- ครูประจำชั้นยกเลิกการเชื่อม Google ของนักเรียนได้จากเมนูของนักเรียนในหน้าห้อง (เมื่อ roster บอก `google_linked: true`)
+- test ใช้ `FakeGoogleSignInGateway` / `FakeGoogleSignInRepository` (`test/google_signin/`) ไม่เรียก plugin หรือ Google จริง
+
 ## ตัวอ่านตัวเลขบนเครื่อง แบบฝึก mastery และ dashboard (Phase 5–6, DESIGN §12, §14, §9.6–§9.8)
 
 - **โมเดล** (`lib/ml/`): `ModelRepository` เรียก `GET /ml/models/active?name=digit_crnn` (§9.8) เมื่อเปิด shell ของครูหรือหน้าสแกน

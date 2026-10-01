@@ -164,11 +164,16 @@ class RosterStudent {
     this.studentCode,
     this.leftCourseAt,
     this.pinPending = false,
+    this.googleLinked,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// A Google account for sign-in is linked (DESIGN §24.9, §24.22); null
+  /// for a subject teacher, who does not see it.
+  final bool? googleLinked;
 
   /// เลขประจำตัวนักเรียน of the school (DESIGN §24.4), if known.
   final String? studentCode;
@@ -193,6 +198,7 @@ class RosterStudent {
       _ => null,
     },
     pinPending: json['pin_pending'] == true,
+    googleLinked: json['google_linked'] as bool?,
   );
 }
 

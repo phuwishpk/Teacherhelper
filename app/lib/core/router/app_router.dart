@@ -44,6 +44,9 @@ import '../../features/exams/exam_question_screen.dart';
 import '../../features/exams/exam_screen.dart';
 import '../../features/exams/exam_versions_screen.dart';
 import '../../features/google_classroom/classroom_feedback_screen.dart';
+import '../../features/google_signin/google_first_link_screen.dart';
+import '../../features/google_signin/google_signin_models.dart';
+import '../../features/google_signin/google_web_return_screens.dart';
 import '../../features/gradebook/gradebook_screen.dart';
 import '../../features/gradebook/gradebook_settings_screen.dart';
 import '../../features/gradebook/student_grades.dart';
@@ -69,6 +72,7 @@ import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/student/student_account_screen.dart';
 import '../../features/student/student_shell.dart';
 import '../../features/upload_queue/upload_queue_screen.dart';
 import '../auth/session.dart';
@@ -88,6 +92,25 @@ abstract final class AppRoutes {
   /// so existing links and bookmarks still work.
   static const studentLogin = '/student/login';
   static const studentQr = '/student/login/qr';
+
+  /// Google sign-in (DESIGN §24.9): where the web flow's callback returns
+  /// (`?ticket=` or `?error=`), the student's first confirmation and its
+  /// card scanner. All public.
+  static const googleLoginReturn = '/login/google';
+  static const googleFirstLink = '/login/google/confirm';
+  static const googleFirstLinkQr = '/login/google/confirm/qr';
+
+  /// Where the web flow returns after linking a Google account
+  /// (`?status=linked|<code>`); every signed-in role may open it.
+  static const googleLinkResult = '/google-link';
+
+  /// Student: "บัญชีของฉัน" with the Google account (DESIGN §24.13).
+  static const studentAccount = '/student/account';
+
+  /// The web flow's returns, kept while the session restores (see
+  /// [routerProvider]).
+  static bool isGoogleReturn(String location) =>
+      location == googleLoginReturn || location == googleLinkResult;
 
   /// Admin: one screen that opens the web panel (DESIGN §7.4).
   static const adminHome = '/admin-home';
@@ -320,6 +343,7 @@ abstract final class AppRoutes {
   /// Routes a signed-in student may open (everything else sends them home).
   static bool isStudentArea(String location) =>
       location == student ||
+      location == studentAccount ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/') ||
@@ -348,10 +372,16 @@ abstract final class AppRoutes {
 
   static bool isPublic(String location) =>
       location == login ||
+      location == googleLoginReturn ||
+      location == googleFirstLink ||
+      location == googleFirstLinkQr ||
       location == register ||
       location == studentLogin ||
       location == studentQr;
 }
+
+String _qrLinkError(Object error) =>
+    googleFirstLinkErrorMessage(error, qr: true);
 
 int _id(GoRouterState state, String name) =>
     int.parse(state.pathParameters[name]!);
@@ -365,6 +395,11 @@ final routerProvider = Provider<GoRouter>((ref) {
   // A result link that waits for the student to sign in.
   String? pendingResult;
 
+  // A return of the Google web flow (DESIGN §24.9.4) that arrived while
+  // the session was still restoring: the app starts on it, but the splash
+  // would otherwise swallow its ticket or status.
+  String? pendingGoogle;
+
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: refresh,
@@ -375,6 +410,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       final link = AppRoutes.fromResultLink(state.uri);
       if (link != null) pendingResult = link;
       final location = link ?? state.matchedLocation;
+      if (AppRoutes.isGoogleReturn(location)) {
+        pendingGoogle = state.uri.toString();
+      }
+      final google = pendingGoogle;
+      if (google != null && session is! SessionRestoring) {
+        final path = Uri.parse(google).path;
+        // A login return is for a signed-out user, a link result for a
+        // signed-in one; anything else is stale.
+        final usable = session is SignedIn
+            ? path == AppRoutes.googleLinkResult
+            : path == AppRoutes.googleLoginReturn;
+        if (usable && location != path) return google;
+        pendingGoogle = null;
+        if (usable) return null;
+      }
       final public = AppRoutes.isPublic(location);
       final inStudentArea = AppRoutes.isStudentArea(location);
       final String? target = switch (session) {
@@ -424,8 +474,40 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.googleLoginReturn,
+        builder: (context, state) => GoogleLoginReturnScreen(
+          ticket: state.uri.queryParameters['ticket'],
+          error: state.uri.queryParameters['error'],
+        ),
+        routes: [
+          GoRoute(
+            path: 'confirm',
+            builder: (context, state) => const GoogleFirstLinkScreen(),
+            routes: [
+              GoRoute(
+                path: 'qr',
+                builder: (context, state) => const StudentQrScanScreen(
+                  signIn: linkGoogleWithQr,
+                  errorMessage: _qrLinkError,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.googleLinkResult,
+        builder: (context, state) => GoogleLinkResultScreen(
+          status: state.uri.queryParameters['status'] ?? 'google_error',
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) => RegisterScreen(
+          google: state.extra is GoogleRegistration
+              ? state.extra as GoogleRegistration
+              : null,
+        ),
       ),
       GoRoute(
         path: AppRoutes.studentLogin,
@@ -442,6 +524,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.student,
         builder: (context, state) => const StudentShell(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentAccount,
+        builder: (context, state) => const StudentAccountScreen(),
       ),
       GoRoute(
         path: '/student/results/:sid',

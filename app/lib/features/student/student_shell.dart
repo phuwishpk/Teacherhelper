@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/router/app_router.dart';
 import '../auth/sign_out_action.dart';
 import '../gradebook/student_grades.dart';
 import '../hand_in/student_assignments_page.dart';
@@ -73,6 +75,12 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       appBar: AppBar(
         title: Text(user == null ? 'EduVision' : 'สวัสดี ${user.name}'),
         actions: [
+          IconButton(
+            key: const ValueKey('student_account_button'),
+            tooltip: 'บัญชีของฉัน',
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () => context.push(AppRoutes.studentAccount),
+          ),
           IconButton(
             tooltip: 'ออกจากระบบ',
             icon: const Icon(Icons.logout),

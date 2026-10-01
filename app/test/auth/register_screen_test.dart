@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:eduvision/core/api/api_client.dart';
 import 'package:eduvision/core/auth/auth_repository.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/features/auth/register_screen.dart';
+import 'package:eduvision/features/google_signin/google_signin_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,8 @@ import '../helpers/pump_screen.dart';
 
 class _FakeAuth extends Fake implements AuthRepository {
   final calls = <Map<String, String>>[];
+  final tickets = <String?>[];
+  Object? error;
 
   @override
   Future<void> register({
@@ -17,7 +21,14 @@ class _FakeAuth extends Fake implements AuthRepository {
     required String name,
     required String email,
     required String password,
+    String? googleLinkTicket,
   }) async {
+    tickets.add(googleLinkTicket);
+    if (error != null) {
+      final e = error!;
+      error = null;
+      throw e;
+    }
     calls.add({
       'school_code': schoolCode,
       'name': name,
@@ -101,5 +112,95 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('login-stub'), findsOneWidget);
     },
+  );
+
+  group('from a Google sign-in (DESIGN §24.9.5)', () {
+    const google = GoogleRegistration(
+      linkTicket: 'tkt',
+      name: 'ครูใหม่ ใจดี',
+      email: 'new@school.ac.th',
+    );
+
+    Future<_FakeAuth> pumpGoogle(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final auth = _FakeAuth();
+      await pumpScreen(
+        tester,
+        const RegisterScreen(google: google),
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
+        ],
+        extraRoutes: [
+          GoRoute(path: '/login', builder: (_, _) => const Text('login-stub')),
+        ],
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'รหัสโรงเรียน (school_code)'),
+        'SCH001',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'รหัสผ่าน (อย่างน้อย 8 ตัว)'),
+        'secret-pass-1',
+      );
+      return auth;
+    }
+
+    testWidgets('prefills the Google name and e-mail and sends the ticket', (
+      tester,
+    ) async {
+      final auth = await pumpGoogle(tester);
+      expect(find.text('สมัครพร้อมเชื่อมบัญชี Google'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
+      await tester.pumpAndSettle();
+
+      expect(auth.tickets, ['tkt']);
+      expect(auth.calls.single['name'], 'ครูใหม่ ใจดี');
+      expect(auth.calls.single['email'], 'new@school.ac.th');
+      expect(
+        find.textContaining('ปุ่ม "เข้าสู่ระบบด้วย Google"'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('an expired ticket can be dropped to register without Google', (
+      tester,
+    ) async {
+      final auth = await pumpGoogle(tester);
+      auth.error = _apiError(422, 'link_ticket_invalid');
+      await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('สมัครโดยไม่เชื่อม Google'), findsOneWidget);
+      expect(find.text('สมัครพร้อมเชื่อมบัญชี Google'), findsNothing);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
+      await tester.pumpAndSettle();
+      expect(auth.tickets, ['tkt', null]);
+      expect(find.text('สมัครสำเร็จ'), findsOneWidget);
+    });
+
+    testWidgets('a domain the school does not allow is explained', (
+      tester,
+    ) async {
+      final auth = await pumpGoogle(tester);
+      auth.error = _apiError(403, 'google_domain_not_allowed');
+      await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('โดเมนนี้'), findsOneWidget);
+    });
+  });
+}
+
+DioException _apiError(int status, String code) {
+  final options = RequestOptions(path: '/auth/teacher/register');
+  return DioException(
+    requestOptions: options,
+    response: Response(
+      requestOptions: options,
+      statusCode: status,
+      data: {'message': 'x', 'errors': <String, dynamic>{}, 'code': code},
+    ),
   );
 }
