@@ -23,6 +23,12 @@ abstract class TokenStorage {
   Future<int?> readDataOwner();
   Future<void> writeDataOwner(int? userId);
 
+  /// The tab of the login page used last (`teacher` or `student`), so a
+  /// shared class phone opens on the student form. Not personal data;
+  /// survives [clear] like the data owner.
+  Future<String?> readLoginTab();
+  Future<void> writeLoginTab(String tab);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
@@ -34,6 +40,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _key = 'auth_token';
   static const _userKey = 'auth_user';
   static const _ownerKey = 'local_data_owner';
+  static const _loginTabKey = 'login_tab';
   final FlutterSecureStorage _storage;
 
   @override
@@ -68,6 +75,13 @@ class SecureTokenStorage implements TokenStorage {
       : _storage.write(key: _ownerKey, value: '$userId');
 
   @override
+  Future<String?> readLoginTab() => _storage.read(key: _loginTabKey);
+
+  @override
+  Future<void> writeLoginTab(String tab) =>
+      _storage.write(key: _loginTabKey, value: tab);
+
+  @override
   Future<void> clear() async {
     await _storage.delete(key: _key);
     await _storage.delete(key: _userKey);
@@ -75,11 +89,18 @@ class SecureTokenStorage implements TokenStorage {
 }
 
 class InMemoryTokenStorage implements TokenStorage {
-  InMemoryTokenStorage({this.token, this.user, this.dataOwner});
+  InMemoryTokenStorage({this.token, this.user, this.dataOwner, this.loginTab});
 
   String? token;
   Map<String, dynamic>? user;
   int? dataOwner;
+  String? loginTab;
+
+  @override
+  Future<String?> readLoginTab() async => loginTab;
+
+  @override
+  Future<void> writeLoginTab(String tab) async => loginTab = tab;
 
   @override
   Future<int?> readDataOwner() async => dataOwner;

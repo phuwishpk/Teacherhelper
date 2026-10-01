@@ -68,11 +68,11 @@
 
 | Role | ช่องทาง | ทำอะไรได้ |
 |---|---|---|
-| **Admin** (ระดับโรงเรียน / ระดับระบบ) | Web admin (Filament) | จัดการโรงเรียน, อนุมัติบัญชีครู, import ตัวชี้วัด, จัดการเวอร์ชันโมเดล, ตั้งค่าความยินยอมและนโยบายเก็บภาพ |
+| **Admin** (ระดับโรงเรียน / ระดับระบบ) | Web admin (Filament) เข้าจากหน้า login เดียวของแอปหรือ `/admin/login` (§7.4) | จัดการโรงเรียน, อนุมัติบัญชีครู, import ตัวชี้วัด, จัดการเวอร์ชันโมเดล, ตั้งค่าความยินยอมและนโยบายเก็บภาพ |
 | **ครู** | แอป Android (ใช้บนแท็บเล็ตได้) | จัดการห้องและนักเรียน, รายวิชาและแผนการสอน (§20), สร้างการบ้านและเฉลย, พิมพ์ใบงาน, สแกนหรืออัปโหลดรูป, ตรวจทานและเผยแพร่, ตอบคำขอตรวจใหม่, อนุมัติคลังแบบฝึกและการวิเคราะห์รายคน, ดู dashboard และกราฟ, สร้างข้อสอบ พิมพ์เล่มและกระดาษคำตอบ แล้วสแกนตรวจด้วยมือถือ (§22), สมุดคะแนนและตัดเกรด (§23) |
 | **นักเรียน** | แอป Android | ส่งงานด้วยกล้องหรือไฟล์ (§19.6), ดูผลที่เผยแพร่แล้ว, อ่านคำอธิบาย, ขอให้ครูตรวจใหม่, ทำแบบฝึกซ่อม, ดูทักษะ กราฟ และการวิเคราะห์ของตัวเอง, ดูผลสอบและเกรดที่ครูประกาศแล้ว (§22.12, §23.7) |
 
-แอปมือถือ**ไม่มีโหมด admin**
+ทุก role ใช้**หน้า login เดียว**ในแอป (§7.4) แต่แอปมือถือ**ไม่มีโหมด admin**: admin ที่ login ในแอปเห็นแค่หน้า "ผู้ดูแลระบบ" ที่มีปุ่มเปิดหน้าเว็บผู้ดูแลระบบ งาน admin ทั้งหมดอยู่ใน Filament
 
 ### 2.2 ประเภทคำถาม
 
@@ -328,7 +328,7 @@ app/lib/
 │  └─ scan_pipeline.dart
 ├─ ml/              โหลดโมเดล TFLite, preprocess, greedy CTC decode
 └─ features/
-   ├─ auth/  home/ (shell + dashboard ของครู)  classrooms/  assignments/  worksheets/
+   ├─ auth/ (หน้า login เดียว 2 แท็บ)  admin/ (หน้า "ผู้ดูแลระบบ")  home/ (shell + dashboard ของครู)  classrooms/  assignments/  worksheets/
    ├─ scan/  upload_queue/  review/  appeals/
    ├─ results/  practice/  mastery/  dashboard/
 ```
@@ -477,12 +477,38 @@ task worker เรียกผ่าน `artisan eduvision:queue-work` ซึ่
 | ครู | email + password ผู้สมัครใหม่ต้องกรอก `teacher_join_code` ของโรงเรียน แล้วรอ admin อนุมัติ | ability `teacher` หมดอายุ 30 วัน |
 | นักเรียน (ทางหลัก) | สแกน**บัตร QR** (`EVL1.{token}`) | ability `student` หมดอายุ 180 วัน |
 | นักเรียน (สำรอง) | `class_code` + เลขที่ + PIN 6 หลัก ผิด 5 ครั้งล็อก 15 นาที | ability `student` |
-| Admin | Filament ผ่าน web session | ไม่มี API token |
+| Admin (ในแอป) | email + password ฟอร์มเดียวกับครู (`POST /auth/teacher/login`) | ability `admin` หมดอายุ 1 วัน เปิดได้แค่ `GET /me`, `POST /auth/logout` และ `POST /auth/admin-handoff` |
+| Admin (เว็บ) | Filament ผ่าน web session: ลิงก์ใช้ครั้งเดียวจากแอป หรือ `/admin/login` (สำรอง) | ไม่ใช้ API token |
 
 - เมื่อครูออกบัตร QR ใหม่หรือรีเซ็ต PIN **token เดิมทั้งหมดของนักเรียนคนนั้นถูกยกเลิก**
 - rate limit ใช้ Laravel `RateLimiter` บน `/api/v1/auth/*` และเพิ่ม Cloudflare WAF เป็นชั้นที่สองเมื่อเปิดใช้ Cloudflare
 
+**หน้า login เดียว (แก้ 1 ต.ค. 2569)** แอปมีหน้า login หน้าเดียวสำหรับทุก role แบ่ง 2 แท็บ (`SegmentedButton`):
+
+- **"ครู / ผู้ดูแลระบบ"**: อีเมล + รหัสผ่าน ส่งไป `POST /auth/teacher/login` ทั้งครูและ admin ใต้ฟอร์มมีลิงก์ "ยังไม่มีบัญชี? สมัครใช้งาน" response มี `user.role` แอปจึงพาแต่ละ role ไปหน้าของตัวเอง: `admin` → `/admin-home`, `teacher` → shell ของครู, `student` → shell ของนักเรียน (redirect ของ go_router ตาม role ทุกครั้ง admin เปิดหน้าครูหรือนักเรียนไม่ได้)
+- **"นักเรียน"**: ฟอร์มรหัสห้อง + เลขที่ + PIN 6 หลักอยู่ในหน้าเลย และปุ่ม "สแกนบัตร QR" ที่เปิดกล้องสแกนบัตรเดิม (`/student/login/qr`) บนเว็บ (ใช้ดู UI เท่านั้น) ปุ่มนี้บอกว่าต้องใช้แอป Android
+- แอปจำแท็บที่ใช้ล่าสุดไว้ใน `flutter_secure_storage` ที่เก็บ token อยู่แล้ว (ไม่ใช่ข้อมูลส่วนตัว ไม่ถูกลบตอน logout) เครื่องประจำห้องจึงเปิดมาที่แท็บนักเรียน `/login?tab=student` เลือกแท็บนักเรียนเสมอ และ route เดิม `/student/login` (รวมถึงลิงก์ผลจาก Classroom §19.7 ที่รอ login) redirect มาที่ `/login?tab=student`
+- ตอบได้ทั้งจอ 360 px และจอกว้าง (คอลัมน์กว้างไม่เกิน 440 px กลางจอ)
+
+**การส่งต่อ admin ไปหน้าเว็บ (admin handoff)** หน้า `/admin-home` ในแอปมีคำทักทาย ข้อความว่างาน admin ทำในหน้าเว็บ ปุ่ม **"เปิดหน้าผู้ดูแลระบบ"** และปุ่มออกจากระบบ ปุ่มเปิดหน้าเว็บทำงานดังนี้:
+
+1. แอปเรียก `POST /api/v1/auth/admin-handoff` ด้วย token ของ admin ได้ `{data: {url, expires_at}}`
+2. server สร้าง token สุ่ม 48 ตัวอักษร (hex 192 bit) เก็บเฉพาะ **SHA-256** ใน cache (database store) ผูกกับ `user_id` อายุ **60 วินาที** แล้วตอบ url `GET /admin/handoff/{token}`
+3. แอปเปิด url ใน browser ภายนอก (Android) หรือแท็บใหม่ (เว็บ) ผ่าน `url_launcher`
+4. web route ใช้ token **ได้ครั้งเดียว** (เขียน marker ด้วย `Cache::add` ที่ชนะได้คำขอเดียวแม้ยิงพร้อมกัน แล้วลบ token) ตรวจว่าผู้ใช้ยังเป็น admin ที่ `active` (`canAccessPanel`) แล้ว login เข้า web guard ของ Filament, `session()->regenerate()` และ redirect ไป `/admin`
+5. ถ้า token หมดอายุ ใช้แล้ว ไม่รู้จัก หรือผู้ใช้ไม่ใช่ admin / ถูกระงับ: redirect ไป `/admin/login` พร้อมข้อความภาษาไทยใต้ฟอร์ม
+
+กฎความปลอดภัย:
+
+- token ของ admin มีแค่ ability `admin` จึงถูก `role:teacher` / `role:student` (`EnsureRole` ตรวจทั้ง role และ ability) ปฏิเสธ 403 ทุก route แม้ policy ของ route ใดลืมตรวจ role และใช้ `POST /devices` ไม่ได้ (admin ไม่รับ push)
+- `POST /auth/admin-handoff` ผ่าน `active` + `role:admin` และ limiter `admin-handoff` (10 ครั้ง/นาที ต่อ admin) ส่วน `GET /admin/handoff/{token}` มี limiter `admin-handoff-link` (10 ครั้ง/นาที ต่อ IP)
+- response ของลิงก์ (ทั้งสำเร็จและไม่สำเร็จ) ส่ง `Referrer-Policy: no-referrer` และ `Cache-Control: no-store` เพื่อไม่ให้ token หลุดไปใน header `Referer` (`SecurityHeaders` ไม่ทับ policy ที่ route ตั้งไว้แล้ว)
+- ไม่มี token, url หรือรหัสผ่านใน log บันทึกแค่ผลและ `user_id`
+- `/admin/login` ของ Filament ยังใช้ได้เป็นทางสำรอง ใต้ฟอร์มมีข้อความ "เข้าสู่ระบบจากแอป EduVision ได้ด้วยบัญชีเดียวกัน" (render hook `AUTH_LOGIN_FORM_AFTER`)
+
 ### 7.5 Web admin (Filament)
+
+เข้าได้ 2 ทาง: ปุ่ม "เปิดหน้าผู้ดูแลระบบ" ในแอปหลัง login ด้วยบัญชี admin (ลิงก์ใช้ครั้งเดียว §7.4) หรือ `/admin/login` โดยตรง
 
 - จัดการโรงเรียน และสร้าง `teacher_join_code`
 - อนุมัติหรือระงับบัญชีครู
@@ -900,12 +926,13 @@ CREATE TABLE training_samples (
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
 | POST | `/auth/teacher/register` | สาธารณะ | `{school_code, name, email, password}` ได้บัญชีสถานะ `pending` |
-| POST | `/auth/teacher/login` | สาธารณะ | ได้ token (ต้องมีสถานะ `active`) |
+| POST | `/auth/teacher/login` | สาธารณะ | ครูและ admin (หน้า login เดียว §7.4) ได้ `{token, user}` (ต้องมีสถานะ `active`) token มี ability ตาม `user.role`: `teacher` หรือ `admin` |
 | POST | `/auth/student/qr` | สาธารณะ | `{qr_token}` |
 | POST | `/auth/student/pin` | สาธารณะ | `{class_code, student_number, pin}` มี rate limit และ lockout |
 | POST | `/auth/logout` | ทุก role | ยกเลิก token ปัจจุบัน |
 | GET | `/me` | ทุก role | |
-| POST | `/devices` | ทุก role | `{fcm_token}` |
+| POST | `/auth/admin-handoff` | admin | `{data: {url, expires_at}}` ลิงก์ `GET /admin/handoff/{token}` ใช้ได้ครั้งเดียวภายใน 60 วินาที เข้า Filament (§7.4) |
+| POST | `/devices` | ครู, นักเรียน | `{fcm_token}` (token ของ admin ได้ 403) |
 | GET | `/me/ai-key` | ครู | `{configured, key_last4, last_verified_at}` ไม่มีค่า key จริง |
 | PUT | `/me/ai-key` | ครู | `{gemini_api_key}` server ทดสอบเรียก Gemini (list models) ก่อน ถ้าใช้ไม่ได้ตอบ 422 `code: ai_key_invalid` ถ้าผ่านเก็บแบบเข้ารหัส |
 | DELETE | `/me/ai-key` | ครู | ลบ key งานที่ค้างในคิวของครูคนนี้จะใช้ key กลางของ server ถ้ามี |
@@ -1726,6 +1753,12 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 
 **รอผู้ใช้ยืนยัน** (รวมไว้ที่เดียวให้ยกขึ้นถามก่อนถึง build ข้อนั้น): คอลัมน์ตัวเลขแบบ SAT (วง "." ในทุกคอลัมน์ + หนึ่งคอลัมน์เพิ่ม) แทน "คอลัมน์จุดทศนิยม" แยกที่ผู้ใช้พูดถึง (§22.7), ข้อสอบไม่มีตัวเลือกโพสต์ลง Classroom เลยและทุก route ของ Classroom ปฏิเสธข้อสอบ (ผู้ใช้พูดว่า "ไม่โพสต์โดยค่าตั้งต้น" §22.1, §22.3), สัญญาณสแกนมีแค่เสียงคลิกของระบบกับการสั่น (#51 บอก "มีเสียงและสั่น" §22.10), ข้อสอบ `app` ที่ครูใช้เล่มข้อสอบของตัวเองไม่ต้องกรอกโจทย์ในแอป มีแค่เฉลยก็พิมพ์กระดาษคำตอบได้ (§22.4), คำเตือน "อาจติด มส" นับเฉพาะรายการการเข้าเรียนที่เริ่มกรอกคะแนนแล้ว (§23.4) และคะแนนรายตอนแสดงให้นักเรียน (§22.12)
 
+**รอบ 1 ต.ค. 2569: หน้า login เดียว** (ผู้ใช้ยืนยัน)
+
+| # | เรื่อง | ตัดสินใจ | เหตุผลหลัก |
+|---|---|---|---|
+| 58 | หน้า login เดียวของทุก role | แอปมีหน้า login หน้าเดียว 2 แท็บ "ครู / ผู้ดูแลระบบ" (อีเมล + รหัสผ่าน) และ "นักเรียน" (PIN ในหน้า + ปุ่มสแกนบัตร QR) จำแท็บล่าสุดใน secure storage เดิม route เดิมของนักเรียน redirect มาแท็บนักเรียน admin ใช้ `POST /auth/teacher/login` ได้ token ability `admin` อายุ 1 วัน ที่เปิดได้แค่ `/me`, logout และ `POST /auth/admin-handoff` ซึ่งให้ลิงก์ `/admin/handoff/{token}` ใช้ครั้งเดียวใน 60 วินาที (เก็บ SHA-256 ใน database cache) เพื่อ login เข้า Filament แทนการทำหน้า admin ในแอป `/admin/login` ยังเป็นทางสำรอง (§2.1, §7.4, §9.1) | ผู้ใช้จำทางเข้าเดียว admin ไม่ต้องรู้ URL ของ panel และงาน admin ยังอยู่ใน Filament ที่เดียว token ของ admin ถูก ability กันจาก API ครูและนักเรียนแม้ policy ใดพลาด ลิงก์สั้นและใช้ครั้งเดียวจึงหลุดได้ยาก ไม่เพิ่ม package และใช้ได้บน shared hosting |
+
 ---
 
 ## 18. การเชื่อม Google Classroom (Phase 7)
@@ -2336,7 +2369,7 @@ scope รวมเป็นตาราง §18.5 บวก `classroom.announcem
 - **ครู "อัปโหลดรูปเพื่อตรวจ"** (implement build ข้อ 5 แอป, ผู้ใช้กำหนด flow): หน้า `/hand-ins/upload` เปิดจากการ์ดในหน้าหลักและการ์ดในหน้ารายละเอียดการบ้าน (`?assignment=` เลือกวิชาและการบ้านให้แล้ว) ลำดับ: เลือก**วิชา** (วิชาของการบ้านที่รับงานได้ งานที่ยังไม่มีวิชาอยู่ใต้ "ยังไม่ระบุวิชา") → เลือก**การบ้าน**ของวิชานั้น (แสดงห้องและ "ส่งแล้ว N คน" จาก `submissions_count` ของ `GET /assignments`; ไม่แสดงงาน `worksheet` ที่ยังเป็น `draft` งาน `freeform` ที่ยังไม่อนุมัติเฉลยมีป้าย "รออนุมัติเฉลย") → เลือก**นักเรียน**ของห้องนั้น (ค้นด้วยชื่อหรือเลขที่ ป้าย "ส่งแล้ว"/"ส่งช้า" จาก `meta.submissions` ของ `GET /assignments/{id}/review-queue?per_page=1`) → แนบรูปหรือ PDF 1–5 ไฟล์ (`file_picker` เท่านั้น) → **"ส่งตรวจ"** (`POST /assignments/{id}/students/{student_id}/pages`) ผลลัพธ์บอก "ส่งตรวจแล้ว" / "เก็บงานไว้แล้ว" (`waiting_key`) / "รับงานใหม่แล้ว รอครูกดตรวจ" พร้อมปุ่ม "ตรวจงานใหม่" (`POST /submissions/{id}/grade`) ปุ่ม "ส่งงานนักเรียนคนต่อไป" คงการบ้านไว้ ใช้บนเว็บ (Chrome) ได้ครบเพราะไม่พึ่ง pipeline บนมือถือ
 - **หน้าสแกน "เลือกไฟล์"** (implement build ข้อ 5 แอป): รูปที่เลือกเข้า pipeline marker/QR ทีละไฟล์ (หน้ายืนยันเดิม ปุ่ม "ข้ามไฟล์นี้" แทน "ถ่ายใหม่") รูปที่ไม่เจอ marker/QR (ทุก `ScanRejected` ที่ไม่ใช่แค่ภาพเบลอ) ไฟล์ที่อ่านไม่ได้ และ PDF ทุกไฟล์ (pipeline อ่านได้เฉพาะรูป) ไปรวมในหน้า "ไม่พบสัญลักษณ์หรือ QR" ครูติ๊กไฟล์ของนักเรียนคนเดียวกันครั้งละไม่เกิน 5 ไฟล์ แล้ว "ส่งแบบรูปทั้งหน้า" เปิดหน้า "อัปโหลดรูปเพื่อตรวจ" พร้อมไฟล์นั้น ไฟล์ที่เหลือรอรอบถัดไป บนเว็บหน้าสแกนยังเป็นข้อความเดิม ครูใช้ "อัปโหลดรูปเพื่อตรวจ" จากหน้าหลักหรือหน้าการบ้านแทน
   - รูปที่เลือกจากเครื่องส่งตามไฟล์เดิมโดย**ไม่ย่อ** (ข้อ 21.9 ย่อได้เฉพาะภาพจากกล้องในแอปที่ตั้ง 1080p) เพราะ Dart เข้ารหัส JPEG เองไม่ได้ถ้าไม่เพิ่ม package token ไม่เปลี่ยน ส่วนขนาดไฟล์ถูกจำกัดที่ 10 MB ต่อไฟล์อยู่แล้ว
-- **ประกาศผลรายคนและเชื่อมใหม่เพื่อ scope ประกาศ** (implement build ข้อ 6 แอป, 30 ก.ย. 2569): หน้า **ประกาศผลรายคน** (`/assignments/{id}/google-feedback`) เปิดจากการ์ด Google Classroom ของการบ้านและหน้างานที่ส่ง แสดงแถวล่าสุดของแต่ละ submission จาก `GET /assignments/{id}/google-feedback` (ชื่อ เลขที่ ป้าย "รอส่ง"/"ส่งแล้ว"/"ส่งไม่สำเร็จ" เวลาเผยแพร่ เวลาส่งประกาศ และเหตุผลที่ไม่สำเร็จ) สรุป "ส่งประกาศแล้ว x/y คน" และปุ่ม **"ส่งประกาศอีกครั้ง (n)"** (`POST .../google-feedback/retry` แล้วโหลดรายการและตัวเลขหน้าหลักใหม่ ถ้า `queued = 0` บอกให้ดูเหตุผลรายแถว) ปุ่มนี้กดไม่ได้ระหว่างบัญชีต้องเชื่อมใหม่ แอปไม่ถาม Google เองและไม่ poll (กดโหลดใหม่) บรรทัด "ส่งประกาศผลใน Classroom ไม่สำเร็จ" ของการ์ด "รอดำเนินการ" บอกทางไปหน้านี้ **scope ใหม่**: แอปขอ `classroom.announcements` เพิ่มใน `googleServerScopes` (ตรงกับ `GoogleScopes::REQUIRED`) แบนเนอร์ "ต้องเชื่อมบัญชี Google ใหม่" และการ์ดในหน้าตั้งค่าแสดง `reconnect_message` ของ `GET /google/status` (ถ้าไม่มี แต่ `scopes` ขาด scope ประกาศ ใช้ข้อความเดียวกับ server) ข้อความของ 409 `google_reconnect_required` ใช้ `message` ของ server (ต่อท้าย "ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"" ถ้าข้อความยังไม่บอกวิธี) และทำให้แบนเนอร์ขึ้นพร้อมเหตุผลนั้นทันที **งานที่สร้างในเว็บ**: หน้าประกาศผลรายคนมี "คัดลอกคะแนน" รายคน (คะแนนรวมที่ใช้จริงจาก `meta.submissions` ของ review-queue จับคู่ด้วย `submission_id`) และทั้งหมด พร้อม "เปิดใน Classroom" "คัดลอกคะแนน" ทั้งหมด (ทั้งหน้านี้และหน้างานที่ส่ง) รวมนักเรียนที่ส่งในแอปหรือครูอัปโหลดให้ (§19.6) ด้วย ไม่ใช่เฉพาะแถวที่ส่งใน Classroom คนละหนึ่งบรรทัด **ลิงก์ในประกาศ**: `AndroidManifest.xml` รับ `eduvision://r/{id}` (intent filter `VIEW` + `BROWSABLE`, `flutter_deeplinking_enabled`) และ redirect ของ go_router แปลงเป็น `/student/results/{id}` นักเรียนที่ยังไม่ login ไปหน้า login ของนักเรียนก่อน แล้วเปิดผลนั้นหลัง login (จำลิงก์ไว้ในหน่วยความจำครั้งเดียว) ครูที่เปิดลิงก์ไปหน้าหลักของครู
+- **ประกาศผลรายคนและเชื่อมใหม่เพื่อ scope ประกาศ** (implement build ข้อ 6 แอป, 30 ก.ย. 2569): หน้า **ประกาศผลรายคน** (`/assignments/{id}/google-feedback`) เปิดจากการ์ด Google Classroom ของการบ้านและหน้างานที่ส่ง แสดงแถวล่าสุดของแต่ละ submission จาก `GET /assignments/{id}/google-feedback` (ชื่อ เลขที่ ป้าย "รอส่ง"/"ส่งแล้ว"/"ส่งไม่สำเร็จ" เวลาเผยแพร่ เวลาส่งประกาศ และเหตุผลที่ไม่สำเร็จ) สรุป "ส่งประกาศแล้ว x/y คน" และปุ่ม **"ส่งประกาศอีกครั้ง (n)"** (`POST .../google-feedback/retry` แล้วโหลดรายการและตัวเลขหน้าหลักใหม่ ถ้า `queued = 0` บอกให้ดูเหตุผลรายแถว) ปุ่มนี้กดไม่ได้ระหว่างบัญชีต้องเชื่อมใหม่ แอปไม่ถาม Google เองและไม่ poll (กดโหลดใหม่) บรรทัด "ส่งประกาศผลใน Classroom ไม่สำเร็จ" ของการ์ด "รอดำเนินการ" บอกทางไปหน้านี้ **scope ใหม่**: แอปขอ `classroom.announcements` เพิ่มใน `googleServerScopes` (ตรงกับ `GoogleScopes::REQUIRED`) แบนเนอร์ "ต้องเชื่อมบัญชี Google ใหม่" และการ์ดในหน้าตั้งค่าแสดง `reconnect_message` ของ `GET /google/status` (ถ้าไม่มี แต่ `scopes` ขาด scope ประกาศ ใช้ข้อความเดียวกับ server) ข้อความของ 409 `google_reconnect_required` ใช้ `message` ของ server (ต่อท้าย "ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่"" ถ้าข้อความยังไม่บอกวิธี) และทำให้แบนเนอร์ขึ้นพร้อมเหตุผลนั้นทันที **งานที่สร้างในเว็บ**: หน้าประกาศผลรายคนมี "คัดลอกคะแนน" รายคน (คะแนนรวมที่ใช้จริงจาก `meta.submissions` ของ review-queue จับคู่ด้วย `submission_id`) และทั้งหมด พร้อม "เปิดใน Classroom" "คัดลอกคะแนน" ทั้งหมด (ทั้งหน้านี้และหน้างานที่ส่ง) รวมนักเรียนที่ส่งในแอปหรือครูอัปโหลดให้ (§19.6) ด้วย ไม่ใช่เฉพาะแถวที่ส่งใน Classroom คนละหนึ่งบรรทัด **ลิงก์ในประกาศ**: `AndroidManifest.xml` รับ `eduvision://r/{id}` (intent filter `VIEW` + `BROWSABLE`, `flutter_deeplinking_enabled`) และ redirect ของ go_router แปลงเป็น `/student/results/{id}` นักเรียนที่ยังไม่ login ไปแท็บนักเรียนของหน้า login (`/login?tab=student`, §7.4) ก่อน แล้วเปิดผลนั้นหลัง login (จำลิงก์ไว้ในหน่วยความจำครั้งเดียว) ครูที่เปิดลิงก์ไปหน้าหลักของครู
 - dependency ใหม่: `file_picker` (อัปโหลดไฟล์เฉลยและงานส่ง)
 
 ### 19.12 การทดสอบ

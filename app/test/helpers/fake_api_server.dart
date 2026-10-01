@@ -36,6 +36,9 @@ class FakeApiServer {
     this.teacherEmail = 'somsri@school.test',
     this.teacherPassword = 'secret-pass-1234',
     this.teacherToken = '7|sanctum-plain-text-token-for-tests',
+    this.adminEmail = 'admin@school.test',
+    this.adminPassword = 'admin-pass-1234',
+    this.adminToken = '9|sanctum-admin-token-for-tests',
   });
 
   /// Origin the app is pointed at; nothing ever connects to it.
@@ -46,6 +49,18 @@ class FakeApiServer {
   final String teacherEmail;
   final String teacherPassword;
   final String teacherToken;
+
+  /// An admin signs in on the same form (DESIGN §7.4); their token opens
+  /// only `/me`, logout and `POST /auth/admin-handoff` (403 elsewhere).
+  final String adminEmail;
+  final String adminPassword;
+  final String adminToken;
+
+  /// `POST /auth/admin-handoff` calls answered.
+  int handoffs = 0;
+
+  static const handoffUrl =
+      '$origin/admin/handoff/0123456789abcdef0123456789abcdef0123456789abcdef';
 
   final requests = <RecordedRequest>[];
 
@@ -88,6 +103,15 @@ class FakeApiServer {
     'school': {'id': 3, 'name': 'โรงเรียนทดสอบ'},
   };
 
+  Map<String, dynamic> get adminJson => {
+    'id': 2,
+    'name': 'ผู้ดูแลระบบ',
+    'role': 'admin',
+    'email': adminEmail,
+    'status': 'active',
+    'school': null,
+  };
+
   static String apiPath(Uri uri) => uri.path.startsWith(_prefix)
       ? uri.path.substring(_prefix.length)
       : uri.path;
@@ -110,6 +134,25 @@ class FakeApiServer {
     return jsonResponse(status, body);
   }
 
+  (int, Object?) _adminRoute(String method, String path) {
+    switch ((method, path)) {
+      case ('GET', '/me'):
+        return (200, {'data': adminJson});
+      case ('POST', '/auth/logout'):
+        logouts++;
+        return (204, null);
+      case ('POST', '/auth/admin-handoff'):
+        handoffs++;
+        return (
+          200,
+          {
+            'data': {'url': handoffUrl, 'expires_at': '2026-10-01T03:01:00Z'},
+          },
+        );
+    }
+    return (403, _error('คุณไม่มีสิทธิ์ทำรายการนี้', code: 'forbidden'));
+  }
+
   (int, Object?) _route(RequestOptions o) {
     final method = o.method.toUpperCase();
     final path = apiPath(o.uri);
@@ -118,7 +161,10 @@ class FakeApiServer {
     if (method == 'POST' && path == '/auth/teacher/login') {
       if (body['email'] == teacherEmail &&
           body['password'] == teacherPassword) {
-        return (200, {'token': teacherToken});
+        return (200, {'token': teacherToken, 'user': teacherJson});
+      }
+      if (body['email'] == adminEmail && body['password'] == adminPassword) {
+        return (200, {'token': adminToken, 'user': adminJson});
       }
       return (
         422,
@@ -130,6 +176,9 @@ class FakeApiServer {
           },
         ),
       );
+    }
+    if (o.headers['Authorization'] == 'Bearer $adminToken') {
+      return _adminRoute(method, path);
     }
     if (o.headers['Authorization'] != 'Bearer $teacherToken') {
       return (401, _error('Unauthenticated.', code: 'unauthenticated'));

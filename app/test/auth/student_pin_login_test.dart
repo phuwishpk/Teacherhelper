@@ -4,10 +4,12 @@ import 'package:eduvision/core/auth/auth_repository.dart';
 import 'package:eduvision/core/auth/session.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/core/auth/user.dart';
-import 'package:eduvision/features/auth/student_login_screen.dart';
+import 'package:eduvision/features/auth/login_screen.dart';
+import 'package:eduvision/features/auth/student_login_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/fake_http_adapter.dart';
 import '../helpers/pump_screen.dart';
 
 class _FakeAuth extends Fake implements AuthRepository {
@@ -50,6 +52,13 @@ DioException _lockedError() => _error(423, {
   'code': 'pin_locked',
 });
 
+Future<void> _tapLogin(WidgetTester tester) async {
+  final button = find.widgetWithText(FilledButton, 'เข้าสู่ระบบ');
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+}
+
 Future<void> _fill(WidgetTester tester) async {
   await tester.enterText(
     find.widgetWithText(TextFormField, 'รหัสห้อง'),
@@ -60,7 +69,7 @@ Future<void> _fill(WidgetTester tester) async {
     find.widgetWithText(TextFormField, 'PIN 6 หลัก'),
     '123456',
   );
-  await tester.tap(find.widgetWithText(FilledButton, 'เข้าสู่ระบบ'));
+  await _tapLogin(tester);
   await tester.pumpAndSettle();
 }
 
@@ -69,13 +78,13 @@ void main() {
     final auth = _FakeAuth();
     await pumpScreen(
       tester,
-      const StudentLoginScreen(),
+      const LoginScreen(initialTab: LoginTab.student),
       overrides: [
         authRepositoryProvider.overrideWithValue(auth),
         tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
       ],
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'เข้าสู่ระบบ'));
+    await _tapLogin(tester);
     await tester.pump();
     expect(find.text('รหัสห้องมี 6 ตัวอักษร'), findsOneWidget);
     expect(find.text('กรอกเลขที่'), findsOneWidget);
@@ -90,7 +99,7 @@ void main() {
     final storage = InMemoryTokenStorage();
     final container = await pumpScreen(
       tester,
-      const StudentLoginScreen(),
+      const LoginScreen(initialTab: LoginTab.student),
       overrides: [
         authRepositoryProvider.overrideWithValue(auth),
         tokenStorageProvider.overrideWithValue(storage),
@@ -105,6 +114,44 @@ void main() {
     final session = container.read(sessionProvider);
     expect(session, isA<SignedIn>());
     expect((session as SignedIn).user.isStudent, isTrue);
+  });
+
+  testWidgets('the PIN tab posts to the student endpoint, then reads /me', (
+    tester,
+  ) async {
+    final adapter = FakeHttpAdapter(
+      (o) async => o.path == '/me'
+          ? jsonResponse(200, {
+              'data': {'id': 4567, 'name': 'ด.ญ. สมหญิง', 'role': 'student'},
+            })
+          : jsonResponse(200, {'token': 'student-token'}),
+    );
+    final storage = InMemoryTokenStorage();
+    await pumpScreen(
+      tester,
+      const LoginScreen(initialTab: LoginTab.student),
+      overrides: [
+        authRepositoryProvider.overrideWithValue(
+          ApiAuthRepository(fakeDio(adapter)),
+        ),
+        tokenStorageProvider.overrideWithValue(storage),
+      ],
+    );
+    await _fill(tester);
+
+    final login = adapter.requests.first;
+    expect(login.method, 'POST');
+    expect(login.path, '/auth/student/pin');
+    expect(login.data, {
+      'class_code': 'ABC123',
+      'student_number': 12,
+      'pin': '123456',
+    });
+    expect(
+      adapter.requests.map((r) => r.path),
+      isNot(contains('/auth/teacher/login')),
+    );
+    expect(await storage.read(), 'student-token');
   });
 
   group('studentPinErrorMessage', () {
@@ -150,7 +197,7 @@ void main() {
     final auth = _FakeAuth(pinError: _lockedError());
     final container = await pumpScreen(
       tester,
-      const StudentLoginScreen(),
+      const LoginScreen(initialTab: LoginTab.student),
       overrides: [
         authRepositoryProvider.overrideWithValue(auth),
         tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),

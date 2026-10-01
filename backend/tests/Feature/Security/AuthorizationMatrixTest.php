@@ -23,7 +23,8 @@ use Tests\TestCase;
  *   other      a teacher of another school                 -> 404 (or 403 where the id is not looked up first)
  *   peer       a classmate of the student who owns the row -> 404
  *   disabled   a disabled account with a valid token        -> 403 account_not_active
- *   admin      an admin token has no API abilities          -> 403
+ *   admin      an admin token (ability `admin`) opens only /me, logout and the
+ *              panel handoff (DESIGN §7.4)                  -> 403 everywhere else
  *   owner      the teacher / student who owns the row       -> anything but 401/403/404 (422 with the empty body counts)
  *
  * test_every_api_route_is_in_the_matrix fails when a route is added without
@@ -269,13 +270,19 @@ class AuthorizationMatrixTest extends TestCase
         'api.submission-pages.image' => ['GET', 'submission-pages/{page}/image', 404, 404, 403, 404],
         'api.ml.models.active' => ['GET', 'ml/models/active', self::OK, self::OK, self::OK, self::OK],
         'api.ml.models.file' => ['GET', 'ml/models/{model}/file', self::OK, self::OK, self::OK, self::OK],
+        // Push tokens (§9.9): any app user, never an admin token.
+        'api.devices.store' => ['POST', 'devices', self::OK, self::OK, self::OK, self::OK],
+    ];
+
+    /** Admin-only routes: [method, uri]. Teachers and students get 403. */
+    private const ADMIN = [
+        'api.auth.admin-handoff' => ['POST', 'auth/admin-handoff'],
     ];
 
     /** Routes for every logged-in account. */
     private const COMMON = [
         'api.auth.logout' => ['POST', 'auth/logout'],
         'api.me' => ['GET', 'me'],
-        'api.devices.store' => ['POST', 'devices'],
     ];
 
     /** @return array<string, array{string}> */
@@ -294,6 +301,12 @@ class AuthorizationMatrixTest extends TestCase
     public static function sharedRoutes(): array
     {
         return array_map(fn (string $name) => [$name], array_combine(array_keys(self::SHARED), array_keys(self::SHARED)));
+    }
+
+    /** @return array<string, array{string}> */
+    public static function adminRoutes(): array
+    {
+        return array_map(fn (string $name) => [$name], array_combine(array_keys(self::ADMIN), array_keys(self::ADMIN)));
     }
 
     /** @return array<string, array{string}> */
@@ -324,7 +337,7 @@ class AuthorizationMatrixTest extends TestCase
                 $routes[$route->getName()] = $route->methods()[0].' '.substr($route->uri(), strlen('api/v1/'));
             }
         }
-        $matrix = [...self::TEACHER, ...self::STUDENT, ...self::SHARED, ...self::COMMON];
+        $matrix = [...self::TEACHER, ...self::STUDENT, ...self::SHARED, ...self::ADMIN, ...self::COMMON];
         $expected = [...self::PUBLIC, ...array_keys($matrix)];
         sort($expected);
         $actual = array_keys($routes);
@@ -388,6 +401,19 @@ class AuthorizationMatrixTest extends TestCase
         $this->expect($this->call_($method, $uri, $this->teacherB), $otherSchool, 'teacher of another school');
         $this->expect($this->call_($method, $uri, $this->teacherA2), $sameSchool, 'teacher of the same school');
         $this->expect($this->call_($method, $uri, $this->teacherA), self::OK, 'owner');
+    }
+
+    #[DataProvider('adminRoutes')]
+    public function test_admin_route(string $name): void
+    {
+        [$method, $uri] = self::ADMIN[$name];
+        $disabledAdmin = $this->makeAdmin(['status' => 'disabled']);
+
+        $this->expect($this->call_($method, $uri, null), 401, 'guest');
+        $this->expect($this->call_($method, $uri, $this->teacherA), 403, 'teacher');
+        $this->expect($this->call_($method, $uri, $this->studentA), 403, 'student');
+        $this->expect($this->call_($method, $uri, $disabledAdmin), 403, 'disabled admin', 'account_not_active');
+        $this->expect($this->call_($method, $uri, $this->admin), self::OK, 'admin');
     }
 
     #[DataProvider('commonRoutes')]

@@ -10,13 +10,13 @@ import '../../features/assignments/indicator_mapping_screen.dart';
 import '../../features/assignments/question.dart';
 import '../../features/assignments/question_form_screen.dart';
 import '../../features/assignments/rubric_screen.dart';
+import '../../features/admin/admin_home_screen.dart';
 import '../../features/analysis/classroom_analyses_screen.dart';
 import '../../features/analysis/student_analysis_screen.dart';
 import '../../features/appeals/appeals_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/splash_screen.dart';
-import '../../features/auth/student_login_screen.dart';
 import '../../features/auth/student_qr_scan_screen.dart';
 import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
@@ -71,10 +71,22 @@ import '../auth/session.dart';
 
 abstract final class AppRoutes {
   static const splash = '/splash';
+
+  /// The one login page of every role (DESIGN §7.4); `?tab=student` opens
+  /// the student tab.
   static const login = '/login';
+  static String loginAt(LoginTab tab) =>
+      Uri(path: login, queryParameters: {'tab': tab.name}).toString();
+  static final loginStudent = loginAt(LoginTab.student);
   static const register = '/register';
+
+  /// The old student login screen: now redirects to [loginStudent], kept
+  /// so existing links and bookmarks still work.
   static const studentLogin = '/student/login';
   static const studentQr = '/student/login/qr';
+
+  /// Admin: one screen that opens the web panel (DESIGN §7.4).
+  static const adminHome = '/admin-home';
 
   /// Teacher shell.
   static const home = '/';
@@ -337,8 +349,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           public
               ? null
               : pendingResult != null
-              ? AppRoutes.studentLogin
+              ? AppRoutes.loginStudent
               : AppRoutes.login,
+        // An admin's token opens nothing but the panel handoff.
+        SignedIn(:final user) when user.isAdmin => () {
+          pendingResult = null;
+          return location == AppRoutes.adminHome ? null : AppRoutes.adminHome;
+        }(),
         SignedIn(:final user) when user.isStudent => () {
           final pending = pendingResult;
           if (pending != null) {
@@ -349,7 +366,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         }(),
         SignedIn() => () {
           pendingResult = null;
-          return (public || location == AppRoutes.splash || inStudentArea)
+          return (public ||
+                  location == AppRoutes.splash ||
+                  location == AppRoutes.adminHome ||
+                  inStudentArea)
               ? AppRoutes.home
               : null;
         }(),
@@ -364,7 +384,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => LoginScreen(
+          initialTab: LoginTab.parse(state.uri.queryParameters['tab']),
+        ),
       ),
       GoRoute(
         path: AppRoutes.register,
@@ -372,7 +394,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.studentLogin,
-        builder: (context, state) => const StudentLoginScreen(),
+        redirect: (context, state) => AppRoutes.loginStudent,
+      ),
+      GoRoute(
+        path: AppRoutes.adminHome,
+        builder: (context, state) => const AdminHomeScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentQr,

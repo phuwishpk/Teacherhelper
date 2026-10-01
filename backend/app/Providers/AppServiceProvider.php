@@ -115,6 +115,12 @@ class AppServiceProvider extends ServiceProvider
             return $limits;
         });
 
+        // The admin's one-time link to the Filament panel (§7.4): the app asks
+        // once per tap, so 10 a minute per admin is plenty; the link itself is
+        // capped per address (it has no login, a bad token only redirects).
+        RateLimiter::for('admin-handoff', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('admin-handoff-link', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
+
         // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
         // runaway client must not burn the Cloud project's Classroom quota.
         RateLimiter::for('google', fn (Request $request) => self::perUser($request, 30));

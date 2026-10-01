@@ -25,6 +25,10 @@ class User {
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
 
+  /// An admin signs in on the same login page; their token opens only
+  /// `/me`, logout and the handoff to the web panel (DESIGN §7.4).
+  bool get isAdmin => role == 'admin';
+
   /// Round-trips through [fromJson]; used to cache the last `/me` payload so
   /// the app can start offline (DESIGN §6.3 offline scanning).
   Map<String, dynamic> toJson() => {
