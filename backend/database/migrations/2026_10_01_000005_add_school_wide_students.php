@@ -56,8 +56,20 @@ return new class extends Migration
     {
         Schema::dropIfExists('student_merges');
 
+        // MariaDB/MySQL may silently drop the implicit index of the teacher_id
+        // foreign key once idx_classrooms_teacher_open covers it; dropping the
+        // composite index would then fail with 1553 ("needed in a foreign key
+        // constraint"). Dropping the key around it lets InnoDB recreate its own.
+        $mysql = in_array(DB::getDriverName(), ['mysql', 'mariadb'], true);
+        if ($mysql) {
+            Schema::table('classrooms', fn (Blueprint $table) => $table->dropForeign(['teacher_id']));
+        }
+        Schema::table('classrooms', fn (Blueprint $table) => $table->dropIndex('idx_classrooms_teacher_open'));
+        if ($mysql) {
+            Schema::table('classrooms', fn (Blueprint $table) => $table->foreign('teacher_id')->references('id')->on('users')->restrictOnDelete());
+        }
+
         Schema::table('classrooms', function (Blueprint $table) {
-            $table->dropIndex('idx_classrooms_teacher_open');
             $table->dropConstrainedForeignId('closed_by');
             $table->dropColumn('closed_at');
         });

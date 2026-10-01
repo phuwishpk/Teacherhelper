@@ -358,6 +358,13 @@ final class StudentMerger
             }
         }
 
+        // A row the roster sync added for D still waits for a PIN. K already has
+        // a working PIN and card, so issuing one there would only reset them.
+        if ($out['moved'] !== [] && DB::table('student_credentials')->where('student_id', $keepId)->exists()) {
+            DB::table('classroom_students')->where('student_id', $keepId)->whereIn('classroom_id', $out['moved'])
+                ->whereNotNull('pin_pending_at')->update(['pin_pending_at' => null]);
+        }
+
         return $out;
     }
 

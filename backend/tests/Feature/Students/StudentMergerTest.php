@@ -155,6 +155,19 @@ class StudentMergerTest extends TestCase
         $this->assertSame([$this->room1->id], StudentMerge::query()->sole()->summary['classroom_students']['kept']);
     }
 
+    public function test_a_pin_pending_row_of_d_is_not_pending_for_k_who_has_a_pin(): void
+    {
+        $k = $this->keep['student'];
+        $d = $this->merge['student'];
+        DB::table('classroom_students')->where('student_id', $d->id)->update(['pin_pending_at' => now()]);
+
+        $this->mergeOk($k, $d);
+
+        $this->assertNull(DB::table('classroom_students')->where('classroom_id', $this->room2->id)->where('student_id', $k->id)->value('pin_pending_at'));
+        $this->asGuest()->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->keep['pin']])
+            ->assertOk()->assertJsonPath('user.id', $k->id);
+    }
+
     public function test_an_empty_submission_gives_way_to_real_work_on_either_side(): void
     {
         $k = $this->keep['student'];
