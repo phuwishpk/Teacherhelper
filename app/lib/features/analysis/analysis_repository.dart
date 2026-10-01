@@ -42,7 +42,8 @@ abstract class AnalysisRepository {
   /// `PATCH /classrooms/{id} {auto_share_analysis}`.
   Future<void> setAutoShare(int classroomId, bool value);
 
-  /// Student: `GET /student/analysis`, their own shared texts only.
+  /// Student: `GET /student/analyses`, their own shared texts only, one
+  /// per classroom of theirs (DESIGN §24.26).
   Future<List<MyAnalysis>> mine();
 }
 
@@ -117,7 +118,7 @@ class ApiAnalysisRepository implements AnalysisRepository {
 
   @override
   Future<List<MyAnalysis>> mine() async {
-    final res = await _dio.get<Object?>('/student/analysis');
+    final res = await _dio.get<Object?>('/student/analyses');
     return unwrapList(res.data).map(MyAnalysis.fromJson).toList();
   }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Domain\Notifications;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassroomCourseRequest;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GradebookPublication;
 use App\Models\GradebookPublishedGrade;
@@ -23,7 +25,8 @@ abstract class PushNotifier implements Notifier
 
     public function gradingFinished(Assignment $assignment, int $awaitingReview, int $awaitingAiKey): void
     {
-        $teacherId = $assignment->classroom?->teacher_id;
+        // The teacher whose work it is (DESIGN §24.8): the course's creator, else the homeroom teacher.
+        $teacherId = ClassroomAccess::managerId($assignment);
         if ($teacherId === null) {
             return;
         }
@@ -76,7 +79,7 @@ abstract class PushNotifier implements Notifier
 
     public function classroomWorkImported(Assignment $assignment): void
     {
-        $teacherId = $assignment->classroom?->teacher_id;
+        $teacherId = ClassroomAccess::managerId($assignment);
         if ($teacherId === null) {
             return;
         }
@@ -97,12 +100,38 @@ abstract class PushNotifier implements Notifier
         $this->push($studentIds, new PushMessage(
             PushMessage::GRADES_PUBLISHED,
             NoticeTexts::gradesPublished((string) $publication->course?->code),
-            ['course_id' => $publication->course_id],
+            ['course_id' => $publication->course_id, 'classroom_id' => $publication->classroom_id],
         ));
     }
 
     public function googleReconnectNeeded(int $teacherId): void
     {
         $this->push([$teacherId], new PushMessage(PushMessage::GOOGLE_RECONNECT, NoticeTexts::googleReconnectNeeded()));
+    }
+
+    public function courseRequested(ClassroomCourseRequest $request): void
+    {
+        $teacherId = $request->classroom?->teacher_id;
+        if ($teacherId === null) {
+            return;
+        }
+        $this->push([(int) $teacherId], new PushMessage(
+            PushMessage::COURSE_REQUEST,
+            NoticeTexts::courseRequested((string) $request->course?->code, (string) $request->classroom?->name),
+            ['request_id' => $request->id, 'classroom_id' => $request->classroom_id],
+        ));
+    }
+
+    public function courseRequestDecided(ClassroomCourseRequest $request): void
+    {
+        $this->push([$request->requested_by], new PushMessage(
+            PushMessage::COURSE_REQUEST_DECIDED,
+            NoticeTexts::courseRequestDecided(
+                (string) $request->course?->code,
+                (string) $request->classroom?->name,
+                $request->status === ClassroomCourseRequest::STATUS_APPROVED,
+            ),
+            ['request_id' => $request->id, 'classroom_id' => $request->classroom_id, 'course_id' => $request->course_id],
+        ));
     }
 }

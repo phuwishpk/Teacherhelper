@@ -47,11 +47,16 @@ final myGradesProvider = FutureProvider.autoDispose<List<StudentGradeSummary>>((
   return ref.watch(gradebookRepositoryProvider).myGrades();
 }, retry: apiRetry);
 
-/// Student: one course's published grade and breakdown.
+/// Student: one course's published grade and breakdown, in one classroom
+/// of theirs or (null) the newest publication (DESIGN §24.26).
+typedef MyCourseGradeQuery = ({int courseId, int? classroomId});
+
 final myCourseGradeProvider = FutureProvider.autoDispose
-    .family<StudentGradeDetail, int>((ref, courseId) {
+    .family<StudentGradeDetail, MyCourseGradeQuery>((ref, q) {
       watchSignedInUser(ref, keepAlive: false);
-      return ref.watch(gradebookRepositoryProvider).myCourseGrade(courseId);
+      return ref
+          .watch(gradebookRepositoryProvider)
+          .myCourseGrade(q.courseId, classroomId: q.classroomId);
     }, retry: apiRetry);
 
 /// Hands the exported CSV to the share sheet (LINE, Drive, e-mail …) with

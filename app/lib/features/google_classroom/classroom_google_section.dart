@@ -21,7 +21,10 @@ const gradeReturnNote =
 /// "Google Classroom" card on the classroom detail (DESIGN §18.7, §19.11):
 /// link a course, match students, sync the roster, sync the work now (with
 /// the time of the last sync round), unlink. Hidden unless the server has Google
-/// Classroom set up ([googleClassroomEnabledProvider]).
+/// Classroom set up ([googleClassroomEnabledProvider]). Every teacher of the
+/// room links their own course (DESIGN §24.10, §24.24); a subject teacher's
+/// sync only matches accounts and pairing by hand stays with the homeroom
+/// teacher.
 class ClassroomGoogleSection extends ConsumerStatefulWidget {
   const ClassroomGoogleSection({super.key, required this.classroom});
 
@@ -74,7 +77,9 @@ class _ClassroomGoogleSectionState
           .read(googleClassroomRepositoryProvider)
           .syncRoster(id);
       ref.invalidate(rosterProvider(id));
-      if (result.added.isNotEmpty) ref.invalidate(classroomsProvider);
+      if (result.added.isNotEmpty || result.enrolled.isNotEmpty) {
+        ref.invalidate(classroomsProvider);
+      }
       if (mounted) await showRosterSyncResult(context, result);
     } catch (e) {
       ref.read(googleStatusProvider.notifier).noteError(e);
@@ -115,6 +120,7 @@ class _ClassroomGoogleSectionState
     final statusValue = ref.watch(googleStatusProvider);
     final status = statusValue.value;
     final link = widget.classroom.googleLink;
+    final subject = widget.classroom.isSubject;
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -155,8 +161,12 @@ class _ClassroomGoogleSectionState
               ),
               const SizedBox(height: 4),
               Text(
-                'จับคู่บัญชี Google ของนักเรียนกับเลขที่ในห้อง เพื่อให้รู้ว่างานที่ส่งมาเป็นของใคร '
-                'และส่งคะแนนกลับได้ กด "ซิงก์รายชื่อ" เพื่อเพิ่มนักเรียนที่เพิ่งเข้าคอร์ส',
+                subject
+                    ? 'คอร์สของคุณสำหรับห้องนี้ กด "ซิงก์รายชื่อ" เพื่อจับคู่บัญชี Google '
+                          'กับนักเรียนในห้อง (ไม่เพิ่มหรือเอานักเรียนออก) '
+                          'บัญชีที่ไม่อยู่ในห้องให้แจ้งครูประจำชั้น'
+                    : 'จับคู่บัญชี Google ของนักเรียนกับเลขที่ในห้อง เพื่อให้รู้ว่างานที่ส่งมาเป็นของใคร '
+                          'และส่งคะแนนกลับได้ กด "ซิงก์รายชื่อ" เพื่อเพิ่มนักเรียนที่เพิ่งเข้าคอร์ส',
                 style: muted,
               ),
               const SizedBox(height: 12),
@@ -164,17 +174,19 @@ class _ClassroomGoogleSectionState
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  FilledButton.tonalIcon(
-                    onPressed: _busy
-                        ? null
-                        : () => context.push(
-                            AppRoutes.classroomGoogleRoster(
-                              widget.classroom.id,
+                  if (!subject)
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('google_roster_match'),
+                      onPressed: _busy
+                          ? null
+                          : () => context.push(
+                              AppRoutes.classroomGoogleRoster(
+                                widget.classroom.id,
+                              ),
                             ),
-                          ),
-                    icon: const Icon(Icons.people_alt_outlined),
-                    label: const Text('จับคู่นักเรียน'),
-                  ),
+                      icon: const Icon(Icons.people_alt_outlined),
+                      label: const Text('จับคู่นักเรียน'),
+                    ),
                   FilledButton.tonalIcon(
                     key: const ValueKey('google_roster_sync'),
                     onPressed: _busy ? null : _syncRoster,

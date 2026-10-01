@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../classrooms/classroom.dart';
+import '../classrooms/school_students.dart';
 import 'google_config.dart';
 
 /// `GET /google/status` (DESIGN §18.6).
@@ -123,6 +124,63 @@ class LinkedClassroom {
   final String name;
 }
 
+/// How the server matched a Classroom account to a student the school
+/// already has (`matched_by`, DESIGN §24.10 `SchoolStudentMatcher`).
+enum ImportMatchKind {
+  google('google', 'เข้าสู่ระบบแอปด้วยบัญชี Google นี้'),
+  classroomUser('classroom_user', 'บัญชี Google เดียวกันในห้องอื่น'),
+  email('email', 'อีเมล Google เดียวกัน'),
+  name('name', 'ชื่อตรงกัน ตรวจให้แน่ใจว่าเป็นคนเดียวกัน');
+
+  const ImportMatchKind(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static ImportMatchKind fromApi(Object? value) => values.firstWhere(
+    (k) => k.apiValue == value,
+    orElse: () => ImportMatchKind.name,
+  );
+}
+
+/// `students[].match` of the import preview: the student of the school this
+/// Classroom account is (DESIGN §24.10). Importing with it enrols that
+/// account instead of creating another one.
+class ImportMatch {
+  const ImportMatch({
+    required this.studentId,
+    required this.name,
+    required this.matchedBy,
+    this.classes = const [],
+  });
+
+  final int studentId;
+  final String name;
+  final ImportMatchKind matchedBy;
+
+  /// The rooms the student is in now (same shape as `GET /school-students`).
+  final List<StudentClassroom> classes;
+
+  /// "ป.4/2 ปี 2568 เลขที่ 4 (ห้องเก่า) · …", or "ยังไม่อยู่ในห้องใด".
+  String get classesLabel => classes.isEmpty
+      ? 'ยังไม่อยู่ในห้องใด'
+      : classes.map((c) => c.label).join(' · ');
+
+  static ImportMatch? maybe(Object? json) {
+    if (json is! Map || json['student_id'] is! num) return null;
+    return ImportMatch(
+      studentId: (json['student_id'] as num).toInt(),
+      name: (json['name'] ?? '') as String,
+      matchedBy: ImportMatchKind.fromApi(json['matched_by']),
+      classes: [
+        if (json['classes'] case final List list)
+          for (final c in list.whereType<Map>())
+            StudentClassroom.fromJson(c.cast<String, dynamic>()),
+      ],
+    );
+  }
+}
+
 /// One account of `GET /google/courses/{course_id}/import-preview`.
 class ImportPreviewStudent {
   const ImportPreviewStudent({
@@ -130,6 +188,7 @@ class ImportPreviewStudent {
     required this.name,
     required this.proposedNumber,
     this.email,
+    this.match,
   });
 
   final String googleUserId;
@@ -139,13 +198,64 @@ class ImportPreviewStudent {
   /// 1..N in Thai dictionary order (`ThaiNameSorter`, DESIGN §19.2).
   final int proposedNumber;
 
+  /// The student of the school this account is, if the server found one
+  /// (DESIGN §24.10).
+  final ImportMatch? match;
+
   factory ImportPreviewStudent.fromJson(Map<String, dynamic> json) =>
       ImportPreviewStudent(
         googleUserId: json['google_user_id'].toString(),
         name: (json['name'] ?? '') as String,
         email: _nonEmpty(json['email']),
         proposedNumber: (json['proposed_number'] as num).toInt(),
+        match: ImportMatch.maybe(json['match']),
       );
+}
+
+/// `suggested_classroom` of the import preview (DESIGN §24.10, §24.24): an
+/// open room of the school that already holds most of the course's
+/// students, offered before "สร้างห้องใหม่".
+class SuggestedClassroom {
+  const SuggestedClassroom({
+    required this.id,
+    required this.name,
+    required this.academicYear,
+    required this.coverage,
+    required this.matched,
+    required this.ownedByMe,
+    this.homeroomTeacher,
+  });
+
+  final int id;
+  final String name;
+  final int academicYear;
+  final TeacherRef? homeroomTeacher;
+
+  /// Share of the course's accounts that are students of this room (0..1).
+  final double coverage;
+
+  /// How many of the course's accounts are students of this room.
+  final int matched;
+
+  /// The signed-in teacher is the room's homeroom teacher: linking needs
+  /// nobody's approval.
+  final bool ownedByMe;
+
+  /// "85%".
+  String get coverageLabel => '${(coverage * 100).round()}%';
+
+  static SuggestedClassroom? maybe(Object? json) {
+    if (json is! Map || json['id'] is! num) return null;
+    return SuggestedClassroom(
+      id: (json['id'] as num).toInt(),
+      name: (json['name'] ?? '') as String,
+      academicYear: (json['academic_year'] as num?)?.toInt() ?? 0,
+      homeroomTeacher: TeacherRef.maybe(json['homeroom_teacher']),
+      coverage: _double(json['coverage']) ?? 0,
+      matched: (json['matched'] as num?)?.toInt() ?? 0,
+      ownedByMe: json['owned_by_me'] == true,
+    );
+  }
 }
 
 /// What the server proposes before importing a course (DESIGN §19.2).
@@ -158,12 +268,17 @@ class ClassroomImportPreview {
     required this.students,
     this.section,
     this.gradeLevelGuess,
+    this.suggestedClassroom,
   });
 
   final String courseId;
   final String name;
   final String? section;
   final String suggestedName;
+
+  /// An existing room to link the course to instead of creating one
+  /// (DESIGN §24.10); null when none holds 70% of the course.
+  final SuggestedClassroom? suggestedClassroom;
 
   /// 1-12 guessed from the course name and section; null means the teacher
   /// must pick one.
@@ -195,6 +310,7 @@ class ClassroomImportPreview {
           : null,
       academicYear: (json['academic_year'] as num).toInt(),
       students: students,
+      suggestedClassroom: SuggestedClassroom.maybe(json['suggested_classroom']),
     );
   }
 }
@@ -209,6 +325,7 @@ class ClassroomImportRequest {
     required this.academicYear,
     required this.numbers,
     this.removed = const [],
+    this.existing = const {},
   });
 
   final String courseId;
@@ -222,6 +339,10 @@ class ClassroomImportRequest {
   /// Accounts the teacher took out (kept out of later roster syncs).
   final List<String> removed;
 
+  /// Google user id -> the existing student of the school to enrol for it
+  /// (DESIGN §24.10): no new account and no new PIN.
+  final Map<String, int> existing;
+
   Map<String, dynamic> toJson() => {
     'course_id': courseId,
     'name': name,
@@ -229,7 +350,11 @@ class ClassroomImportRequest {
     'academic_year': academicYear,
     'students': [
       for (final e in numbers.entries)
-        {'google_user_id': e.key, 'student_number': e.value},
+        {
+          'google_user_id': e.key,
+          'student_number': e.value,
+          'student_id': ?existing[e.key],
+        },
     ],
     'removed': removed,
   };
@@ -261,12 +386,61 @@ class ClassroomImportResult {
   }
 }
 
-/// `POST /classrooms/{id}/google-roster/sync` (DESIGN §19.2).
+/// The answer of `POST /google/courses/{course_id}/link-existing`
+/// (DESIGN §24.10, §24.24).
+sealed class LinkExistingResult {
+  const LinkExistingResult();
+}
+
+/// 200: the course is linked to the room and its roster was synced.
+class LinkedExisting extends LinkExistingResult {
+  const LinkedExisting({
+    required this.classroom,
+    this.roster,
+    this.rosterError,
+  });
+
+  final Classroom classroom;
+
+  /// What the roster sync after linking changed; null when it failed.
+  final RosterSyncResult? roster;
+
+  /// Why that sync failed (`roster_error.message`); the link stays and
+  /// "ซิงก์รายชื่อ" tries again.
+  final String? rosterError;
+}
+
+/// 202: a course request (`origin = classroom_import`) waits for the
+/// homeroom teacher, who links the course on approval.
+class LinkRequested extends LinkExistingResult {
+  const LinkRequested({this.requestId});
+
+  final int? requestId;
+}
+
+/// A Classroom account a subject teacher's sync found that is not a student
+/// of the room (`not_in_classroom`, DESIGN §24.24).
+class NotInClassroomAccount {
+  const NotInClassroomAccount({required this.name, this.email});
+
+  final String name;
+  final String? email;
+
+  factory NotInClassroomAccount.fromJson(Map<String, dynamic> json) =>
+      NotInClassroomAccount(
+        name: (json['name'] ?? '') as String,
+        email: _nonEmpty(json['email']),
+      );
+}
+
+/// `POST /classrooms/{id}/google-roster/sync` (DESIGN §19.2, §24.24).
 class RosterSyncResult {
   const RosterSyncResult({
     this.added = const [],
     this.left = const [],
     this.rematched = const [],
+    this.enrolled = const [],
+    this.notInClassroom = const [],
   });
 
   /// New accounts appended to the room, with their one-time PINs.
@@ -278,7 +452,26 @@ class RosterSyncResult {
   /// Existing students matched to an account by e-mail or full name.
   final List<RosterStudent> rematched;
 
-  bool get unchanged => added.isEmpty && left.isEmpty && rematched.isEmpty;
+  /// Students the school already had who joined the room with their own
+  /// account; a PIN only for one who never had a way to sign in.
+  final List<EnrolledStudent> enrolled;
+
+  /// Accounts of a subject teacher's course that are not students of the
+  /// room: the homeroom teacher adds them.
+  final List<NotInClassroomAccount> notInClassroom;
+
+  /// Every row that comes with a one-time PIN.
+  List<EnrolledStudent> get withPins => [
+    for (final s in [...added, ...enrolled])
+      if (s.hasPin) s,
+  ];
+
+  bool get unchanged =>
+      added.isEmpty &&
+      left.isEmpty &&
+      rematched.isEmpty &&
+      enrolled.isEmpty &&
+      notInClassroom.isEmpty;
 
   factory RosterSyncResult.fromJson(Map<String, dynamic> json) {
     List<Map<String, dynamic>> rows(String key) => [
@@ -290,6 +483,10 @@ class RosterSyncResult {
       added: rows('added').map(EnrolledStudent.fromJson).toList(),
       left: rows('left').map(RosterStudent.fromJson).toList(),
       rematched: rows('rematched').map(RosterStudent.fromJson).toList(),
+      enrolled: rows('enrolled').map(EnrolledStudent.fromJson).toList(),
+      notInClassroom: rows(
+        'not_in_classroom',
+      ).map(NotInClassroomAccount.fromJson).toList(),
     );
   }
 }

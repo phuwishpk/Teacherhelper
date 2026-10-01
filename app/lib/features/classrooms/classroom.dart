@@ -8,6 +8,9 @@ class Classroom {
     required this.classCode,
     this.studentCount,
     this.googleLink,
+    this.closedAt,
+    this.myRole = ClassroomRole.homeroom,
+    this.homeroomTeacher,
   });
 
   final int id;
@@ -27,6 +30,28 @@ class Classroom {
   /// `classroom_google_links`), when the server includes `google_link`.
   final ClassroomGoogleLink? googleLink;
 
+  /// Set once the room was closed: a "ห้องเก่า", read-only (DESIGN §24.6).
+  final DateTime? closedAt;
+
+  /// The signed-in teacher's role in this room (DESIGN §24.8 `my_role`).
+  final ClassroomRole myRole;
+
+  /// The owner of the room (DESIGN §24.20 `homeroom_teacher`), shown on a
+  /// room the signed-in teacher teaches as a subject teacher.
+  final TeacherRef? homeroomTeacher;
+
+  bool get isClosed => closedAt != null;
+
+  bool get isHomeroom => myRole == ClassroomRole.homeroom;
+
+  /// A shared homeroom the teacher teaches an own course in (§24.7): the
+  /// roster is read-only and only their own course's results show.
+  bool get isSubject => myRole == ClassroomRole.subject;
+
+  /// The homeroom teacher of an open room edits the roster and the
+  /// students' data (DESIGN §24.2, §24.8).
+  bool get canManageStudents => isHomeroom && !isClosed;
+
   Classroom withGoogleLink(ClassroomGoogleLink? link) => Classroom(
     id: id,
     name: name,
@@ -35,6 +60,9 @@ class Classroom {
     classCode: classCode,
     studentCount: studentCount,
     googleLink: link,
+    closedAt: closedAt,
+    myRole: myRole,
+    homeroomTeacher: homeroomTeacher,
   );
 
   factory Classroom.fromJson(Map<String, dynamic> json) => Classroom(
@@ -51,7 +79,43 @@ class Classroom {
             (json['google_link'] as Map).cast<String, dynamic>(),
           )
         : null,
+    closedAt: switch (json['closed_at']) {
+      String s => DateTime.tryParse(s),
+      _ => null,
+    },
+    myRole: json['my_role'] == 'subject'
+        ? ClassroomRole.subject
+        : ClassroomRole.homeroom,
+    homeroomTeacher: TeacherRef.maybe(json['homeroom_teacher']),
   );
+}
+
+/// `{id, name}` of a teacher as the shared-homeroom payloads carry it
+/// (DESIGN §24.12 B, §24.20).
+class TeacherRef {
+  const TeacherRef({required this.id, required this.name});
+
+  final int id;
+  final String name;
+
+  /// Null unless [json] is a `{id, name}` map.
+  static TeacherRef? maybe(Object? json) => json is Map && json['id'] is num
+      ? TeacherRef(
+          id: (json['id'] as num).toInt(),
+          name: json['name'] as String? ?? '',
+        )
+      : null;
+}
+
+/// `my_role` of a classroom (DESIGN §24.2): the homeroom teacher owns the
+/// room, a subject teacher teaches a course in it.
+enum ClassroomRole {
+  homeroom('ครูประจำชั้น'),
+  subject('ครูประจำวิชา');
+
+  const ClassroomRole(this.label);
+
+  final String label;
 }
 
 /// `google_link` of a classroom and the answer of
@@ -97,13 +161,22 @@ class RosterStudent {
     required this.studentId,
     required this.studentNumber,
     required this.name,
+    this.studentCode,
     this.leftCourseAt,
     this.pinPending = false,
+    this.googleLinked,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// A Google account for sign-in is linked (DESIGN §24.9, §24.22); null
+  /// for a subject teacher, who does not see it.
+  final bool? googleLinked;
+
+  /// เลขประจำตัวนักเรียน of the school (DESIGN §24.4), if known.
+  final String? studentCode;
 
   /// Added by the background roster sync (DESIGN §19.2): nobody has seen
   /// the student's first PIN yet, shown as "ยังไม่ได้รับ PIN".
@@ -119,60 +192,198 @@ class RosterStudent {
     studentId: ((json['student_id'] ?? json['id']) as num).toInt(),
     studentNumber: (json['student_number'] as num).toInt(),
     name: json['name'] as String,
+    studentCode: json['student_code'] as String?,
     leftCourseAt: switch (json['left_course_at']) {
       String s => DateTime.tryParse(s),
       _ => null,
     },
     pinPending: json['pin_pending'] == true,
+    googleLinked: json['google_linked'] as bool?,
   );
 }
 
 /// A row of the `201` answer of `POST /classrooms/{id}/students`
-/// (DESIGN §9.2): the new student plus the initial PIN. The server keeps only
-/// the PIN's hash, so this is the ONLY time the app ever sees it.
+/// (DESIGN §9.2, §24.4): the student plus the initial PIN. The server keeps
+/// only the PIN's hash, so this is the ONLY time the app ever sees it. An
+/// existing student keeps their PIN ([existing], [pin] empty) unless the
+/// teacher asked for a new one.
 class EnrolledStudent {
   const EnrolledStudent({
     required this.studentId,
     required this.studentNumber,
     required this.name,
     required this.pin,
+    this.existing = false,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// Empty when no PIN was issued (an existing student keeping theirs).
   final String pin;
+  final bool existing;
+
+  bool get hasPin => pin.isNotEmpty;
 
   factory EnrolledStudent.fromJson(Map<String, dynamic> json) =>
       EnrolledStudent(
         studentId: (json['student_id'] as num).toInt(),
         studentNumber: (json['student_number'] as num).toInt(),
         name: json['name'] as String,
-        pin: json['pin'].toString(),
+        pin: switch (json['pin']) {
+          null => '',
+          final Object pin => pin.toString(),
+        },
+        existing: json['existing'] == true,
       );
 }
 
-/// Input row for `POST /classrooms/{id}/students`.
-class NewStudent {
-  const NewStudent({required this.studentNumber, required this.name});
+/// A row of `POST /classrooms/{id}/students` (DESIGN §24.4): a new student
+/// account or a student of the school who already has one.
+sealed class StudentEnrolment {
+  const StudentEnrolment();
 
+  int get studentNumber;
+
+  Map<String, dynamic> toJson();
+}
+
+/// A new student: the server creates the account and issues a PIN.
+class NewStudent extends StudentEnrolment {
+  const NewStudent({
+    required this.studentNumber,
+    required this.name,
+    this.studentCode,
+  });
+
+  @override
   final int studentNumber;
   final String name;
 
+  /// เลขประจำตัวนักเรียน (optional, DESIGN §24.4).
+  final String? studentCode;
+
+  @override
   Map<String, dynamic> toJson() => {
     'student_number': studentNumber,
     'name': name,
+    'student_code': ?studentCode,
   };
 
   @override
   bool operator ==(Object other) =>
       other is NewStudent &&
       other.studentNumber == studentNumber &&
-      other.name == name;
+      other.name == name &&
+      other.studentCode == studentCode;
 
   @override
-  int get hashCode => Object.hash(studentNumber, name);
+  int get hashCode => Object.hash(studentNumber, name, studentCode);
 
   @override
-  String toString() => 'NewStudent($studentNumber, $name)';
+  String toString() => 'NewStudent($studentNumber, $name, $studentCode)';
+}
+
+/// A student of the school joining this room with their account, PIN and
+/// QR card; [reissuePin] gives them a new PIN (the old one stops working).
+class ExistingStudentEnrolment extends StudentEnrolment {
+  const ExistingStudentEnrolment({
+    required this.studentId,
+    required this.studentNumber,
+    this.reissuePin = false,
+  });
+
+  final int studentId;
+  @override
+  final int studentNumber;
+  final bool reissuePin;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'student_id': studentId,
+    'student_number': studentNumber,
+    if (reissuePin) 'reissue_pin': true,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is ExistingStudentEnrolment &&
+      other.studentId == studentId &&
+      other.studentNumber == studentNumber &&
+      other.reissuePin == reissuePin;
+
+  @override
+  int get hashCode => Object.hash(studentId, studentNumber, reissuePin);
+
+  @override
+  String toString() =>
+      'ExistingStudentEnrolment($studentId, $studentNumber, $reissuePin)';
+}
+
+/// `numbering` of "นำนักเรียนจากห้องเดิม" (DESIGN §24.6).
+enum CopyNumbering {
+  /// The numbers of the source room (a clash goes after the highest).
+  keep('keep', 'ใช้เลขที่เดิม'),
+
+  /// Thai dictionary order after the highest number of this room.
+  sorted('sorted', 'เรียงตามชื่อใหม่');
+
+  const CopyNumbering(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
+/// A student "นำนักเรียนจากห้องเดิม" left out (`skipped[]`, DESIGN §24.24).
+class SkippedStudent {
+  const SkippedStudent({
+    required this.studentId,
+    required this.name,
+    required this.reason,
+  });
+
+  final int studentId;
+  final String name;
+
+  /// `already_enrolled` or `not_active`.
+  final String reason;
+
+  String get reasonLabel => switch (reason) {
+    'already_enrolled' => 'อยู่ในห้องนี้แล้ว',
+    'not_active' => 'บัญชีถูกปิดหรือรวมกับบัญชีอื่นแล้ว',
+    _ => reason,
+  };
+
+  factory SkippedStudent.fromJson(Map<String, dynamic> json) => SkippedStudent(
+    studentId: (json['student_id'] as num).toInt(),
+    name: json['name'] as String? ?? '',
+    reason: json['reason'] as String? ?? '',
+  );
+}
+
+/// `201` of `POST /classrooms/{id}/students/from-classroom` (DESIGN §24.6,
+/// §24.24): the students enrolled (with a PIN only when a new one was
+/// issued) and the ones left out.
+class StudentsCopyResult {
+  const StudentsCopyResult({this.enrolled = const [], this.skipped = const []});
+
+  final List<EnrolledStudent> enrolled;
+  final List<SkippedStudent> skipped;
+
+  List<EnrolledStudent> get withPins => [
+    for (final e in enrolled)
+      if (e.hasPin) e,
+  ];
+
+  factory StudentsCopyResult.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> rows(String key) => [
+      if (json[key] case final List list)
+        for (final r in list.whereType<Map>()) r.cast<String, dynamic>(),
+    ];
+    return StudentsCopyResult(
+      enrolled: rows('enrolled').map(EnrolledStudent.fromJson).toList(),
+      skipped: rows('skipped').map(SkippedStudent.fromJson).toList(),
+    );
+  }
 }

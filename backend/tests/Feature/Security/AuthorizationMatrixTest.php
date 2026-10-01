@@ -26,6 +26,13 @@ use Tests\TestCase;
  *   admin      an admin token (ability `admin`) opens only /me, logout and the
  *              panel handoff (DESIGN §7.4)                  -> 403 everywhere else
  *   owner      the teacher / student who owns the row       -> anything but 401/403/404 (422 with the empty body counts)
+ *   subject    teacher S, subject teacher of classroom A (course S approved, DESIGN §24.8)
+ *              -> SUBJECT[route], else the same-school column
+ *   pending    teacher P, whose request for classroom A still waits -> PENDING[route], else the same-school column
+ *   classmate-less  a student of another classroom of school A -> the other-school column of a student route
+ *
+ * SharedHomeroomMatrixTest adds the other direction: the homeroom teacher on
+ * the subject teacher's work (read-only, 403 not_course_teacher).
  *
  * test_every_api_route_is_in_the_matrix fails when a route is added without
  * a row here, so a new endpoint cannot ship without stating who may call it.
@@ -35,9 +42,15 @@ class AuthorizationMatrixTest extends TestCase
     use GoogleFixtures;
     use RefreshDatabase;
     use SecurityWorld;
+    use SharedHomeroomWorld;
 
     /** Public routes, exercised by TeacherAuthTest and StudentAuthTest instead. */
-    private const PUBLIC = ['api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.student.qr', 'api.auth.student.pin'];
+    private const PUBLIC = [
+        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.student.qr', 'api.auth.student.pin',
+        // Google sign-in (§24.9), exercised by GoogleSignInTest.
+        'api.auth.google.config', 'api.auth.google', 'api.auth.google.web-url', 'api.auth.google.ticket',
+        'api.auth.google.link-with-pin', 'api.auth.google.link-with-qr',
+    ];
 
     private const OK = 'ok';
 
@@ -54,9 +67,36 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.show' => ['GET', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.update' => ['PATCH', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.students.store' => ['POST', 'classrooms/{classroom}/students', 404, 404],
+        'api.classrooms.students.from-classroom' => ['POST', 'classrooms/{classroom}/students/from-classroom', 404, 404],
         'api.classrooms.roster' => ['GET', 'classrooms/{classroom}/roster', 404, 404],
         'api.classrooms.students.pending-pins' => ['POST', 'classrooms/{classroom}/students/pending-pins', 404, 404],
         'api.classrooms.login-cards' => ['POST', 'classrooms/{classroom}/login-cards', 404, 404],
+        // School-wide students (§24.4-§24.6): the homeroom teacher's classrooms only; any
+        // teacher of the school searches and validates (422 counts as reached).
+        'api.classrooms.close' => ['POST', 'classrooms/{classroom}/close', 404, 404],
+        'api.classrooms.reopen' => ['POST', 'classrooms/{classroom}/reopen', 404, 404],
+        'api.classrooms.destroy' => ['DELETE', 'classrooms/{classroom}', 404, 404],
+        'api.classrooms.students.update' => ['PATCH', 'classrooms/{classroom}/students/{student}', 404, 404],
+        'api.classrooms.students.destroy' => ['DELETE', 'classrooms/{classroom}/students/{student}', 404, 404],
+        'api.school-students.index' => ['GET', 'school-students', self::OK, self::OK],
+        // Shared homerooms (§24.7): any teacher of the school browses open classrooms and asks
+        // (422 with the empty body); requests are seen by their requester and the homeroom teacher.
+        'api.classrooms.directory' => ['GET', 'classrooms/directory', self::OK, self::OK],
+        'api.classrooms.courses.index' => ['GET', 'classrooms/{classroom}/courses', 404, 404],
+        'api.classrooms.courses.destroy' => ['DELETE', 'classrooms/{classroom}/courses/{own_course}', 404, 404],
+        'api.classrooms.course-requests.store' => ['POST', 'classrooms/{classroom}/course-requests', self::OK, 404],
+        'api.course-requests.index' => ['GET', 'course-requests', self::OK, self::OK],
+        'api.course-requests.approve' => ['POST', 'course-requests/{incoming_request}/approve', 404, 404],
+        'api.course-requests.decline' => ['POST', 'course-requests/{incoming_request}/decline', 404, 404],
+        // Teacher A cancels their own request to teacher A2's classroom; A2 (its homeroom teacher) may not.
+        'api.course-requests.destroy' => ['DELETE', 'course-requests/{outgoing_request}', '403 not_requester', 404],
+        // A colleague sees the student (school-wide search) but is not their homeroom teacher.
+        'api.students.update' => ['PATCH', 'students/{student}', '403 not_homeroom_teacher', 404],
+        // Unlinking a student's Google sign-in is for their editors too (§24.9.5).
+        'api.students.google-identity.destroy' => ['DELETE', 'students/{student}/google-identity', '403 not_homeroom_teacher', 404],
+        'api.students.duplicate-candidates' => ['GET', 'students/duplicate-candidates', self::OK, self::OK],
+        'api.students.merge-preview' => ['GET', 'students/merge-preview', self::OK, self::OK],
+        'api.students.merge' => ['POST', 'students/merge', self::OK, self::OK],
         'api.students.login-card' => ['POST', 'students/{student}/login-card', 403, 404],
         'api.students.pin' => ['POST', 'students/{student}/pin', 403, 404],
         'api.login-card-prints.show' => ['GET', 'login-card-prints/{card_print}', 403, 404],
@@ -216,6 +256,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.google.oauth-url' => ['POST', 'google/oauth/url', self::OK, self::OK],
         'api.google.courses' => ['GET', 'google/courses', self::OK, self::OK],
         'api.google.courses.import-preview' => ['GET', 'google/courses/{course}/import-preview', self::OK, self::OK],
+        'api.google.courses.link-existing' => ['POST', 'google/courses/{course}/link-existing', self::OK, self::OK],
         'api.classrooms.import-google' => ['POST', 'classrooms/import-google', self::OK, self::OK],
         'api.classrooms.google-roster.sync' => ['POST', 'classrooms/{classroom}/google-roster/sync', 404, 404],
         'api.classrooms.google-link.store' => ['POST', 'classrooms/{classroom}/google-link', 404, 404],
@@ -233,6 +274,56 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.grade-conflicts' => ['GET', 'assignments/{assignment}/grade-conflicts', 404, 404],
         'api.grade-conflicts.resolve' => ['POST', 'grade-conflicts/{conflict}/resolve', 404, 404],
         'api.teacher.attention' => ['GET', 'teacher/attention', self::OK, self::OK],
+    ];
+
+    /**
+     * What subject teacher S gets on teacher A's rows where it differs from
+     * the same-school column (DESIGN §24.8): S sees classroom A, its roster
+     * (read-only) and charts through an own course (422 without course_id
+     * counts as reached), never teacher A's work, students' AI analysis or
+     * anything that edits the roster or the classroom.
+     */
+    private const SUBJECT = [
+        'api.classrooms.show' => self::OK,
+        'api.classrooms.update' => '403 not_homeroom_teacher',
+        'api.classrooms.students.store' => '403 not_homeroom_teacher',
+        'api.classrooms.students.from-classroom' => '403 not_homeroom_teacher',
+        'api.classrooms.roster' => self::OK,
+        'api.classrooms.students.pending-pins' => '403 not_homeroom_teacher',
+        'api.classrooms.login-cards' => '403 not_homeroom_teacher',
+        'api.classrooms.close' => '403 not_homeroom_teacher',
+        'api.classrooms.reopen' => '403 not_homeroom_teacher',
+        'api.classrooms.destroy' => '403 not_homeroom_teacher',
+        'api.classrooms.students.update' => '403 not_homeroom_teacher',
+        'api.classrooms.students.destroy' => '403 not_homeroom_teacher',
+        'api.classrooms.courses.index' => self::OK,
+        'api.classrooms.mastery' => self::OK,
+        'api.classrooms.indicator-pass-rate' => self::OK,
+        'api.students.mastery' => self::OK,
+        'api.students.indicator-progress' => self::OK,
+        'api.classrooms.analyses' => '403 not_homeroom_teacher',
+        'api.students.analysis' => '403 not_homeroom_teacher',
+        'api.students.analysis.run' => '403 not_homeroom_teacher',
+        'api.analyses.update' => '403 not_homeroom_teacher',
+        'api.analyses.approve' => '403 not_homeroom_teacher',
+        // Build 4 (§24.10): each teacher links and syncs their own course (a subject
+        // teacher's only matches); pairing accounts by hand stays the homeroom teacher's.
+        'api.classrooms.google-roster.sync' => self::OK,
+        'api.classrooms.google-link.store' => self::OK,
+        'api.classrooms.google-link.destroy' => self::OK,
+        'api.classrooms.google-roster.show' => self::OK,
+        'api.classrooms.google-roster.update' => '403 not_homeroom_teacher',
+        'api.classrooms.google-sync' => self::OK,
+        'api.course-requests.destroy' => 404,
+    ];
+
+    /** What teacher P (request pending) gets where it differs from the same-school column. */
+    private const PENDING = [
+        // The requester sees the request but only the homeroom teacher decides it.
+        'api.course-requests.approve' => '403 not_homeroom_teacher',
+        'api.course-requests.decline' => '403 not_homeroom_teacher',
+        // Teacher A's request to classroom A2 is none of P's business.
+        'api.course-requests.destroy' => 404,
     ];
 
     /**
@@ -254,6 +345,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
         // Always the signed-in student's own shared texts (§20.5).
         'api.student.analysis' => ['GET', 'student/analysis', self::OK, self::OK],
+        'api.student.analyses' => ['GET', 'student/analyses', self::OK, self::OK],
+        // One page of the signed-in student's own classes (§24.11).
+        'api.student.overview' => ['GET', 'student/overview', self::OK, self::OK],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
         'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
         // A classmate hands in to the same assignment as themself (their own work).
@@ -283,6 +377,10 @@ class AuthorizationMatrixTest extends TestCase
     private const COMMON = [
         'api.auth.logout' => ['POST', 'auth/logout'],
         'api.me' => ['GET', 'me'],
+        // The own Google sign-in account of every role, admins included (§24.9.5).
+        'api.me.google-identity.show' => ['GET', 'me/google-identity'],
+        'api.me.google-identity.store' => ['POST', 'me/google-identity'],
+        'api.me.google-identity.destroy' => ['DELETE', 'me/google-identity'],
     ];
 
     /** @return array<string, array{string}> */
@@ -319,7 +417,9 @@ class AuthorizationMatrixTest extends TestCase
     {
         parent::setUp();
         $this->makeSecurityWorld();
+        $this->makeSharedHomeroomWorld();
         $this->configureGoogle();
+        config(['services.google_signin.client_ids' => 'test-signin-client.apps.googleusercontent.com']);
         // Every Google call answers with an empty list, so an owner's request
         // reaches its normal end instead of a stray-request error.
         $this->fakeGoogle([
@@ -350,6 +450,13 @@ class AuthorizationMatrixTest extends TestCase
         }
     }
 
+    public function test_the_role_overrides_name_teacher_routes(): void
+    {
+        foreach ([...array_keys(self::SUBJECT), ...array_keys(self::PENDING)] as $name) {
+            $this->assertArrayHasKey($name, self::TEACHER, $name);
+        }
+    }
+
     #[DataProvider('teacherRoutes')]
     public function test_teacher_route(string $name): void
     {
@@ -360,9 +467,15 @@ class AuthorizationMatrixTest extends TestCase
         $this->expect($this->call_($method, $uri, $this->admin), 403, 'admin');
         $this->expect($this->call_($method, $uri, $this->disabledTeacherA), 403, 'disabled teacher', 'account_not_active');
         $this->expect($this->call_($method, $uri, $this->teacherB), $otherSchool, 'teacher of another school');
-        $this->expect($this->call_($method, $uri, $this->teacherA2), $sameSchool, 'teacher of the same school');
-        if ($method === 'DELETE' && $sameSchool === self::OK) {
-            $this->restoreDeletedBy($name);
+        foreach ([
+            'teacher of the same school' => [$this->teacherA2, $sameSchool],
+            'teacher with a pending request' => [$this->teacherP, self::PENDING[$name] ?? $sameSchool],
+            'subject teacher of the classroom' => [$this->teacherS, self::SUBJECT[$name] ?? $sameSchool],
+        ] as $actor => [$user, $expected]) {
+            $this->expect($this->call_($method, $uri, $user), $expected, $actor);
+            if ($method === 'DELETE' && $expected === self::OK) {
+                $this->restoreDeletedBy($name);
+            }
         }
         $this->expect($this->call_($method, $uri, $this->teacherA), self::OK, 'owner');
     }
@@ -384,6 +497,8 @@ class AuthorizationMatrixTest extends TestCase
         $this->expect($this->call_($method, $uri, $this->teacherA), 403, 'the teacher');
         $this->expect($this->call_($method, $uri, $this->admin), 403, 'admin');
         $this->expect($this->call_($method, $uri, $this->studentB), $otherSchool, 'student of another school');
+        // School-wide rows (practice items) answer like a classmate; classroom rows like another school.
+        $this->expect($this->call_($method, $uri, $this->studentOther), $name === 'api.student.practice.attempts' ? $peer : $otherSchool, 'student of another classroom');
         $this->expect($this->call_($method, $uri, $this->studentA), $peer, 'classmate');
         $this->expect($this->call_($method, $uri, $this->studentA2), self::OK, 'owner');
     }
@@ -496,6 +611,8 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_page_image}' => $this->examPageImageA->id,
             '{exam_document}' => $this->examDocumentA->id,
             '{gradebook_item}' => $this->gradebookItemA->id,
+            '{incoming_request}' => $this->incomingRequest->id,
+            '{outgoing_request}' => $this->outgoingRequest->id,
         ]);
 
         if ($uri === 'scans') {
@@ -510,6 +627,12 @@ class AuthorizationMatrixTest extends TestCase
 
     private function expect(TestResponse $response, int|string $expected, string $actor, ?string $code = null): void
     {
+        // '403 not_homeroom_teacher': a status with its own code (DESIGN §24.8).
+        if (is_string($expected) && str_contains($expected, ' ')) {
+            [$status, $code] = explode(' ', $expected, 2);
+            $expected = (int) $status;
+        }
+
         $status = $response->getStatusCode();
         $body = (string) $response->getContent();
         $where = "{$actor}: {$response->baseRequest->getMethod()} {$response->baseRequest->getPathInfo()} -> {$status} ".mb_substr($body, 0, 300);

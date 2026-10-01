@@ -10,10 +10,12 @@ use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
+use App\Http\Controllers\Api\V1\ClassroomCourseController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\CourseController;
 use App\Http\Controllers\Api\V1\CourseDocumentController;
+use App\Http\Controllers\Api\V1\CourseRequestController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExamController;
@@ -23,7 +25,9 @@ use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\ExamSheetController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
+use App\Http\Controllers\Api\V1\GoogleIdentityController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
+use App\Http\Controllers\Api\V1\GoogleSignInController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradebookController;
 use App\Http\Controllers\Api\V1\GradebookItemController;
@@ -46,12 +50,16 @@ use App\Http\Controllers\Api\V1\ResponseController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\RubricController;
 use App\Http\Controllers\Api\V1\ScanController;
+use App\Http\Controllers\Api\V1\SchoolStudentController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
+use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentGradeController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
+use App\Http\Controllers\Api\V1\StudentMergeController;
+use App\Http\Controllers\Api\V1\StudentOverviewController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
@@ -92,17 +100,40 @@ Route::prefix('v1')->group(function () {
             Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
             Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');
         });
+
+        // Google sign-in for every role (DESIGN §24.9). /config tells the app whether to show the
+        // button; the rest answer 503 google_signin_not_configured first, then share the per-IP
+        // `google-signin` limiter. The PIN/QR confirmation of a student's first Google sign-in
+        // also goes through `student-auth` (the PIN login's per-student limit and lockout).
+        Route::get('google/config', [GoogleSignInController::class, 'config'])->name('api.auth.google.config');
+        Route::middleware(['google.signin', 'throttle:google-signin'])->group(function () {
+            Route::post('google', [GoogleSignInController::class, 'signIn'])->name('api.auth.google');
+            Route::post('google/web-url', [GoogleSignInController::class, 'webUrl'])->name('api.auth.google.web-url');
+            Route::post('google/ticket', [GoogleSignInController::class, 'ticket'])->name('api.auth.google.ticket');
+            Route::middleware('throttle:student-auth')->group(function () {
+                Route::post('google/link-with-pin', [GoogleSignInController::class, 'linkWithPin'])->name('api.auth.google.link-with-pin');
+                Route::post('google/link-with-qr', [GoogleSignInController::class, 'linkWithQr'])->name('api.auth.google.link-with-qr');
+            });
+        });
     });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('auth/logout', [TeacherAuthController::class, 'logout'])->name('api.auth.logout'); // deletes the current token only
 
-        // Every other route also requires status = active (`active` middleware).
-        Route::middleware('active')->group(function () {
+        // Every other route also requires status = active (`active` middleware), and a
+        // write on a closed classroom answers 409 classroom_closed (`classroom.open`, §24.6).
+        Route::middleware(['active', 'classroom.open'])->group(function () {
             Route::get('me', MeController::class)->name('api.me');
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
             Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');
+
+            // The Google account every role signs in with (§24.9.5), admins included.
+            Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {
+                Route::get('me/google-identity', [GoogleIdentityController::class, 'show'])->name('api.me.google-identity.show');
+                Route::post('me/google-identity', [GoogleIdentityController::class, 'store'])->middleware('throttle:google-signin')->name('api.me.google-identity.store');
+                Route::delete('me/google-identity', [GoogleIdentityController::class, 'destroy'])->name('api.me.google-identity.destroy');
+            });
 
             // Admin-only (§7.4): a one-time link from the app's unified login to the Filament panel.
             Route::post('auth/admin-handoff', [AdminHandoffController::class, 'store'])
@@ -123,13 +154,41 @@ Route::prefix('v1')->group(function () {
                 Route::post('classrooms', [ClassroomController::class, 'store'])->name('api.classrooms.store');
                 Route::get('classrooms/{id}', [ClassroomController::class, 'show'])->name('api.classrooms.show');
                 Route::patch('classrooms/{id}', [ClassroomController::class, 'update'])->name('api.classrooms.update');
+                // "ห้องเก่า" (§24.6): close, reopen, and delete while empty.
+                Route::post('classrooms/{id}/close', [ClassroomController::class, 'close'])->name('api.classrooms.close');
+                Route::post('classrooms/{id}/reopen', [ClassroomController::class, 'reopen'])->name('api.classrooms.reopen');
+                Route::delete('classrooms/{id}', [ClassroomController::class, 'destroy'])->name('api.classrooms.destroy');
                 Route::post('classrooms/{id}/students', [ClassroomStudentController::class, 'store'])->name('api.classrooms.students.store');
+                Route::patch('classrooms/{id}/students/{student_id}', [ClassroomStudentController::class, 'update'])->name('api.classrooms.students.update');
+                Route::delete('classrooms/{id}/students/{student_id}', [ClassroomStudentController::class, 'destroy'])->name('api.classrooms.students.destroy');
                 Route::get('classrooms/{id}/roster', [ClassroomStudentController::class, 'index'])->name('api.classrooms.roster');
                 Route::post('classrooms/{id}/students/pending-pins', [ClassroomStudentController::class, 'pendingPins'])->name('api.classrooms.students.pending-pins');
+                // "นำนักเรียนจากห้องเดิม" (§24.6): enrol students of another classroom of the school.
+                Route::post('classrooms/{id}/students/from-classroom', [ClassroomStudentController::class, 'fromClassroom'])->name('api.classrooms.students.from-classroom');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
+
+                // Shared homerooms (§24.7): the directory to ask for, the courses of a classroom,
+                // course requests (homeroom teacher approves or declines, the requester cancels) and unbinding.
+                Route::get('classrooms/directory', [ClassroomCourseController::class, 'directory'])->name('api.classrooms.directory');
+                Route::get('classrooms/{id}/courses', [ClassroomCourseController::class, 'index'])->name('api.classrooms.courses.index');
+                Route::delete('classrooms/{id}/courses/{course_id}', [ClassroomCourseController::class, 'destroy'])->where('course_id', '[0-9]{1,18}')->name('api.classrooms.courses.destroy');
+                Route::post('classrooms/{id}/course-requests', [ClassroomCourseController::class, 'storeRequest'])->name('api.classrooms.course-requests.store');
+                Route::get('course-requests', [CourseRequestController::class, 'index'])->name('api.course-requests.index');
+                Route::post('course-requests/{id}/approve', [CourseRequestController::class, 'approve'])->name('api.course-requests.approve');
+                Route::post('course-requests/{id}/decline', [CourseRequestController::class, 'decline'])->name('api.course-requests.decline');
+                Route::delete('course-requests/{id}', [CourseRequestController::class, 'destroy'])->name('api.course-requests.destroy');
+
+                // One account per student across the school (§24.4, §24.5): search, edit, duplicates, merge.
+                Route::get('school-students', [SchoolStudentController::class, 'index'])->name('api.school-students.index');
+                Route::patch('students/{id}', [StudentController::class, 'update'])->name('api.students.update');
+                Route::get('students/duplicate-candidates', [StudentController::class, 'duplicateCandidates'])->name('api.students.duplicate-candidates');
+                Route::get('students/merge-preview', [StudentMergeController::class, 'preview'])->name('api.students.merge-preview');
+                Route::post('students/merge', [StudentMergeController::class, 'store'])->name('api.students.merge');
 
                 Route::post('students/{id}/login-card', [LoginCardController::class, 'storeForStudent'])->name('api.students.login-card');
                 Route::post('students/{id}/pin', [StudentPinController::class, 'store'])->name('api.students.pin');
+                // The student's editors remove their Google sign-in link (§24.9.5).
+                Route::delete('students/{id}/google-identity', [GoogleIdentityController::class, 'destroyForStudent'])->middleware('google.signin')->name('api.students.google-identity.destroy');
 
                 Route::get('login-card-prints/{id}', [LoginCardController::class, 'show'])->name('api.login-card-prints.show');
                 Route::get('login-card-prints/{id}/file', [LoginCardController::class, 'download'])->name('api.login-card-prints.file');
@@ -331,6 +390,7 @@ Route::prefix('v1')->group(function () {
                         Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
                         // Import a classroom from a course and sync its roster (§19.2).
                         Route::get('google/courses/{course_id}/import-preview', [GoogleImportController::class, 'preview'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.import-preview');
+                        Route::post('google/courses/{course_id}/link-existing', [GoogleImportController::class, 'linkExisting'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.link-existing');
                         Route::post('classrooms/import-google', [GoogleImportController::class, 'import'])->name('api.classrooms.import-google');
                         Route::post('classrooms/{id}/google-roster/sync', [GoogleImportController::class, 'syncRoster'])->name('api.classrooms.google-roster.sync');
                         // "ซิงก์ตอนนี้": one sync round of the classroom (§19.3).
@@ -348,6 +408,8 @@ Route::prefix('v1')->group(function () {
 
             // Student-only (§9.7, §19.6): their own published results and hand-ins.
             Route::middleware('role:student')->prefix('student')->group(function () {
+                // One page across every classroom of the student, grouped by course (§24.11).
+                Route::get('overview', StudentOverviewController::class)->name('api.student.overview');
                 Route::get('results', [StudentResultController::class, 'index'])->name('api.student.results.index');
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->name('api.student.results.show');
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:appeal')->name('api.student.responses.appeal');
@@ -361,6 +423,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 // Only the analysis texts the teacher shared, never the teacher's version (§20.5).
                 Route::get('analysis', [AnalysisController::class, 'mine'])->name('api.student.analysis');
+                Route::get('analyses', [AnalysisController::class, 'mineAll'])->name('api.student.analyses');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Hand in from the app (§19.6): open assignments and a whole-page submission.
                 Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');

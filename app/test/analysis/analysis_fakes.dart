@@ -144,7 +144,7 @@ Map<String, dynamic> classroomAnalysesJson({bool autoShare = false}) => {
 
 List<Map<String, dynamic>> myAnalysesJson() => [
   {
-    'classroom': {'id': 7, 'name': 'ป.5/1'},
+    'classroom': {'id': 7, 'name': 'ป.5/1', 'academic_year': 2569},
     'text': 'หนูทำเศษส่วนได้ดีมาก ลองฝึกทศนิยมอีกนิดนะ',
     'shared_at': '2026-09-29T23:00:00Z',
     'next_steps': [

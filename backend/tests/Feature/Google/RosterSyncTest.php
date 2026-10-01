@@ -14,6 +14,7 @@ use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
 use App\Models\StudentCredential;
 use App\Models\User;
+use App\Models\UserGoogleIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -28,6 +29,9 @@ class RosterSyncTest extends TestCase
 {
     use GoogleFixtures;
     use RefreshDatabase;
+
+    /** A sync that changes nothing (DESIGN §24.10 added enrolled and not_in_classroom). */
+    private const NOTHING = ['added' => [], 'enrolled' => [], 'left' => [], 'rematched' => [], 'not_in_classroom' => []];
 
     private User $teacher;
 
@@ -115,10 +119,10 @@ class RosterSyncTest extends TestCase
         $this->assertSame([], $data['rematched']);
         $this->assertSame('g-new-a', $this->member(6)->google_user_id);
         $this->assertSame('bella@student.example', $this->member(7)->google_email);
-        $this->assertNotNull(ClassroomGoogleLink::query()->find($this->classroom->id)->roster_synced_at);
+        $this->assertNotNull(ClassroomGoogleLink::query()->where('classroom_id', $this->classroom->id)->sole()->roster_synced_at);
 
         // Nothing new the second time.
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
     }
 
     public function test_an_account_that_left_is_unmatched_and_labelled_and_matched_back_by_email_when_it_returns(): void
@@ -141,7 +145,7 @@ class RosterSyncTest extends TestCase
         // Still gone: the time it left does not move.
         $leftAt = $member->left_course_at->toIso8601String();
         $this->travel(1)->days();
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
         $this->assertSame($leftAt, $this->member(2)->left_course_at->toIso8601String());
 
         // Back with the same account (Google shows the e-mail in another case).
@@ -170,6 +174,21 @@ class RosterSyncTest extends TestCase
         $this->assertSame('g-2-new', $this->member(2)->google_user_id);
     }
 
+    public function test_a_second_account_of_a_member_is_neither_added_nor_moves_the_match(): void
+    {
+        // Student 2 signs in with another Google account (pass 1), and that account
+        // is in the course next to the one the membership is matched to.
+        UserGoogleIdentity::create(['user_id' => $this->students[2]->id, 'google_sub' => 'g-2-other', 'email' => 'two@home.example', 'linked_via' => 'self', 'linked_at' => now()]);
+        $this->roster([...self::current(), self::courseStudent('g-2-other', 'สอง มีสุข', 'two@home.example')]);
+        $before = User::query()->where('role', 'student')->count();
+
+        $this->assertSame(self::NOTHING, $this->sync());
+
+        $this->assertSame($before, User::query()->where('role', 'student')->count(), 'no duplicate student');
+        $this->assertSame('g-2', $this->member(2)->google_user_id, 'the match stays');
+        $this->assertSame(3, ClassroomStudent::query()->where('classroom_id', $this->classroom->id)->count());
+    }
+
     public function test_names_in_the_app_are_never_overwritten(): void
     {
         $this->roster([
@@ -188,7 +207,7 @@ class RosterSyncTest extends TestCase
         ClassroomGoogleIgnoredUser::query()->insert(['classroom_id' => $this->classroom->id, 'google_user_id' => 'g-parent', 'name' => 'ผู้ปกครอง', 'created_at' => now()]);
         $this->roster([...self::current(), self::courseStudent('g-parent', 'ผู้ปกครอง', 'parent@example.com')]);
 
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
         $this->assertDatabaseMissing('classroom_students', ['google_user_id' => 'g-parent']);
     }
 

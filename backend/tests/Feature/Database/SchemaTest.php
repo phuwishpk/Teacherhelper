@@ -37,6 +37,8 @@ class SchemaTest extends TestCase
             'mastery.updated_at' => ['mastery', 'updated_at'],
             'practice_attempts.created_at' => ['practice_attempts', 'created_at'],
             'gradebook_publications.published_at' => ['gradebook_publications', 'published_at'],
+            'student_merges.created_at' => ['student_merges', 'created_at'],
+            'user_google_identities.linked_at' => ['user_google_identities', 'linked_at'],
         ];
     }
 

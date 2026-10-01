@@ -213,6 +213,31 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
   `configured` และกล่องเชื่อมผ่านเบราว์เซอร์กับ clock ปลอมของ widget test), `test/results/retake_notice_test.dart`,
   JVM `AttachmentRasterizerTest.kt` ไม่มี test ไหนต่อ Google จริง ของจริงทดสอบตาม KICKOFF ส่วนที่ 6 ข้อ G7
 
+## เข้าสู่ระบบด้วย Google (DESIGN §24.9, build 3)
+
+ปุ่ม **"เข้าสู่ระบบด้วย Google"** อยู่ทั้งสองแท็บของหน้า login และการ์ด "บัญชี Google สำหรับเข้าสู่ระบบ" อยู่ในหน้าตั้งค่าครู,
+"บัญชีของฉัน" ของนักเรียน (`/student/account` ไอคอนบนแถบด้านบน) และหน้า `/admin-home` โค้ดอยู่ที่ `lib/features/google_signin/`
+แสดงเมื่อ **ทั้ง** build ใช้ Google ได้ **และ** server เปิด (`GET /auth/google/config` → `enabled`, บนเว็บต้องมี `web_flow` ด้วย)
+
+```bash
+# Android: Web client ID ของ project sign-in (ไม่ใช่ของ Classroom) เป็น serverClientId
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
+            --dart-define=GOOGLE_SIGNIN_CLIENT_ID=yyyyyyyy.apps.googleusercontent.com
+# Chrome: ทาง redirect ผ่าน server ต้องใช้พอร์ตคงที่ให้ตรงกับ GOOGLE_SIGNIN_APP_URL ของ backend
+flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+- **Android**: `google_sign_in` 7 `initialize(serverClientId)` → `authenticate()` → ID token → `POST /auth/google` แล้ว
+  `signOut()` ของ plugin ทันที (เครื่องประจำห้องใช้หลายคน) plugin initialize ได้ครั้งเดียวต่อการเปิดแอป build ที่มี
+  `GOOGLE_SIGNIN_CLIENT_ID` จึง **เชื่อม Google Classroom ผ่านเบราว์เซอร์เสมอ** (`googleAuthProvider` เป็น `DisabledGoogleAuth`)
+- **เว็บ**: `POST /auth/google/web-url` แล้วเปิดหน้าของ Google ในแท็บเดิม server ส่งกลับมาที่ `/#/login/google?ticket=…`
+  (แลกด้วย `POST /auth/google/ticket`) หรือ `/#/google-link?status=…` หลังเชื่อม router เก็บสองที่นี้ไว้ระหว่าง restore session
+- `google_not_linked` แท็บครู: ถาม "สมัครใช้งานครู" (หน้าสมัครเติมชื่อและอีเมลจาก Google แล้วส่ง `google_link_ticket`) หรือ
+  login ด้วยรหัสผ่าน แท็บนักเรียน: หน้า "ยืนยันตัวตนครั้งแรก" (`/login/google/confirm`) ต้องติ๊กยอมรับข้อความ PDPA ก่อน
+  แล้วใช้ PIN หรือสแกนบัตร (`/login/google/confirm/qr`) link ticket อยู่ในหน่วยความจำเท่านั้น
+- ครูประจำชั้นยกเลิกการเชื่อม Google ของนักเรียนได้จากเมนูของนักเรียนในหน้าห้อง (เมื่อ roster บอก `google_linked: true`)
+- test ใช้ `FakeGoogleSignInGateway` / `FakeGoogleSignInRepository` (`test/google_signin/`) ไม่เรียก plugin หรือ Google จริง
+
 ## ตัวอ่านตัวเลขบนเครื่อง แบบฝึก mastery และ dashboard (Phase 5–6, DESIGN §12, §14, §9.6–§9.8)
 
 - **โมเดล** (`lib/ml/`): `ModelRepository` เรียก `GET /ml/models/active?name=digit_crnn` (§9.8) เมื่อเปิด shell ของครูหรือหน้าสแกน
@@ -301,7 +326,8 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 |---|---|
 | `POST /auth/student/qr` | `{qr_token}` คือส่วนหลัง `EVL1.` ของ QR บนบัตร |
 | PIN ล็อก | 423 `code: pin_locked` → ข้อความล็อก โดยใช้เวลาที่เหลือจาก `errors.pin[0]` ถ้ามี; 429 (limiter ต่อ IP ของ `throttle:student-auth`) → "มีการเข้าสู่ระบบถี่เกินไป" ไม่ใช่ข้อความล็อก PIN |
-| `POST /classrooms/{id}/students` | body `{students: [{name, student_number}]}` ตอบ `201 {data: [{student_id, student_number, name, status, pin}]}` แอปแสดง PIN เริ่มต้นของทุกคนครั้งเดียว (คัดลอกได้) ก่อนออกจากหน้า |
+| `POST /classrooms/{id}/students` | body `{students: [{name, student_number, student_code?} \| {student_id, student_number, reissue_pin?}]}` (§24.4) ตอบ `201 {data: [{student_id, student_number, name, student_code, status, pin, existing}]}` แอปแสดงเฉพาะ PIN ที่ออกใหม่ครั้งเดียว (คัดลอกได้) ก่อนออกจากหน้า คนเดิม `pin: null` ไม่แสดง; 422 `student_code_taken` ใช้ `existing_student` และ key `errors.students.{i}.student_code` เสนอ "เพิ่มคนนี้เข้าห้องแทน" |
+| นักเรียนระดับโรงเรียนและห้องเก่า (§24.12 A) | request/response ทดสอบไว้ที่ `test/classrooms/school_students_repository_test.dart`; 409 `classroom_has_data` อ่าน `counts` ระดับบน (§24.18) |
 | งานพิมพ์บัตร QR | `202 {data: {id, status, classroom_id, student_id, download_url, status_url, error}}` แอป poll ที่ `status_url` (หรือ `GET /login-card-prints/{id}` ถ้าไม่มี) จน `status = ready` แล้วดาวน์โหลด `download_url` (รับทั้ง URL เต็มและ `/api/v1/...`) |
 | `POST /students/{id}/pin` | ตอบ `{pin}` (backend ส่ง `student_id` มาด้วย) แอปแสดง `pin` ครั้งเดียว |
 | `GET /subjects` | `{data: [{id, code, name}]}` ใช้ตอนสร้างการบ้าน |

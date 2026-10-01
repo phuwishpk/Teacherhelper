@@ -75,7 +75,7 @@ class _FakeMastery implements MasteryRepository {
   );
 
   @override
-  Future<List<SkillMastery>> student(int studentId) async =>
+  Future<List<SkillMastery>> student(int studentId, {int? courseId}) async =>
       available ? studentRows().map(SkillMastery.fromJson).toList() : [];
 }
 

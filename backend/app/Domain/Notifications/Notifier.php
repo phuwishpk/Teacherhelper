@@ -4,6 +4,7 @@ namespace App\Domain\Notifications;
 
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassroomCourseRequest;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GradebookPublication;
 use App\Models\Submission;
@@ -58,4 +59,10 @@ interface Notifier
      * taken back): once per drop (google_accounts.reconnect_notified_at, §19.3).
      */
     public function googleReconnectNeeded(int $teacherId): void;
+
+    /** A subject teacher asked to bind a course to the classroom: tell its homeroom teacher (DESIGN §24.7). */
+    public function courseRequested(ClassroomCourseRequest $request): void;
+
+    /** The homeroom teacher approved or declined the request: tell the requester (DESIGN §24.7). */
+    public function courseRequestDecided(ClassroomCourseRequest $request): void;
 }

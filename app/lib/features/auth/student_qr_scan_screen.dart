@@ -6,15 +6,30 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 
+/// Signs in with a scanned card payload; throws what the API threw.
+typedef CardSignIn = Future<void> Function(WidgetRef ref, String payload);
+
 /// Camera view that looks for a login-card QR (`EVL1.{token}`) and signs the
-/// student in with `POST /auth/student/qr`.
+/// student in with `POST /auth/student/qr`, or with [signIn] instead (the
+/// Google first confirmation, DESIGN §24.9.5).
 class StudentQrScanScreen extends ConsumerStatefulWidget {
-  const StudentQrScanScreen({super.key});
+  const StudentQrScanScreen({super.key, this.signIn, this.errorMessage});
+
+  final CardSignIn? signIn;
+
+  /// Thai message of a failed [signIn]; the card login's by default.
+  final String Function(Object error)? errorMessage;
 
   @override
   ConsumerState<StudentQrScanScreen> createState() =>
       _StudentQrScanScreenState();
 }
+
+/// Thai message of a failed card login.
+String cardErrorMessage(Object error) =>
+    apiStatusCode(error) == 401 || apiStatusCode(error) == 422
+    ? 'บัตรนี้ใช้ไม่ได้แล้ว (อาจถูกออกบัตรใหม่) ขอบัตรใหม่จากครู'
+    : apiErrorMessage(error);
 
 class _StudentQrScanScreenState extends ConsumerState<StudentQrScanScreen> {
   final _controller = MobileScannerController(
@@ -50,14 +65,17 @@ class _StudentQrScanScreenState extends ConsumerState<StudentQrScanScreen> {
     });
     await _controller.stop();
     try {
-      await ref.read(sessionProvider.notifier).signInStudentQr(payload);
+      final signIn = widget.signIn;
+      if (signIn != null) {
+        await signIn(ref, payload);
+      } else {
+        await ref.read(sessionProvider.notifier).signInStudentQr(payload);
+      }
       // The router redirects to /student once the session is SignedIn.
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = apiStatusCode(e) == 401 || apiStatusCode(e) == 422
-            ? 'บัตรนี้ใช้ไม่ได้แล้ว (อาจถูกออกบัตรใหม่) ขอบัตรใหม่จากครู'
-            : apiErrorMessage(e);
+        _error = widget.errorMessage?.call(e) ?? cardErrorMessage(e);
         _busy = false;
       });
       await _controller.start();

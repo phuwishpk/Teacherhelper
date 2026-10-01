@@ -1952,3 +1952,63 @@ cd app && flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 - ใส่ `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` ใน `.env` บน Plesk (ดู `docs/HOSTING.md`)
 - hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (hosting probe ตรวจ `oauth2.googleapis.com` ให้แล้ว)
 - ถ้า secret หลุด: Credentials → เลือก Web client → Reset secret แล้วอัปเดต `.env`
+- Google sign-in ใช้ project แยก ค่าใน `.env` ของ server ดู G9 และ `docs/HOSTING.md` §6.4
+
+### G9 Google sign-in: project แยกสำหรับเข้าสู่ระบบ (DESIGN §24.9, 2 ต.ค. 2569)
+
+ปุ่ม "เข้าสู่ระบบด้วย Google" ของทุก role ใช้ **Google Cloud project ใหม่** ไม่ใช่ project ของ G1 เพราะขอแค่ `openid email profile` ซึ่ง publish ได้ทันทีโดยไม่ต้องผ่าน verification (project ของ Classroom ยังเป็นโหมด Testing) ขั้นตอนเต็มพร้อมคำอธิบายอยู่ใน `docs/HOSTING.md` §6.4 สรุปสำหรับเครื่อง dev (ประมาณ 20 นาที):
+
+| ของที่ได้ | เอาไปใส่ที่ไหน | เป็นความลับไหม |
+|---|---|---|
+| Web client ID ของ project sign-in | `backend/.env` → `GOOGLE_SIGNIN_CLIENT_IDS` (ตัวแรก) และแอป → `--dart-define=GOOGLE_SIGNIN_CLIENT_ID` | ไม่ลับ |
+| Web client secret ของ project sign-in | `backend/.env` → `GOOGLE_SIGNIN_CLIENT_SECRET` (ใช้กับทางเว็บเท่านั้น) | **ลับ** ห้ามเข้า repo/แชต |
+| Android client ของ project sign-in | ไม่ต้องใส่ที่ไหน Google จับคู่จาก package name + SHA-1 | ไม่ลับ |
+
+1. Console → New project `eduvision-signin` → เลือก project นี้
+2. OAuth consent screen: External, App name `EduVision`, อีเมลติดต่อ, **ไม่ใส่โลโก้**, scope `openid` `userinfo.email` `userinfo.profile` เท่านั้น แล้ว **Publish app**
+3. Credentials → OAuth client ID → **Web application** `EduVision sign-in web` → Authorized redirect URIs: `http://127.0.0.1:8000/auth/google/callback` และ `https://teacherhelper.phuwish.com/auth/google/callback` → คัดลอก Client ID และ secret
+4. Credentials → OAuth client ID → **Android**: `com.eduvision.app` + SHA-1 ของ debug keystore (คำสั่งเดียวกับ G5) ⚠️ ต้องตรวจสอบ: ถ้า Google ตอบว่า package + SHA-1 นี้ถูกใช้แล้ว แปลว่าอยู่ใน project ของ G5 ให้ลบ Android client ใน project G5 ก่อน แล้วสร้างใหม่ที่นี่ (แอปที่ตั้ง sign-in แล้วเชื่อม Classroom ผ่านเบราว์เซอร์เสมอ จึงไม่ต้องใช้ Android client ของ G5) บันทึกผลใน `docs/HOSTING.md` §12
+5. `backend/.env` ในเครื่อง:
+   ```ini
+   GOOGLE_SIGNIN_CLIENT_IDS=yyyyyyyy.apps.googleusercontent.com     # Web client ID ของข้อ 3
+   GOOGLE_SIGNIN_CLIENT_SECRET=GOCSPX-yyyyyyyy                      # ทางเว็บเท่านั้น
+   GOOGLE_SIGNIN_APP_URL=http://localhost:5173                      # ทางเว็บ: ต้องตรงกับ --web-port ของ flutter run -d chrome
+   ```
+   แล้ว `php artisan config:clear` (ถ้าเคย cache)
+6. รันแอป:
+   ```bash
+   cd app
+   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 \
+               --dart-define=GOOGLE_SIGNIN_CLIENT_ID=yyyyyyyy.apps.googleusercontent.com   # Web client ID ของข้อ 3 (ไม่ใช่ Android)
+   flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://127.0.0.1:8000   # ทางเว็บ ดู UI
+   ```
+7. `/admin` → โรงเรียน → แก้ไข → เปิดสวิตช์ "ให้นักเรียนเข้าสู่ระบบด้วย Google" (ทดสอบกับโรงเรียนทดสอบเท่านั้น ของจริงเปิดเมื่อมีความยินยอมของผู้ปกครอง)
+
+ตรวจสอบ: `curl -s http://127.0.0.1:8000/api/v1/auth/google/config` ตอบ `"enabled":true` และหน้า login ของแอปมีปุ่ม "เข้าสู่ระบบด้วย Google" ทั้งสองแท็บ
+
+### G10 ทดสอบของจริง: บัญชีนักเรียนระดับโรงเรียนและห้องประจำชั้นร่วม (DESIGN §24.4–§24.8)
+
+ใช้ครูทดสอบ 2 คน (ก = ครูประจำชั้น, ข = ครูประจำวิชา) บนมือถือหรือ Chrome ไม่ต้องใช้ Google
+
+1. ก สร้างห้อง ป.5/1 เพิ่มนักเรียน 3 คน พิมพ์บัตร QR แล้วสร้างห้อง ป.6/1 (ปีการศึกษาถัดไป) → "นำนักเรียนจากห้องเดิม" เลือก ป.5/1 ใช้ PIN เดิม
+2. นักเรียนคนหนึ่ง login ด้วย PIN เดิมผ่านรหัสห้อง ป.6/1 และสแกนบัตร QR เดิม ต้องได้บัญชีเดียวกัน
+3. ก เพิ่ม "นักเรียนใหม่" ชื่อซ้ำกับคนเดิมใน ป.6/1 → การ์ด "บัญชีที่อาจซ้ำ" ขึ้น → "รวมบัญชีนักเรียน" ดูหน้าเทียบสองฝั่งแล้วรวม → PIN ของบัญชีที่ถูกรวมใช้ไม่ได้
+4. ข สร้างรายวิชาของตัวเอง → "ขอสอนห้องของครูท่านอื่น" เลือก ป.5/1 → ก เห็นตัวเลขบนแท็บห้องเรียน อนุมัติ → ข สร้างการบ้านใน ป.5/1 ได้ แต่ไม่มีปุ่มเพิ่มนักเรียน/แก้ข้อมูลนักเรียน → ก เห็นการบ้านของ ข แบบอ่านอย่างเดียว
+5. ก ปิดห้อง ป.6/1 → ห้องย้ายไปส่วน "ห้องเก่า" ทุกปุ่มเขียนหายไป นักเรียนยังเห็นผลของห้องนั้นในส่วน "ห้องเก่า" ของ "วิชาของฉัน"
+6. นักเรียนที่อยู่ทั้งสองห้องเปิด "วิชาของฉัน" เห็นการ์ดรายวิชาของทั้งสองห้องพร้อมป้ายห้อง
+
+ตรวจสอบ: ทุกข้อผ่านโดยไม่มีบัญชีนักเรียนใหม่เกิดขึ้นนอกจากข้อ 3 (smoke `backend/tools/smoke.sh` ทำวงจรเดียวกันผ่าน API ให้แล้ว)
+
+### G11 ทดสอบของจริง: Google sign-in และ Classroom กับนักเรียนที่มีบัญชีแล้ว (DESIGN §24.9–§24.10)
+
+ต้องทำ G9 และ G7 ก่อน ใช้บัญชี Google ของทีมเท่านั้น (ไม่ใช่ของนักเรียนจริง)
+
+1. **ครู**: แท็บครู → "เข้าสู่ระบบด้วย Google" ด้วยบัญชีที่อีเมลตรงกับบัญชีครูในแอป → เข้าได้ทันที ตั้งค่า → "บัญชี Google สำหรับเข้าสู่ระบบ" แสดงว่าเชื่อมแล้ว → ยกเลิก → login ด้วยรหัสผ่านยังได้
+2. **ครูใหม่**: บัญชี Google ที่ไม่มีในระบบ → "สมัครใช้งานครู" (ชื่อและอีเมลเติมให้) → admin อนุมัติใน `/admin` → login ด้วย Google ได้
+3. **admin**: login ด้วยรหัสผ่าน → `/admin-home` → "เชื่อมบัญชี Google" → ออกแล้ว login ด้วย Google → เข้าหน้า admin
+4. **นักเรียน (ยืนยันด้วย PIN)**: แท็บนักเรียน → Google → หน้า "ยืนยันตัวตนครั้งแรก" → ติ๊กยอมรับข้อความ → รหัสห้อง + เลขที่ + PIN → เข้าได้ ครั้งต่อไปกด Google แล้วเข้าทันที
+5. **⚠️ `sub` = `userId` ของ Classroom**: ครูนำเข้าคอร์สทดลองของ G7 เป็นห้อง (หรือซิงก์รายชื่อ) แล้วนักเรียนในคอร์สนั้นกด Google ในแท็บนักเรียน **ถ้าเข้าได้ทันทีโดยไม่ถาม PIN = ตรงกัน** ถ้าถาม PIN = ไม่ตรง (ยังใช้ได้ด้วย PIN) บันทึกผลใน `docs/HOSTING.md` §12 และ `docs/STATUS.md`
+6. **ครูประจำวิชานำเข้าคอร์สของตัวเอง**: ครู ข สร้างคอร์สที่สองใน classroom.google.com ที่มีนักเรียนชุดเดียวกัน → แอป "นำเข้าจาก Google Classroom" → หน้าตัวอย่างเสนอ "ผูกคอร์สนี้กับห้อง … ที่มีอยู่" → ส่งคำขอ → ครู ก อนุมัติ → ห้องมีคอร์สของ ข ผูกอยู่และไม่มีนักเรียนใหม่
+7. **ยกเลิกการเชื่อม**: ครูประจำชั้นเมนูนักเรียน → "ยกเลิกการเชื่อม Google" → นักเรียนกด Google แล้วกลับไปหน้ายืนยันตัวตน
+
+ตรวจสอบ: ทุกข้อผ่าน และ log ของ server (`storage/logs`) ไม่มีอีเมลหรือ token ในบรรทัด `google_signin`

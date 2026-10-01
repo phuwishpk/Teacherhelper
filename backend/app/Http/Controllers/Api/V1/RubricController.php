@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\RubricService;
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -40,7 +41,7 @@ class RubricController extends Controller
             throw new ApiException('การบ้านนี้ปิดแล้ว แก้ไขไม่ได้', 'assignment_closed', 409);
         }
 
-        if ($this->keys->forTeacher($question->assignment->classroom?->teacher_id) === null) {
+        if ($this->keys->forTeacher(ClassroomAccess::managerId($question->assignment)) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 

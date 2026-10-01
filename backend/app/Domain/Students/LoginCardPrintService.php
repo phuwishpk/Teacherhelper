@@ -15,7 +15,10 @@ use App\Models\User;
  */
 class LoginCardPrintService
 {
-    public function queueForClassroom(Classroom $classroom, User $teacher): LoginCardPrint
+    /**
+     * @param  list<int>|null  $studentIds  only these students of the classroom (DESIGN §24.4); null = all
+     */
+    public function queueForClassroom(Classroom $classroom, User $teacher, ?array $studentIds = null): LoginCardPrint
     {
         $print = LoginCardPrint::create([
             'school_id' => $classroom->school_id,
@@ -25,7 +28,7 @@ class LoginCardPrintService
             'status' => LoginCardPrint::STATUS_QUEUED,
         ]);
 
-        RenderLoginCardsJob::dispatch($print->id);
+        RenderLoginCardsJob::dispatch($print->id, $studentIds);
 
         return $print;
     }

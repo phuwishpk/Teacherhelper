@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../google_signin/google_signin_flow.dart';
+import '../google_signin/google_signin_models.dart';
 import 'student_login_form.dart';
 
 /// The two tabs of the login page (DESIGN §7.4). The name is what the
@@ -127,6 +129,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       qrScanSupported: widget.qrScanSupported,
                     ),
                   },
+                  // "เข้าสู่ระบบด้วย Google" on both tabs (DESIGN §24.13).
+                  GoogleSignInSection(
+                    intent: _tab == LoginTab.student
+                        ? GoogleIntent.student
+                        : GoogleIntent.staff,
+                  ),
                 ],
               ),
             ),

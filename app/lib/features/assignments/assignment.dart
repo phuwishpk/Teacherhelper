@@ -87,6 +87,7 @@ class Assignment {
     this.structureLockedAt,
     this.gradebookCategoryId,
     this.excludedFromGrade = false,
+    this.canManage = true,
   });
 
   static const kindHomework = 'homework';
@@ -193,6 +194,11 @@ class Assignment {
   /// "ไม่นับเกรด": practice work shown faint in the gradebook.
   final bool excludedFromGrade;
 
+  /// False on another teacher's course work in the signed-in teacher's
+  /// homeroom (DESIGN §24.8, §24.20 `can_manage`): results are readable,
+  /// nothing can be changed. Absent = the teacher's own work.
+  final bool canManage;
+
   bool get isExam => kind == kindExam;
 
   bool get isManualExam => isExam && gradingMethod == 'manual';
@@ -238,6 +244,7 @@ class Assignment {
     structureLockedAt: structureLockedAt,
     gradebookCategoryId: gradebookCategoryId,
     excludedFromGrade: excludedFromGrade,
+    canManage: canManage,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -307,6 +314,7 @@ class Assignment {
       structureLockedAt: locked is String ? DateTime.tryParse(locked) : null,
       gradebookCategoryId: (json['gradebook_category_id'] as num?)?.toInt(),
       excludedFromGrade: json['excluded_from_grade'] == true,
+      canManage: json['can_manage'] != false,
     );
   }
 }

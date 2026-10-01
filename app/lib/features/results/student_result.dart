@@ -1,5 +1,6 @@
 import '../review/review_labels.dart';
 import '../review/review_models.dart';
+import '../student/student_labels.dart';
 
 /// Shown when the total was taken from Google Classroom (DESIGN §19.3).
 const totalOverriddenNote = 'คะแนนรวมปรับตามที่ครูรับจาก Classroom';
@@ -15,6 +16,8 @@ class StudentResult {
     this.publishedAt,
     this.totalOverridden = false,
     this.kind = 'homework',
+    this.course,
+    this.classroom,
   });
 
   final int submissionId;
@@ -35,6 +38,18 @@ class StudentResult {
   /// DESIGN §19.3), so it may differ from the sum of the per-question scores.
   final bool totalOverridden;
 
+  /// The course of the work (null for older work) and the classroom label
+  /// (DESIGN §24.11, §24.26).
+  final CourseRef? course;
+  final ClassroomLabel? classroom;
+
+  /// The subject group of the student's combined view (§24.11).
+  SubjectTag get tag => SubjectTag(
+    course: course,
+    subjectName: subjectName,
+    classroom: classroom,
+  );
+
   factory StudentResult.fromJson(Map<String, dynamic> json) {
     final assignment = json['assignment'] as Map<String, dynamic>?;
     final subject = assignment?['subject'] as Map<String, dynamic>?;
@@ -48,6 +63,8 @@ class StudentResult {
       publishedAt: published == null ? null : DateTime.tryParse(published),
       totalOverridden: json['total_overridden'] == true,
       kind: json['kind'] as String? ?? 'homework',
+      course: CourseRef.fromJson(json['course']),
+      classroom: ClassroomLabel.fromJson(json['classroom']),
     );
   }
 }

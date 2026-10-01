@@ -25,6 +25,8 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $password
  * @property string $status pending|active|disabled
  * @property int|null $approved_by
+ * @property string|null $student_code the school student ID, normalised (DESIGN §24.4)
+ * @property int|null $merged_into_id this account was merged into that one (DESIGN §24.5)
  */
 class User extends Authenticatable implements FilamentUser
 {
@@ -51,6 +53,8 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'status',
         'approved_by',
+        'student_code',
+        'merged_into_id',
     ];
 
     protected $hidden = [
@@ -121,6 +125,23 @@ class User extends Authenticatable implements FilamentUser
     public function googleAccount(): HasOne
     {
         return $this->hasOne(GoogleAccount::class);
+    }
+
+    /** The Google account this user signs in with (DESIGN §24.9). @return HasOne<UserGoogleIdentity, $this> */
+    public function googleIdentity(): HasOne
+    {
+        return $this->hasOne(UserGoogleIdentity::class);
+    }
+
+    /** The account this one was merged into (DESIGN §24.5). @return BelongsTo<User, $this> */
+    public function mergedInto(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'merged_into_id');
+    }
+
+    public function isMerged(): bool
+    {
+        return $this->merged_into_id !== null;
     }
 
     public function isActive(): bool

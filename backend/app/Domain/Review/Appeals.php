@@ -2,12 +2,11 @@
 
 namespace App\Domain\Review;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Events\AppealOpened;
 use App\Events\AppealResolved;
 use App\Exceptions\ApiException;
 use App\Models\Appeal;
-use App\Models\Assignment;
-use App\Models\Classroom;
 use App\Models\Response;
 use App\Models\ScoreEvent;
 use App\Models\Submission;
@@ -34,7 +33,8 @@ use Illuminate\Validation\ValidationException;
 final class Appeals
 {
     /**
-     * Appeals on answers of classrooms the teacher teaches in their school.
+     * Appeals on answers of assignments the teacher manages (DESIGN §24.8:
+     * the course's teacher answers them, not the homeroom teacher).
      *
      * @return Builder<Appeal>
      */
@@ -44,9 +44,7 @@ final class Appeals
             'submission_id',
             Submission::query()->select('id')->whereIn(
                 'assignment_id',
-                Assignment::query()->select('id')
-                    ->where('school_id', $teacher->school_id)
-                    ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id)),
+                ClassroomAccess::managedAssignments($teacher)->select('assignments.id'),
             ),
         ));
     }
@@ -58,13 +56,18 @@ final class Appeals
      */
     public static function openForTeacher(int $teacherId): Builder
     {
+        $teacher = User::query()->find($teacherId);
+        if ($teacher === null) {
+            return Appeal::query()->whereRaw('1 = 0');
+        }
+
         return Appeal::query()
             ->where('appeals.status', Appeal::STATUS_OPEN)
             ->whereIn('response_id', Response::query()->select('id')->whereIn(
                 'submission_id',
                 Submission::query()->select('id')->whereIn(
                     'assignment_id',
-                    Assignment::query()->select('id')->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacherId)),
+                    ClassroomAccess::managedAssignments($teacher)->select('assignments.id'),
                 ),
             ));
     }
@@ -96,7 +99,7 @@ final class Appeals
                 throw self::alreadyAppealed();
             }
 
-            $teacherId = $submission->assignment?->classroom?->teacher_id;
+            $teacherId = $submission->assignment === null ? null : ClassroomAccess::managerId($submission->assignment);
             if ($teacherId !== null) {
                 AppealOpened::dispatch($appeal->id, $teacherId);
             }

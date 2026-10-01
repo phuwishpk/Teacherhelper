@@ -29,12 +29,22 @@ class ImportCourseWorkJob implements ShouldBeUnique, ShouldQueue
     public int $uniqueFor = 900;
 
     /**
+     * The classroom_google_links row whose course listed the courseWork
+     * (DESIGN §24.10: one course per teacher). Not promoted, so a job queued
+     * before build 4 unserializes with null and falls back to the homeroom
+     * teacher's course.
+     */
+    public ?int $linkId = null;
+
+    /**
      * @param  array<string, mixed>  $courseWork
      */
     public function __construct(
         public readonly int $classroomId,
         public readonly array $courseWork,
+        ?int $linkId = null,
     ) {
+        $this->linkId = $linkId;
         $this->onQueue('default');
     }
 
@@ -45,6 +55,6 @@ class ImportCourseWorkJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(CourseWorkImporter $importer): void
     {
-        $importer->import($this->classroomId, $this->courseWork);
+        $importer->import($this->classroomId, $this->courseWork, $this->linkId);
     }
 }

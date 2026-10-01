@@ -29,6 +29,14 @@ class SignedIn extends SessionState {
 /// Prefix of the payload printed on a student login card (DESIGN §5.4).
 const studentCardQrPrefix = 'EVL1.';
 
+/// The card token of a scanned login-card [payload] (`EVL1.{token}` or the
+/// bare token).
+String studentCardToken(String payload) =>
+    (payload.startsWith(studentCardQrPrefix)
+            ? payload.substring(studentCardQrPrefix.length)
+            : payload)
+        .trim();
+
 class SessionNotifier extends Notifier<SessionState> {
   @override
   SessionState build() => const SessionRestoring();
@@ -102,12 +110,14 @@ class SessionNotifier extends Notifier<SessionState> {
 
   /// [qrPayload] is the raw QR content (`EVL1.{token}`) or the bare token.
   Future<void> signInStudentQr(String qrPayload) async {
-    final token = qrPayload.startsWith(studentCardQrPrefix)
-        ? qrPayload.substring(studentCardQrPrefix.length)
-        : qrPayload;
     final repo = ref.read(authRepositoryProvider);
-    await _finishSignIn(repo.loginStudentQr(token.trim()));
+    await _finishSignIn(repo.loginStudentQr(studentCardToken(qrPayload)));
   }
+
+  /// Finishes a sign-in whose Sanctum token came from another route, e.g.
+  /// Google (DESIGN §24.9): store it, read `/me`, claim the local data.
+  Future<void> signInWithToken(Future<String> tokenFuture) =>
+      _finishSignIn(tokenFuture);
 
   Future<void> signInStudentPin({
     required String classCode,

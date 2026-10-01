@@ -2,8 +2,10 @@
 
 namespace App\Policies;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Classroom;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 /**
  * Admin abilities (Filament UserResource, DESIGN §7.5) and the teacher-side
@@ -51,21 +53,75 @@ class UserPolicy
     }
 
     /**
-     * Re-issue the QR login card or reset the PIN of a student: only a teacher
-     * who teaches a classroom the student belongs to, in the same school.
+     * Re-issue the QR login card or reset the PIN of a student: the student's
+     * editors (DESIGN §24.2), i.e. the homeroom teacher of an open classroom
+     * the student is in, in the same school.
      */
     public function manageStudentCredentials(User $user, User $student): bool
     {
-        return self::teachesStudent($user, $student);
+        return self::editsStudent($user, $student);
     }
 
-    /** GET /students/{id}/mastery (DESIGN §9.6): the same teachers. */
+    /** PATCH /students/{id} (name, student code, DESIGN §24.4): the same editors. */
+    public function editStudent(User $user, User $student): bool
+    {
+        return self::editsStudent($user, $student);
+    }
+
+    /**
+     * Filament "ยกเลิกการเชื่อม Google" of a student (DESIGN §24.9.5): an
+     * active admin of the student's school, or a system admin. Teachers use
+     * DELETE /students/{id}/google-identity (editStudent).
+     */
+    public function unlinkGoogle(User $user, User $student): bool
+    {
+        return $this->isAdmin($user) && $student->isStudent()
+            && ($user->school_id === null || $user->school_id === $student->school_id);
+    }
+
+    /**
+     * Merge $merge into $keep (DESIGN §24.5): an admin of their school (or a
+     * system admin), or a teacher who is the homeroom teacher of a classroom
+     * (open or closed) of each of the two accounts. A subject teacher cannot,
+     * because merging edits student data (#65).
+     */
+    public function mergeStudents(User $user, User $keep, User $merge): bool
+    {
+        if ($user->isAdmin()) {
+            return $user->isActive() && ($user->school_id === null || ($user->school_id === $keep->school_id && $user->school_id === $merge->school_id));
+        }
+
+        return self::isHomeroomOf($user, $keep, false) && self::isHomeroomOf($user, $merge, false);
+    }
+
+    /**
+     * GET /students/{id}/mastery and indicator-progress (DESIGN §9.6, §24.8):
+     * a homeroom teacher of any classroom of the student (open or closed), or
+     * a subject teacher of one (who must then name an own course).
+     */
     public function viewMastery(User $user, User $student): bool
     {
-        return self::teachesStudent($user, $student);
+        return ClassroomAccess::forStudent($user, $student) !== null;
     }
 
-    private static function teachesStudent(User $user, User $student): bool
+    /** The per-student AI analysis (§20.5): homeroom teachers only, 403 not_homeroom_teacher for a subject teacher (§24.8). */
+    public function viewAnalysis(User $user, User $student): Response|bool
+    {
+        $access = ClassroomAccess::forStudent($user, $student);
+        if ($access === null) {
+            return false;
+        }
+
+        return $access['homeroom'] ? true : ClassroomAccess::denyNotHomeroom();
+    }
+
+    /** The editors of a student (DESIGN §24.2): the homeroom teacher of an open classroom of theirs. */
+    public static function editsStudent(User $user, User $student): bool
+    {
+        return self::isHomeroomOf($user, $student, true);
+    }
+
+    private static function isHomeroomOf(User $user, User $student, bool $openOnly): bool
     {
         if (! $user->isTeacher() || ! $user->isActive() || $user->school_id === null) {
             return false;
@@ -78,6 +134,7 @@ class UserPolicy
         return Classroom::query()
             ->where('teacher_id', $user->id)
             ->where('school_id', $user->school_id)
+            ->when($openOnly, fn ($q) => $q->whereNull('closed_at'))
             ->whereHas('students', fn ($q) => $q->whereKey($student->id))
             ->exists();
     }

@@ -10,10 +10,12 @@ import '../router/app_router.dart';
 /// | `appeal_opened`     | teacher | -                   | appeals list         |
 /// | `classroom_work_imported` | teacher | `assignment_id` | answer key (§19.3) |
 /// | `google_reconnect`  | teacher | -                   | settings (reconnect) |
+/// | `course_request`    | teacher | `request_id`, `classroom_id` | requests to decide (§24.7) |
+/// | `course_request_decided` | teacher | `request_id`, `classroom_id`, `course_id` | own requests |
 /// | `results_published` | student | `submission_id`     | result detail        |
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
 /// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
-/// | `grades_published`  | student | `course_id`         | the course grade     |
+/// | `grades_published`  | student | `course_id`, `classroom_id` | that classroom's course grade |
 ///
 /// Only these types are routed; anything else just opens the app. Returns
 /// null when the message is not for this user's role.
@@ -30,6 +32,9 @@ String? routeForPush(Map<String, String> data, User user) {
       'classroom_work_imported' when id('assignment_id') != null =>
         AppRoutes.answerKey(id('assignment_id')!),
       'google_reconnect' => AppRoutes.settings,
+      // Shared homerooms (DESIGN §24.7, §24.20).
+      'course_request' => AppRoutes.courseRequests,
+      'course_request_decided' => AppRoutes.courseRequestsOutgoing,
       _ => null,
     };
   }
@@ -43,8 +48,13 @@ String? routeForPush(Map<String, String> data, User user) {
       // at the top of the results tab.
       'retake_requested' => AppRoutes.student,
       // The course grade was published (§23.7, §23.11).
+      // classroom_id picks that classroom's publication when the course is
+      // taught in two of the student's classrooms (DESIGN §24.28).
       'grades_published' when id('course_id') != null =>
-        AppRoutes.myCourseGrade(id('course_id')!),
+        AppRoutes.myCourseGrade(
+          id('course_id')!,
+          classroomId: id('classroom_id'),
+        ),
       'grades_published' => AppRoutes.student,
       _ => null,
     };

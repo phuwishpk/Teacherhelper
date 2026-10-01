@@ -80,7 +80,7 @@ class AnswerKeyController extends Controller
     public function estimate(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
-        Gate::authorize('view', $assignment);
+        Gate::authorize('update', $assignment);
         ExamGuard::homeworkOnly($assignment);
 
         $kind = $request->input('kind', 'read');

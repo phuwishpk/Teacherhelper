@@ -166,7 +166,7 @@ class StudentAnalysisTest extends TestCase
 
         $mine = $this->asUser($studentA)->getJson('/api/v1/student/analysis')->assertOk()->json('data');
         $this->assertCount(1, $mine);
-        $this->assertSame(['id' => $this->room->id, 'name' => 'ป.5/1'], $mine[0]['classroom']);
+        $this->assertSame(['id' => $this->room->id, 'name' => 'ป.5/1', 'academic_year' => (int) $this->room->academic_year, 'closed' => false], $mine[0]['classroom']);
         $this->assertSame('เก่งมาก ฝึกเศษส่วนต่ออีกนิดนะ', $mine[0]['text']);
         $this->assertSame(['ค 1.1 ป.5/4'], array_column(array_column($mine[0]['next_steps'], 'skill'), 'code'));
         $this->assertArrayNotHasKey('teacher_text', $mine[0]);

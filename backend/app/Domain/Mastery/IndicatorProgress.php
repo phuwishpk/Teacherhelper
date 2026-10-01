@@ -53,11 +53,18 @@ final class IndicatorProgress
 
     /**
      * @param  list<int>|null  $skillIds  from parseIds(); must be skills the school sees (422 otherwise)
+     * @param  list<int>|null  $allowed  the only indicators the caller may see (a subject teacher's
+     *                                   course, DESIGN §24.8); null = all
      * @return array{student_id: int, skill_ids: list<int>, skills: list<array<string, mixed>>, series: list<array<string, mixed>>}
      */
-    public function forStudent(int $studentId, int $schoolId, ?array $skillIds): array
+    public function forStudent(int $studentId, int $schoolId, ?array $skillIds, ?array $allowed = null): array
     {
-        $mastery = Mastery::query()->where('student_id', $studentId)->with('skill')->get()
+        if ($allowed !== null && $skillIds !== null && array_diff($skillIds, $allowed) !== []) {
+            throw ValidationException::withMessages(['skill_ids' => 'ไม่พบตัวชี้วัดที่เลือกในรายวิชานี้']);
+        }
+        $mastery = Mastery::query()->where('student_id', $studentId)
+            ->when($allowed !== null, fn ($q) => $q->whereIn('skill_id', $allowed === [] ? [0] : $allowed))
+            ->with('skill')->get()
             ->filter(fn (Mastery $m) => $m->skill !== null)
             ->sort(fn (Mastery $a, Mastery $b) => strnatcmp($a->skill->code, $b->skill->code) ?: $a->skill_id <=> $b->skill_id)
             ->values();
@@ -65,6 +72,7 @@ final class IndicatorProgress
         if ($skillIds === null) {
             $skillIds = SkillObservation::query()
                 ->where('student_id', $studentId)
+                ->when($allowed !== null, fn ($q) => $q->whereIn('skill_id', $allowed === [] ? [0] : $allowed))
                 ->groupBy('skill_id')
                 ->selectRaw('skill_id, MAX(observed_at) AS last_at')
                 ->orderByDesc('last_at')

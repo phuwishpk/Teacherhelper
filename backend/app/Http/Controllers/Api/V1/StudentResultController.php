@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Review\Appeals;
+use App\Domain\Students\StudentClassrooms;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreAppealRequest;
 use App\Http\Resources\AppealResource;
@@ -27,16 +28,31 @@ class StudentResultController extends Controller
 {
     public const PER_PAGE = 50;
 
+    /** What the resource reads of the assignment: subject, course and classroom labels. */
+    private const LABELS = ['assignment.subject', 'assignment.course:id,code,name', 'assignment.classroom:id,name,academic_year,closed_at'];
+
     public function __construct(private readonly Appeals $appeals) {}
 
-    /** GET /api/v1/student/results -> cursor-paginated StudentResultResource, newest first. */
+    /**
+     * GET /api/v1/student/results?course_id=&classroom_id= -> cursor-paginated
+     * StudentResultResource, newest first, across every classroom of the
+     * student (DESIGN §24.11).
+     */
     public function index(Request $request): AnonymousResourceCollection
     {
+        $filters = StudentClassrooms::filters($request);
         $page = self::published($request)
-            ->with('assignment.subject')
+            ->when($filters['course_id'] !== null || $filters['classroom_id'] !== null, fn (Builder $q) => $q->whereIn(
+                'submissions.assignment_id',
+                Assignment::query()->select('id')
+                    ->when($filters['course_id'] !== null, fn (Builder $a) => $a->where('course_id', $filters['course_id']))
+                    ->when($filters['classroom_id'] !== null, fn (Builder $a) => $a->where('classroom_id', $filters['classroom_id'])),
+            ))
+            ->with(self::LABELS)
             ->orderByDesc('published_at')
             ->orderByDesc('id')
-            ->cursorPaginate(self::PER_PAGE);
+            ->cursorPaginate(self::PER_PAGE)
+            ->withQueryString();
 
         return StudentResultResource::collection($page);
     }
@@ -49,7 +65,7 @@ class StudentResultController extends Controller
     public function show(Request $request, int $submissionId): StudentResultResource
     {
         $submission = self::published($request)
-            ->with(['assignment.subject', 'responses.question', 'responses.appeal'])
+            ->with([...self::LABELS, 'responses.question', 'responses.appeal'])
             ->findOrFail($submissionId);
         Gate::authorize('view', $submission);
         $submission->setAttribute('retake_reason', ClassroomSubmissionImport::query()

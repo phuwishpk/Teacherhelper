@@ -77,6 +77,11 @@ return [
         'budget_seconds' => max(1, (int) env('CLASSROOM_SYNC_BUDGET_SECONDS', 40)),
     ],
 
+    // Classroom import (DESIGN §24.10): the preview suggests binding the
+    // course to an existing open classroom of the school once that
+    // classroom holds at least this share of the course roster.
+    'classroom_suggest_threshold' => min(1.0, max(0.01, (float) env('CLASSROOM_SUGGEST_THRESHOLD', 0.7))),
+
     // Answers decided by code before any Gemini call (DESIGN §21.3):
     // - blank_ink_max: an answer box whose ink_ratio is below this gets 0
     //   points as "ไม่ได้ตอบ" (auto_rule blank_ink) and lands in the `look`

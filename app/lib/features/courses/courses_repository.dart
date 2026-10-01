@@ -46,6 +46,15 @@ abstract class CoursesRepository {
   /// `GET /courses?classroom_id=` (not paginated).
   Future<List<Course>> list({int? classroomId});
 
+  /// `GET /classrooms/{id}/courses` (DESIGN §24.12 B): the courses taught
+  /// in a classroom with their teachers; a subject teacher gets only their
+  /// own.
+  Future<List<ClassroomCourse>> taughtIn(int classroomId);
+
+  /// `DELETE /classrooms/{id}/courses/{course_id}` (DESIGN §24.7 step 5);
+  /// 409 `course_in_use` while the room has assignments of the course.
+  Future<void> unbind(int classroomId, int courseId);
+
   /// `GET /courses/{id}` with indicators, units and lesson plans.
   Future<Course> get(int id);
 
@@ -122,6 +131,17 @@ class ApiCoursesRepository implements CoursesRepository {
       queryParameters: {'classroom_id': ?classroomId},
     );
     return unwrapList(res.data).map(Course.fromJson).toList();
+  }
+
+  @override
+  Future<List<ClassroomCourse>> taughtIn(int classroomId) async {
+    final res = await _dio.get<Object?>('/classrooms/$classroomId/courses');
+    return unwrapList(res.data).map(ClassroomCourse.fromJson).toList();
+  }
+
+  @override
+  Future<void> unbind(int classroomId, int courseId) async {
+    await _dio.delete<Object?>('/classrooms/$classroomId/courses/$courseId');
   }
 
   @override

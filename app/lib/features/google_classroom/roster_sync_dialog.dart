@@ -21,7 +21,7 @@ Future<void> showRosterSyncResult(
   }
   await showDialog<void>(
     context: context,
-    barrierDismissible: result.added.isEmpty,
+    barrierDismissible: result.withPins.isEmpty,
     builder: (context) => RosterSyncResultDialog(result: result),
   );
 }
@@ -38,6 +38,11 @@ class RosterSyncResultDialog extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final added = result.added;
+    final pins = result.withPins;
+    TextStyle? pinStyle() => theme.textTheme.titleMedium?.copyWith(
+      fontFamily: 'monospace',
+      letterSpacing: 2,
+    );
 
     Widget heading(String text) => Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 4),
@@ -73,13 +78,25 @@ class RosterSyncResultDialog extends StatelessWidget {
                   row(
                     s.studentNumber,
                     s.name,
-                    trailing: SelectableText(
-                      s.pin,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontFamily: 'monospace',
-                        letterSpacing: 2,
-                      ),
-                    ),
+                    trailing: SelectableText(s.pin, style: pinStyle()),
+                  ),
+              ],
+              if (result.enrolled.isNotEmpty) ...[
+                heading(
+                  'นักเรียนเดิมของโรงเรียนเข้าห้อง ${result.enrolled.length} คน',
+                ),
+                Text(
+                  'ใช้บัญชี PIN และบัตร QR เดิม '
+                  '(คนที่ยังไม่เคยมี PIN ได้ PIN ใหม่ แสดงครั้งเดียว)',
+                  style: muted,
+                ),
+                for (final s in result.enrolled)
+                  row(
+                    s.studentNumber,
+                    s.name,
+                    trailing: s.hasPin
+                        ? SelectableText(s.pin, style: pinStyle())
+                        : null,
                   ),
               ],
               if (result.left.isNotEmpty) ...[
@@ -97,14 +114,31 @@ class RosterSyncResultDialog extends StatelessWidget {
                 ),
                 for (final s in result.rematched) row(s.studentNumber, s.name),
               ],
+              if (result.notInClassroom.isNotEmpty) ...[
+                heading(
+                  'ไม่อยู่ในรายชื่อห้องนี้ ${result.notInClassroom.length} บัญชี',
+                ),
+                Text(
+                  'อยู่ในคอร์สของคุณแต่ไม่ใช่นักเรียนของห้องนี้ '
+                  'แจ้งครูประจำชั้นให้เพิ่มเข้าห้อง แล้วซิงก์อีกครั้ง',
+                  style: muted,
+                ),
+                for (final a in result.notInClassroom)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      a.email == null ? a.name : '${a.name} (${a.email})',
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
       ),
       actions: [
-        if (added.isNotEmpty) ...[
+        if (pins.isNotEmpty) ...[
           TextButton.icon(
-            onPressed: () => copyPins(context, added),
+            onPressed: () => copyPins(context, pins),
             icon: const Icon(Icons.copy_all_outlined),
             label: const Text('คัดลอก PIN'),
           ),
@@ -119,7 +153,7 @@ class RosterSyncResultDialog extends StatelessWidget {
           ),
       ],
     );
-    if (added.isEmpty) return dialog;
+    if (pins.isEmpty) return dialog;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {

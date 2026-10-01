@@ -1,4 +1,5 @@
 import '../assignments/answer_key_models.dart';
+import '../student/student_labels.dart';
 
 /// Most files (pages) one hand-in takes: the server counts every PDF page
 /// and refuses more than `SUBMISSION_MAX_PAGES` (5) in all with 422
@@ -20,6 +21,8 @@ class StudentAssignment {
     required this.title,
     this.classroomName,
     this.subjectName,
+    this.course,
+    this.classroom,
     this.dueAt,
     this.acceptLate = true,
     this.canSubmit = true,
@@ -37,8 +40,23 @@ class StudentAssignment {
   final String title;
   final String? classroomName;
   final String? subjectName;
+
+  /// The course of the work, or null for older work without one
+  /// (DESIGN §24.26).
+  final CourseRef? course;
+
+  /// The classroom label (`{id, name, academic_year, closed}`, §24.11).
+  final ClassroomLabel? classroom;
   final DateTime? dueAt;
   final bool acceptLate;
+
+  /// The subject group of the student's combined view (§24.11).
+  SubjectTag get tag => SubjectTag(
+    course: course,
+    subjectName: subjectName,
+    classroom: classroom,
+    classroomName: classroomName,
+  );
 
   /// False once the due time passed on an assignment that refuses late
   /// work (the server answers 422 `submission_late`).
@@ -65,6 +83,8 @@ class StudentAssignment {
       title: json['title'] as String? ?? 'การบ้าน',
       classroomName: classroom is Map ? classroom['name'] as String? : null,
       subjectName: json['subject_name'] as String?,
+      course: CourseRef.fromJson(json['course']),
+      classroom: ClassroomLabel.fromJson(classroom),
       dueAt: _time(json['due_at']),
       acceptLate: json['accept_late'] != false,
       canSubmit: json['can_submit'] != false,

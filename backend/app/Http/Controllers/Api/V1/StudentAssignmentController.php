@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Exams\ExamGuard;
 use App\Domain\Pages\PageUploads;
 use App\Domain\Pages\WholePageSubmissions;
+use App\Domain\Students\StudentClassrooms;
+use App\Domain\Students\StudentHandIn;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
@@ -39,22 +41,28 @@ class StudentAssignmentController extends Controller
     public function __construct(private readonly WholePageSubmissions $submissions) {}
 
     /**
-     * GET /api/v1/student/assignments -> {data: [{id, title, classroom: {id,
-     * name}, subject_name, due_at, accept_late, can_submit, submission_id,
-     * submitted_at, late, status: not_submitted|submitted|published}]}.
-     * Only `ready` assignments (a draft freeform one appears once its key is
-     * approved, §19.5; closed ones are gone). Soonest due first, no due date
-     * last. can_submit = false once the due time passed on an assignment
-     * that refuses late work.
+     * GET /api/v1/student/assignments?course_id=&classroom_id= -> {data:
+     * [{id, title, course: {id, code, name}|null, classroom: {id, name,
+     * academic_year, closed}, subject_name, due_at, accept_late, can_submit,
+     * submission_id, submitted_at, late, status:
+     * not_submitted|submitted|published}]} across every classroom of the
+     * student (DESIGN §24.11). Only `ready` assignments (a draft freeform
+     * one appears once its key is approved, §19.5; closed ones are gone).
+     * Soonest due first, no due date last. can_submit = false once the due
+     * time passed on an assignment that refuses late work, and always in a
+     * closed classroom (read-only, §24.6).
      */
     public function index(Request $request): JsonResponse
     {
         $studentId = (int) $request->user()->id;
+        $filters = StudentClassrooms::filters($request);
         $assignments = self::own($request)
             ->where('status', Assignment::STATUS_READY)
             // Exams are done on paper only (DESIGN §22.1).
             ->where('kind', Assignment::KIND_HOMEWORK)
-            ->with(['classroom:id,name', 'subject:id,name'])
+            ->when($filters['course_id'] !== null, fn (Builder $q) => $q->where('course_id', $filters['course_id']))
+            ->when($filters['classroom_id'] !== null, fn (Builder $q) => $q->where('classroom_id', $filters['classroom_id']))
+            ->with(['classroom:id,name,academic_year,closed_at', 'subject:id,name', 'course:id,code,name'])
             ->orderByRaw('CASE WHEN due_at IS NULL THEN 1 ELSE 0 END')
             ->orderBy('due_at')
             ->orderByDesc('id')
@@ -73,11 +81,12 @@ class StudentAssignmentController extends Controller
             return [
                 'id' => $assignment->id,
                 'title' => $assignment->title,
-                'classroom' => ['id' => $assignment->classroom_id, 'name' => $assignment->classroom?->name],
+                'course' => StudentClassrooms::course($assignment->course),
+                'classroom' => StudentClassrooms::label($assignment->classroom),
                 'subject_name' => $assignment->subject?->name,
                 'due_at' => $assignment->due_at?->toIso8601String(),
                 'accept_late' => (bool) $assignment->accept_late,
-                'can_submit' => ! self::refusesLate($assignment),
+                'can_submit' => StudentHandIn::canSubmit($assignment),
                 'submission_id' => $submission?->id,
                 'submitted_at' => $submission?->submitted_at?->toIso8601String(),
                 'late' => (bool) ($submission?->late ?? false),
@@ -104,7 +113,7 @@ class StudentAssignmentController extends Controller
         if (! $assignment->isReady()) {
             throw new ApiException('การบ้านนี้ยังไม่เปิดให้ส่ง หรือปิดรับแล้ว', 'assignment_not_ready', 409);
         }
-        if (self::refusesLate($assignment)) {
+        if (StudentHandIn::refusesLate($assignment)) {
             throw new ApiException('เลยกำหนดส่งแล้ว และการบ้านนี้ไม่รับงานส่งช้า', 'submission_late', 422);
         }
 
@@ -113,7 +122,7 @@ class StudentAssignmentController extends Controller
         $received = $this->submissions->receive($assignment, (int) $student->id, $files, SubmissionPage::SOURCE_STUDENT_APP, [
             'uploaded_by' => $student->id,
             'submitted_at' => $now,
-            'late' => self::isLate($assignment),
+            'late' => StudentHandIn::isLate($assignment),
         ], false);
         $submission = $received['submission'];
 
@@ -139,16 +148,6 @@ class StudentAssignmentController extends Controller
             'classroom_id',
             ClassroomStudent::query()->select('classroom_id')->where('student_id', $request->user()->id),
         );
-    }
-
-    private static function isLate(Assignment $assignment): bool
-    {
-        return $assignment->due_at !== null && now()->greaterThan($assignment->due_at);
-    }
-
-    private static function refusesLate(Assignment $assignment): bool
-    {
-        return ! $assignment->accept_late && self::isLate($assignment);
     }
 
     private static function status(?Submission $submission): string

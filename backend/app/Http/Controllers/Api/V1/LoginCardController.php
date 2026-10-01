@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Students\LoginCardPrintService;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -24,21 +25,38 @@ class LoginCardController extends Controller
 {
     public function __construct(private readonly LoginCardPrintService $prints) {}
 
-    /** POST /api/v1/classrooms/{id}/login-cards -> 202 {data: print} */
+    /**
+     * POST /api/v1/classrooms/{id}/login-cards {student_ids?[]} -> 202 {data: print}:
+     * the whole classroom, or only the given students of it (DESIGN §24.4).
+     */
     public function storeForClassroom(Request $request, int $id): JsonResponse
     {
         $teacher = $request->user();
-        $classroom = Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
-            ->findOrFail($id);
+        // Seen as homeroom or subject teacher (else 404); printing is the homeroom teacher's (§24.8).
+        $classroom = ClassroomAccess::classrooms($teacher)->findOrFail($id);
         Gate::authorize('printLoginCards', $classroom);
+        $data = $request->validate([
+            'student_ids' => ['sometimes', 'array', 'list', 'min:1', 'max:100'],
+            'student_ids.*' => ['integer', 'min:1', 'max:999999999999999999', 'distinct'],
+        ], [
+            'student_ids.min' => 'เลือกนักเรียนอย่างน้อย 1 คน',
+            'student_ids.*.integer' => 'รหัสนักเรียนไม่ถูกต้อง',
+        ]);
+        $studentIds = isset($data['student_ids']) ? array_map('intval', $data['student_ids']) : null;
 
         if (! $classroom->students()->exists()) {
             throw new ApiException('ห้องนี้ยังไม่มีนักเรียน', 'classroom_empty', 422);
         }
+        if ($studentIds !== null) {
+            $found = $classroom->students()->whereIn('users.id', $studentIds)->pluck('users.id')->map(fn ($id) => (int) $id)->all();
+            foreach ($studentIds as $i => $studentId) {
+                if (! in_array($studentId, $found, true)) {
+                    throw new ApiException('นักเรียนบางคนไม่ได้อยู่ในห้องนี้', 'validation_failed', 422, ["student_ids.{$i}" => ['นักเรียนคนนี้ไม่ได้อยู่ในห้องนี้']]);
+                }
+            }
+        }
 
-        $print = $this->prints->queueForClassroom($classroom, $teacher);
+        $print = $this->prints->queueForClassroom($classroom, $teacher, $studentIds);
 
         return (new LoginCardPrintResource($print->refresh()))->response()->setStatusCode(202);
     }

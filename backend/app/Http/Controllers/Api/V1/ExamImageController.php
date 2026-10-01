@@ -67,7 +67,7 @@ class ExamImageController extends Controller
     public function showQuestion(Request $request, int $id): StreamedResponse
     {
         $question = self::ownQuestions($request)->findOrFail($id);
-        Gate::authorize('update', $question);
+        Gate::authorize('view', $question);
 
         return self::stream($question->prompt_image_path);
     }
@@ -107,7 +107,7 @@ class ExamImageController extends Controller
     public function showOption(Request $request, int $id): StreamedResponse
     {
         $option = self::ownOptions($request)->findOrFail($id);
-        Gate::authorize('update', $option->question);
+        Gate::authorize('view', $option->question);
 
         return self::stream($option->image_path);
     }

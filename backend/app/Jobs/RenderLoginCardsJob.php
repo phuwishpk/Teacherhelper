@@ -35,7 +35,10 @@ class RenderLoginCardsJob implements ShouldQueue
      */
     public int $timeout = 45;
 
-    public function __construct(public readonly int $printId)
+    /**
+     * @param  list<int>|null  $studentIds  a classroom print of only these students (DESIGN §24.4); null = the whole classroom
+     */
+    public function __construct(public readonly int $printId, public readonly ?array $studentIds = null)
     {
         $this->onQueue('pdf');
     }
@@ -118,7 +121,9 @@ class RenderLoginCardsJob implements ShouldQueue
         if ($print->classroom_id !== null) {
             $classroom = $print->classroom;
 
-            return $classroom->students()->get()
+            return $classroom->students()
+                ->when($this->studentIds !== null, fn ($q) => $q->whereIn('users.id', $this->studentIds))
+                ->get()
                 ->map(fn (User $student) => [
                     'student' => $student,
                     'student_number' => (int) $student->pivot->student_number,
@@ -133,9 +138,14 @@ class RenderLoginCardsJob implements ShouldQueue
             return [];
         }
 
-        // A student normally belongs to one classroom; the newest wins when re-enrolled.
+        // The card names one classroom: the newest open one (DESIGN §24.4: the
+        // same card logs in through any of them), else the newest closed one.
         /** @var Classroom|null $classroom */
-        $classroom = $student->classrooms()->orderByDesc('classrooms.academic_year')->orderByDesc('classrooms.id')->first();
+        $classroom = $student->classrooms()
+            ->orderByRaw('CASE WHEN classrooms.closed_at IS NULL THEN 0 ELSE 1 END')
+            ->orderByDesc('classrooms.academic_year')
+            ->orderByDesc('classrooms.id')
+            ->first();
         if ($classroom === null) {
             return [];
         }

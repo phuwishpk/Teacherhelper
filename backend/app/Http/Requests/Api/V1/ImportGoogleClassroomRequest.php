@@ -7,9 +7,10 @@ use App\Http\Requests\Concerns\ValidatesAfterAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * POST /classrooms/import-google (DESIGN §19.9) {course_id, name, grade_level,
- * academic_year, students: [{google_user_id, student_number}],
- * removed: [google_user_id]}. Names and e-mails are never taken from here:
+ * POST /classrooms/import-google (DESIGN §19.9, §24.10) {course_id, name,
+ * grade_level, academic_year, students: [{google_user_id, student_number,
+ * student_id?}], removed: [google_user_id]}. student_id enrols an existing
+ * student of the school. Names and e-mails are never taken from here:
  * ClassroomImporter reads them from Google again.
  */
 class ImportGoogleClassroomRequest extends FormRequest
@@ -35,9 +36,10 @@ class ImportGoogleClassroomRequest extends FormRequest
             'grade_level' => ['required', 'integer', 'min:1', 'max:12'],
             'academic_year' => ['required', 'integer', 'min:2500', 'max:2700'],
             'students' => ['present', 'list', 'max:'.self::MAX_ROWS],
-            'students.*' => ['required', 'array:google_user_id,student_number'],
+            'students.*' => ['required', 'array:google_user_id,student_number,student_id'],
             'students.*.google_user_id' => ['required', 'string', 'max:64', 'distinct'],
             'students.*.student_number' => ['required', 'integer', 'min:1', 'max:'.ClassroomImporter::MAX_STUDENT_NUMBER, 'distinct'],
+            'students.*.student_id' => ['sometimes', 'nullable', 'integer', 'min:1', 'distinct'],
             'removed' => ['sometimes', 'list', 'max:'.self::MAX_ROWS],
             'removed.*' => ['required', 'string', 'max:64', 'distinct'],
         ];
@@ -61,7 +63,7 @@ class ImportGoogleClassroomRequest extends FormRequest
             'students.present' => 'ไม่มีรายชื่อนักเรียน (students)',
             'students.list' => 'students ต้องเป็น array',
             'students.max' => 'รายชื่อนักเรียนมากเกินไป',
-            'students.*.array' => 'แต่ละแถวต้องมีแค่ google_user_id และ student_number',
+            'students.*.array' => 'แต่ละแถวต้องมีแค่ google_user_id, student_number และ student_id',
             'students.*.google_user_id.required' => 'ไม่มี google_user_id',
             'students.*.google_user_id.distinct' => 'บัญชี Google เดียวกันถูกส่งมาซ้ำ',
             'students.*.student_number.required' => 'กรุณากรอกเลขที่',
@@ -69,13 +71,15 @@ class ImportGoogleClassroomRequest extends FormRequest
             'students.*.student_number.min' => 'เลขที่ต้องไม่น้อยกว่า 1',
             'students.*.student_number.max' => 'เลขที่ต้องไม่เกิน '.ClassroomImporter::MAX_STUDENT_NUMBER,
             'students.*.student_number.distinct' => 'เลขที่ซ้ำกัน',
+            'students.*.student_id.integer' => 'student_id ต้องเป็นตัวเลข',
+            'students.*.student_id.distinct' => 'นักเรียนคนเดียวกันถูกเลือกให้หลายบัญชี',
             'removed.list' => 'removed ต้องเป็น array',
             'removed.*.distinct' => 'บัญชีที่เอาออกซ้ำกัน',
         ];
     }
 
     /**
-     * @return array{course_id: string, name: string, grade_level: int, academic_year: int, students: list<array{google_user_id: string, student_number: int}>, removed: list<string>}
+     * @return array{course_id: string, name: string, grade_level: int, academic_year: int, students: list<array{google_user_id: string, student_number: int, student_id: int|null}>, removed: list<string>}
      */
     public function importInput(): array
     {
@@ -87,6 +91,7 @@ class ImportGoogleClassroomRequest extends FormRequest
             'students' => array_map(fn (array $s) => [
                 'google_user_id' => (string) $s['google_user_id'],
                 'student_number' => (int) $s['student_number'],
+                'student_id' => isset($s['student_id']) ? (int) $s['student_id'] : null,
             ], array_values($this->validated('students'))),
             'removed' => array_map('strval', array_values($this->validated('removed', []))),
         ];

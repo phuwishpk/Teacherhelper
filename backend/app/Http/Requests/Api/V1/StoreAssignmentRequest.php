@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Exams\ExamVersions;
 use App\Models\Assignment;
 use Illuminate\Foundation\Http\FormRequest;
@@ -16,7 +17,8 @@ use Illuminate\Validation\Rule;
  * §8.3, §19.5, §20.1, §22.15, §23.3). The exam fields
  * are refused on homework; an exam needs due_at (the exam date) and a
  * manual exam manual_full_marks. The classroom must be one the
- * teacher teaches; the course must be bound to it and the lesson plan be
+ * teacher teaches (homeroom or subject, §24.8); the course must be one of
+ * the teacher's own courses bound to it and the lesson plan be
  * one of the course (checked in the controller). The subject comes from
  * the course (a subject_id sent by an older app is ignored).
  */
@@ -38,9 +40,12 @@ class StoreAssignmentRequest extends FormRequest
             'classroom_id' => [
                 'required',
                 'integer',
+                // A classroom the teacher is the homeroom or a subject teacher of (DESIGN §24.8).
                 Rule::exists('classrooms', 'id')
-                    ->where('teacher_id', $teacher?->id)
-                    ->where('school_id', $teacher?->school_id),
+                    ->where('school_id', $teacher?->school_id)
+                    ->where(fn ($q) => $teacher === null ? $q->whereRaw('1 = 0') : $q
+                        ->where('teacher_id', $teacher->id)
+                        ->orWhereIn('id', ClassroomAccess::subjectClassroomIds($teacher))),
             ],
             'course_id' => ['required', 'integer', 'min:1'],
             'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],

@@ -38,19 +38,41 @@ class _ClassroomMasteryScreenState
   late int? _courseId = widget.initialCourseId;
   int? _unitId;
 
-  ClassroomMasteryQuery get _query =>
-      (classroomId: widget.classroomId, courseId: _courseId, unitId: _unitId);
-
   @override
   Widget build(BuildContext context) {
     final classroomId = widget.classroomId;
-    final mastery = ref.watch(classroomMasteryProvider(_query));
-    final name = ref.watch(classroomProvider(classroomId)).value?.name;
-    final courses =
-        ref.watch(classroomCoursesProvider(classroomId)).value ?? const [];
-    final units = _courseId == null
+    final classroom = ref.watch(classroomProvider(classroomId));
+    final name = classroom.value?.name;
+    // A subject teacher sees only their own courses and must pick one
+    // (DESIGN §24.20); the homeroom teacher sees every course of the room.
+    final subject = classroom.value?.isSubject ?? false;
+    final teaching = ref.watch(classroomTeachingProvider(classroomId));
+    final courses = teaching.value ?? const <ClassroomCourse>[];
+    final courseId = _courseId ?? (subject ? courses.firstOrNull?.id : null);
+    final picked = courses.where((c) => c.id == courseId).firstOrNull;
+    final query = (
+      classroomId: classroomId,
+      courseId: courseId,
+      unitId: _unitId,
+    );
+    // Asking without a course is refused for a subject teacher: wait for
+    // their courses first.
+    final noCourse = subject && courseId == null;
+    final AsyncValue<ClassroomMastery> mastery =
+        classroom.isLoading && !classroom.hasValue
+        ? const AsyncLoading()
+        : noCourse
+        ? (teaching.hasError
+              ? AsyncError(
+                  teaching.error!,
+                  teaching.stackTrace ?? StackTrace.empty,
+                )
+              : const AsyncLoading())
+        : ref.watch(classroomMasteryProvider(query));
+    // Units come from the course itself: only the teacher's own course.
+    final units = courseId == null || !(picked?.isMine ?? true)
         ? const <CourseUnit>[]
-        : ref.watch(courseDetailProvider(_courseId!)).value?.units ??
+        : ref.watch(courseDetailProvider(courseId)).value?.units ??
               const <CourseUnit>[];
     final filters = Wrap(
       spacing: 12,
@@ -60,15 +82,24 @@ class _ClassroomMasteryScreenState
           width: 260,
           child: DropdownButtonFormField<int?>(
             key: const ValueKey('heatmap_course'),
-            initialValue: courses.any((c) => c.id == _courseId)
-                ? _courseId
+            initialValue: courses.any((c) => c.id == courseId)
+                ? courseId
                 : null,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'รายวิชา'),
             items: [
-              const DropdownMenuItem(value: null, child: Text('ทุกทักษะ')),
+              if (!subject)
+                const DropdownMenuItem(value: null, child: Text('ทุกทักษะ')),
               for (final c in courses)
-                DropdownMenuItem(value: c.id, child: Text(c.title)),
+                DropdownMenuItem(
+                  value: c.id,
+                  child: Text(
+                    c.isMine || c.teacher == null
+                        ? c.title
+                        : '${c.title} (${c.teacher!.name})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
             ],
             onChanged: (v) => setState(() {
               _courseId = v;
@@ -76,11 +107,11 @@ class _ClassroomMasteryScreenState
             }),
           ),
         ),
-        if (_courseId != null && units.isNotEmpty)
+        if (courseId != null && units.isNotEmpty)
           SizedBox(
             width: 220,
             child: DropdownButtonFormField<int?>(
-              key: ValueKey('heatmap_unit_$_courseId'),
+              key: ValueKey('heatmap_unit_$courseId'),
               initialValue: _unitId,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'หน่วย'),
@@ -101,49 +132,60 @@ class _ClassroomMasteryScreenState
       appBar: AppBar(
         title: Text(name == null ? 'ทักษะของห้อง' : 'ทักษะของห้อง $name'),
       ),
-      body: AsyncView(
-        value: mastery,
-        onRetry: () => ref.invalidate(classroomMasteryProvider(_query)),
-        data: (m) => RefreshIndicator(
-          onRefresh: () => ref.refresh(classroomMasteryProvider(_query).future),
-          child: ContentColumn(
-            maxWidth: 1100,
-            child: ListView(
-              children: [
-                if (courses.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  filters,
-                  const SizedBox(height: 12),
-                ],
-                if (m.skills.isEmpty || m.students.isEmpty)
-                  EmptyView(
-                    icon: Icons.grid_on_outlined,
-                    title: _courseId == null
-                        ? 'ยังไม่มีข้อมูลทักษะ'
-                        : 'ยังไม่มีตัวชี้วัดในส่วนนี้',
-                    message: _courseId == null
-                        ? 'heatmap จะแสดงหลังเผยแพร่ผลการบ้านที่ติดตัวชี้วัดไว้ '
-                              'หรือหลังนักเรียนทำแบบฝึก'
-                        : 'เพิ่มตัวชี้วัดให้รายวิชา หน่วย หรือแผนการสอนก่อน',
-                  )
-                else ...[
-                  _WeakSkillsCard(mastery: m),
-                  const SizedBox(height: 12),
-                  const MasteryLegend(),
-                  const SizedBox(height: 12),
-                  MasteryHeatmap(
-                    mastery: m,
-                    onStudent: (s) => context.push(
-                      AppRoutes.studentMastery(classroomId, s.id),
-                    ),
+      body: noCourse && teaching.hasValue
+          ? const EmptyView(
+              key: ValueKey('heatmap_no_course'),
+              icon: Icons.menu_book_outlined,
+              title: 'ยังไม่มีรายวิชาของคุณในห้องนี้',
+              message: 'ส่งคำขอผูกรายวิชากับห้องนี้ แล้วรอครูประจำชั้นอนุมัติ',
+            )
+          : AsyncView(
+              value: mastery,
+              onRetry: () {
+                ref.invalidate(classroomTeachingProvider(classroomId));
+                ref.invalidate(classroomMasteryProvider(query));
+              },
+              data: (m) => RefreshIndicator(
+                onRefresh: () =>
+                    ref.refresh(classroomMasteryProvider(query).future),
+                child: ContentColumn(
+                  maxWidth: 1100,
+                  child: ListView(
+                    children: [
+                      if (courses.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        filters,
+                        const SizedBox(height: 12),
+                      ],
+                      if (m.skills.isEmpty || m.students.isEmpty)
+                        EmptyView(
+                          icon: Icons.grid_on_outlined,
+                          title: courseId == null
+                              ? 'ยังไม่มีข้อมูลทักษะ'
+                              : 'ยังไม่มีตัวชี้วัดในส่วนนี้',
+                          message: courseId == null
+                              ? 'heatmap จะแสดงหลังเผยแพร่ผลการบ้านที่ติดตัวชี้วัดไว้ '
+                                    'หรือหลังนักเรียนทำแบบฝึก'
+                              : 'เพิ่มตัวชี้วัดให้รายวิชา หน่วย หรือแผนการสอนก่อน',
+                        )
+                      else ...[
+                        _WeakSkillsCard(mastery: m),
+                        const SizedBox(height: 12),
+                        const MasteryLegend(),
+                        const SizedBox(height: 12),
+                        MasteryHeatmap(
+                          mastery: m,
+                          onStudent: (s) => context.push(
+                            AppRoutes.studentMastery(classroomId, s.id),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 24),
-              ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }

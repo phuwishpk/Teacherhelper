@@ -16,8 +16,11 @@ use App\Domain\Notifications\FcmNotifier;
 use App\Domain\Notifications\LogNotifier;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Worksheets\QrSigner;
+use App\Models\ClassroomCourseRequest;
+use App\Policies\CourseRequestPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -78,6 +81,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // DESIGN §24.8 names it CourseRequestPolicy (auto-discovery would look for ClassroomCourseRequestPolicy).
+        Gate::policy(ClassroomCourseRequest::class, CourseRequestPolicy::class);
+
         // Rate limits (DESIGN §7.4). Every limiter is named: Laravel prefixes a
         // named limiter's key with its name, so each one below is its own
         // bucket. (A bare `throttle:N,M` keys on the user id alone, so every
@@ -103,7 +109,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('student-auth', function (Request $request) {
             $limits = [Limit::perMinute(120)->by('ip|'.$request->ip())];
 
-            if ($request->routeIs('api.auth.student.pin')) {
+            if ($request->routeIs('api.auth.student.pin', 'api.auth.google.link-with-pin')) {
                 $limits[] = Limit::perMinute(10)->by(implode('|', [
                     'pin',
                     $request->ip(),
@@ -127,6 +133,11 @@ class AppServiceProvider extends ServiceProvider
         // GET /google/oauth/callback has no login; a bad state is refused
         // before anything reaches Google, so this only caps probing.
         RateLimiter::for('google-oauth-callback', fn (Request $request) => Limit::perMinute(20)->by((string) $request->ip()));
+
+        // Google sign-in (DESIGN §24.9.5): ID tokens are signed, so this only caps
+        // probing and the work of verifying; the browser flow's callback has no login.
+        RateLimiter::for('google-signin', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
+        RateLimiter::for('google-signin-callback', fn (Request $request) => Limit::perMinute(20)->by((string) $request->ip()));
 
         // Endpoints that reach Gemini directly or queue a Gemini job (they
         // cost the teacher's or the school's quota), and the student write

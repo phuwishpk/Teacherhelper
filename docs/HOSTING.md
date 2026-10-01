@@ -255,6 +255,14 @@ GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REDIRECT_URI=https://teacherhelper.phuwish.com/google/oauth/callback   # ว่าง = APP_URL + /google/oauth/callback ต้องตรงกับที่ลงทะเบียนใน Google (§6.3)
 GOOGLE_TIMEOUT=20
 GOOGLE_CLASSROOM_APP_LINK=
+CLASSROOM_SUGGEST_THRESHOLD=0.7       # นำเข้าคอร์ส: เสนอ "ผูกกับห้องที่มีอยู่" เมื่อนักเรียนในคอร์สอยู่ห้องเดียว ≥ 70% (DESIGN §24.10)
+
+# ---- เข้าสู่ระบบด้วย Google (§6.4) คนละ project กับ Classroom ----
+GOOGLE_SIGNIN_CLIENT_IDS=             # client ID แบบ Web ของ project sign-in (ตัวแรก) ว่าง = ปิด ทุก route ตอบ 503 google_signin_not_configured
+GOOGLE_SIGNIN_CLIENT_SECRET=          # ใช้กับทางเว็บเท่านั้น (Flutter web) production ที่ใช้แต่แอป Android เว้นว่างได้
+GOOGLE_SIGNIN_REDIRECT_URI=           # ว่าง = APP_URL + /auth/google/callback ต้องตรงกับที่ลงทะเบียนใน §6.4 ข้อ 4
+GOOGLE_SIGNIN_APP_URL=                # ที่อยู่ของแอปเว็บที่ callback ส่งกลับ ว่าง = ปิดทางเว็บ (Android ยังใช้ได้)
+GOOGLE_SIGNIN_MAX_AGE=600             # วินาทีที่รับ ID token หลัง Google ออกให้
 ```
 
 คำเตือนเรื่อง key
@@ -365,6 +373,7 @@ CI (`.github/workflows/backend.yml`) รัน test บน PHP 8.3 + MariaDB, pi
 1. Websites & Domains > Git > **Pull Updates** → **Deploy** (ถ้าเปิด Automatic deployment ไว้ ขั้นนี้เกิดเองเมื่อ push)
 2. ถ้า commit นั้นแก้ `composer.lock`: ทำ §4.3 ซ้ำ (สลับ docroot → Composer Install → สลับกลับ) หรืออัปโหลด `vendor.zip` ใหม่
 3. `eduvision-maintenance` Run Now: `migrate --force` (ถ้ามี migration ใหม่; ดู output)
+   - **รอบบัญชีนักเรียนระดับโรงเรียน (DESIGN §24) มี migration 4 ไฟล์** (`2026_10_01_000005` ถึง `2026_10_02_000002`) ตัวสุดท้าย**สร้าง `classroom_google_links` ใหม่แล้วคัดลอกแถว** (เปลี่ยน primary key) **export database จาก phpMyAdmin ก่อน** (§9) ทดสอบ up → down → up บน MariaDB 11.8 ในเครื่องแล้ว แต่ยังไม่เคยรันบน MariaDB ของ hosting ถ้า output มี error ให้หยุด อย่ารันซ้ำ แล้วส่ง output มาดู
 4. Run Now: `optimize:clear` → `optimize` → `filament:optimize` (ทุกครั้ง เพราะ route/config/view ถูก cache ไว้)
 5. `curl -s https://teacherhelper.phuwish.com/api/v1/health | jq .` และเปิด `/admin` หนึ่งหน้า
 6. ถ้าแอปเวอร์ชันใหม่ต้องการ API ใหม่ ให้ deploy server **ก่อน** แจก APK
@@ -377,7 +386,7 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 
 ## 6. บริการภายนอก (ไม่บังคับ)
 
-ทุกอย่างในหมวดนี้ปิดได้: ระบบตรวจงานทำงานด้วย key ของครู, push ลง log, และ Classroom ตอบ `503 google_not_configured`
+ทุกอย่างในหมวดนี้ปิดได้: ระบบตรวจงานทำงานด้วย key ของครู, push ลง log, Classroom ตอบ `503 google_not_configured` และ Google sign-in ตอบ `503 google_signin_not_configured` (แอปซ่อนปุ่ม)
 
 ### 6.1 Gemini (DESIGN §10.1)
 
@@ -409,6 +418,41 @@ Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนห
 5. hosting ต้องเรียก `oauth2.googleapis.com`, `classroom.googleapis.com`, `www.googleapis.com` ออกไปได้ (probe ตรวจ `oauth2.googleapis.com` แล้ว) cron ซิงก์ทุก 5 นาทีและดาวน์โหลดไฟล์ที่นักเรียนแนบบน server (ไฟล์ละไม่เกิน `SUBMISSION_MAX_FILE_MB`)
 6. ทดสอบจากแอป: ตั้งค่า > เชื่อม Google Classroom → (ผ่านเบราว์เซอร์: หน้า "เชื่อม Google Classroom สำเร็จ" ที่ `/google/oauth/callback`) → `GET /api/v1/google/status` ตอบ `configured: true, connected: true` ถ้าหน้า Google ขึ้น `Error 400: redirect_uri_mismatch` แปลว่า URI ในข้อ 2 กับ `.env` ไม่ตรงกัน (ดู `redirect_uri` ในลิงก์ที่แอปเปิดได้)
 7. ถ้า secret หลุด: Credentials > เลือก Web client > **Reset secret** แล้วแก้ `.env`
+
+### 6.4 เข้าสู่ระบบด้วย Google (DESIGN §24.9, KICKOFF ส่วนที่ 6 ข้อ G9–G11)
+
+Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** เพราะขอแค่ `openid email profile` ซึ่ง publish ได้โดยไม่ต้องผ่าน verification ส่วน project ของ Classroom (§6.3) ยังอยู่โหมด Testing ตามเดิม ไม่ต้องเปิด API ใดเลย (ใช้แค่ ID token) ไม่ทำส่วนนี้ = ปุ่ม Google ไม่แสดงในแอปและทุกอย่างอื่นใช้ได้ตามปกติ
+
+1. **สร้าง project** Google Cloud Console → เลือก project (มุมซ้ายบน) → **New project** ชื่อ `eduvision-signin` (ชื่อไม่สำคัญ แต่ต้องเป็นคนละ project กับ Classroom/Firebase) → Create แล้วเลือก project นี้ให้แน่ใจก่อนทำข้อต่อไป
+2. **หน้าจอขอความยินยอม** (Google Auth Platform หรือ APIs & Services → OAuth consent screen)
+   - Branding: App name `EduVision`, User support email และ Developer contact = อีเมลของทีม **ไม่ต้องใส่โลโก้** (ใส่โลโก้แล้ว Google ต้องตรวจ brand ก่อนแสดง) Authorized domains: `phuwish.com` Application home page และ privacy policy ใส่ได้ถ้ามี
+   - Audience: User type **External** → แล้วกด **Publish app** (In production) หลังตั้งเสร็จ scope พื้นฐานไม่ต้องผ่าน verification ถ้าค้างโหมด Testing จะใช้ได้เฉพาะ test users และบัญชีอื่นได้ error `access_denied`
+   - Data access (Scopes): `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile` เท่านั้น ห้ามเพิ่ม scope ของ Classroom หรือ Drive ใน project นี้
+3. **client แบบ Web application** Credentials → Create credentials → OAuth client ID → Application type **Web application** ชื่อ `EduVision sign-in web`
+   - client ID ตัวนี้คือ `aud` ของ ID token **ทุกตัว** (แอป Android ส่งค่านี้เป็น `serverClientId`) จึงต้องสร้างแม้จะไม่ใช้ทางเว็บ
+4. **Authorized redirect URIs** ของ client Web (ใช้กับทางเว็บเท่านั้น): `https://teacherhelper.phuwish.com/auth/google/callback` และตอน dev `http://127.0.0.1:8000/auth/google/callback` (ตรงทุกตัวอักษร ไม่มี `/` ท้าย คนละ path กับ `/google/oauth/callback` ของ Classroom) *Authorized JavaScript origins* ไม่ต้องใส่ → Create แล้วจด **client ID** และ **client secret** (secret ใส่ `.env` เท่านั้น ห้าม commit หรือวางในแชต)
+5. **client แบบ Android** Create credentials → OAuth client ID → **Android**: package name `com.eduvision.app` และ **SHA-1** ของ keystore ที่เซ็นแอป
+   - debug (เครื่อง dev): `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1`
+   - release: SHA-1 ของ keystore ที่ใช้เซ็น APK ที่แจก (ถ้าผ่าน Play App Signing ใช้ SHA-1 ในหน้า App integrity ของ Play Console) สร้างหนึ่ง client ต่อ SHA-1
+   - ⚠️ ต้องตรวจสอบตอนสร้าง (DESIGN §24.9.1): Google ไม่ยอมให้ package + SHA-1 เดียวกันอยู่ในสอง project ถ้า project Classroom มี Android client ของ SHA-1 นี้อยู่ (KICKOFF G5) ให้ **ลบ Android client ตัวนั้นใน project Classroom ก่อน** แล้วสร้างที่ project sign-in Classroom ไม่เสียอะไร เพราะแอปที่ตั้ง sign-in แล้วเชื่อม Classroom ผ่านเบราว์เซอร์เสมอ (client ID ของ Android ไม่ต้องใส่ `.env`)
+6. **`.env` บน server** (§4.6): `GOOGLE_SIGNIN_CLIENT_IDS=<client ID แบบ Web จากข้อ 3>` (ถ้าต้องรับ token จาก client อื่นด้วยให้ต่อท้ายคั่นด้วย `,` ตัวแรกต้องเป็น Web) ทางเว็บ (ไม่บังคับ): `GOOGLE_SIGNIN_CLIENT_SECRET=<secret>`, `GOOGLE_SIGNIN_REDIRECT_URI=https://teacherhelper.phuwish.com/auth/google/callback` และ `GOOGLE_SIGNIN_APP_URL=<ที่อยู่ของแอปเว็บ>` → Run Now `optimize:clear` → `optimize`
+7. **build แอป** ด้วย `--dart-define=GOOGLE_SIGNIN_CLIENT_ID=<client ID แบบ Web จากข้อ 3>` (ค่าเดียวกับตัวแรกของ `GOOGLE_SIGNIN_CLIENT_IDS` ไม่ใช่ client ID แบบ Android) แอปที่ตั้งค่านี้เชื่อม Classroom ผ่านเบราว์เซอร์เสมอ (DESIGN §24.9.4) ในเครื่อง dev:
+   ```bash
+   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 --dart-define=GOOGLE_SIGNIN_CLIENT_ID=<web client id>
+   # ทางเว็บ (ดู UI เท่านั้น): พอร์ตต้องตรงกับ GOOGLE_SIGNIN_APP_URL ของ .env ในเครื่อง เช่น http://localhost:5173
+   flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://127.0.0.1:8000
+   ```
+8. **ตั้งค่าของโรงเรียนใน `/admin`** (Filament → โรงเรียน → แก้ไข → ส่วน "เข้าสู่ระบบด้วย Google"): "โดเมนที่อนุญาต" (เช่น `school.ac.th` ว่าง = ทุกโดเมน) และสวิตช์ **"ให้นักเรียนเข้าสู่ระบบด้วย Google"** ซึ่ง**ปิดเป็นค่าตั้งต้น** เปิดเมื่อโรงเรียนมีความยินยอมของผู้ปกครองแล้วเท่านั้น (PDPA DESIGN §24.14) ปุ่ม "ลบการเชื่อม Google ของนักเรียนทั้งหมด" อยู่หัวหน้าเดียวกัน
+9. **ตรวจ**
+   ```bash
+   curl -s https://teacherhelper.phuwish.com/api/v1/auth/google/config | jq .
+   # {"data":{"enabled":true,"web_flow":false,"notice_version":"gsi-1"}}  (web_flow true เมื่อตั้งข้อ 6 ทางเว็บครบ)
+   ```
+   - hosting ต้องเรียก `https://www.googleapis.com/oauth2/v3/certs` ได้ (กุญแจตรวจลายเซ็น แคชใน cache database) และ `oauth2.googleapis.com` (เฉพาะทางเว็บ)
+   - ครู: ถ้าอีเมลของบัญชี Google ตรงกับอีเมลที่สมัครไว้ กด Google ในแท็บครูแล้วเข้าได้เลย (เชื่อมอัตโนมัติ) ถ้าไม่ตรง ให้ login ด้วยรหัสผ่านแล้วเชื่อมที่ตั้งค่า → "บัญชี Google สำหรับเข้าสู่ระบบ" admin เชื่อมที่หน้า `/admin-home` ของแอปหลัง login ด้วยรหัสผ่าน (ไม่เชื่อมอัตโนมัติ)
+   - นักเรียน: กด Google ในแท็บนักเรียน ครั้งแรกเข้าหน้า "ยืนยันตัวตนครั้งแรก" (รหัสห้อง + เลขที่ + PIN หรือสแกนบัตร) ครั้งต่อไปเข้าได้ทันที
+   - ⚠️ **ตรวจ `sub` = `userId` ของ Classroom** (DESIGN §24.9.3): ใช้บัญชีนักเรียนทดสอบที่อยู่ในคอร์สทดลอง (KICKOFF G7) ที่ครูนำเข้าห้องแล้ว กด Google ในแท็บนักเรียน ถ้าเข้าได้ทันทีโดยไม่ถาม PIN แปลว่าตรงกัน (การเชื่อมเป็น `classroom_roster`) ถ้าถาม PIN แปลว่าไม่ตรง ไม่มีอะไรพัง (ยืนยันด้วย PIN ได้) แต่ให้บันทึกผลใน §12
+10. ถ้า secret หลุด: Credentials → client Web → **Reset secret** แล้วแก้ `.env` (ทางเว็บเท่านั้นที่ใช้ secret)
 
 ---
 
@@ -510,6 +554,14 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | ส่งงานรูปทั้งหน้า/เอกสารแล้วได้ `413` หรือ `422 file_too_large` ทั้งที่ไฟล์ไม่ถึง 10 MB | `upload_max_filesize` < 10M หรือ `post_max_size` < 55M | PHP Settings ตาม §4.1 |
 | งานจาก Classroom ไม่เข้าแอป / "ซิงก์ล่าสุด" ไม่ขยับ | ครูต้องเชื่อม Google ใหม่ (ดู `/teacher/attention` → `needs_reconnect`), cron ไม่รัน, หรือ log มี `queue_work.dispatch_failed` step `classroom_sync` | ให้ครูกด "เชื่อมใหม่"; ตรวจ `eduvision-queue-worker` ตามแถว `queue_last_run_at` ข้างบน; รอบซิงก์ห่างกัน 5 นาที |
 | ประกาศผลใน Classroom "ส่งไม่สำเร็จ" | ครูยังไม่ได้ให้ scope `classroom.announcements` หรือนักเรียนยังไม่ได้จับคู่บัญชี Google | เชื่อมใหม่ (§6.3) แล้วกด "ส่งประกาศอีกครั้ง" ในหน้าประกาศผลรายคน |
+| แอปไม่มีปุ่ม "เข้าสู่ระบบด้วย Google" | `GOOGLE_SIGNIN_CLIENT_IDS` ว่าง (`/auth/google/config` ตอบ `enabled: false`), APK ไม่ได้ build ด้วย `GOOGLE_SIGNIN_CLIENT_ID` หรือบนเว็บ `web_flow: false` | §6.4 ข้อ 6–7 แล้ว `optimize:clear`/`optimize` |
+| กด Google บน Android แล้วได้ `DEVELOPER_ERROR` / `[16]` / ไม่มีอะไรเกิดขึ้น | Android client ไม่มี SHA-1 ของ keystore ที่เซ็น APK นี้ หรือ package ไม่ใช่ `com.eduvision.app` หรือ `GOOGLE_SIGNIN_CLIENT_ID` เป็น client ID แบบ Android แทนแบบ Web | §6.4 ข้อ 5 และ 7 (debug กับ release ใช้ SHA-1 คนละตัว) |
+| `422 google_token_invalid` ทุกครั้ง | `GOOGLE_SIGNIN_CLIENT_ID` ของแอปไม่อยู่ใน `GOOGLE_SIGNIN_CLIENT_IDS` (aud ไม่ตรง) หรือนาฬิกา server คลาดเกิน 60 วินาที | ใส่ client ID แบบ Web ตัวเดียวกันทั้งสองที่ log มีเหตุผลใน `google_signin.verify` (`aud`, `age`, ...) |
+| `503 google_unavailable` | hosting เรียก `www.googleapis.com/oauth2/v3/certs` ไม่ได้ | ตรวจ outbound (§6.4 ข้อ 9) |
+| `403 google_domain_not_allowed` / `student_google_disabled` | อีเมลไม่อยู่ในโดเมนที่อนุญาต / สวิตช์นักเรียนของโรงเรียนปิด | §6.4 ข้อ 8 |
+| หน้า Google ทางเว็บขึ้น `Error 400: redirect_uri_mismatch` | URI ใน §6.4 ข้อ 4 ไม่ตรง `GOOGLE_SIGNIN_REDIRECT_URI` (หรือ `APP_URL` + `/auth/google/callback`) | แก้ให้ตรงทุกตัวอักษร |
+| `Error 403: access_denied` ตอนเลือกบัญชี Google | consent screen ของ project sign-in ยังเป็นโหมด Testing | §6.4 ข้อ 2: Publish app |
+| ทั้งห้องกด Google พร้อมกันแล้วบางคนได้ `429` | limiter `google-signin` 10 ครั้ง/นาที ต่อ IP (ทั้งโรงเรียนใช้ NAT เดียว) | รอตาม `Retry-After` หรือใช้ PIN/บัตร QR ไปก่อน (DESIGN §24.22 ข้อที่ต้องทบทวน) |
 | "วิเคราะห์ตอนนี้" ได้ 500/504 | `max_execution_time` < 90 | PHP Settings ตาม §4.1 |
 | ไม่มีการวิเคราะห์รอบกลางคืน | ห้องไม่มี Gemini key ใดเลย (ครูเจ้าของห้องและ key กลาง) หรือ worker ไม่รันหลัง 01:00 | ใส่ key; ดู `/admin` > AI calls (`feature = analysis_nightly`) |
 
@@ -535,3 +587,6 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | มี `Strict-Transport-Security` ใน response หรือไม่ | | |
 | เวลาสร้าง PDF ใบงาน 40 คนบน hosting (DESIGN §16.2) | | |
 | throughput ตรวจ 1 หน้า (วินาที) และห้อง 40 คน (นาที) (DESIGN §7.2) | | |
+| migration รอบบัญชีนักเรียน (§5 ข้อ 3) รันผ่านบน MariaDB ของ hosting | | |
+| Google sign-in: Android client ย้ายจาก project Classroom ได้หรือต้องลบก่อน (§6.4 ข้อ 5) | | |
+| Google sign-in: `sub` ของ ID token = `userId` ของ Classroom (§6.4 ข้อ 9) | | |

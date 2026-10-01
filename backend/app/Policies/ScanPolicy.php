@@ -2,13 +2,16 @@
 
 namespace App\Policies;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Scan;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 /**
- * Scans belong to the teacher who currently teaches the assignment's
- * classroom (AssignmentPolicy::owns, DESIGN §9). Students never see page
- * images: they get their own crops through ResponsePolicy::viewCrop.
+ * Page images are seen by whoever sees the assignment's results (its manager
+ * and the homeroom teacher, DESIGN §24.8); only the manager confirms a
+ * rescan. Students never see page images: they get their own crops through
+ * ResponsePolicy::viewCrop.
  */
 class ScanPolicy
 {
@@ -16,11 +19,13 @@ class ScanPolicy
     {
         $assignment = $scan->submission?->assignment;
 
-        return $assignment !== null && AssignmentPolicy::owns($user, $assignment);
+        return $assignment !== null && $user->isTeacher() && ClassroomAccess::seesResults($user, $assignment);
     }
 
-    public function confirmReplace(User $user, Scan $scan): bool
+    public function confirmReplace(User $user, Scan $scan): Response|bool
     {
-        return $this->view($user, $scan);
+        $assignment = $scan->submission?->assignment;
+
+        return $assignment === null ? false : ClassroomAccess::manageResponse($user, $assignment);
     }
 }

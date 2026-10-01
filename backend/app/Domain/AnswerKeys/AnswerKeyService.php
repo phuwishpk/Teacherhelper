@@ -3,6 +3,7 @@
 namespace App\Domain\AnswerKeys;
 
 use App\Domain\Assignments\AssignmentLocked;
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Courses\IndicatorSuggestions;
 use App\Domain\Documents\CostEstimate;
@@ -109,7 +110,7 @@ final class AnswerKeyService
             return ['extraction' => $existing, 'cached' => true, 'applied' => $this->applyTo($assignment, $existing), 'estimate' => $estimate];
         }
 
-        if ($this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
+        if ($this->keys->forTeacher(ClassroomAccess::managerId($assignment)) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
         $selection->files(); // files still stored, not too large, range cuttable: 422 now rather than a failed job
@@ -204,7 +205,7 @@ final class AnswerKeyService
             return;
         }
 
-        $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
+        $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
             $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง');
 

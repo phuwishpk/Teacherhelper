@@ -103,10 +103,11 @@ class WholePageUploadsTest extends TestCase
         $data = $this->listed()->json('data');
 
         $this->assertSame([$closedLate->id, $soon->id, $this->assignment->id, $open->id], array_column($data, 'id'), 'soonest due first, no due date last; draft, closed and other classrooms hidden');
-        $this->assertSame(['id', 'title', 'classroom', 'subject_name', 'due_at', 'accept_late', 'can_submit', 'submission_id', 'submitted_at', 'late', 'status'], array_keys($data[0]));
+        $this->assertSame(['id', 'title', 'course', 'classroom', 'subject_name', 'due_at', 'accept_late', 'can_submit', 'submission_id', 'submitted_at', 'late', 'status'], array_keys($data[0]));
         $this->assertSame([false, false, 'not_submitted', null], [$data[0]['accept_late'], $data[0]['can_submit'], $data[0]['status'], $data[0]['submitted_at']]);
         $this->assertSame([true, 'not_submitted'], [$data[1]['can_submit'], $data[1]['status']]);
-        $this->assertSame(['id' => $this->classroom->id, 'name' => $this->classroom->name], $data[2]['classroom']);
+        $this->assertSame(['id' => $this->classroom->id, 'name' => $this->classroom->name, 'academic_year' => 2569, 'closed' => false], $data[2]['classroom']);
+        $this->assertNull($data[2]['course']);
     }
 
     public function test_a_student_hands_in_photos_and_a_pdf_as_themself_and_sees_only_that_it_was_sent(): void

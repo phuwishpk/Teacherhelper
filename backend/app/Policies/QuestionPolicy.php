@@ -2,24 +2,32 @@
 
 namespace App\Policies;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Question;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
-/** A question belongs to its assignment: same rule as AssignmentPolicy. */
+/** A question belongs to its assignment: same rules as AssignmentPolicy. */
 class QuestionPolicy
 {
-    public function update(User $user, Question $question): bool
+    /** Read the question's image (exams, §22.4): whoever sees the assignment. */
+    public function view(User $user, Question $question): bool
     {
-        return $question->assignment !== null && AssignmentPolicy::owns($user, $question->assignment);
+        return $question->assignment !== null && ClassroomAccess::seesResults($user, $question->assignment);
     }
 
-    public function delete(User $user, Question $question): bool
+    public function update(User $user, Question $question): Response|bool
+    {
+        return $question->assignment === null ? false : ClassroomAccess::manageResponse($user, $question->assignment);
+    }
+
+    public function delete(User $user, Question $question): Response|bool
     {
         return $this->update($user, $question);
     }
 
     /** Request an AI draft or approve the rubric. */
-    public function manageRubric(User $user, Question $question): bool
+    public function manageRubric(User $user, Question $question): Response|bool
     {
         return $this->update($user, $question);
     }

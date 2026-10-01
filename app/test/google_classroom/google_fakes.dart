@@ -126,6 +126,37 @@ class FakeGoogleRepository implements GoogleClassroomRepository {
         );
   }
 
+  /// Calls of `link-existing`: (course id, classroom id, app course id).
+  final linkExistingCalls = <(String, int, int?)>[];
+
+  /// Answer of `link-existing`; defaults to linking the room at once.
+  LinkExistingResult? linkExistingResult;
+
+  @override
+  Future<LinkExistingResult> linkExisting(
+    String courseId, {
+    required int classroomId,
+    int? appCourseId,
+  }) async {
+    await _maybeFail();
+    linkExistingCalls.add((courseId, classroomId, appCourseId));
+    return linkExistingResult ??
+        LinkedExisting(
+          classroom: Classroom(
+            id: classroomId,
+            name: 'ห้อง $classroomId',
+            gradeLevel: 5,
+            academicYear: 2569,
+            classCode: 'EXI001',
+            googleLink: ClassroomGoogleLink(
+              courseId: courseId,
+              courseName: 'คอร์ส $courseId',
+            ),
+          ),
+          roster: const RosterSyncResult(),
+        );
+  }
+
   @override
   Future<RosterSyncResult> syncRoster(int classroomId) async {
     await _maybeFail();

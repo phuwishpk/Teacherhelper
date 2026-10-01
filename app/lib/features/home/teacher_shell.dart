@@ -12,6 +12,7 @@ import '../gradebook/grades_home_page.dart';
 import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
+import 'teacher_attention.dart';
 
 /// Teacher-side navigation shell: a bottom NavigationBar on phones and a
 /// NavigationRail from tablet width up (the review queue is meant for
@@ -71,6 +72,17 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     final user = ref.watch(currentUserProvider);
     final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
     final queueOpen = ref.watch(uploadQueueOpenCountProvider);
+    // Course requests waiting for the homeroom teacher (DESIGN §24.7): a
+    // badge on "ห้องเรียน", where "คำขอผูกรายวิชา" is.
+    final requests =
+        ref.watch(teacherAttentionProvider).value?.courseRequestsPending ?? 0;
+    Widget icon(int i, IconData data) => i == 1 && requests > 0
+        ? Badge.count(
+            key: ValueKey('nav_badge_$i'),
+            count: requests,
+            child: Icon(data),
+          )
+        : Icon(data);
 
     final pages = <Widget>[
       DashboardPage(user: user, onNavigate: _select),
@@ -142,10 +154,10 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
                     child: scanButton,
                   ),
                   destinations: [
-                    for (final d in _destinations)
+                    for (final (i, d) in _destinations.indexed)
                       NavigationRailDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
+                        icon: icon(i, d.icon),
+                        selectedIcon: icon(i, d.selectedIcon),
                         label: Text(d.label),
                       ),
                   ],
@@ -161,10 +173,10 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
               selectedIndex: _index,
               onDestinationSelected: _select,
               destinations: [
-                for (final d in _destinations)
+                for (final (i, d) in _destinations.indexed)
                   NavigationDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selectedIcon),
+                    icon: icon(i, d.icon),
+                    selectedIcon: icon(i, d.selectedIcon),
                     label: d.label,
                   ),
               ],

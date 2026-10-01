@@ -83,11 +83,11 @@ class ClassroomImportTest extends TestCase
             ->assertJsonPath('data.academic_year', 2570);
 
         $this->assertSame([
-            ['google_user_id' => 'g-kamol', 'name' => 'กมล ใจดี', 'email' => 'kamol@student.example', 'proposed_number' => 1],
-            ['google_user_id' => 'g-kesorn', 'name' => 'ด.ญ. เกษร ดีมาก', 'email' => 'kesorn@student.example', 'proposed_number' => 2],
-            ['google_user_id' => 'g-parent', 'name' => 'คุณแม่ ของกมล', 'email' => 'parent@example.com', 'proposed_number' => 3],
-            ['google_user_id' => 'g-adam', 'name' => 'Mr. Adam West', 'email' => 'adam@student.example', 'proposed_number' => 4],
-            ['google_user_id' => 'g-noname', 'name' => 'noname', 'email' => 'noname@student.example', 'proposed_number' => 5],
+            ['google_user_id' => 'g-kamol', 'name' => 'กมล ใจดี', 'email' => 'kamol@student.example', 'proposed_number' => 1, 'match' => null],
+            ['google_user_id' => 'g-kesorn', 'name' => 'ด.ญ. เกษร ดีมาก', 'email' => 'kesorn@student.example', 'proposed_number' => 2, 'match' => null],
+            ['google_user_id' => 'g-parent', 'name' => 'คุณแม่ ของกมล', 'email' => 'parent@example.com', 'proposed_number' => 3, 'match' => null],
+            ['google_user_id' => 'g-adam', 'name' => 'Mr. Adam West', 'email' => 'adam@student.example', 'proposed_number' => 4, 'match' => null],
+            ['google_user_id' => 'g-noname', 'name' => 'noname', 'email' => 'noname@student.example', 'proposed_number' => 5, 'match' => null],
         ], $res->json('data.students'));
         $this->assertStringContainsString('teacherId=me', $this->sentTo('/v1/courses?')[0]->url());
         $this->assertNoSecretIn($res->getContent(), 'the preview');
@@ -171,7 +171,7 @@ class ClassroomImportTest extends TestCase
         $this->assertNull($members[0]->left_course_at);
         $this->assertSame(User::ROLE_STUDENT, User::query()->find($students[0]['student_id'])->role);
 
-        $link = ClassroomGoogleLink::query()->findOrFail($classroom->id);
+        $link = ClassroomGoogleLink::query()->where('classroom_id', $classroom->id)->sole();
         $this->assertSame($this->teacher->id, $link->owner_user_id);
         $this->assertNotNull($link->roster_synced_at);
         $this->assertDatabaseHas('classroom_google_ignored_users', ['classroom_id' => $classroom->id, 'google_user_id' => 'g-parent', 'name' => 'คุณแม่ ของกมล']);
@@ -185,7 +185,7 @@ class ClassroomImportTest extends TestCase
         // The removed account stays out of the next roster sync.
         $this->asUser($this->teacher)->postJson("/api/v1/classrooms/{$classroom->id}/google-roster/sync")
             ->assertOk()
-            ->assertExactJson(['data' => ['added' => [], 'left' => [], 'rematched' => []]]);
+            ->assertExactJson(['data' => ['added' => [], 'enrolled' => [], 'left' => [], 'rematched' => [], 'not_in_classroom' => []]]);
         $this->assertNoSecretIn($res->getContent(), 'the import answer');
         $this->assertNoSecretInLogs();
     }

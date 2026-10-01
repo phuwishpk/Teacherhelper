@@ -22,7 +22,12 @@ import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
+import '../../features/classrooms/course_requests.dart';
+import '../../features/classrooms/course_requests_screen.dart';
+import '../../features/classrooms/merge_students_screen.dart';
+import '../../features/classrooms/request_classroom_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/classrooms/students_from_classroom_screen.dart';
 import '../../features/courses/course_detail_screen.dart';
 import '../../features/courses/course_form_screen.dart';
 import '../../features/courses/course_models.dart';
@@ -40,6 +45,9 @@ import '../../features/exams/exam_question_screen.dart';
 import '../../features/exams/exam_screen.dart';
 import '../../features/exams/exam_versions_screen.dart';
 import '../../features/google_classroom/classroom_feedback_screen.dart';
+import '../../features/google_signin/google_first_link_screen.dart';
+import '../../features/google_signin/google_signin_models.dart';
+import '../../features/google_signin/google_web_return_screens.dart';
 import '../../features/gradebook/gradebook_screen.dart';
 import '../../features/gradebook/gradebook_settings_screen.dart';
 import '../../features/gradebook/student_grades.dart';
@@ -65,7 +73,9 @@ import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/student/student_account_screen.dart';
 import '../../features/student/student_shell.dart';
+import '../../features/student/student_subject_screen.dart';
 import '../../features/upload_queue/upload_queue_screen.dart';
 import '../auth/session.dart';
 
@@ -85,6 +95,25 @@ abstract final class AppRoutes {
   static const studentLogin = '/student/login';
   static const studentQr = '/student/login/qr';
 
+  /// Google sign-in (DESIGN §24.9): where the web flow's callback returns
+  /// (`?ticket=` or `?error=`), the student's first confirmation and its
+  /// card scanner. All public.
+  static const googleLoginReturn = '/login/google';
+  static const googleFirstLink = '/login/google/confirm';
+  static const googleFirstLinkQr = '/login/google/confirm/qr';
+
+  /// Where the web flow returns after linking a Google account
+  /// (`?status=linked|<code>`); every signed-in role may open it.
+  static const googleLinkResult = '/google-link';
+
+  /// Student: "บัญชีของฉัน" with the Google account (DESIGN §24.13).
+  static const studentAccount = '/student/account';
+
+  /// The web flow's returns, kept while the session restores (see
+  /// [routerProvider]).
+  static bool isGoogleReturn(String location) =>
+      location == googleLoginReturn || location == googleLinkResult;
+
   /// Admin: one screen that opens the web panel (DESIGN §7.4).
   static const adminHome = '/admin-home';
 
@@ -98,6 +127,25 @@ abstract final class AppRoutes {
   static String classroom(int id) => '/classrooms/$id';
   static String classroomEdit(int id) => '/classrooms/$id/edit';
   static String studentsAdd(int id) => '/classrooms/$id/students/add';
+
+  /// "เลือกนักเรียนที่มีอยู่" of the add screen (DESIGN §24.4).
+  static String studentsAddExisting(int id) =>
+      '/classrooms/$id/students/add?mode=existing';
+
+  /// "นำนักเรียนจากห้องเดิม" (DESIGN §24.6): enrol the students of another
+  /// room, e.g. last year's.
+  static String studentsFromClassroom(int id) =>
+      '/classrooms/$id/students/from-classroom';
+
+  /// "รวมบัญชีนักเรียน" (DESIGN §24.5): find the other account of a student
+  /// of the room, then compare both before merging.
+  static String studentMerge(int classroomId, int studentId) =>
+      '/classrooms/$classroomId/students/$studentId/merge';
+  static String studentsMergePreview(
+    int classroomId, {
+    required int keepId,
+    required int mergeId,
+  }) => '/classrooms/$classroomId/merge?keep=$keepId&merge=$mergeId';
 
   /// Google Classroom (DESIGN §18.7): course picker, student matching and
   /// the submissions of a posted assignment.
@@ -139,6 +187,17 @@ abstract final class AppRoutes {
 
   static String course(int id) => '/courses/$id';
   static String courseEdit(int id) => '/courses/$id/edit';
+
+  /// "คำขอผูกรายวิชา" of shared homerooms (DESIGN §24.7): the requests to
+  /// the teacher's homerooms, or ([outgoing]) the teacher's own.
+  static const courseRequests = '/course-requests';
+  static const courseRequestsOutgoing = '/course-requests?box=outgoing';
+
+  /// "ขอสอนในห้องของครูท่านอื่น": the school's open classrooms, with
+  /// [courseId] preselected when opened from a course.
+  static String courseRequestNew({int? courseId}) => courseId == null
+      ? '/course-requests/new'
+      : '/course-requests/new?course=$courseId';
 
   /// The gradebook of a course (DESIGN §23.9), opened on [classroomId] and
   /// scrolled to [column] (`a{assignment id}` or `i{item id}`) when given.
@@ -245,12 +304,30 @@ abstract final class AppRoutes {
   static String myCourseCharts(int courseId) => '/student/courses/$courseId';
 
   /// Student: their own published grade of one course (§23.7).
-  static String myCourseGrade(int courseId) =>
-      '/student/courses/$courseId/grade';
+  /// [classroomId] picks one classroom's publication (DESIGN §24.26).
+  static String myCourseGrade(int courseId, {int? classroomId}) =>
+      '/student/courses/$courseId/grade'
+      '${classroomId == null ? '' : '?classroom=$classroomId'}';
+
+  /// Student: every published grade ("เกรดของฉัน", §23.9), opened from
+  /// "วิชาของฉัน".
+  static const myGrades = '/student/grades';
+
+  /// Student: one subject of "วิชาของฉัน" (DESIGN §24.11, §24.13): its work
+  /// to hand in, results, grade and charts. [key] is a subject tag key.
+  static const studentSubjectPath = '/student/subject';
+  static String studentSubject(String key) =>
+      '$studentSubjectPath?key=${Uri.encodeQueryComponent(key)}';
 
   /// One student's skills and weaknesses, seen by the teacher.
-  static String studentMastery(int classroomId, int studentId) =>
-      '/classrooms/$classroomId/students/$studentId/mastery';
+  /// A subject teacher passes their [courseId] (DESIGN §24.20).
+  static String studentMastery(
+    int classroomId,
+    int studentId, {
+    int? courseId,
+  }) =>
+      '/classrooms/$classroomId/students/$studentId/mastery'
+      '${courseId == null ? '' : '?course=$courseId'}';
 
   /// Every student's AI analysis in a classroom and its auto-share switch
   /// (DESIGN §20.5).
@@ -285,6 +362,9 @@ abstract final class AppRoutes {
   /// Routes a signed-in student may open (everything else sends them home).
   static bool isStudentArea(String location) =>
       location == student ||
+      location == studentAccount ||
+      location == myGrades ||
+      location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/') ||
@@ -313,10 +393,16 @@ abstract final class AppRoutes {
 
   static bool isPublic(String location) =>
       location == login ||
+      location == googleLoginReturn ||
+      location == googleFirstLink ||
+      location == googleFirstLinkQr ||
       location == register ||
       location == studentLogin ||
       location == studentQr;
 }
+
+String _qrLinkError(Object error) =>
+    googleFirstLinkErrorMessage(error, qr: true);
 
 int _id(GoRouterState state, String name) =>
     int.parse(state.pathParameters[name]!);
@@ -330,6 +416,11 @@ final routerProvider = Provider<GoRouter>((ref) {
   // A result link that waits for the student to sign in.
   String? pendingResult;
 
+  // A return of the Google web flow (DESIGN §24.9.4) that arrived while
+  // the session was still restoring: the app starts on it, but the splash
+  // would otherwise swallow its ticket or status.
+  String? pendingGoogle;
+
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: refresh,
@@ -340,6 +431,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       final link = AppRoutes.fromResultLink(state.uri);
       if (link != null) pendingResult = link;
       final location = link ?? state.matchedLocation;
+      if (AppRoutes.isGoogleReturn(location)) {
+        pendingGoogle = state.uri.toString();
+      }
+      final google = pendingGoogle;
+      if (google != null && session is! SessionRestoring) {
+        final path = Uri.parse(google).path;
+        // A login return is for a signed-out user, a link result for a
+        // signed-in one; anything else is stale.
+        final usable = session is SignedIn
+            ? path == AppRoutes.googleLinkResult
+            : path == AppRoutes.googleLoginReturn;
+        if (usable && location != path) return google;
+        pendingGoogle = null;
+        if (usable) return null;
+      }
       final public = AppRoutes.isPublic(location);
       final inStudentArea = AppRoutes.isStudentArea(location);
       final String? target = switch (session) {
@@ -389,8 +495,40 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.googleLoginReturn,
+        builder: (context, state) => GoogleLoginReturnScreen(
+          ticket: state.uri.queryParameters['ticket'],
+          error: state.uri.queryParameters['error'],
+        ),
+        routes: [
+          GoRoute(
+            path: 'confirm',
+            builder: (context, state) => const GoogleFirstLinkScreen(),
+            routes: [
+              GoRoute(
+                path: 'qr',
+                builder: (context, state) => const StudentQrScanScreen(
+                  signIn: linkGoogleWithQr,
+                  errorMessage: _qrLinkError,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.googleLinkResult,
+        builder: (context, state) => GoogleLinkResultScreen(
+          status: state.uri.queryParameters['status'] ?? 'google_error',
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) => RegisterScreen(
+          google: state.extra is GoogleRegistration
+              ? state.extra as GoogleRegistration
+              : null,
+        ),
       ),
       GoRoute(
         path: AppRoutes.studentLogin,
@@ -407,6 +545,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.student,
         builder: (context, state) => const StudentShell(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentAccount,
+        builder: (context, state) => const StudentAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.myGrades,
+        builder: (context, state) => const MyGradesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentSubjectPath,
+        builder: (context, state) => StudentSubjectScreen(
+          initialKey: state.uri.queryParameters['key'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/student/results/:sid',
@@ -445,8 +597,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'grade',
-            builder: (context, state) =>
-                StudentGradeScreen(courseId: _id(state, 'id')),
+            builder: (context, state) => StudentGradeScreen(
+              courseId: _id(state, 'id'),
+              classroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
           ),
         ],
       ),
@@ -487,8 +643,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'students/add',
+            builder: (context, state) => StudentsBulkAddScreen(
+              classroomId: _id(state, 'id'),
+              initialMode: state.uri.queryParameters['mode'] == 'existing'
+                  ? StudentsAddMode.existing
+                  : StudentsAddMode.newStudents,
+            ),
+          ),
+          GoRoute(
+            path: 'students/from-classroom',
             builder: (context, state) =>
-                StudentsBulkAddScreen(classroomId: _id(state, 'id')),
+                StudentsFromClassroomScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'students/:sid/merge',
+            builder: (context, state) => MergeStudentSearchScreen(
+              classroomId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+            ),
+          ),
+          GoRoute(
+            path: 'merge',
+            builder: (context, state) => MergePreviewScreen(
+              classroomId: _id(state, 'id'),
+              keepId:
+                  int.tryParse(state.uri.queryParameters['keep'] ?? '') ?? 0,
+              mergeId:
+                  int.tryParse(state.uri.queryParameters['merge'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: 'google-link',
@@ -514,6 +696,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => StudentMasteryScreen(
               classroomId: _id(state, 'id'),
               studentId: _id(state, 'sid'),
+              courseId: int.tryParse(state.uri.queryParameters['course'] ?? ''),
             ),
           ),
           GoRoute(
@@ -533,6 +716,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.courses,
         builder: (context, state) => const CoursesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.courseRequests,
+        builder: (context, state) => CourseRequestsScreen(
+          initialBox: state.uri.queryParameters['box'] == 'outgoing'
+              ? CourseRequestBox.outgoing
+              : CourseRequestBox.incoming,
+        ),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => RequestClassroomScreen(
+              courseId: int.tryParse(state.uri.queryParameters['course'] ?? ''),
+            ),
+          ),
+        ],
       ),
       // Before '/courses/:id', which would take "new" as an id.
       GoRoute(

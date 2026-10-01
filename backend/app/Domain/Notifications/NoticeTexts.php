@@ -76,4 +76,18 @@ final class NoticeTexts
     {
         return 'ต้องเชื่อมบัญชี Google ใหม่ แอปจึงจะซิงก์งานกับ Google Classroom ต่อได้';
     }
+
+    /** To the homeroom teacher when a subject teacher asks to bind a course (§24.7). */
+    public static function courseRequested(string $courseCode, string $classroomName): string
+    {
+        return trim("มีคำขอผูกรายวิชา {$courseCode} กับห้อง {$classroomName}");
+    }
+
+    /** To the requester once the homeroom teacher decided (§24.7). */
+    public static function courseRequestDecided(string $courseCode, string $classroomName, bool $approved): string
+    {
+        return $approved
+            ? "ครูประจำชั้นอนุมัติให้ผูกรายวิชา {$courseCode} กับห้อง {$classroomName} แล้ว สั่งงานในห้องนี้ได้เลย"
+            : "ครูประจำชั้นไม่อนุมัติการผูกรายวิชา {$courseCode} กับห้อง {$classroomName}";
+    }
 }

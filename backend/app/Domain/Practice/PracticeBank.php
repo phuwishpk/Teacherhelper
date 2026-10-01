@@ -2,10 +2,10 @@
 
 namespace App\Domain\Practice;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gemini\PracticeDraft;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
-use App\Models\Classroom;
 use App\Models\PracticeItem;
 use App\Models\Skill;
 use App\Models\User;
@@ -133,7 +133,7 @@ final class PracticeBank
         $item->approved_at = now();
     }
 
-    /** The teacher has an assignment in the skill's subject in a classroom they teach. */
+    /** The teacher manages an assignment in the skill's subject (DESIGN §24.8). */
     public static function teachesSubjectOf(User $teacher, int $skillId): bool
     {
         $subjectId = Skill::query()->whereKey($skillId)->value('subject_id');
@@ -141,10 +141,8 @@ final class PracticeBank
             return false;
         }
 
-        return Assignment::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('subject_id', $subjectId)
-            ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id))
+        return ClassroomAccess::managedAssignments($teacher)
+            ->where('assignments.subject_id', $subjectId)
             ->exists();
     }
 

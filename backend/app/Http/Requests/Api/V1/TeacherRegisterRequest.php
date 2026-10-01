@@ -5,7 +5,8 @@ namespace App\Http\Requests\Api\V1;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * POST /api/v1/auth/teacher/register — body per DESIGN §9.1: {school_code, name, email, password}.
+ * POST /api/v1/auth/teacher/register — body per DESIGN §9.1: {school_code, name, email, password},
+ * plus google_link_ticket? from a 404 google_not_linked of POST /auth/google (DESIGN §24.9.5).
  * No `confirmed` rule: the app checks the repeated password in its own form.
  */
 class TeacherRegisterRequest extends FormRequest
@@ -25,6 +26,7 @@ class TeacherRegisterRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
+            'google_link_ticket' => ['sometimes', 'nullable', 'string', 'max:64'],
         ];
     }
 

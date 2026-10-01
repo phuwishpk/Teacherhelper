@@ -5,6 +5,7 @@ namespace App\Domain\Google;
 use App\Domain\Pages\PageFiles;
 use App\Domain\Pages\PdfPageCounter;
 use App\Domain\Pages\WholePageSubmissions;
+use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
@@ -62,9 +63,9 @@ final class ClassroomAttachmentFetcher
      */
     public function fetch(int $importId): string
     {
-        $import = ClassroomSubmissionImport::query()->with('assignment.classroom.googleLink')->find($importId);
+        $import = ClassroomSubmissionImport::query()->with('assignment.classroom')->find($importId);
         $assignment = $import?->assignment;
-        $link = $assignment?->classroom?->googleLink;
+        $link = $assignment === null ? null : ClassroomGoogleLink::forAssignment($assignment);
         if ($import === null || $assignment === null || $link === null
             || $import->state !== ClassroomSubmissionImport::STATE_NEW || $assignment->isClosed()) {
             return self::OUTCOME_SKIPPED;

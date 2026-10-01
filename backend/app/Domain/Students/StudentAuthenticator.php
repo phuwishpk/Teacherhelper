@@ -28,6 +28,15 @@ class StudentAuthenticator
     /** Payload of the login card (`EVL1.{token}`) or the bare token. */
     public function loginWithQr(string $qrPayload, ?string $deviceName = null): NewAccessToken
     {
+        return $this->issueToken($this->studentByQr($qrPayload), $deviceName);
+    }
+
+    /**
+     * The active student of a QR card, with every check of the QR login but
+     * no token (also the first Google link of DESIGN §24.9.5).
+     */
+    public function studentByQr(string $qrPayload): User
+    {
         $token = CredentialIssuer::tokenFromPayload($qrPayload);
 
         $credential = $token === ''
@@ -43,10 +52,20 @@ class StudentAuthenticator
         $student = $credential->student;
         $this->assertActive($student);
 
-        return $this->issueToken($student, $deviceName);
+        return $student;
     }
 
     public function loginWithPin(string $classCode, int $studentNumber, string $pin, ?string $deviceName = null): NewAccessToken
+    {
+        return $this->issueToken($this->studentByPin($classCode, $studentNumber, $pin), $deviceName);
+    }
+
+    /**
+     * The active student behind class code + number + PIN, with the generic
+     * error, the failure counter and the lockout of the PIN login but no
+     * token (also the first Google link of DESIGN §24.9.5).
+     */
+    public function studentByPin(string $classCode, int $studentNumber, string $pin): User
     {
         $classroom = Classroom::query()->where('class_code', ClassCodeGenerator::normalize($classCode))->first();
 
@@ -71,7 +90,7 @@ class StudentAuthenticator
 
         $credential->forceFill(['failed_pin_attempts' => 0, 'locked_until' => null])->save();
 
-        return $this->issueToken($student, $deviceName);
+        return $student;
     }
 
     /**
@@ -100,7 +119,8 @@ class StudentAuthenticator
         });
     }
 
-    private function issueToken(User $student, ?string $deviceName): NewAccessToken
+    /** The student token of every login path: ability `student`, 180 days. */
+    public function issueToken(User $student, ?string $deviceName): NewAccessToken
     {
         return $student->createToken(
             $deviceName ?: self::TOKEN_NAME,

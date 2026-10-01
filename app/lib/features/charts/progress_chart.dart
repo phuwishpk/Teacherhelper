@@ -110,9 +110,14 @@ class IndicatorProgressCard extends ConsumerWidget {
     required this.selection,
     required this.onChanged,
     this.studentId,
+    this.courseId,
   });
 
   final int? studentId;
+
+  /// The course of the teacher's chart: a subject teacher must name it
+  /// (DESIGN §24.20); the homeroom teacher's answer ignores it.
+  final int? courseId;
   final ProgressSelection selection;
 
   /// Called after [selection] changed (the parent calls setState).
@@ -120,7 +125,11 @@ class IndicatorProgressCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final query = (studentId: studentId, skillIds: selection.key);
+    final query = (
+      studentId: studentId,
+      skillIds: selection.key,
+      courseId: courseId,
+    );
     final progress = ref.watch(indicatorProgressProvider(query));
     return ChartCard(
       title: 'พัฒนาการตามเวลา',

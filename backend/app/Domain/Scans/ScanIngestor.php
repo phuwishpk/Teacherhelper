@@ -2,6 +2,7 @@
 
 namespace App\Domain\Scans;
 
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\QrSigningKeyMissing;
 use App\Domain\Worksheets\WorksheetQr;
@@ -77,6 +78,7 @@ final class ScanIngestor
             throw new ApiException('ไม่พบการบ้านของใบงานนี้ในระบบ', 'qr_invalid', 422);
         }
         Gate::forUser($user)->authorize('scan', $assignment);
+        ClosedClassrooms::assertOpen($assignment->classroom); // §24.6
 
         $layout = $assignment->layouts()->where('version', $qr->layoutVersion)->first();
         if ($layout === null) {

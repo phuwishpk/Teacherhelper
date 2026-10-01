@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Jobs\ImportCourseWorkJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\GoogleAccount;
 use Illuminate\Database\Eloquent\Collection;
@@ -17,8 +18,10 @@ use Illuminate\Support\Facades\Log;
  * for one classroom by "ซิงก์ตอนนี้" (POST /classrooms/{id}/google-sync).
  * No Pub/Sub, no daemon: shared hosting.
  *
- * Scope: every linked classroom whose linking teacher's Google account works
- * (an account marked needs_reconnect is skipped until it connects again).
+ * Scope: every course linked to an open classroom (one per teacher since
+ * build 4, DESIGN §24.10) whose linking teacher's Google account works (an
+ * account marked needs_reconnect is skipped until it connects again). Each
+ * assignment syncs through the course of the teacher who manages it.
  *
  * 1. courseWork.list per course: new courseWork created on the Classroom
  *    website is mirrored (ImportCourseWorkJob, one per courseWork);
@@ -59,7 +62,7 @@ final class ClassroomSync
             }
             try {
                 foreach (CourseWorkImporter::newCourseWork(GoogleApi::forAccount($account, $this->tokens), $link) as $work) {
-                    ImportCourseWorkJob::dispatch($link->classroom_id, $work);
+                    ImportCourseWorkJob::dispatch($link->classroom_id, $work, $link->id);
                     $stats['imports']++;
                 }
                 $stats['courses']++;
@@ -73,7 +76,7 @@ final class ClassroomSync
 
         $posted = AssignmentGoogleLink::query()
             ->whereIn('assignment_id', Assignment::query()
-                ->whereIn('classroom_id', $links->modelKeys() === [] ? [0] : $links->modelKeys())
+                ->whereIn('classroom_id', $links->isEmpty() ? [0] : $links->pluck('classroom_id')->unique()->values()->all())
                 ->where('status', '!=', Assignment::STATUS_CLOSED)
                 ->select('id'))
             ->orderBy('last_synced_at')
@@ -112,9 +115,12 @@ final class ClassroomSync
     {
         return ClassroomGoogleLink::query()
             ->when($classroomId !== null, fn ($q) => $q->where('classroom_id', $classroomId))
+            // A closed classroom is read-only (DESIGN §24.6): the sync passes it by.
+            ->whereIn('classroom_id', Classroom::query()->select('id')->whereNull('closed_at'))
             ->whereIn('owner_user_id', GoogleAccount::query()->whereNull('last_error')->select('user_id'))
             ->orderBy('work_synced_at')
             ->orderBy('classroom_id')
+            ->orderBy('id')
             ->get();
     }
 }

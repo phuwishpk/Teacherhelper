@@ -2,7 +2,9 @@
 
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureClassroomOpen;
 use App\Http\Middleware\EnsureGoogleConfigured;
+use App\Http\Middleware\EnsureGoogleSignInConfigured;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
@@ -41,6 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'active' => EnsureUserIsActive::class,
             'google.configured' => EnsureGoogleConfigured::class,
+            // DESIGN §24.12 C: Google sign-in answers 503 google_signin_not_configured when off.
+            'google.signin' => EnsureGoogleSignInConfigured::class,
+            // DESIGN §24.6: writes on a closed classroom answer 409 classroom_closed.
+            'classroom.open' => EnsureClassroomOpen::class,
         ]);
 
         // There is no `login` route: the only web login is Filament's. API guests get
@@ -62,7 +68,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // stable codes so nothing on api/* falls back to Laravel's default body.
         $exceptions->render(function (ApiException $e, Request $request) use ($wantsApiError) {
             return $wantsApiError($request)
-                ? ApiErrorResponse::make($e->getMessage(), $e->errorCode, $e->status, $e->errors)
+                ? ApiErrorResponse::make($e->getMessage(), $e->errorCode, $e->status, $e->errors, [], $e->extra)
                 : null;
         });
 
@@ -112,6 +118,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 404 unknown route, 405, 429 from throttle, abort(...) and friends.
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) use ($wantsApiError) {
-            return $wantsApiError($request) ? ApiErrorResponse::fromHttpException($e) : null;
+            if (! $wantsApiError($request)) {
+                return null;
+            }
+            // A policy denial that names its own code (Response::deny($message,
+            // 'not_course_teacher'), DESIGN §24.8) keeps its message and code. Laravel
+            // turns the AuthorizationException into this HTTP exception first.
+            $denied = $e->getPrevious();
+            if ($denied instanceof AuthorizationException && is_string($denied->getCode()) && preg_match('/\A[a-z_]+\z/', $denied->getCode()) === 1) {
+                return ApiErrorResponse::make($denied->getMessage(), $denied->getCode(), $e->getStatusCode());
+            }
+
+            return ApiErrorResponse::fromHttpException($e);
         });
     })->create();

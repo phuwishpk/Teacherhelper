@@ -41,7 +41,8 @@ class ReviewController extends Controller
     public function queue(ReviewQueueRequest $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
-        Gate::authorize('review', $assignment);
+        // Reading the results: the homeroom teacher too, read-only (§24.8).
+        Gate::authorize('view', $assignment);
 
         try {
             $after = ReviewQueue::decodeCursor($request->validated('cursor'));

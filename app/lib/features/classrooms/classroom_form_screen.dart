@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -74,7 +75,9 @@ class _ClassroomFormScreenState extends ConsumerState<ClassroomFormScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  /// Saves the form. With [copyStudents] (create only) it opens the new
+  /// room and then "นำนักเรียนจากห้องเดิม" (DESIGN §24.6).
+  Future<void> _submit({bool copyStudents = false}) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
@@ -92,11 +95,18 @@ class _ClassroomFormScreenState extends ConsumerState<ClassroomFormScreen> {
           academicYear: year,
         );
       } else {
-        await notifier.create(
+        final created = await notifier.create(
           name: name,
           gradeLevel: _grade,
           academicYear: year,
         );
+        if (copyStudents && mounted) {
+          final router = GoRouter.of(context);
+          showMessage(context, 'สร้างห้องเรียนแล้ว');
+          router.pushReplacement(AppRoutes.classroom(created.id));
+          router.push(AppRoutes.studentsFromClassroom(created.id));
+          return;
+        }
       }
       if (!mounted) return;
       showMessage(
@@ -171,6 +181,22 @@ class _ClassroomFormScreenState extends ConsumerState<ClassroomFormScreen> {
               onPressed: _busy ? null : _submit,
               child: Text(editing ? 'บันทึก' : 'สร้างห้องเรียน'),
             ),
+            if (!editing) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const ValueKey('classroom_create_copy'),
+                onPressed: _busy ? null : () => _submit(copyStudents: true),
+                icon: const Icon(Icons.group_add_outlined),
+                label: const Text('สร้างแล้วนำนักเรียนจากห้องเดิม'),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'เช่น ห้องเดิมของปีการศึกษาก่อน นักเรียนใช้บัญชีเดิม '
+                'ประวัติและคะแนนต่อเนื่อง',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),

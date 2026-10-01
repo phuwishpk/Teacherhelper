@@ -8,15 +8,21 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../courses/classroom_courses_section.dart';
+import '../courses/courses_providers.dart' show classroomTeachingProvider;
 import '../google_classroom/classroom_google_section.dart';
 import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
+import '../google_signin/google_signin_errors.dart';
+import '../google_signin/google_signin_repository.dart';
 import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import '../scan/offline_cache_repository.dart';
 import '../worksheets/print_flow.dart';
 import 'classroom.dart';
+import 'classroom_lifecycle.dart';
 import 'classrooms_providers.dart';
 import 'classrooms_repository.dart';
+import 'duplicate_candidates_card.dart';
 import 'one_time_pins_view.dart';
+import 'student_edit_dialog.dart';
 
 class ClassroomDetailScreen extends ConsumerWidget {
   const ClassroomDetailScreen({super.key, required this.classroomId});
@@ -27,26 +33,32 @@ class ClassroomDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final classroom = ref.watch(classroomProvider(classroomId));
     final roster = ref.watch(rosterProvider(classroomId));
+    // A closed room ("ห้องเก่า") is read-only (DESIGN §24.6, §24.13).
+    final canManage = classroom.value?.canManageStudents ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(classroom.value?.name ?? 'ห้องเรียน'),
         actions: [
-          if (classroom.value case final c?)
+          if (classroom.value case final c? when c.canManageStudents)
             IconButton(
               tooltip: 'แก้ไข',
               icon: const Icon(Icons.edit_outlined),
               onPressed: () =>
                   context.push(AppRoutes.classroomEdit(c.id), extra: c),
             ),
+          if (classroom.value case final c? when c.isHomeroom)
+            ClassroomMenu(classroom: c),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'students_add',
-        onPressed: () => context.push(AppRoutes.studentsAdd(classroomId)),
-        icon: const Icon(Icons.group_add_outlined),
-        label: const Text('เพิ่มนักเรียน'),
-      ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              heroTag: 'students_add',
+              onPressed: () => context.push(AppRoutes.studentsAdd(classroomId)),
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('เพิ่มนักเรียน'),
+            )
+          : null,
       body: AsyncView(
         value: classroom,
         onRetry: () => ref.invalidate(classroomProvider(classroomId)),
@@ -57,13 +69,23 @@ class ClassroomDetailScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             child: ListView(
               children: [
+                if (c.isClosed) ...[
+                  ClosedClassroomBanner(classroom: c),
+                  const SizedBox(height: 8),
+                ],
+                if (c.isSubject) ...[
+                  SubjectTeacherBanner(classroom: c),
+                  const SizedBox(height: 8),
+                ],
                 _HeaderCard(classroom: c),
                 const SizedBox(height: 12),
                 _ActionsRow(classroom: c),
                 const SizedBox(height: 12),
-                ClassroomCoursesSection(classroomId: c.id),
+                ClassroomCoursesSection(classroom: c),
                 const SizedBox(height: 12),
-                ClassroomGoogleSection(classroom: c),
+                // Linking and syncing write: not for a closed room. Every
+                // teacher of the room links their own course (§24.24).
+                if (!c.isClosed) ClassroomGoogleSection(classroom: c),
                 const SizedBox(height: 4),
                 Text(
                   'รายชื่อนักเรียน',
@@ -76,12 +98,42 @@ class ClassroomDetailScreen extends ConsumerWidget {
                       ref.read(rosterProvider(classroomId).notifier).refresh(),
                   data: (students) {
                     if (students.isEmpty) {
-                      return const Card(
+                      return Card(
                         child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            'ยังไม่มีนักเรียน กด "เพิ่มนักเรียน" แล้ววางรายชื่อจากไฟล์ของโรงเรียน',
-                            textAlign: TextAlign.center,
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              Text(
+                                c.canManageStudents
+                                    ? 'ยังไม่มีนักเรียน กด "เพิ่มนักเรียน" แล้ววางรายชื่อจากไฟล์ของโรงเรียน '
+                                          'หรือเลือกนักเรียนที่มีบัญชีในโรงเรียนอยู่แล้ว'
+                                    : 'ห้องนี้ไม่มีนักเรียน',
+                                textAlign: TextAlign.center,
+                              ),
+                              if (c.canManageStudents) ...[
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  key: const ValueKey('roster_add_existing'),
+                                  onPressed: () => context.push(
+                                    AppRoutes.studentsAddExisting(c.id),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.person_search_outlined,
+                                  ),
+                                  label: const Text('เลือกนักเรียนที่มีอยู่'),
+                                ),
+                                TextButton.icon(
+                                  key: const ValueKey(
+                                    'roster_copy_from_classroom',
+                                  ),
+                                  onPressed: () => context.push(
+                                    AppRoutes.studentsFromClassroom(c.id),
+                                  ),
+                                  icon: const Icon(Icons.move_up_outlined),
+                                  label: const Text('นำนักเรียนจากห้องเดิม'),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       );
@@ -90,7 +142,12 @@ class ClassroomDetailScreen extends ConsumerWidget {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (pending.isNotEmpty) ...[
+                        if (c.canManageStudents)
+                          DuplicateCandidatesCard(
+                            classroomId: c.id,
+                            studentIds: {for (final s in students) s.studentId},
+                          ),
+                        if (pending.isNotEmpty && c.canManageStudents) ...[
                           _PendingPinsCard(classroom: c, count: pending.length),
                           const SizedBox(height: 8),
                         ],
@@ -99,7 +156,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
                           child: Column(
                             children: [
                               for (final s in students) ...[
-                                _StudentTile(student: s, classroomId: c.id),
+                                _StudentTile(student: s, classroom: c),
                                 if (s != students.last)
                                   const Divider(height: 1),
                               ],
@@ -180,9 +237,20 @@ class _ActionsRow extends ConsumerWidget {
 
   final Classroom classroom;
 
-  Future<void> _printCards(BuildContext context, WidgetRef ref) {
+  Future<void> _printCards(BuildContext context, WidgetRef ref) async {
+    // One QR card per student across rooms (DESIGN §24.4): printing the
+    // whole room gives everyone a new card.
+    final ok = await confirm(
+      context,
+      title: 'พิมพ์บัตร QR ทั้งห้อง?',
+      message:
+          'นักเรียนทุกคนในห้องนี้จะได้บัตรใหม่ บัตรเดิมใช้ไม่ได้ '
+          'รวมถึงบัตรเดิมของนักเรียนที่อยู่หลายห้อง',
+      confirmLabel: 'พิมพ์บัตร',
+    );
+    if (!ok || !context.mounted) return;
     final repo = ref.read(classroomsRepositoryProvider);
-    return runPrintFlow(
+    await runPrintFlow(
       context,
       ref,
       title: 'บัตร QR ${classroom.name}',
@@ -211,39 +279,46 @@ class _ActionsRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A closed room takes no write (DESIGN §24.6): no cards, scans or work.
+    final open = !classroom.isClosed;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        FilledButton.tonalIcon(
-          onPressed: () => _printCards(context, ref),
-          icon: const Icon(Icons.qr_code_2),
-          label: const Text('พิมพ์บัตร QR'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: () => _prepareOffline(context, ref),
-          icon: const Icon(Icons.download_for_offline_outlined),
-          label: const Text('เตรียมสแกนออฟไลน์'),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => context.push(
-            '${AppRoutes.assignmentNew}?classroom=${classroom.id}',
+        if (open && classroom.isHomeroom)
+          FilledButton.tonalIcon(
+            onPressed: () => _printCards(context, ref),
+            icon: const Icon(Icons.qr_code_2),
+            label: const Text('พิมพ์บัตร QR'),
           ),
-          icon: const Icon(Icons.assignment_add),
-          label: const Text('สร้างการบ้าน'),
-        ),
+        if (open)
+          FilledButton.tonalIcon(
+            onPressed: () => _prepareOffline(context, ref),
+            icon: const Icon(Icons.download_for_offline_outlined),
+            label: const Text('เตรียมสแกนออฟไลน์'),
+          ),
+        if (open)
+          OutlinedButton.icon(
+            onPressed: () => context.push(
+              '${AppRoutes.assignmentNew}?classroom=${classroom.id}',
+            ),
+            icon: const Icon(Icons.assignment_add),
+            label: const Text('สร้างการบ้าน'),
+          ),
         OutlinedButton.icon(
           onPressed: () =>
               context.push(AppRoutes.classroomMastery(classroom.id)),
           icon: const Icon(Icons.grid_on_outlined),
           label: const Text('ทักษะของห้อง'),
         ),
-        OutlinedButton.icon(
-          onPressed: () =>
-              context.push(AppRoutes.classroomAnalyses(classroom.id)),
-          icon: const Icon(Icons.auto_awesome_outlined),
-          label: const Text('วิเคราะห์รายคน'),
-        ),
+        // The AI analysis is the homeroom teacher's (DESIGN §24.8).
+        if (classroom.isHomeroom)
+          OutlinedButton.icon(
+            onPressed: () =>
+                context.push(AppRoutes.classroomAnalyses(classroom.id)),
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('วิเคราะห์รายคน'),
+          ),
       ],
     );
   }
@@ -366,10 +441,75 @@ class PendingPinsPage extends StatelessWidget {
 }
 
 class _StudentTile extends ConsumerWidget {
-  const _StudentTile({required this.student, required this.classroomId});
+  const _StudentTile({required this.student, required this.classroom});
 
   final RosterStudent student;
-  final int classroomId;
+  final Classroom classroom;
+
+  int get classroomId => classroom.id;
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final saved = await showStudentEditDialog(
+      context,
+      classroomId: classroomId,
+      student: student,
+    );
+    if (!saved || !context.mounted) return;
+    await ref.read(rosterProvider(classroomId).notifier).refresh();
+    if (context.mounted) showMessage(context, 'บันทึกข้อมูลนักเรียนแล้ว');
+  }
+
+  Future<void> _remove(BuildContext context, WidgetRef ref) async {
+    final ok = await confirm(
+      context,
+      title: 'เอา ${student.name} ออกจากห้อง?',
+      message:
+          'บัญชีของนักเรียนยังอยู่ และยังอยู่ในห้องอื่นตามเดิม '
+          'เอาออกได้เฉพาะเมื่อยังไม่มีงานหรือคะแนนในห้องนี้',
+      confirmLabel: 'เอาออก',
+      destructive: true,
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      await ref
+          .read(classroomsRepositoryProvider)
+          .removeStudent(classroomId, student.studentId);
+      ref.invalidate(classroomsProvider);
+      await ref.read(rosterProvider(classroomId).notifier).refresh();
+      if (context.mounted) {
+        showMessage(context, 'เอา ${student.name} ออกจากห้องแล้ว');
+      }
+    } catch (e) {
+      if (context.mounted) showMessage(context, apiErrorMessage(e));
+    }
+  }
+
+  /// "ยกเลิกการเชื่อม Google" (DESIGN §24.9.5): the homeroom teacher
+  /// removes the student's Google sign-in; PIN and card keep working.
+  Future<void> _unlinkGoogle(BuildContext context, WidgetRef ref) async {
+    final ok = await confirm(
+      context,
+      title: 'ยกเลิกการเชื่อม Google ของ ${student.name}?',
+      message:
+          'นักเรียนจะเข้าสู่ระบบด้วยปุ่ม Google ไม่ได้จนกว่าจะเชื่อมใหม่ '
+          'ยังเข้าสู่ระบบด้วยบัตร QR หรือ PIN ได้ตามเดิม '
+          'เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้ ถ้าต้องการให้ออกทุกเครื่องให้รีเซ็ต PIN',
+      confirmLabel: 'ยกเลิกการเชื่อม',
+      destructive: true,
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      await ref
+          .read(googleSignInRepositoryProvider)
+          .unlinkStudent(student.studentId);
+      await ref.read(rosterProvider(classroomId).notifier).refresh();
+      if (context.mounted) {
+        showMessage(context, 'ยกเลิกการเชื่อม Google ของ ${student.name} แล้ว');
+      }
+    } catch (e) {
+      if (context.mounted) showMessage(context, googleSignInErrorMessage(e));
+    }
+  }
 
   Future<void> _reissueCard(BuildContext context, WidgetRef ref) async {
     final ok = await confirm(
@@ -396,7 +536,8 @@ class _StudentTile extends ConsumerWidget {
       context,
       title: 'รีเซ็ต PIN ของ ${student.name}?',
       message:
-          'PIN เดิมจะใช้ไม่ได้ และนักเรียนจะถูกออกจากระบบทุกเครื่อง PIN ใหม่จะแสดงครั้งเดียว',
+          'PIN เดิมจะใช้ไม่ได้ นักเรียนจะถูกออกจากระบบทุกเครื่อง '
+          'และการเชื่อมบัญชี Google (ถ้ามี) จะถูกยกเลิก PIN ใหม่จะแสดงครั้งเดียว',
       confirmLabel: 'รีเซ็ต PIN',
     );
     if (!ok || !context.mounted) return;
@@ -429,6 +570,14 @@ class _StudentTile extends ConsumerWidget {
                 'จดไว้ให้นักเรียนตอนนี้ ระบบจะไม่แสดง PIN นี้อีก',
                 textAlign: TextAlign.center,
               ),
+              if (reset.googleUnlinked) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'ยกเลิกการเชื่อมบัญชี Google แล้ว นักเรียนต้องเข้าด้วย PIN ใหม่แล้วเชื่อม Google อีกครั้ง',
+                  key: ValueKey('pin_reset_google_unlinked'),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
           ),
           actions: [
@@ -444,21 +593,49 @@ class _StudentTile extends ConsumerWidget {
     }
   }
 
+  /// A subject teacher sees only their own course's indicators (§24.20).
+  void _openMastery(BuildContext context, WidgetRef ref) {
+    int? courseId;
+    if (classroom.isSubject) {
+      courseId = ref
+          .read(classroomTeachingProvider(classroomId))
+          .value
+          ?.firstOrNull
+          ?.id;
+    }
+    context.push(
+      AppRoutes.studentMastery(
+        classroomId,
+        student.studentId,
+        courseId: courseId,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
+      key: ValueKey('roster_student_${student.studentId}'),
       leading: CircleAvatar(
         radius: 18,
         child: Text('${student.studentNumber}'),
       ),
       title: Text(student.name),
-      subtitle: student.leftCourse || student.pinPending
+      subtitle:
+          student.leftCourse ||
+              student.pinPending ||
+              student.studentCode != null
           ? Align(
               alignment: AlignmentDirectional.centerStart,
               child: Wrap(
                 spacing: 6,
                 runSpacing: 4,
                 children: [
+                  if (student.studentCode case final code?)
+                    Text(
+                      'เลขประจำตัว $code',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   if (student.leftCourse)
                     StatusChip(
                       key: ValueKey('left_course_${student.studentId}'),
@@ -475,52 +652,138 @@ class _StudentTile extends ConsumerWidget {
               ),
             )
           : null,
-      onTap: () => context.push(
-        AppRoutes.studentMastery(classroomId, student.studentId),
-      ),
+      onTap: () => _openMastery(context, ref),
       trailing: PopupMenuButton<String>(
         tooltip: 'ตัวเลือก',
         onSelected: (v) => switch (v) {
-          'mastery' => context.push(
-            AppRoutes.studentMastery(classroomId, student.studentId),
-          ),
+          'mastery' => _openMastery(context, ref),
           'analysis' => context.push(
             AppRoutes.studentAnalysis(classroomId, student.studentId),
           ),
           'card' => _reissueCard(context, ref),
           'pin' => _resetPin(context, ref),
+          'edit' => _edit(context, ref),
+          'merge' => context.push(
+            AppRoutes.studentMerge(classroomId, student.studentId),
+          ),
+          'google' => _unlinkGoogle(context, ref),
+          'remove' => _remove(context, ref),
           _ => null,
         },
-        itemBuilder: (context) => const [
-          PopupMenuItem(
+        itemBuilder: (context) => [
+          const PopupMenuItem(
             value: 'mastery',
             child: ListTile(
               leading: Icon(Icons.insights_outlined),
               title: Text('ทักษะและจุดอ่อน'),
             ),
           ),
-          PopupMenuItem(
-            value: 'analysis',
-            child: ListTile(
-              leading: Icon(Icons.auto_awesome_outlined),
-              title: Text('วิเคราะห์รายคน (AI)'),
+          if (classroom.isHomeroom)
+            const PopupMenuItem(
+              value: 'analysis',
+              child: ListTile(
+                leading: Icon(Icons.auto_awesome_outlined),
+                title: Text('วิเคราะห์รายคน (AI)'),
+              ),
             ),
-          ),
-          PopupMenuItem(
-            value: 'card',
-            child: ListTile(
-              leading: Icon(Icons.qr_code_2),
-              title: Text('ออกบัตร QR ใหม่'),
+          // Editing the student is for the homeroom teacher of an open
+          // room (DESIGN §24.2); merging works from closed rooms too
+          // (§24.5).
+          if (classroom.canManageStudents) ...const [
+            PopupMenuItem(
+              value: 'edit',
+              child: ListTile(
+                leading: Icon(Icons.edit_outlined),
+                title: Text('แก้ชื่อ เลขประจำตัว และเลขที่'),
+              ),
             ),
-          ),
-          PopupMenuItem(
-            value: 'pin',
-            child: ListTile(
-              leading: Icon(Icons.password),
-              title: Text('รีเซ็ต PIN'),
+            PopupMenuItem(
+              value: 'card',
+              child: ListTile(
+                leading: Icon(Icons.qr_code_2),
+                title: Text('ออกบัตร QR ใหม่'),
+              ),
             ),
-          ),
+            PopupMenuItem(
+              value: 'pin',
+              child: ListTile(
+                leading: Icon(Icons.password),
+                title: Text('รีเซ็ต PIN'),
+              ),
+            ),
+          ],
+          if (classroom.canManageStudents && student.googleLinked == true)
+            const PopupMenuItem(
+              value: 'google',
+              child: ListTile(
+                leading: Icon(Icons.link_off),
+                title: Text('ยกเลิกการเชื่อม Google'),
+              ),
+            ),
+          if (classroom.isHomeroom)
+            const PopupMenuItem(
+              value: 'merge',
+              child: ListTile(
+                leading: Icon(Icons.merge_type),
+                title: Text('รวมบัญชีนักเรียน'),
+              ),
+            ),
+          if (classroom.canManageStudents)
+            const PopupMenuItem(
+              value: 'remove',
+              child: ListTile(
+                leading: Icon(Icons.person_remove_outlined),
+                title: Text('เอาออกจากห้อง'),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// On a room the teacher teaches as a subject teacher (DESIGN §24.7,
+/// §24.13): who the homeroom teacher is, and that the roster and the
+/// students' data are read-only here.
+class SubjectTeacherBanner extends StatelessWidget {
+  const SubjectTeacherBanner({super.key, required this.classroom});
+
+  final Classroom classroom;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = TextStyle(color: scheme.onTertiaryContainer);
+    final owner = classroom.homeroomTeacher?.name;
+    return Card(
+      key: const ValueKey('subject_banner'),
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.co_present_outlined, color: scheme.onTertiaryContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    owner == null
+                        ? 'คุณเป็นครูประจำวิชาของห้องนี้'
+                        : 'ห้องของ $owner (ครูประจำชั้น)',
+                    style: style.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'สั่งงานและดูผลได้เฉพาะรายวิชาของคุณ รายชื่อนักเรียนดูได้อย่างเดียว '
+                    'แก้รายชื่อหรือข้อมูลนักเรียนให้ติดต่อครูประจำชั้น',
+                    style: style,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

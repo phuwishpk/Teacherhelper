@@ -48,9 +48,9 @@ final class GradebookOverview
         $courses = $courses
             ->with([
                 'gradebookCategories',
-                // Only the teacher's own classrooms, as GradebookAccess::classroom() requires.
-                'classrooms' => fn ($q) => $q->where('classrooms.teacher_id', $teacher->id)
-                    ->where('classrooms.school_id', $teacher->school_id)
+                // Every classroom the own course is bound to (homeroom or subject, §24.8),
+                // as GradebookAccess::classroom() accepts.
+                'classrooms' => fn ($q) => $q->where('classrooms.school_id', $teacher->school_id)
                     ->orderBy('classrooms.name')->orderBy('classrooms.id'),
             ])
             ->orderByDesc('academic_year')->orderByDesc('semester')->orderBy('code')->orderBy('id')

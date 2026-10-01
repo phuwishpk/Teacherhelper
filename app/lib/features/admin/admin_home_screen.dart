@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/google_browser_connect.dart';
+import '../google_signin/google_identity_card.dart';
 import 'admin_repository.dart';
 
 /// Where an admin lands after the unified login (DESIGN §7.4). Admin work
@@ -82,6 +83,10 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
             const SizedBox(height: 16),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
           ],
+          const SizedBox(height: 24),
+          // Linked here after a password login; an admin is never linked
+          // from their e-mail (DESIGN §24.9.3, #61).
+          const GoogleIdentityCard(),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: () => ref.read(sessionProvider.notifier).signOut(),

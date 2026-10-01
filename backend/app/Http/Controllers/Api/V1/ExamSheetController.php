@@ -47,7 +47,8 @@ class ExamSheetController extends Controller
             ->with('submission.assignment.classroom')
             ->whereIn('submission_id', self::ownSubmissions($request))
             ->findOrFail($id);
-        Gate::authorize('view', $scan);
+        // A review write: the exam's manager only (the homeroom teacher reads, §24.8).
+        Gate::authorize('confirmReplace', $scan);
 
         return response()->json($review->chooseVersion($request->user(), $scan, $request->all()));
     }

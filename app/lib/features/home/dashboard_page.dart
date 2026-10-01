@@ -81,11 +81,17 @@ class DashboardPage extends ConsumerWidget {
             AiKeyCard(onOpenSettings: () => context.push(AppRoutes.settings)),
             const SizedBox(height: 12),
             TeacherAttentionCard(
-              onOpen: (target) => onNavigate(switch (target) {
-                AttentionTarget.classrooms => 1,
-                AttentionTarget.assignments => 2,
-                AttentionTarget.review => 3,
-              }),
+              onOpen: (target) {
+                if (target == AttentionTarget.courseRequests) {
+                  context.push(AppRoutes.courseRequests);
+                  return;
+                }
+                onNavigate(switch (target) {
+                  AttentionTarget.classrooms => 1,
+                  AttentionTarget.assignments => 2,
+                  _ => 3,
+                });
+              },
             ),
             const SizedBox(height: 12),
             Card(

@@ -6,20 +6,33 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../student/student_labels.dart';
 import 'hand_in_models.dart';
 import 'hand_in_repository.dart';
 
-/// Student tab "ส่งงาน" (DESIGN §19.6, §19.11): the ready assignments of the
-/// student's classrooms, soonest due first. Each opens the hand-in screen;
-/// a published one opens its result instead.
-class StudentAssignmentsPage extends ConsumerWidget {
+/// Student tab "ส่งงาน" (DESIGN §19.6, §19.11, §24.11): the ready
+/// assignments of every classroom of the student in one list, grouped by
+/// subject with the classroom label, soonest due first within a subject;
+/// chips switch to one subject. Each opens the hand-in screen; a published
+/// one opens its result instead.
+class StudentAssignmentsPage extends ConsumerStatefulWidget {
   const StudentAssignmentsPage({super.key, this.now});
 
   /// Clock for the overdue labels (tests).
   final DateTime Function()? now;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudentAssignmentsPage> createState() =>
+      _StudentAssignmentsPageState();
+}
+
+class _StudentAssignmentsPageState
+    extends ConsumerState<StudentAssignmentsPage> {
+  /// The [SubjectTag.key] shown, or null for every subject.
+  String? _subject;
+
+  @override
+  Widget build(BuildContext context) {
     final list = ref.watch(studentAssignmentsProvider);
     Future<void> refresh() => ref.refresh(studentAssignmentsProvider.future);
     return AsyncView(
@@ -42,14 +55,27 @@ class StudentAssignmentsPage extends ConsumerWidget {
             ),
           );
         }
-        final time = (now ?? DateTime.now)();
+        final time = (widget.now ?? DateTime.now)();
+        final sections = groupBySubject(items, (a) => a.tag);
+        final tags = [for (final s in sections) s.tag];
+        final selected = tags.any((t) => t.key == _subject) ? _subject : null;
         return RefreshIndicator(
           onRefresh: refresh,
           child: ContentColumn(
-            child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, i) =>
-                  _AssignmentCard(assignment: items[i], now: time),
+            child: ListView(
+              children: [
+                SubjectFilterBar(
+                  tags: tags,
+                  selected: selected,
+                  onSelected: (key) => setState(() => _subject = key),
+                ),
+                for (final section in sections)
+                  if (selected == null || section.tag.key == selected) ...[
+                    SubjectSectionHeader(tag: section.tag),
+                    for (final a in section.items)
+                      StudentAssignmentCard(assignment: a, now: time),
+                  ],
+              ],
             ),
           ),
         );
@@ -58,8 +84,14 @@ class StudentAssignmentsPage extends ConsumerWidget {
   }
 }
 
-class _AssignmentCard extends StatelessWidget {
-  const _AssignmentCard({required this.assignment, required this.now});
+/// One assignment of the student: due time, hand-in labels; opens the
+/// hand-in screen or, once published, the result.
+class StudentAssignmentCard extends StatelessWidget {
+  const StudentAssignmentCard({
+    super.key,
+    required this.assignment,
+    required this.now,
+  });
 
   final StudentAssignment assignment;
   final DateTime now;
@@ -81,14 +113,9 @@ class _AssignmentCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              [
-                ?a.subjectName,
-                ?a.classroomName,
-                if (a.dueAt != null)
-                  'กำหนดส่ง ${formatThaiDateTime(a.dueAt!)}'
-                else
-                  'ไม่มีกำหนดส่ง',
-              ].join(' · '),
+              a.dueAt != null
+                  ? 'กำหนดส่ง ${formatThaiDateTime(a.dueAt!)}'
+                  : 'ไม่มีกำหนดส่ง',
             ),
             if (chips.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -111,7 +138,7 @@ class _AssignmentCard extends StatelessWidget {
   }
 }
 
-/// "ส่งแล้ว", "ส่งช้า", "เลยกำหนด", "ปิดรับแล้ว", "ประกาศผลแล้ว".
+/// "ส่งแล้ว", "ส่งช้า", "เลยกำหนด", "ปิดรับแล้ว", "ห้องเก่า", "ประกาศผลแล้ว".
 List<Widget> studentAssignmentChips(
   StudentAssignment a,
   DateTime now,
@@ -127,7 +154,9 @@ List<Widget> studentAssignmentChips(
       color: scheme.primary,
     ),
   if (a.late) StatusChip(label: 'ส่งช้า', color: scheme.error),
-  if (!a.isSubmitted && !a.canSubmit)
+  if (!a.isSubmitted && !a.canSubmit && (a.classroom?.closed ?? false))
+    StatusChip(label: 'ห้องเก่า ส่งไม่ได้แล้ว', color: scheme.outline)
+  else if (!a.isSubmitted && !a.canSubmit)
     StatusChip(label: 'ปิดรับแล้ว', color: scheme.error)
   else if (!a.isSubmitted && a.isOverdue(now))
     StatusChip(label: 'เลยกำหนด ส่งได้แต่จะติดป้ายส่งช้า', color: scheme.error),

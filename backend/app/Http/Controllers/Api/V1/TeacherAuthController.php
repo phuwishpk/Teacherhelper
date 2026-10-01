@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Auth\Google\GoogleSignIn;
+use App\Domain\Auth\Google\GoogleSignInConfig;
+use App\Domain\Auth\Google\GoogleSignInErrors;
+use App\Domain\Auth\Google\GoogleSignInTickets;
+use App\Domain\Auth\Google\VerifiedGoogleIdentity;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\TeacherLoginRequest;
@@ -9,9 +14,11 @@ use App\Http\Requests\Api\V1\TeacherRegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\School;
 use App\Models\User;
+use App\Models\UserGoogleIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -28,8 +35,13 @@ class TeacherAuthController extends Controller
      * school_code must match schools.teacher_join_code. The account is created
      * `pending` (DESIGN §9.1) and can log in only after an admin approves it in
      * Filament (UserResource "approve"), which sets status=active + approved_by.
+     *
+     * google_link_ticket (DESIGN §24.9.5): the Google account of a 404
+     * google_not_linked is linked as the account is created (`registration`),
+     * after the school's domain check; it signs in once an admin approves.
+     * 422 link_ticket_invalid, 403 google_domain_not_allowed, 409 google_already_linked.
      */
-    public function register(TeacherRegisterRequest $request): JsonResponse
+    public function register(TeacherRegisterRequest $request, GoogleSignInTickets $tickets, GoogleSignIn $signIn): JsonResponse
     {
         $data = $request->validated();
 
@@ -43,18 +55,60 @@ class TeacherAuthController extends Controller
             );
         }
 
-        $user = User::create([
-            'school_id' => $school->id,
-            'role' => User::ROLE_TEACHER,
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => $data['password'],
-            'status' => User::STATUS_PENDING,
-        ]);
+        $ticket = $data['google_link_ticket'] ?? null;
+        $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket, $school);
+
+        $user = DB::transaction(function () use ($data, $school, $google, $ticket, $tickets, $signIn) {
+            $user = User::create([
+                'school_id' => $school->id,
+                'role' => User::ROLE_TEACHER,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'status' => User::STATUS_PENDING,
+            ]);
+            if ($google !== null) {
+                if ($tickets->consumeLink($ticket) === null) {
+                    throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
+                }
+                $signIn->link($user->setRelation('school', $school), $google, UserGoogleIdentity::VIA_REGISTRATION, $user);
+            }
+
+            return $user;
+        });
 
         return response()->json([
             'user' => new UserResource($user->setRelation('school', $school)),
         ], 201);
+    }
+
+    /**
+     * The Google account behind a registration's link ticket, checked
+     * against the school's domains and existing links (nothing spent yet).
+     *
+     * @throws ApiException
+     */
+    private static function registrationIdentity(GoogleSignInTickets $tickets, string $ticket, School $school): VerifiedGoogleIdentity
+    {
+        if (! GoogleSignInConfig::enabled()) {
+            throw GoogleSignInErrors::notConfigured();
+        }
+        $google = $tickets->peekLink($ticket);
+        if ($google === null) {
+            throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
+        }
+        if (! $school->allowsGoogleDomain($google->domain())) {
+            GoogleSignIn::log('register', 'google_domain_not_allowed');
+
+            throw GoogleSignInErrors::domainNotAllowed();
+        }
+        if (UserGoogleIdentity::query()->where('google_sub', $google->sub)->exists()) {
+            GoogleSignIn::log('register', 'google_already_linked');
+
+            throw GoogleSignInErrors::alreadyLinked();
+        }
+
+        return $google;
     }
 
     /** Sanctum token lifetime for admins: their token only opens the panel handoff. */
