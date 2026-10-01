@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminHandoffLinkController;
 use App\Http\Controllers\GoogleOAuthCallbackController;
+use App\Http\Controllers\GoogleSignInCallbackController;
 use App\Http\Controllers\ResultLinkController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
@@ -21,6 +22,16 @@ Route::get('google/oauth/callback', GoogleOAuthCallbackController::class)
     ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
     ->middleware('throttle:google-oauth-callback')
     ->name('google.oauth.callback');
+
+// Google's redirect after the account chooser of the browser sign-in flow
+// (POST /api/v1/auth/google/web-url, DESIGN §24.9.4). No login, session or
+// cookie: the single-use state says what was asked. Register this exact URL
+// (GOOGLE_SIGNIN_REDIRECT_URI, default APP_URL + /auth/google/callback) in
+// the Web client of the sign-in project.
+Route::get('auth/google/callback', GoogleSignInCallbackController::class)
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
+    ->middleware('throttle:google-signin-callback')
+    ->name('auth.google.callback');
 
 // The link in a private Classroom announcement (DESIGN §19.7): a Thai page
 // that opens the result in the app. No login and no student data.

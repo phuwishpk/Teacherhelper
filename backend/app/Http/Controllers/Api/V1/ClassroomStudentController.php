@@ -150,7 +150,7 @@ class ClassroomStudentController extends Controller
         Gate::authorize('viewRoster', $classroom);
         $request->attributes->set(RosterStudentResource::LIMITED, ! ClassroomAccess::homeroomOf($request->user(), $classroom));
 
-        return RosterStudentResource::collection($classroom->students()->get());
+        return RosterStudentResource::collection($classroom->students()->with('googleIdentity')->get());
     }
 
     /**

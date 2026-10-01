@@ -98,6 +98,15 @@ class ClosedClassroomTest extends TestCase
         'api.students.update' => 403,
         'api.students.pin' => 403,
         'api.students.login-card' => 403,
+        'api.students.google-identity.destroy' => 403,
+        // Google sign-in (§24.9): accounts, not classrooms.
+        'api.auth.google' => null,
+        'api.auth.google.web-url' => null,
+        'api.auth.google.ticket' => null,
+        'api.auth.google.link-with-pin' => null,
+        'api.auth.google.link-with-qr' => null,
+        'api.me.google-identity.store' => null,
+        'api.me.google-identity.destroy' => null,
     ];
 
     /** Student routes, called by student A2 (who owns responseA2 and is in classroom A). */
@@ -108,6 +117,7 @@ class ClosedClassroomTest extends TestCase
         parent::setUp();
         $this->makeSecurityWorld();
         $this->configureGoogle();
+        config(['services.google_signin.client_ids' => 'test-signin-client.apps.googleusercontent.com']);
         $this->fakeGoogle([
             'classroom.googleapis.com/*' => Http::response(['courses' => [], 'students' => [], 'studentSubmissions' => []]),
             'www.googleapis.com/*' => Http::response([]),

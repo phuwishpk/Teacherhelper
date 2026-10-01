@@ -57,6 +57,8 @@ final class StudentMerger
         'submission_pages.uploaded_by' => self::MOVE,
         'score_events.actor_user_id' => self::MOVE,
         'student_analyses.student_id' => self::MOVE,
+        'user_google_identities.user_id' => self::MOVE, // only when K has none; both linked refuses the merge
+        'user_google_identities.linked_by' => self::MOVE,
         'mastery.student_id' => self::DELETE, // recomputed for K from the moved observations
         'student_credentials.student_id' => self::DELETE,
         'device_tokens.user_id' => self::DELETE,
@@ -176,6 +178,11 @@ final class StudentMerger
             $summary['mastery'] = ['dropped' => $droppedMastery, 'recomputed_skill_ids' => $skillIds];
 
             $summary['student_analyses'] = $this->moveKeyed('student_analyses', ['classroom_id'], $k->id, $d->id, 'id');
+            // Google sign-in (§24.5): conflicts() refused the merge when both are linked.
+            $summary['user_google_identities'] = [
+                'moved' => $this->moveColumn('user_google_identities', 'user_id', $k->id, $d->id),
+                'linked_by_moved' => $this->moveColumn('user_google_identities', 'linked_by', $k->id, $d->id),
+            ];
 
             if ($k->student_code === null && $d->student_code !== null) {
                 $code = $d->student_code;
@@ -277,6 +284,11 @@ final class StudentMerger
             }
         }
 
+        if (DB::table('user_google_identities')->where('user_id', $keep->id)->exists()
+            && DB::table('user_google_identities')->where('user_id', $merge->id)->exists()) {
+            $conflicts[] = ['type' => 'google', 'message' => 'ทั้งสองบัญชีเชื่อมบัญชี Google สำหรับเข้าสู่ระบบไว้ ยกเลิกการเชื่อมของบัญชีใดบัญชีหนึ่งก่อน'];
+        }
+
         if ($keep->student_code !== null && $merge->student_code !== null && $keep->student_code !== $merge->student_code) {
             $conflicts[] = ['type' => 'student_code', 'message' => "เลขประจำตัวต่างกัน ({$keep->student_code} กับ {$merge->student_code}) ล้างเลขของบัญชีใดบัญชีหนึ่งก่อน"];
         }
@@ -329,8 +341,10 @@ final class StudentMerger
             'observations' => DB::table('skill_observations')->where('student_id', $student->id)->count(),
             'mastery_skills' => DB::table('mastery')->where('student_id', $student->id)->count(),
             'analyses' => DB::table('student_analyses')->where('student_id', $student->id)->count(),
-            // The Google accounts the Classroom rosters matched (§18.4); sign-in links come with build 3.
-            'google_emails' => $classrooms->pluck('google_email')->filter()->map(fn ($e) => mb_strtolower((string) $e))->unique()->values()->all(),
+            // The Google sign-in account (§24.9) first, then those the Classroom rosters matched (§18.4).
+            'google_emails' => collect([DB::table('user_google_identities')->where('user_id', $student->id)->value('email')])
+                ->merge($classrooms->pluck('google_email'))
+                ->filter()->map(fn ($e) => mb_strtolower((string) $e))->unique()->values()->all(),
         ];
     }
 

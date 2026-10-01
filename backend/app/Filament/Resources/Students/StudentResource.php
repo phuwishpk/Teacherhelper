@@ -2,15 +2,18 @@
 
 namespace App\Filament\Resources\Students;
 
+use App\Domain\Auth\Google\GoogleSignIn;
 use App\Filament\Resources\Students\Pages\DuplicateStudents;
 use App\Filament\Resources\Students\Pages\ManageStudents;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -21,8 +24,8 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * DESIGN §24.13: the students of the school in Filament, searchable by name
- * or student code, with "รวมบัญชีนักเรียน" (the row is the account kept)
- * and the page of likely duplicates. Students are created and edited by
+ * or student code, with "รวมบัญชีนักเรียน" (the row is the account kept),
+ * "ยกเลิกการเชื่อม Google" (§24.9.5) and the page of likely duplicates. Students are created and edited by
  * their homeroom teachers in the app. An admin of a school sees that
  * school's students; a system admin (school_id null) sees all.
  */
@@ -51,6 +54,10 @@ class StudentResource extends Resource
                 TextColumn::make('name')->label('ชื่อ')->searchable()->sortable(),
                 TextColumn::make('student_code')->label('เลขประจำตัว')->searchable()->placeholder('—'),
                 TextColumn::make('classrooms.name')->label('ห้อง')->badge()->placeholder('—'),
+                IconColumn::make('google')
+                    ->label('Google')
+                    ->state(fn (User $record) => $record->googleIdentity !== null)
+                    ->boolean(),
                 TextColumn::make('school.name')->label('โรงเรียน')->sortable()
                     ->visible(fn () => self::admin()?->school_id === null),
                 TextColumn::make('status')
@@ -82,6 +89,20 @@ class StudentResource extends Resource
                     ->visible(fn () => self::admin()?->school_id === null),
             ])
             ->recordActions([
+                Action::make('unlinkGoogle')
+                    ->label('ยกเลิกการเชื่อม Google')
+                    ->icon(Heroicon::OutlinedLinkSlash)
+                    ->color('danger')
+                    ->visible(fn (User $record) => $record->googleIdentity !== null)
+                    ->authorize(fn (User $record) => Gate::allows('unlinkGoogle', $record))
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $record) => "ยกเลิกการเชื่อม Google ของ {$record->name}")
+                    ->modalDescription('นักเรียนจะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเชื่อมใหม่ (ยังใช้บัตร QR และ PIN ได้) เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้จนกว่าจะรีเซ็ต PIN')
+                    ->modalSubmitActionLabel('ยกเลิกการเชื่อม')
+                    ->action(function (User $record, GoogleSignIn $signIn) {
+                        $signIn->unlink($record, self::admin(), 'admin');
+                        Notification::make()->title('ยกเลิกการเชื่อม Google แล้ว')->success()->send();
+                    }),
                 Action::make('merge')
                     ->label('รวมบัญชี')
                     ->icon(Heroicon::OutlinedArrowsPointingIn)
@@ -115,7 +136,7 @@ class StudentResource extends Resource
 
         return parent::getEloquentQuery()
             ->where('role', User::ROLE_STUDENT)
-            ->with(['school', 'classrooms', 'mergedInto'])
+            ->with(['school', 'classrooms', 'mergedInto', 'googleIdentity'])
             ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
     }
 

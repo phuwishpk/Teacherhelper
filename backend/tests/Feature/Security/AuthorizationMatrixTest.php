@@ -45,7 +45,12 @@ class AuthorizationMatrixTest extends TestCase
     use SharedHomeroomWorld;
 
     /** Public routes, exercised by TeacherAuthTest and StudentAuthTest instead. */
-    private const PUBLIC = ['api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.student.qr', 'api.auth.student.pin'];
+    private const PUBLIC = [
+        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.student.qr', 'api.auth.student.pin',
+        // Google sign-in (§24.9), exercised by GoogleSignInTest.
+        'api.auth.google.config', 'api.auth.google', 'api.auth.google.web-url', 'api.auth.google.ticket',
+        'api.auth.google.link-with-pin', 'api.auth.google.link-with-qr',
+    ];
 
     private const OK = 'ok';
 
@@ -86,6 +91,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.course-requests.destroy' => ['DELETE', 'course-requests/{outgoing_request}', '403 not_requester', 404],
         // A colleague sees the student (school-wide search) but is not their homeroom teacher.
         'api.students.update' => ['PATCH', 'students/{student}', '403 not_homeroom_teacher', 404],
+        // Unlinking a student's Google sign-in is for their editors too (§24.9.5).
+        'api.students.google-identity.destroy' => ['DELETE', 'students/{student}/google-identity', '403 not_homeroom_teacher', 404],
         'api.students.duplicate-candidates' => ['GET', 'students/duplicate-candidates', self::OK, self::OK],
         'api.students.merge-preview' => ['GET', 'students/merge-preview', self::OK, self::OK],
         'api.students.merge' => ['POST', 'students/merge', self::OK, self::OK],
@@ -362,6 +369,10 @@ class AuthorizationMatrixTest extends TestCase
     private const COMMON = [
         'api.auth.logout' => ['POST', 'auth/logout'],
         'api.me' => ['GET', 'me'],
+        // The own Google sign-in account of every role, admins included (§24.9.5).
+        'api.me.google-identity.show' => ['GET', 'me/google-identity'],
+        'api.me.google-identity.store' => ['POST', 'me/google-identity'],
+        'api.me.google-identity.destroy' => ['DELETE', 'me/google-identity'],
     ];
 
     /** @return array<string, array{string}> */
@@ -400,6 +411,7 @@ class AuthorizationMatrixTest extends TestCase
         $this->makeSecurityWorld();
         $this->makeSharedHomeroomWorld();
         $this->configureGoogle();
+        config(['services.google_signin.client_ids' => 'test-signin-client.apps.googleusercontent.com']);
         // Every Google call answers with an empty list, so an owner's request
         // reaches its normal end instead of a stray-request error.
         $this->fakeGoogle([

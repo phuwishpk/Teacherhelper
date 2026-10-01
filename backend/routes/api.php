@@ -25,7 +25,9 @@ use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\ExamSheetController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
+use App\Http\Controllers\Api\V1\GoogleIdentityController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
+use App\Http\Controllers\Api\V1\GoogleSignInController;
 use App\Http\Controllers\Api\V1\GoogleSubmissionController;
 use App\Http\Controllers\Api\V1\GradebookController;
 use App\Http\Controllers\Api\V1\GradebookItemController;
@@ -97,6 +99,21 @@ Route::prefix('v1')->group(function () {
             Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
             Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');
         });
+
+        // Google sign-in for every role (DESIGN §24.9). /config tells the app whether to show the
+        // button; the rest answer 503 google_signin_not_configured first, then share the per-IP
+        // `google-signin` limiter. The PIN/QR confirmation of a student's first Google sign-in
+        // also goes through `student-auth` (the PIN login's per-student limit and lockout).
+        Route::get('google/config', [GoogleSignInController::class, 'config'])->name('api.auth.google.config');
+        Route::middleware(['google.signin', 'throttle:google-signin'])->group(function () {
+            Route::post('google', [GoogleSignInController::class, 'signIn'])->name('api.auth.google');
+            Route::post('google/web-url', [GoogleSignInController::class, 'webUrl'])->name('api.auth.google.web-url');
+            Route::post('google/ticket', [GoogleSignInController::class, 'ticket'])->name('api.auth.google.ticket');
+            Route::middleware('throttle:student-auth')->group(function () {
+                Route::post('google/link-with-pin', [GoogleSignInController::class, 'linkWithPin'])->name('api.auth.google.link-with-pin');
+                Route::post('google/link-with-qr', [GoogleSignInController::class, 'linkWithQr'])->name('api.auth.google.link-with-qr');
+            });
+        });
     });
 
     Route::middleware('auth:sanctum')->group(function () {
@@ -109,6 +126,13 @@ Route::prefix('v1')->group(function () {
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
             Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');
+
+            // The Google account every role signs in with (§24.9.5), admins included.
+            Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {
+                Route::get('me/google-identity', [GoogleIdentityController::class, 'show'])->name('api.me.google-identity.show');
+                Route::post('me/google-identity', [GoogleIdentityController::class, 'store'])->middleware('throttle:google-signin')->name('api.me.google-identity.store');
+                Route::delete('me/google-identity', [GoogleIdentityController::class, 'destroy'])->name('api.me.google-identity.destroy');
+            });
 
             // Admin-only (§7.4): a one-time link from the app's unified login to the Filament panel.
             Route::post('auth/admin-handoff', [AdminHandoffController::class, 'store'])
@@ -160,6 +184,8 @@ Route::prefix('v1')->group(function () {
 
                 Route::post('students/{id}/login-card', [LoginCardController::class, 'storeForStudent'])->name('api.students.login-card');
                 Route::post('students/{id}/pin', [StudentPinController::class, 'store'])->name('api.students.pin');
+                // The student's editors remove their Google sign-in link (§24.9.5).
+                Route::delete('students/{id}/google-identity', [GoogleIdentityController::class, 'destroyForStudent'])->middleware('google.signin')->name('api.students.google-identity.destroy');
 
                 Route::get('login-card-prints/{id}', [LoginCardController::class, 'show'])->name('api.login-card-prints.show');
                 Route::get('login-card-prints/{id}/file', [LoginCardController::class, 'download'])->name('api.login-card-prints.file');

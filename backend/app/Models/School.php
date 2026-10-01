@@ -16,6 +16,8 @@ use Illuminate\Support\Carbon;
  * @property string $teacher_join_code
  * @property bool $allow_training_data
  * @property Carbon|null $crop_retention_until
+ * @property list<string>|null $google_signin_domains e-mail domains allowed to sign in with Google; null or [] = any (DESIGN §24.9.2)
+ * @property bool $student_google_signin the PDPA switch: may this school's students use Google sign-in
  */
 class School extends Model
 {
@@ -27,6 +29,8 @@ class School extends Model
         'teacher_join_code',
         'allow_training_data',
         'crop_retention_until',
+        'google_signin_domains',
+        'student_google_signin',
     ];
 
     /**
@@ -37,6 +41,8 @@ class School extends Model
         return [
             'allow_training_data' => 'boolean',
             'crop_retention_until' => 'date',
+            'google_signin_domains' => 'array',
+            'student_google_signin' => 'boolean',
         ];
     }
 
@@ -56,6 +62,21 @@ class School extends Model
     public function classrooms(): HasMany
     {
         return $this->hasMany(Classroom::class);
+    }
+
+    /**
+     * Whether $domain (lower case, the part after the last `@` of a verified
+     * e-mail) may sign in with Google for this school (DESIGN §24.9.2): any
+     * domain when the list is empty, else an exact match (no subdomains).
+     */
+    public function allowsGoogleDomain(string $domain): bool
+    {
+        $domains = array_values(array_filter(
+            array_map(fn ($d) => mb_strtolower(trim((string) $d)), (array) ($this->google_signin_domains ?? [])),
+            fn (string $d) => $d !== '',
+        ));
+
+        return $domains === [] || in_array(mb_strtolower($domain), $domains, true);
     }
 
     /** 8 uppercase letters/digits without 0/O/1/I, the code teachers type at sign-up. */

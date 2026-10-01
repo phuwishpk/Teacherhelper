@@ -109,7 +109,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('student-auth', function (Request $request) {
             $limits = [Limit::perMinute(120)->by('ip|'.$request->ip())];
 
-            if ($request->routeIs('api.auth.student.pin')) {
+            if ($request->routeIs('api.auth.student.pin', 'api.auth.google.link-with-pin')) {
                 $limits[] = Limit::perMinute(10)->by(implode('|', [
                     'pin',
                     $request->ip(),
@@ -133,6 +133,11 @@ class AppServiceProvider extends ServiceProvider
         // GET /google/oauth/callback has no login; a bad state is refused
         // before anything reaches Google, so this only caps probing.
         RateLimiter::for('google-oauth-callback', fn (Request $request) => Limit::perMinute(20)->by((string) $request->ip()));
+
+        // Google sign-in (DESIGN §24.9.5): ID tokens are signed, so this only caps
+        // probing and the work of verifying; the browser flow's callback has no login.
+        RateLimiter::for('google-signin', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
+        RateLimiter::for('google-signin-callback', fn (Request $request) => Limit::perMinute(20)->by((string) $request->ip()));
 
         // Endpoints that reach Gemini directly or queue a Gemini job (they
         // cost the teacher's or the school's quota), and the student write

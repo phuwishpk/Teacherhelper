@@ -26,6 +26,7 @@ use App\Models\StudentMerge;
 use App\Models\Subject;
 use App\Models\Submission;
 use App\Models\User;
+use App\Models\UserGoogleIdentity;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -416,5 +417,34 @@ class StudentMergerTest extends TestCase
             'computed_input_hash' => str_repeat('c', 64), 'strengths' => [], 'areas' => [],
             'status' => StudentAnalysis::STATUS_COMPUTED,
         ]);
+    }
+
+    public function test_google_sign_in_links_move_to_the_kept_account_unless_both_have_one(): void
+    {
+        $k = $this->keep['student'];
+        $d = $this->merge['student'];
+        $link = fn (User $user, string $sub) => UserGoogleIdentity::create(['user_id' => $user->id, 'google_sub' => $sub, 'email' => "{$sub}@school.ac.th", 'linked_via' => 'pin_confirm', 'linked_by' => $user->id, 'linked_at' => now()]);
+        $link($k, 'k-sub');
+        $dLink = $link($d, 'd-sub');
+
+        $preview = app(StudentMerger::class)->preview($k, $d);
+        $this->assertFalse($preview['can_merge']);
+        $this->assertSame(['google'], array_column($preview['conflicts'], 'type'));
+        $this->assertSame(['d-sub@school.ac.th'], $preview['merge']['google_emails']);
+        try {
+            app(StudentMerger::class)->merge($k, $d, $this->teacher);
+            $this->fail('merged two Google links');
+        } catch (ApiException $e) {
+            $this->assertSame('merge_conflict', $e->errorCode);
+            $this->assertArrayHasKey('google', $e->errors);
+        }
+
+        UserGoogleIdentity::query()->where('user_id', $k->id)->delete();
+        $record = app(StudentMerger::class)->merge($k, $d, $this->teacher);
+
+        $moved = $dLink->refresh();
+        $this->assertSame($k->id, $moved->user_id);
+        $this->assertSame($k->id, $moved->linked_by);
+        $this->assertSame([$dLink->id], $record->summary['user_google_identities']['moved']);
     }
 }

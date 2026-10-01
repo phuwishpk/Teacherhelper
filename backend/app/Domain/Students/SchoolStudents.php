@@ -151,18 +151,19 @@ final class SchoolStudents
             ->whereIn('classroom_students.student_id', $ids)
             ->orderByDesc('classrooms.academic_year')
             ->orderBy('classrooms.name')
-            ->get(['classroom_students.student_id', 'classroom_students.student_number', 'classroom_students.google_user_id', 'classrooms.id', 'classrooms.name', 'classrooms.academic_year', 'classrooms.closed_at'])
+            ->get(['classroom_students.student_id', 'classroom_students.student_number', 'classrooms.id', 'classrooms.name', 'classrooms.academic_year', 'classrooms.closed_at'])
             ->groupBy('student_id');
+        $linked = $ids === [] ? [] : array_flip(DB::table('user_google_identities')->whereIn('user_id', $ids)->pluck('user_id')->map(fn ($id) => (int) $id)->all());
 
-        return $students->map(function (User $student) use ($rows) {
+        return $students->map(function (User $student) use ($rows, $linked) {
             $classes = $rows->get($student->id, collect());
 
             return [
                 'id' => $student->id,
                 'name' => $student->name,
                 'student_code' => $student->student_code,
-                // A Google account matched by a Classroom roster (§18.4); sign-in links come with build 3.
-                'has_google' => $classes->contains(fn ($c) => $c->google_user_id !== null),
+                // A linked Google sign-in account (§24.9, user_google_identities).
+                'has_google' => isset($linked[$student->id]),
                 'classrooms' => $classes->map(fn ($c) => [
                     'id' => (int) $c->id,
                     'name' => $c->name,

@@ -127,6 +127,12 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(GoogleAccount::class);
     }
 
+    /** The Google account this user signs in with (DESIGN §24.9). @return HasOne<UserGoogleIdentity, $this> */
+    public function googleIdentity(): HasOne
+    {
+        return $this->hasOne(UserGoogleIdentity::class);
+    }
+
     /** The account this one was merged into (DESIGN §24.5). @return BelongsTo<User, $this> */
     public function mergedInto(): BelongsTo
     {

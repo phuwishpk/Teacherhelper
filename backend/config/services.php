@@ -123,6 +123,27 @@ return [
         'app_link' => env('GOOGLE_CLASSROOM_APP_LINK'),
     ],
 
+    /*
+    | Google sign-in for every role (DESIGN §24.9): a separate Google Cloud
+    | project from Classroom's, scopes openid email profile only.
+    | client_ids: the OAuth client IDs accepted as `aud` of an ID token,
+    | comma separated; the first one is the Web client of the browser flow
+    | (the Android app uses it as serverClientId). Empty = Google sign-in is
+    | off: every sign-in route answers 503 google_signin_not_configured.
+    | client_secret, redirect_uri (empty = APP_URL + /auth/google/callback)
+    | and app_url (the web app the callback returns to) serve the browser
+    | flow only; without the secret or app_url it is off (web_flow: false)
+    | while Android sign-in keeps working.
+    | max_age: seconds an ID token is accepted after it was issued (iat).
+    */
+    'google_signin' => [
+        'client_ids' => env('GOOGLE_SIGNIN_CLIENT_IDS'),
+        'client_secret' => env('GOOGLE_SIGNIN_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_SIGNIN_REDIRECT_URI') ?: rtrim((string) env('APP_URL', 'http://localhost'), '/').'/auth/google/callback',
+        'app_url' => env('GOOGLE_SIGNIN_APP_URL'),
+        'max_age' => (int) env('GOOGLE_SIGNIN_MAX_AGE', 600),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

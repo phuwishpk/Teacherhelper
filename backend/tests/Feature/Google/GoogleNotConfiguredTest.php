@@ -37,7 +37,9 @@ class GoogleNotConfiguredTest extends TestCase
         $routes = [];
         foreach (Route::getRoutes() as $route) {
             $name = (string) $route->getName();
-            if (str_starts_with($route->uri(), 'api/v1/') && str_contains($name, 'google') && $name !== self::STATUS_ROUTE) {
+            // Google sign-in (§24.9: api.auth.google*, *.google-identity*) has its own switch (GoogleSignInTest).
+            $signIn = str_starts_with($name, 'api.auth.google') || str_contains($name, 'google-identity');
+            if (str_starts_with($route->uri(), 'api/v1/') && str_contains($name, 'google') && $name !== self::STATUS_ROUTE && ! $signIn) {
                 $routes[$name] = [$route->methods()[0], $route->uri()];
             }
         }

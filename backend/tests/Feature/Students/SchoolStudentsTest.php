@@ -11,6 +11,7 @@ use App\Models\LoginCardPrint;
 use App\Models\StudentCredential;
 use App\Models\Submission;
 use App\Models\User;
+use App\Models\UserGoogleIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -271,6 +272,10 @@ class SchoolStudentsTest extends TestCase
         $this->assertSame(['google_user', 'email'], $byPair[$c->id.'-'.$d->id]);
         $this->assertCount(2, $pairs);
         $this->assertSame(['id', 'name', 'student_code', 'has_google', 'classrooms'], array_keys($pairs[0]['a']));
+        // has_google is a linked Google sign-in account (§24.9), not a Classroom roster match.
+        $this->assertFalse(collect($pairs)->firstWhere('a.id', $c->id)['a']['has_google']);
+        UserGoogleIdentity::create(['user_id' => $c->id, 'google_sub' => 'g-1', 'email' => 'somchai@school.ac.th', 'linked_via' => 'self', 'linked_at' => now()]);
+        $pairs = $this->asUser($this->teacher)->getJson('/api/v1/students/duplicate-candidates')->assertOk()->json('data');
         $this->assertTrue(collect($pairs)->firstWhere('a.id', $c->id)['a']['has_google']);
     }
 }

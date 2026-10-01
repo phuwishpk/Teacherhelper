@@ -4,6 +4,7 @@ use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureClassroomOpen;
 use App\Http\Middleware\EnsureGoogleConfigured;
+use App\Http\Middleware\EnsureGoogleSignInConfigured;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
@@ -42,6 +43,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'active' => EnsureUserIsActive::class,
             'google.configured' => EnsureGoogleConfigured::class,
+            // DESIGN §24.12 C: Google sign-in answers 503 google_signin_not_configured when off.
+            'google.signin' => EnsureGoogleSignInConfigured::class,
             // DESIGN §24.6: writes on a closed classroom answer 409 classroom_closed.
             'classroom.open' => EnsureClassroomOpen::class,
         ]);

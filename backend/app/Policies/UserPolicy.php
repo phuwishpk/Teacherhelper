@@ -69,6 +69,17 @@ class UserPolicy
     }
 
     /**
+     * Filament "ยกเลิกการเชื่อม Google" of a student (DESIGN §24.9.5): an
+     * active admin of the student's school, or a system admin. Teachers use
+     * DELETE /students/{id}/google-identity (editStudent).
+     */
+    public function unlinkGoogle(User $user, User $student): bool
+    {
+        return $this->isAdmin($user) && $student->isStudent()
+            && ($user->school_id === null || $user->school_id === $student->school_id);
+    }
+
+    /**
      * Merge $merge into $keep (DESIGN §24.5): an admin of their school (or a
      * system admin), or a teacher who is the homeroom teacher of a classroom
      * (open or closed) of each of the two accounts. A subject teacher cannot,
