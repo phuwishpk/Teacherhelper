@@ -227,6 +227,59 @@ class FakeSchoolClassrooms extends Fake implements ClassroomsRepository {
     return rows;
   }
 
+  /// Calls of `from-classroom`: (target, source, ids, numbering, new pins).
+  final copies = <(int, int, List<int>, CopyNumbering, bool)>[];
+  Object? copyError;
+
+  /// Students `from-classroom` reports as skipped.
+  List<SkippedStudent> copySkipped = const [];
+
+  @override
+  Future<StudentsCopyResult> copyStudents(
+    int classroomId, {
+    required int sourceClassroomId,
+    required List<int> studentIds,
+    required CopyNumbering numbering,
+    required bool newPins,
+  }) async {
+    copies.add((
+      classroomId,
+      sourceClassroomId,
+      studentIds,
+      numbering,
+      newPins,
+    ));
+    if (copyError case final e?) throw e;
+    final source = rosters[sourceClassroomId] ?? const <RosterStudent>[];
+    var next = 0;
+    for (final r in rosters[classroomId] ?? const <RosterStudent>[]) {
+      if (r.studentNumber > next) next = r.studentNumber;
+    }
+    final rows = [
+      for (final s in source)
+        if (studentIds.contains(s.studentId))
+          EnrolledStudent(
+            studentId: s.studentId,
+            studentNumber: numbering == CopyNumbering.keep
+                ? s.studentNumber
+                : ++next,
+            name: s.name,
+            pin: newPins ? '30000${s.studentNumber}' : '',
+            existing: true,
+          ),
+    ];
+    rosters[classroomId] = [
+      ...?rosters[classroomId],
+      for (final r in rows)
+        RosterStudent(
+          studentId: r.studentId,
+          studentNumber: r.studentNumber,
+          name: r.name,
+        ),
+    ];
+    return StudentsCopyResult(enrolled: rows, skipped: copySkipped);
+  }
+
   @override
   Future<List<SchoolStudent>> searchSchoolStudents(String query) async {
     searches.add(query);

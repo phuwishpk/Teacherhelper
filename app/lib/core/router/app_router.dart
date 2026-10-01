@@ -27,6 +27,7 @@ import '../../features/classrooms/course_requests_screen.dart';
 import '../../features/classrooms/merge_students_screen.dart';
 import '../../features/classrooms/request_classroom_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
+import '../../features/classrooms/students_from_classroom_screen.dart';
 import '../../features/courses/course_detail_screen.dart';
 import '../../features/courses/course_form_screen.dart';
 import '../../features/courses/course_models.dart';
@@ -129,6 +130,11 @@ abstract final class AppRoutes {
   /// "เลือกนักเรียนที่มีอยู่" of the add screen (DESIGN §24.4).
   static String studentsAddExisting(int id) =>
       '/classrooms/$id/students/add?mode=existing';
+
+  /// "นำนักเรียนจากห้องเดิม" (DESIGN §24.6): enrol the students of another
+  /// room, e.g. last year's.
+  static String studentsFromClassroom(int id) =>
+      '/classrooms/$id/students/from-classroom';
 
   /// "รวมบัญชีนักเรียน" (DESIGN §24.5): find the other account of a student
   /// of the room, then compare both before merging.
@@ -614,6 +620,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ? StudentsAddMode.existing
                   : StudentsAddMode.newStudents,
             ),
+          ),
+          GoRoute(
+            path: 'students/from-classroom',
+            builder: (context, state) =>
+                StudentsFromClassroomScreen(classroomId: _id(state, 'id')),
           ),
           GoRoute(
             path: 'students/:sid/merge',

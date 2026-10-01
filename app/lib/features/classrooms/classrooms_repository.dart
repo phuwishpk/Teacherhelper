@@ -49,6 +49,17 @@ abstract class ClassroomsRepository {
   );
   Future<List<RosterStudent>> roster(int id);
 
+  /// "นำนักเรียนจากห้องเดิม" (DESIGN §24.6): enrols [studentIds] of
+  /// [sourceClassroomId] with their accounts; [newPins] issues every one a
+  /// new PIN (shown once), otherwise they keep PIN and QR card.
+  Future<StudentsCopyResult> copyStudents(
+    int classroomId, {
+    required int sourceClassroomId,
+    required List<int> studentIds,
+    required CopyNumbering numbering,
+    required bool newPins,
+  });
+
   /// `PATCH /classrooms/{id}/students/{student_id}` {student_number}.
   Future<RosterStudent> updateStudentNumber(
     int classroomId,
@@ -188,6 +199,26 @@ class ApiClassroomsRepository implements ClassroomsRepository {
       data: {'students': students.map((s) => s.toJson()).toList()},
     );
     return unwrapList(res.data).map(EnrolledStudent.fromJson).toList();
+  }
+
+  @override
+  Future<StudentsCopyResult> copyStudents(
+    int classroomId, {
+    required int sourceClassroomId,
+    required List<int> studentIds,
+    required CopyNumbering numbering,
+    required bool newPins,
+  }) async {
+    final res = await _dio.post<Object?>(
+      '/classrooms/$classroomId/students/from-classroom',
+      data: {
+        'source_classroom_id': sourceClassroomId,
+        'student_ids': studentIds,
+        'numbering': numbering.apiValue,
+        'pin': newPins ? 'new' : 'keep',
+      },
+    );
+    return StudentsCopyResult.fromJson(unwrapJson(res.data));
   }
 
   @override

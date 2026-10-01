@@ -83,10 +83,9 @@ class ClassroomDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 ClassroomCoursesSection(classroom: c),
                 const SizedBox(height: 12),
-                // Linking and syncing write: not for a closed room, and the
-                // room's Google course is the homeroom teacher's (§24.20).
-                if (!c.isClosed && c.isHomeroom)
-                  ClassroomGoogleSection(classroom: c),
+                // Linking and syncing write: not for a closed room. Every
+                // teacher of the room links their own course (§24.24).
+                if (!c.isClosed) ClassroomGoogleSection(classroom: c),
                 const SizedBox(height: 4),
                 Text(
                   'รายชื่อนักเรียน',
@@ -122,6 +121,16 @@ class ClassroomDetailScreen extends ConsumerWidget {
                                     Icons.person_search_outlined,
                                   ),
                                   label: const Text('เลือกนักเรียนที่มีอยู่'),
+                                ),
+                                TextButton.icon(
+                                  key: const ValueKey(
+                                    'roster_copy_from_classroom',
+                                  ),
+                                  onPressed: () => context.push(
+                                    AppRoutes.studentsFromClassroom(c.id),
+                                  ),
+                                  icon: const Icon(Icons.move_up_outlined),
+                                  label: const Text('นำนักเรียนจากห้องเดิม'),
                                 ),
                               ],
                             ],

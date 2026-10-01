@@ -14,6 +14,7 @@ import 'package:eduvision/features/courses/course_models.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/gradebook/gradebook_repository.dart';
 import 'package:eduvision/features/google_classroom/google_providers.dart';
+import 'package:eduvision/features/google_classroom/google_repository.dart';
 import 'package:eduvision/features/home/teacher_attention.dart';
 import 'package:eduvision/features/mastery/classroom_mastery_screen.dart';
 import 'package:eduvision/features/mastery/mastery_models.dart';
@@ -26,6 +27,7 @@ import 'package:go_router/go_router.dart';
 
 import '../courses/course_fakes.dart';
 import '../gradebook/gradebook_fakes.dart';
+import '../google_classroom/google_fakes.dart';
 import '../helpers/home_fakes.dart';
 import '../helpers/pump_screen.dart';
 import 'classroom_fakes.dart';
@@ -509,6 +511,9 @@ void main() {
             courses: courses,
           ),
           googleClassroomEnabledProvider.overrideWithValue(true),
+          googleClassroomRepositoryProvider.overrideWithValue(
+            FakeGoogleRepository(),
+          ),
         ],
         extraRoutes: [
           GoRoute(
@@ -526,13 +531,14 @@ void main() {
       expect(find.byType(FloatingActionButton), findsNothing);
       expect(find.byTooltip('แก้ไข'), findsNothing);
       expect(find.byKey(const ValueKey('classroom_menu')), findsNothing);
-      for (final label in [
-        'พิมพ์บัตร QR',
-        'วิเคราะห์รายคน',
-        'Google Classroom',
-      ]) {
+      for (final label in ['พิมพ์บัตร QR', 'วิเคราะห์รายคน']) {
         expect(find.text(label), findsNothing, reason: label);
       }
+      // Since build 4 a subject teacher links their own course (§24.24).
+      expect(
+        find.byKey(const ValueKey('classroom_google_section')),
+        findsOneWidget,
+      );
       expect(find.text('สร้างการบ้าน'), findsOneWidget);
       expect(find.byKey(const ValueKey('classroom_add_course')), findsNothing);
       expect(find.byKey(const ValueKey('classroom_course_4')), findsOneWidget);

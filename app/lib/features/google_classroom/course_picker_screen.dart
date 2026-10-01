@@ -62,6 +62,18 @@ class _GoogleCoursePickerScreenState
       ref.read(classroomsProvider.notifier).setGoogleLink(classroomId, link);
       ref.invalidate(googleCoursesProvider);
       if (!mounted) return;
+      // Pairing by hand is the homeroom teacher's (DESIGN §24.24): a
+      // subject teacher matches through "ซิงก์รายชื่อ".
+      final subject =
+          ref.read(classroomProvider(classroomId)).value?.isSubject ?? false;
+      if (subject) {
+        showMessage(
+          context,
+          'ผูกกับ ${course.name} แล้ว กด "ซิงก์รายชื่อ" เพื่อจับคู่นักเรียน',
+        );
+        context.pop();
+        return;
+      }
       showMessage(
         context,
         'ผูกกับ ${course.name} แล้ว จับคู่นักเรียนต่อได้เลย',

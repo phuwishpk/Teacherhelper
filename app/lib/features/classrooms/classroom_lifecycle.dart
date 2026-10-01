@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
 import 'classroom.dart';
@@ -24,9 +25,18 @@ class ClassroomMenu extends ConsumerWidget {
         'close' => closeClassroom(context, ref, classroom),
         'reopen' => reopenClassroom(context, ref, classroom),
         'delete' => deleteClassroom(context, ref, classroom),
+        'copy' => context.push(AppRoutes.studentsFromClassroom(classroom.id)),
         _ => null,
       },
       itemBuilder: (context) => [
+        if (!classroom.isClosed)
+          const PopupMenuItem(
+            value: 'copy',
+            child: ListTile(
+              leading: Icon(Icons.move_up_outlined),
+              title: Text('นำนักเรียนจากห้องเดิม'),
+            ),
+          ),
         if (classroom.isClosed)
           const PopupMenuItem(
             value: 'reopen',

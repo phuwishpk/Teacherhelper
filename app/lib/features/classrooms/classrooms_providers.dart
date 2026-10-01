@@ -159,6 +159,27 @@ class RosterNotifier extends AsyncNotifier<List<RosterStudent>> {
     ref.invalidate(classroomsProvider);
     return enrolled;
   }
+
+  /// "นำนักเรียนจากห้องเดิม" (DESIGN §24.6); the answer carries any new PINs.
+  Future<StudentsCopyResult> copyFrom(
+    int sourceClassroomId, {
+    required List<int> studentIds,
+    required CopyNumbering numbering,
+    required bool newPins,
+  }) async {
+    final result = await ref
+        .read(classroomsRepositoryProvider)
+        .copyStudents(
+          classroomId,
+          sourceClassroomId: sourceClassroomId,
+          studentIds: studentIds,
+          numbering: numbering,
+          newPins: newPins,
+        );
+    await refresh();
+    ref.invalidate(classroomsProvider);
+    return result;
+  }
 }
 
 final rosterProvider = AsyncNotifierProvider.autoDispose

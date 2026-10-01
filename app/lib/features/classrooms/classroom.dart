@@ -320,3 +320,70 @@ class ExistingStudentEnrolment extends StudentEnrolment {
   String toString() =>
       'ExistingStudentEnrolment($studentId, $studentNumber, $reissuePin)';
 }
+
+/// `numbering` of "นำนักเรียนจากห้องเดิม" (DESIGN §24.6).
+enum CopyNumbering {
+  /// The numbers of the source room (a clash goes after the highest).
+  keep('keep', 'ใช้เลขที่เดิม'),
+
+  /// Thai dictionary order after the highest number of this room.
+  sorted('sorted', 'เรียงตามชื่อใหม่');
+
+  const CopyNumbering(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
+/// A student "นำนักเรียนจากห้องเดิม" left out (`skipped[]`, DESIGN §24.24).
+class SkippedStudent {
+  const SkippedStudent({
+    required this.studentId,
+    required this.name,
+    required this.reason,
+  });
+
+  final int studentId;
+  final String name;
+
+  /// `already_enrolled` or `not_active`.
+  final String reason;
+
+  String get reasonLabel => switch (reason) {
+    'already_enrolled' => 'อยู่ในห้องนี้แล้ว',
+    'not_active' => 'บัญชีถูกปิดหรือรวมกับบัญชีอื่นแล้ว',
+    _ => reason,
+  };
+
+  factory SkippedStudent.fromJson(Map<String, dynamic> json) => SkippedStudent(
+    studentId: (json['student_id'] as num).toInt(),
+    name: json['name'] as String? ?? '',
+    reason: json['reason'] as String? ?? '',
+  );
+}
+
+/// `201` of `POST /classrooms/{id}/students/from-classroom` (DESIGN §24.6,
+/// §24.24): the students enrolled (with a PIN only when a new one was
+/// issued) and the ones left out.
+class StudentsCopyResult {
+  const StudentsCopyResult({this.enrolled = const [], this.skipped = const []});
+
+  final List<EnrolledStudent> enrolled;
+  final List<SkippedStudent> skipped;
+
+  List<EnrolledStudent> get withPins => [
+    for (final e in enrolled)
+      if (e.hasPin) e,
+  ];
+
+  factory StudentsCopyResult.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> rows(String key) => [
+      if (json[key] case final List list)
+        for (final r in list.whereType<Map>()) r.cast<String, dynamic>(),
+    ];
+    return StudentsCopyResult(
+      enrolled: rows('enrolled').map(EnrolledStudent.fromJson).toList(),
+      skipped: rows('skipped').map(SkippedStudent.fromJson).toList(),
+    );
+  }
+}

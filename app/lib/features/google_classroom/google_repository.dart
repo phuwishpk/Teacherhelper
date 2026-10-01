@@ -34,6 +34,17 @@ abstract class GoogleClassroomRepository {
   /// match in one step. The answer carries the one-time PINs.
   Future<ClassroomImportResult> importClassroom(ClassroomImportRequest request);
 
+  /// Links [courseId] to an existing room of the school instead of creating
+  /// one (DESIGN §24.10): at once for the room's homeroom teacher (or a
+  /// subject teacher whose [appCourseId] the room already has), otherwise
+  /// as a course request. 409 `classroom_closed`, `course_already_linked`,
+  /// `request_pending`; 422 `app_course_id`.
+  Future<LinkExistingResult> linkExisting(
+    String courseId, {
+    required int classroomId,
+    int? appCourseId,
+  });
+
   /// Appends new course accounts, marks students who left and matches
   /// returning ones back ("ซิงก์รายชื่อ"). 422 `classroom_not_linked`.
   Future<RosterSyncResult> syncRoster(int classroomId);
@@ -162,6 +173,39 @@ class ApiGoogleClassroomRepository implements GoogleClassroomRepository {
       options: _slow,
     );
     return ClassroomImportResult.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<LinkExistingResult> linkExisting(
+    String courseId, {
+    required int classroomId,
+    int? appCourseId,
+  }) async {
+    final res = await _dio.post<Object?>(
+      '/google/courses/${Uri.encodeComponent(courseId)}/link-existing',
+      data: {'classroom_id': classroomId, 'app_course_id': ?appCourseId},
+      options: _slow,
+    );
+    final json = unwrapJson(res.data);
+    if (res.statusCode == 202 || json['status'] == 'requested') {
+      return LinkRequested(requestId: (json['request_id'] as num?)?.toInt());
+    }
+    final roster = json['roster'];
+    final error = json['roster_error'];
+    return LinkedExisting(
+      classroom: Classroom.fromJson(
+        (json['classroom'] as Map).cast<String, dynamic>(),
+      ),
+      roster: roster is Map
+          ? RosterSyncResult.fromJson(roster.cast<String, dynamic>())
+          : null,
+      rosterError: switch (error) {
+        {'message': final String message} when message.trim().isNotEmpty =>
+          message,
+        Map() => 'ซิงก์รายชื่อไม่สำเร็จ',
+        _ => null,
+      },
+    );
   }
 
   @override
@@ -383,6 +427,14 @@ String googleErrorMessage(Object error) {
     'already_posted' => 'การบ้านนี้โพสต์ลง Google Classroom แล้ว',
     'course_already_linked' =>
       'คอร์สนี้ผูกกับห้องเรียนในแอปแล้ว เลือกคอร์สอื่น หรือเปิดห้องที่ผูกไว้',
+    'course_link_busy' =>
+      'กำลังผูกคอร์สนี้กับห้องเรียนอยู่ รอสักครู่แล้วลองอีกครั้ง',
+    'classroom_closed' => 'ห้องนี้ปิดแล้ว (ห้องเก่า) ผูกคอร์สเพิ่มไม่ได้',
+    'request_pending' =>
+      'มีคำขอผูกรายวิชานี้กับห้องนี้รออนุมัติอยู่แล้ว ดูได้ที่ "คำขอผูกรายวิชา"',
+    'course_already_in_classroom' => 'รายวิชานี้ผูกกับห้องนี้อยู่แล้ว',
+    'student_not_in_school' =>
+      'ไม่พบนักเรียนบางคนในโรงเรียนแล้ว (อาจถูกรวมบัญชีหรือปิดบัญชี) โหลดหน้านี้ใหม่',
     'classroom_not_linked' =>
       'ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ผูกที่หน้าห้องเรียนก่อน',
     'coursework_not_owned' =>
