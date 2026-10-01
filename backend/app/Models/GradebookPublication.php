@@ -49,6 +49,12 @@ class GradebookPublication extends Model
         return $this->belongsTo(Course::class);
     }
 
+    /** @return BelongsTo<Classroom, $this> */
+    public function classroom(): BelongsTo
+    {
+        return $this->belongsTo(Classroom::class);
+    }
+
     /** @return HasMany<GradebookPublishedGrade, $this> */
     public function grades(): HasMany
     {

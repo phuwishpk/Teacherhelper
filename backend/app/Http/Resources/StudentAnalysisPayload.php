@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\Mastery\MasteryCalculator;
+use App\Domain\Students\StudentClassrooms;
 use App\Models\Skill;
 use App\Models\StudentAnalysis;
 
@@ -18,7 +19,7 @@ use App\Models\StudentAnalysis;
  *
  * summary(): the same without the texts (the classroom list).
  *
- * student(): {classroom: {id, name}, text, shared_at, next_steps} — only
+ * student(): {classroom: {id, name, academic_year, closed}, text, shared_at, next_steps} — only
  *   the shared text, never the teacher text (§20.9); next steps only while
  *   the shared text is the current draft they were written with.
  */
@@ -95,7 +96,7 @@ final class StudentAnalysisPayload
     public static function student(StudentAnalysis $row, array $skills): array
     {
         return [
-            'classroom' => ['id' => $row->classroom_id, 'name' => $row->classroom?->name],
+            'classroom' => StudentClassrooms::label($row->classroom),
             'text' => $row->shared_student_text,
             'shared_at' => $row->shared_at?->toIso8601String(),
             'next_steps' => $row->shared_student_text === $row->student_text ? self::nextSteps($row, $skills) : [],

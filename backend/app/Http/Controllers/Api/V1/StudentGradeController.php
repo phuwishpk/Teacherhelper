@@ -2,34 +2,34 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Domain\Gradebook\GradebookPublisher;
+use App\Domain\Gradebook\StudentPublishedGrades;
+use App\Domain\Students\StudentClassrooms;
 use App\Http\Controllers\Controller;
-use App\Models\GradebookPublication;
 use App\Models\GradebookPublishedGrade;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 /**
- * A student's own published grades (DESIGN §23.7, §23.12): only their row
- * of the latest publication of each classroom that was not withdrawn. No
- * class average, no ranking, no classmates; the teacher's note on ร/มส and
- * the attendance warning stay with the teacher.
+ * A student's own published grades (DESIGN §23.7, §23.12, §24.11): only
+ * their row of the latest publication of each (course, classroom) that was
+ * not withdrawn, in every classroom they are or were in (closed ones
+ * included, read-only). No class average, no ranking, no classmates; the
+ * teacher's note on ร/มส and the attendance warning stay with the teacher.
  */
 class StudentGradeController extends Controller
 {
     /**
-     * GET /api/v1/student/grades -> {data: [{course: {id, code, name},
-     * classroom_id, published_at, grade, special, total_rounded}]} newest first
+     * GET /api/v1/student/grades?course_id=&classroom_id= -> {data:
+     * [{course: {id, code, name}, classroom_id, classroom: {id, name,
+     * academic_year, closed}, published_at, grade, special, total_rounded}]}
+     * newest first
      */
     public function index(Request $request): JsonResponse
     {
-        $rows = self::currentRows($request->user()->id);
+        $filters = StudentClassrooms::filters($request);
+        $rows = StudentPublishedGrades::current($request->user()->id, $filters['course_id'], $filters['classroom_id']);
 
-        return response()->json(['data' => $rows->map(fn (GradebookPublishedGrade $row) => [
-            'course' => self::course($row->publication),
-            'classroom_id' => $row->publication->classroom_id,
-            'published_at' => $row->publication->published_at->toIso8601String(),
+        return response()->json(['data' => $rows->map(fn (GradebookPublishedGrade $row) => self::head($row) + [
             'grade' => $row->grade,
             'special' => $row->special,
             'total_rounded' => $row->total_rounded,
@@ -37,19 +37,19 @@ class StudentGradeController extends Controller
     }
 
     /**
-     * GET /api/v1/student/courses/{id}/grade -> {data: {course, classroom_id,
-     * published_at, grade, special, total, total_rounded, breakdown}}; 404
-     * until a grade of the course is published for the student.
+     * GET /api/v1/student/courses/{id}/grade?classroom_id= -> {data: {course,
+     * classroom_id, classroom, published_at, grade, special, total,
+     * total_rounded, breakdown}}; the newest when the course was published
+     * in two of the student's classrooms (classroom_id picks one); 404 until
+     * a grade of the course is published for the student.
      */
     public function show(Request $request, int $id): JsonResponse
     {
-        $row = self::currentRows($request->user()->id, $id)->first();
+        $filters = StudentClassrooms::filters($request);
+        $row = StudentPublishedGrades::current($request->user()->id, $id, $filters['classroom_id'])->first();
         abort_if($row === null, 404);
 
-        return response()->json(['data' => [
-            'course' => self::course($row->publication),
-            'classroom_id' => $row->publication->classroom_id,
-            'published_at' => $row->publication->published_at->toIso8601String(),
+        return response()->json(['data' => self::head($row) + [
             'grade' => $row->grade,
             'special' => $row->special,
             'total' => $row->total,
@@ -59,41 +59,17 @@ class StudentGradeController extends Controller
     }
 
     /**
-     * The student's rows of publications that are the current one of their
-     * classroom, newest first.
-     *
-     * @return Collection<int, GradebookPublishedGrade>
+     * @return array<string, mixed>
      */
-    private static function currentRows(int $studentId, ?int $courseId = null): Collection
+    private static function head(GradebookPublishedGrade $row): array
     {
-        $rows = GradebookPublishedGrade::query()
-            ->where('student_id', $studentId)
-            ->whereHas('publication', function ($q) use ($courseId) {
-                $q->whereNull('withdrawn_at');
-                if ($courseId !== null) {
-                    $q->where('course_id', $courseId);
-                }
-            })
-            ->with('publication.course')
-            ->get();
+        $publication = $row->publication;
 
-        $current = [];
-
-        return $rows
-            ->filter(function (GradebookPublishedGrade $row) use (&$current) {
-                $p = $row->publication;
-                $key = $p->course_id.':'.$p->classroom_id;
-                $current[$key] ??= GradebookPublisher::current($p->course_id, $p->classroom_id)?->id;
-
-                return $current[$key] === $p->id;
-            })
-            ->sortByDesc(fn (GradebookPublishedGrade $row) => $row->publication->published_at->getTimestamp())
-            ->values();
-    }
-
-    /** @return array{id: int, code: string, name: string} */
-    private static function course(GradebookPublication $publication): array
-    {
-        return ['id' => $publication->course_id, 'code' => (string) $publication->course?->code, 'name' => (string) $publication->course?->name];
+        return [
+            'course' => ['id' => $publication->course_id, 'code' => (string) $publication->course?->code, 'name' => (string) $publication->course?->name],
+            'classroom_id' => $publication->classroom_id,
+            'classroom' => StudentClassrooms::label($publication->classroom),
+            'published_at' => $publication->published_at->toIso8601String(),
+        ];
     }
 }

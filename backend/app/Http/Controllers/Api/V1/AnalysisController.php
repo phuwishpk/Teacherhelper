@@ -6,6 +6,7 @@ use App\Domain\Analysis\StudentAnalyses;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Gemini\TeacherGuidance;
+use App\Domain\Students\StudentClassrooms;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StudentAnalysisPayload;
 use App\Models\Classroom;
@@ -14,6 +15,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -112,21 +114,55 @@ class AnalysisController extends Controller
 
     /**
      * GET /api/v1/student/analysis -> {data: [{classroom, text, shared_at,
-     * next_steps}]}: the signed-in student's shared texts only.
+     * next_steps}]}: the signed-in student's shared text of their newest
+     * open classroom that has one (the newest closed one when no open
+     * classroom has one), so at most one row (DESIGN §24.11). Every
+     * classroom's text is GET /student/analyses.
      */
     public function mine(Request $request): JsonResponse
     {
-        $student = $request->user();
-        $rows = StudentAnalysis::query()
-            ->where('student_id', $student->id)
-            ->whereNotNull('shared_student_text')
-            ->whereHas('classroom.students', fn ($q) => $q->where('users.id', $student->id))
-            ->with('classroom:id,name')
-            ->orderBy('classroom_id')
-            ->get();
+        $rows = self::sharedOf($request->user())->take(1);
         $skills = StudentAnalysisPayload::skillsOf($rows);
 
         return response()->json(['data' => $rows->map(fn (StudentAnalysis $r) => StudentAnalysisPayload::student($r, $skills))->values()->all()]);
+    }
+
+    /**
+     * GET /api/v1/student/analyses?classroom_id= -> {data: [{classroom: {id,
+     * name, academic_year, closed}, text, shared_at, next_steps}]}: one row
+     * per classroom of the student with a shared text, open classrooms
+     * first, then the newest academic year (DESIGN §24.11, §24.12 E).
+     */
+    public function mineAll(Request $request): JsonResponse
+    {
+        $filters = StudentClassrooms::filters($request);
+        $rows = self::sharedOf($request->user())
+            ->when($filters['classroom_id'] !== null, fn ($rows) => $rows->where('classroom_id', $filters['classroom_id']))
+            ->values();
+        $skills = StudentAnalysisPayload::skillsOf($rows);
+
+        return response()->json(['data' => $rows->map(fn (StudentAnalysis $r) => StudentAnalysisPayload::student($r, $skills))->values()->all()]);
+    }
+
+    /**
+     * The student's shared analyses of the classrooms they are in, in the
+     * order of StudentClassrooms::of (open first, newest year).
+     *
+     * @return Collection<int, StudentAnalysis>
+     */
+    private static function sharedOf(User $student): Collection
+    {
+        $rooms = StudentClassrooms::of($student)->keyBy('id');
+        $rows = StudentAnalysis::query()
+            ->where('student_id', $student->id)
+            ->whereNotNull('shared_student_text')
+            ->whereIn('classroom_id', $rooms->keys()->all())
+            ->get()
+            ->keyBy('classroom_id');
+
+        return $rooms->filter(fn (Classroom $room) => $rows->has($room->id))
+            ->map(fn (Classroom $room) => $rows->get($room->id)->setRelation('classroom', $room))
+            ->values();
     }
 
     /**

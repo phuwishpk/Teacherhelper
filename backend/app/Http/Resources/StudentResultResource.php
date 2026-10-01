@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\Exams\ExamResult;
+use App\Domain\Students\StudentClassrooms;
 use App\Models\Appeal;
 use App\Models\Response;
 use App\Models\Submission;
@@ -15,7 +16,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * {id, submission_id, assignment_id, title, subject_name,
  *  assignment: {id, title, subject: {id, code, name}|null},
+ *  course: {id, code, name}|null, classroom: {id, name, academic_year, closed},
  *  total_score, total_overridden, max_score, published_at}
+ *
+ * course and classroom label the result in the student's combined view
+ * (DESIGN §24.11); course is null for older work without a course.
  *
  * total_score is the effective total (COALESCE(total_override, total_score),
  * DESIGN §19.3); total_overridden = the teacher took the total from Google
@@ -63,6 +68,8 @@ class StudentResultResource extends JsonResource
                 'title' => $assignment->title,
                 'subject' => $subject === null ? null : ['id' => $subject->id, 'code' => $subject->code, 'name' => $subject->name],
             ],
+            'course' => StudentClassrooms::course($assignment?->course),
+            'classroom' => StudentClassrooms::label($assignment?->classroom),
             'total_score' => $submission->effectiveTotal(),
             'total_overridden' => $submission->total_override !== null,
             'max_score' => $submission->getAttribute('max_score') === null ? null : round((float) $submission->getAttribute('max_score'), 2),

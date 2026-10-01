@@ -345,6 +345,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
         // Always the signed-in student's own shared texts (§20.5).
         'api.student.analysis' => ['GET', 'student/analysis', self::OK, self::OK],
+        'api.student.analyses' => ['GET', 'student/analyses', self::OK, self::OK],
+        // One page of the signed-in student's own classes (§24.11).
+        'api.student.overview' => ['GET', 'student/overview', self::OK, self::OK],
         'api.student.retake-requests' => ['GET', 'student/retake-requests', self::OK, self::OK],
         'api.student.assignments.index' => ['GET', 'student/assignments', self::OK, self::OK],
         // A classmate hands in to the same assignment as themself (their own work).

@@ -59,6 +59,7 @@ use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentGradeController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentMergeController;
+use App\Http\Controllers\Api\V1\StudentOverviewController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
@@ -407,6 +408,8 @@ Route::prefix('v1')->group(function () {
 
             // Student-only (§9.7, §19.6): their own published results and hand-ins.
             Route::middleware('role:student')->prefix('student')->group(function () {
+                // One page across every classroom of the student, grouped by course (§24.11).
+                Route::get('overview', StudentOverviewController::class)->name('api.student.overview');
                 Route::get('results', [StudentResultController::class, 'index'])->name('api.student.results.index');
                 Route::get('results/{submission_id}', [StudentResultController::class, 'show'])->name('api.student.results.show');
                 Route::post('responses/{id}/appeal', [StudentResultController::class, 'appeal'])->middleware('throttle:appeal')->name('api.student.responses.appeal');
@@ -420,6 +423,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 // Only the analysis texts the teacher shared, never the teacher's version (§20.5).
                 Route::get('analysis', [AnalysisController::class, 'mine'])->name('api.student.analysis');
+                Route::get('analyses', [AnalysisController::class, 'mineAll'])->name('api.student.analyses');
                 Route::get('retake-requests', [StudentRetakeController::class, 'index'])->name('api.student.retake-requests');
                 // Hand in from the app (§19.6): open assignments and a whole-page submission.
                 Route::get('assignments', [StudentAssignmentController::class, 'index'])->name('api.student.assignments.index');
