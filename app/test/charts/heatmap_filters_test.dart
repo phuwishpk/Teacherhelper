@@ -67,7 +67,8 @@ class _FakeMastery extends MasteryRepository {
   Future<MasteryList> mine() async => const MasteryList(rows: []);
 
   @override
-  Future<List<SkillMastery>> student(int studentId) async => const [];
+  Future<List<SkillMastery>> student(int studentId, {int? courseId}) async =>
+      const [];
 }
 
 void main() {

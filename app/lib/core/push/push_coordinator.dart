@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/assignments/assignments_providers.dart';
+import '../../features/classrooms/classrooms_providers.dart';
+import '../../features/classrooms/course_requests.dart';
 import '../../features/google_classroom/google_providers.dart';
 import '../../features/gradebook/gradebook_providers.dart';
 import '../../features/home/teacher_attention.dart';
@@ -185,6 +187,13 @@ final pushCoordinatorProvider = Provider<PushCoordinator>((ref) {
       case 'google_reconnect':
         ref.invalidate(googleStatusProvider);
         ref.invalidate(teacherAttentionProvider);
+      case 'course_request':
+        ref.invalidate(courseRequestsProvider);
+        ref.invalidate(teacherAttentionProvider);
+      case 'course_request_decided':
+        // Approved: the room joins the teacher's list.
+        ref.invalidate(courseRequestsProvider);
+        ref.invalidate(classroomsProvider);
     }
   }
 

@@ -20,14 +20,38 @@ class StudentMasteryScreen extends ConsumerWidget {
     super.key,
     required this.classroomId,
     required this.studentId,
+    this.courseId,
   });
 
   final int classroomId;
   final int studentId;
 
+  /// Only this course's indicators. A subject teacher (DESIGN §24.20) must
+  /// name a course; without one the screen uses their first course of the
+  /// room.
+  final int? courseId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mastery = ref.watch(studentMasteryProvider(studentId));
+    final classroom = ref.watch(classroomProvider(classroomId));
+    final subject = classroom.value?.isSubject ?? false;
+    var courseId = this.courseId;
+    if (courseId == null && subject) {
+      courseId = ref
+          .watch(classroomTeachingProvider(classroomId))
+          .value
+          ?.firstOrNull
+          ?.id;
+    }
+    // Wait for the room (and a subject teacher's course): asking without
+    // a course would be refused for a subject teacher.
+    final waiting =
+        (classroom.isLoading && !classroom.hasValue) ||
+        (subject && courseId == null);
+    final query = (studentId: studentId, courseId: courseId);
+    final AsyncValue<List<SkillMastery>> mastery = waiting
+        ? const AsyncLoading()
+        : ref.watch(studentMasteryProvider(query));
     final roster = ref.watch(rosterProvider(classroomId)).value ?? const [];
     final student = roster.where((s) => s.studentId == studentId).firstOrNull;
     final theme = Theme.of(context);
@@ -39,17 +63,20 @@ class StudentMasteryScreen extends ConsumerWidget {
               : '${student.studentNumber}. ${student.name}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'วิเคราะห์รายคน (AI)',
-            icon: const Icon(Icons.auto_awesome_outlined),
-            onPressed: () =>
-                context.push(AppRoutes.studentAnalysis(classroomId, studentId)),
-          ),
+          // The AI analysis is the homeroom teacher's (DESIGN §24.8).
+          if (!subject)
+            IconButton(
+              tooltip: 'วิเคราะห์รายคน (AI)',
+              icon: const Icon(Icons.auto_awesome_outlined),
+              onPressed: () => context.push(
+                AppRoutes.studentAnalysis(classroomId, studentId),
+              ),
+            ),
         ],
       ),
       body: AsyncView(
         value: mastery,
-        onRetry: () => ref.invalidate(studentMasteryProvider(studentId)),
+        onRetry: () => ref.invalidate(studentMasteryProvider(query)),
         data: (rows) {
           if (rows.isEmpty) {
             return EmptyView(
@@ -72,8 +99,7 @@ class StudentMasteryScreen extends ConsumerWidget {
               .take(3)
               .toList();
           return RefreshIndicator(
-            onRefresh: () =>
-                ref.refresh(studentMasteryProvider(studentId).future),
+            onRefresh: () => ref.refresh(studentMasteryProvider(query).future),
             child: ContentColumn(
               child: ListView(
                 children: [

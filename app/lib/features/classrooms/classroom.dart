@@ -10,6 +10,7 @@ class Classroom {
     this.googleLink,
     this.closedAt,
     this.myRole = ClassroomRole.homeroom,
+    this.homeroomTeacher,
   });
 
   final int id;
@@ -35,9 +36,17 @@ class Classroom {
   /// The signed-in teacher's role in this room (DESIGN §24.8 `my_role`).
   final ClassroomRole myRole;
 
+  /// The owner of the room (DESIGN §24.20 `homeroom_teacher`), shown on a
+  /// room the signed-in teacher teaches as a subject teacher.
+  final TeacherRef? homeroomTeacher;
+
   bool get isClosed => closedAt != null;
 
   bool get isHomeroom => myRole == ClassroomRole.homeroom;
+
+  /// A shared homeroom the teacher teaches an own course in (§24.7): the
+  /// roster is read-only and only their own course's results show.
+  bool get isSubject => myRole == ClassroomRole.subject;
 
   /// The homeroom teacher of an open room edits the roster and the
   /// students' data (DESIGN §24.2, §24.8).
@@ -53,6 +62,7 @@ class Classroom {
     googleLink: link,
     closedAt: closedAt,
     myRole: myRole,
+    homeroomTeacher: homeroomTeacher,
   );
 
   factory Classroom.fromJson(Map<String, dynamic> json) => Classroom(
@@ -76,7 +86,25 @@ class Classroom {
     myRole: json['my_role'] == 'subject'
         ? ClassroomRole.subject
         : ClassroomRole.homeroom,
+    homeroomTeacher: TeacherRef.maybe(json['homeroom_teacher']),
   );
+}
+
+/// `{id, name}` of a teacher as the shared-homeroom payloads carry it
+/// (DESIGN §24.12 B, §24.20).
+class TeacherRef {
+  const TeacherRef({required this.id, required this.name});
+
+  final int id;
+  final String name;
+
+  /// Null unless [json] is a `{id, name}` map.
+  static TeacherRef? maybe(Object? json) => json is Map && json['id'] is num
+      ? TeacherRef(
+          id: (json['id'] as num).toInt(),
+          name: json['name'] as String? ?? '',
+        )
+      : null;
 }
 
 /// `my_role` of a classroom (DESIGN §24.2): the homeroom teacher owns the

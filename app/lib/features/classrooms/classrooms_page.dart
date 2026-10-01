@@ -8,8 +8,10 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/google_providers.dart';
+import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import 'classroom.dart';
 import 'classrooms_providers.dart';
+import 'request_classroom_screen.dart';
 
 /// "ห้องเรียน" tab of the teacher shell. It is a body only: the shell's
 /// Scaffold shows [ClassroomsFab] for it, so the root ScaffoldMessenger has
@@ -28,6 +30,10 @@ class ClassroomsPage extends ConsumerWidget {
         if (list.isEmpty) {
           return const Column(
             children: [
+              ContentColumn(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: SharedHomeroomBar(),
+              ),
               Expanded(
                 child: EmptyView(
                   icon: Icons.groups_outlined,
@@ -51,10 +57,12 @@ class ClassroomsPage extends ConsumerWidget {
           child: ContentColumn(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             child: ListView.builder(
-              itemCount: list.length + 1,
-              itemBuilder: (context, i) => i == list.length
+              itemCount: list.length + 2,
+              itemBuilder: (context, i) => i == 0
+                  ? const SharedHomeroomBar()
+                  : i == list.length + 1
                   ? const ClosedClassroomsSection()
-                  : ClassroomCard(classroom: list[i]),
+                  : ClassroomCard(classroom: list[i - 1]),
             ),
           ),
         );
@@ -93,12 +101,48 @@ class ClassroomCard extends StatelessWidget {
           ],
         ),
         subtitle: Text(
-          'ปีการศึกษา ${c.academicYear} · รหัสห้อง ${c.classCode}'
-          '${c.studentCount != null ? ' · นักเรียน ${c.studentCount} คน' : ''}'
-          '${closedAt != null ? ' · ปิดเมื่อ ${formatThaiDate(closedAt.toLocal())}' : ''}',
+          [
+            // A shared homeroom shows whose room it is (DESIGN §24.13).
+            if (c.isSubject && c.homeroomTeacher != null)
+              'ครูประจำชั้น ${c.homeroomTeacher!.name}',
+            'ปีการศึกษา ${c.academicYear}',
+            'รหัสห้อง ${c.classCode}',
+            if (c.studentCount != null) 'นักเรียน ${c.studentCount} คน',
+            if (closedAt != null)
+              'ปิดเมื่อ ${formatThaiDate(closedAt.toLocal())}',
+          ].join(' · '),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.push(AppRoutes.classroom(c.id)),
+      ),
+    );
+  }
+}
+
+/// Shared homerooms (DESIGN §24.7, §24.13) above the list: ask to teach
+/// in another teacher's room, and the requests with a badge counting the
+/// ones that wait for this teacher's decision.
+class SharedHomeroomBar extends ConsumerWidget {
+  const SharedHomeroomBar({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending =
+        ref.watch(teacherAttentionProvider).value?.courseRequestsPending ?? 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          CourseRequestsButton(pending: pending),
+          TextButton.icon(
+            key: const ValueKey('request_other_classroom'),
+            onPressed: () => context.push(AppRoutes.courseRequestNew()),
+            icon: const Icon(Icons.group_add_outlined),
+            label: const Text('ขอสอนห้องของครูท่านอื่น'),
+          ),
+        ],
       ),
     );
   }

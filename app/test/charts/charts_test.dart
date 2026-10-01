@@ -149,7 +149,11 @@ void main() {
       await r.progress(studentId: 55, skillIds: [3, 1]);
       expect(sent.last.$1, endsWith('/students/55/indicator-progress'));
       expect(sent.last.$2, {'skill_ids': '3,1'});
-      await r.progress();
+      // A subject teacher's chart names the course (DESIGN §24.20); the
+      // student's own chart never sends one.
+      await r.progress(studentId: 55, courseId: 4);
+      expect(sent.last.$2, {'course_id': '4'});
+      await r.progress(courseId: 4);
       expect(sent.last.$1, endsWith('/student/indicator-progress'));
       expect(sent.last.$2, isEmpty);
       await r.passRate(7, courseId: 4);
@@ -531,7 +535,11 @@ void main() {
         mastery.calls.where((c) => c.studentId == 55).single.classroomId,
         7,
       );
-      expect(charts.progressCalls.single, (studentId: 55, skillIds: null));
+      expect(charts.progressCalls.single, (
+        studentId: 55,
+        skillIds: null,
+        courseId: 4,
+      ));
       expect(find.byKey(const ValueKey('progress_chart')), findsOneWidget);
       expect(find.text('72% · 3 ครั้ง'), findsOneWidget);
       expect(find.text('30% · 1 ครั้ง'), findsOneWidget);

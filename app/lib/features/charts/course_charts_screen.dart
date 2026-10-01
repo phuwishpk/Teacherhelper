@@ -388,6 +388,7 @@ class _StudentCourseChartsBodyState
           const SizedBox(height: 12),
           IndicatorProgressCard(
             studentId: widget.studentId,
+            courseId: _own ? null : widget.courseId,
             selection: _selection,
             onChanged: () => setState(() {}),
           ),

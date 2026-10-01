@@ -10,6 +10,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
 import '../assignments/question.dart';
+import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'course_models.dart';
 import 'courses_providers.dart';
@@ -116,6 +117,27 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
         : _description.text.trim(),
   );
 
+  /// The rooms of [ids] this form may send (DESIGN §24.20: `classroom_ids`
+  /// takes the teacher's own homerooms only). Another teacher's room, where
+  /// the course came through an approved request, is left out: the server
+  /// keeps that binding. A closed room is looked up in "ห้องเก่า".
+  Future<List<int>> _homeroomIds(Iterable<int> ids) async {
+    final open = ref.read(classroomsProvider).value ?? const <Classroom>[];
+    var known = {for (final c in open) c.id: c.isHomeroom};
+    if (ids.any((id) => !known.containsKey(id))) {
+      try {
+        final closed = await ref.read(closedClassroomsProvider.future);
+        known = {...known, for (final c in closed) c.id: c.isHomeroom};
+      } catch (_) {
+        // Unknown rooms are sent as before; the server says if one is not ours.
+      }
+    }
+    return [
+      for (final id in ids)
+        if (known[id] ?? true) id,
+    ]..sort();
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -126,8 +148,8 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
     try {
       if (_c case final c?) {
         await repo.update(c.id, _draft);
-        final classrooms = _classroomIds.toList()..sort();
-        final before = [...c.classroomIds]..sort();
+        final classrooms = await _homeroomIds(_classroomIds);
+        final before = await _homeroomIds(c.classroomIds);
         if (classrooms.join(',') != before.join(',')) {
           await repo.setClassrooms(c.id, classrooms);
         }
@@ -143,7 +165,7 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
       } else {
         final created = await repo.create(
           _draft,
-          classroomIds: _classroomIds.toList(),
+          classroomIds: await _homeroomIds(_classroomIds),
           skillIds: [for (final s in _indicators) s.id],
         );
         invalidateCourses(ref);
@@ -327,7 +349,9 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        for (final c in list)
+                        // Another teacher's room is bound through a request
+                        // ("ขอสอนห้องของครูท่านอื่น", DESIGN §24.7).
+                        for (final c in list.where((c) => c.isHomeroom))
                           FilterChip(
                             key: ValueKey('course_classroom_${c.id}'),
                             label: Text(c.name),

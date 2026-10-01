@@ -20,6 +20,15 @@ final classroomCoursesProvider = FutureProvider.autoDispose
           .list(classroomId: classroomId);
     });
 
+/// The courses taught in a classroom with their teachers (`GET
+/// /classrooms/{id}/courses`, DESIGN §24.12 B): every course of the room
+/// for the homeroom teacher, the teacher's own for a subject teacher.
+final classroomTeachingProvider = FutureProvider.autoDispose
+    .family<List<ClassroomCourse>, int>((ref, classroomId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(coursesRepositoryProvider).taughtIn(classroomId);
+    });
+
 /// One course with its indicators, units and lesson plans.
 final courseDetailProvider = FutureProvider.autoDispose.family<Course, int>((
   ref,
@@ -66,5 +75,6 @@ final courseGuidanceMemoryProvider =
 void invalidateCourses(WidgetRef ref) {
   ref.invalidate(coursesProvider);
   ref.invalidate(classroomCoursesProvider);
+  ref.invalidate(classroomTeachingProvider);
   ref.invalidate(courseDetailProvider);
 }

@@ -1,4 +1,5 @@
 import '../../core/api/teacher_guidance.dart';
+import '../classrooms/classroom.dart' show TeacherRef;
 import '../../core/util/thai_date.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/question.dart';
@@ -170,6 +171,72 @@ List<CourseClassroom> _classrooms(Map<String, dynamic> json) {
       for (final id in ids)
         if (id is num) CourseClassroom(id: id.toInt(), name: 'ห้อง #$id'),
   ];
+}
+
+/// A course taught in a classroom, as `GET /classrooms/{id}/courses`
+/// answers (DESIGN §24.12 B): every course of the room for its homeroom
+/// teacher, only the teacher's own ones for a subject teacher.
+class ClassroomCourse {
+  const ClassroomCourse({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.gradeLevel,
+    required this.academicYear,
+    this.semester = 0,
+    this.subjectName,
+    this.teacher,
+    this.isMine = true,
+  });
+
+  final int id;
+  final String code;
+  final String name;
+  final int gradeLevel;
+  final int semester;
+  final int academicYear;
+  final String? subjectName;
+
+  /// The course's creator: the teacher who teaches it in the room.
+  final TeacherRef? teacher;
+
+  /// The signed-in teacher's own course; another teacher's course is
+  /// read-only for the homeroom teacher (DESIGN §24.8).
+  final bool isMine;
+
+  String get title => '$code $name';
+
+  String get termLabel =>
+      '${gradeLevelLabel(gradeLevel)} · ${semesterLabel(semester)} · $academicYear';
+
+  factory ClassroomCourse.fromJson(Map<String, dynamic> json) {
+    final course = json['course'] is Map
+        ? (json['course'] as Map).cast<String, dynamic>()
+        : json;
+    final subject = course['subject'];
+    return ClassroomCourse(
+      id: _int(course['id']) ?? 0,
+      code: course['code'] as String? ?? '',
+      name: course['name'] as String? ?? '',
+      gradeLevel: _int(course['grade_level']) ?? 1,
+      semester: _int(course['semester']) ?? 0,
+      academicYear: _int(course['academic_year']) ?? currentThaiYear(),
+      subjectName: subject is Map ? subject['name'] as String? : null,
+      teacher: TeacherRef.maybe(json['teacher']),
+      isMine: json['is_mine'] != false,
+    );
+  }
+
+  /// One of the teacher's own [Course]s bound to the room.
+  factory ClassroomCourse.own(Course c) => ClassroomCourse(
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    gradeLevel: c.gradeLevel,
+    semester: c.semester,
+    academicYear: c.academicYear,
+    subjectName: c.subjectName,
+  );
 }
 
 /// หน่วยการเรียนรู้ (`units`).

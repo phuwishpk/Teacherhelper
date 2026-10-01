@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../courses/classroom_courses_section.dart';
+import '../courses/courses_providers.dart' show classroomTeachingProvider;
 import '../google_classroom/classroom_google_section.dart';
 import '../google_classroom/roster_sync_dialog.dart' show leftCourseLabel;
 import '../home/teacher_attention.dart' show teacherAttentionProvider;
@@ -70,17 +71,20 @@ class ClassroomDetailScreen extends ConsumerWidget {
                   ClosedClassroomBanner(classroom: c),
                   const SizedBox(height: 8),
                 ],
+                if (c.isSubject) ...[
+                  SubjectTeacherBanner(classroom: c),
+                  const SizedBox(height: 8),
+                ],
                 _HeaderCard(classroom: c),
                 const SizedBox(height: 12),
                 _ActionsRow(classroom: c),
                 const SizedBox(height: 12),
-                ClassroomCoursesSection(
-                  classroomId: c.id,
-                  readOnly: c.isClosed,
-                ),
+                ClassroomCoursesSection(classroom: c),
                 const SizedBox(height: 12),
-                // Linking and syncing write: not for a closed room.
-                if (!c.isClosed) ClassroomGoogleSection(classroom: c),
+                // Linking and syncing write: not for a closed room, and the
+                // room's Google course is the homeroom teacher's (§24.20).
+                if (!c.isClosed && c.isHomeroom)
+                  ClassroomGoogleSection(classroom: c),
                 const SizedBox(height: 4),
                 Text(
                   'รายชื่อนักเรียน',
@@ -296,12 +300,14 @@ class _ActionsRow extends ConsumerWidget {
           icon: const Icon(Icons.grid_on_outlined),
           label: const Text('ทักษะของห้อง'),
         ),
-        OutlinedButton.icon(
-          onPressed: () =>
-              context.push(AppRoutes.classroomAnalyses(classroom.id)),
-          icon: const Icon(Icons.auto_awesome_outlined),
-          label: const Text('วิเคราะห์รายคน'),
-        ),
+        // The AI analysis is the homeroom teacher's (DESIGN §24.8).
+        if (classroom.isHomeroom)
+          OutlinedButton.icon(
+            onPressed: () =>
+                context.push(AppRoutes.classroomAnalyses(classroom.id)),
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('วิเคราะห์รายคน'),
+          ),
       ],
     );
   }
@@ -540,9 +546,29 @@ class _StudentTile extends ConsumerWidget {
     }
   }
 
+  /// A subject teacher sees only their own course's indicators (§24.20).
+  void _openMastery(BuildContext context, WidgetRef ref) {
+    int? courseId;
+    if (classroom.isSubject) {
+      courseId = ref
+          .read(classroomTeachingProvider(classroomId))
+          .value
+          ?.firstOrNull
+          ?.id;
+    }
+    context.push(
+      AppRoutes.studentMastery(
+        classroomId,
+        student.studentId,
+        courseId: courseId,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
+      key: ValueKey('roster_student_${student.studentId}'),
       leading: CircleAvatar(
         radius: 18,
         child: Text('${student.studentNumber}'),
@@ -579,15 +605,11 @@ class _StudentTile extends ConsumerWidget {
               ),
             )
           : null,
-      onTap: () => context.push(
-        AppRoutes.studentMastery(classroomId, student.studentId),
-      ),
+      onTap: () => _openMastery(context, ref),
       trailing: PopupMenuButton<String>(
         tooltip: 'ตัวเลือก',
         onSelected: (v) => switch (v) {
-          'mastery' => context.push(
-            AppRoutes.studentMastery(classroomId, student.studentId),
-          ),
+          'mastery' => _openMastery(context, ref),
           'analysis' => context.push(
             AppRoutes.studentAnalysis(classroomId, student.studentId),
           ),
@@ -608,13 +630,14 @@ class _StudentTile extends ConsumerWidget {
               title: Text('ทักษะและจุดอ่อน'),
             ),
           ),
-          const PopupMenuItem(
-            value: 'analysis',
-            child: ListTile(
-              leading: Icon(Icons.auto_awesome_outlined),
-              title: Text('วิเคราะห์รายคน (AI)'),
+          if (classroom.isHomeroom)
+            const PopupMenuItem(
+              value: 'analysis',
+              child: ListTile(
+                leading: Icon(Icons.auto_awesome_outlined),
+                title: Text('วิเคราะห์รายคน (AI)'),
+              ),
             ),
-          ),
           // Editing the student is for the homeroom teacher of an open
           // room (DESIGN §24.2); merging works from closed rooms too
           // (§24.5).
@@ -658,6 +681,53 @@ class _StudentTile extends ConsumerWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// On a room the teacher teaches as a subject teacher (DESIGN §24.7,
+/// §24.13): who the homeroom teacher is, and that the roster and the
+/// students' data are read-only here.
+class SubjectTeacherBanner extends StatelessWidget {
+  const SubjectTeacherBanner({super.key, required this.classroom});
+
+  final Classroom classroom;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = TextStyle(color: scheme.onTertiaryContainer);
+    final owner = classroom.homeroomTeacher?.name;
+    return Card(
+      key: const ValueKey('subject_banner'),
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.co_present_outlined, color: scheme.onTertiaryContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    owner == null
+                        ? 'คุณเป็นครูประจำวิชาของห้องนี้'
+                        : 'ห้องของ $owner (ครูประจำชั้น)',
+                    style: style.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'สั่งงานและดูผลได้เฉพาะรายวิชาของคุณ รายชื่อนักเรียนดูได้อย่างเดียว '
+                    'แก้รายชื่อหรือข้อมูลนักเรียนให้ติดต่อครูประจำชั้น',
+                    style: style,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

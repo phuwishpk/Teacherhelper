@@ -184,7 +184,8 @@ Map<String, dynamic> progressJson({
 
 /// In-memory [ChartsRepository] that records what the screens asked for.
 class FakeChartsRepository implements ChartsRepository {
-  final progressCalls = <({int? studentId, List<int>? skillIds})>[];
+  final progressCalls =
+      <({int? studentId, List<int>? skillIds, int? courseId})>[];
   final passRateCalls = <({int classroomId, int? courseId})>[];
   final planCalls = <({int courseId, int? classroomId})>[];
   int scoredCount = 5;
@@ -193,8 +194,13 @@ class FakeChartsRepository implements ChartsRepository {
   Future<IndicatorProgress> progress({
     int? studentId,
     List<int>? skillIds,
+    int? courseId,
   }) async {
-    progressCalls.add((studentId: studentId, skillIds: skillIds));
+    progressCalls.add((
+      studentId: studentId,
+      skillIds: skillIds,
+      courseId: courseId,
+    ));
     return IndicatorProgress.fromJson(
       progressJson(studentId: studentId ?? 55, ids: skillIds ?? const [1, 3]),
     );

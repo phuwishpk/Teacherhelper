@@ -85,12 +85,15 @@ class AssignmentDetailScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     // An exam opened through an assignment link has its own screens (§22).
     if (detail.value?.isExam ?? false) return ExamScreen(examId: assignmentId);
+    // Another teacher's course work in the homeroom teacher's room is
+    // read-only (DESIGN §24.8): results only, no edits.
+    final manage = detail.value?.canManage ?? true;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(detail.value?.title ?? 'การบ้าน'),
         actions: [
-          if (detail.value case final a?) ...[
+          if (detail.value case final a? when a.canManage) ...[
             IconButton(
               tooltip: 'แก้ไข',
               icon: const Icon(Icons.edit_outlined),
@@ -106,18 +109,22 @@ class AssignmentDetailScreen extends ConsumerWidget {
           ],
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'question_new',
-        onPressed: () {
-          final a = detail.value;
-          context.push(
-            AppRoutes.questionNew(assignmentId),
-            extra: a == null ? null : QuestionFormArgs.forAssignment(ref, a),
-          );
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('เพิ่มคำถาม'),
-      ),
+      floatingActionButton: manage
+          ? FloatingActionButton.extended(
+              heroTag: 'question_new',
+              onPressed: () {
+                final a = detail.value;
+                context.push(
+                  AppRoutes.questionNew(assignmentId),
+                  extra: a == null
+                      ? null
+                      : QuestionFormArgs.forAssignment(ref, a),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('เพิ่มคำถาม'),
+            )
+          : null,
       body: AsyncView(
         value: detail,
         onRetry: () => ref.invalidate(assignmentDetailProvider(assignmentId)),
@@ -138,6 +145,10 @@ class AssignmentDetailScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               child: ListView(
                 children: [
+                  if (!a.canManage) ...[
+                    _ReadOnlyBanner(assignment: a),
+                    const SizedBox(height: 8),
+                  ],
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -190,7 +201,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   _AnswerKeyCard(assignment: a),
-                  if (!a.isFreeform) ...[
+                  if (!a.isFreeform && a.canManage) ...[
                     const SizedBox(height: 12),
                     Card(
                       child: Padding(
@@ -247,7 +258,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  if (canUploadFor(a)) ...[
+                  if (a.canManage && canUploadFor(a)) ...[
                     const SizedBox(height: 12),
                     Card(
                       child: ListTile(
@@ -268,9 +279,13 @@ class AssignmentDetailScreen extends ConsumerWidget {
                     Card(
                       child: ListTile(
                         leading: const Icon(Icons.rate_review_outlined),
-                        title: const Text('ตรวจทานและเผยแพร่'),
+                        title: Text(
+                          a.canManage ? 'ตรวจทานและเผยแพร่' : 'คะแนนและคำตอบ',
+                        ),
                         subtitle: Text(
-                          (a.needsReviewCount ?? 0) > 0
+                          !a.canManage
+                              ? 'ดูคะแนนที่ให้และคำตอบของนักเรียน (อ่านอย่างเดียว)'
+                              : (a.needsReviewCount ?? 0) > 0
                               ? 'รอตรวจทาน ${a.needsReviewCount} ข้อ'
                               : 'ดูคะแนนที่ AI ให้ แก้ไข แล้วเผยแพร่ให้นักเรียน',
                         ),
@@ -291,9 +306,14 @@ class AssignmentDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  AssignmentGoogleSection(assignment: a, classroom: classroom),
-                  if (a.questions.isNotEmpty) ...[
+                  if (a.canManage) ...[
+                    const SizedBox(height: 12),
+                    AssignmentGoogleSection(
+                      assignment: a,
+                      classroom: classroom,
+                    ),
+                  ],
+                  if (a.questions.isNotEmpty && a.canManage) ...[
                     const SizedBox(height: 12),
                     Card(
                       child: ListTile(
@@ -325,7 +345,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  if (a.questions.isEmpty)
+                  if (a.questions.isEmpty && a.canManage)
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(24),
@@ -338,6 +358,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
                   for (final q in a.questions)
                     _QuestionTile(
                       question: q,
+                      readOnly: !a.canManage,
                       onTap: () => context.push(
                         AppRoutes.questionEdit(a.id, q.id),
                         extra: QuestionFormArgs.forAssignment(ref, a, q),
@@ -478,9 +499,13 @@ class _QuestionTile extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
     this.onRubric,
+    this.readOnly = false,
   });
 
   final Question question;
+
+  /// Another teacher's work: the question shows, nothing opens or deletes.
+  final bool readOnly;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback? onRubric;
@@ -491,7 +516,7 @@ class _QuestionTile extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       child: ListTile(
-        onTap: onTap,
+        onTap: readOnly ? null : onTap,
         leading: CircleAvatar(radius: 16, child: Text('${q.position}')),
         title: Text(q.promptText, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Wrap(
@@ -515,7 +540,7 @@ class _QuestionTile extends StatelessWidget {
               ),
             if (q.type.needsRubric)
               InkWell(
-                onTap: onRubric,
+                onTap: readOnly ? null : onRubric,
                 child: StatusChip(
                   label: 'rubric: ${q.rubricStatus.label}',
                   color: q.rubricStatus == RubricStatus.approved
@@ -525,10 +550,43 @@ class _QuestionTile extends StatelessWidget {
               ),
           ],
         ),
-        trailing: IconButton(
-          tooltip: 'ลบข้อ',
-          icon: const Icon(Icons.delete_outline),
-          onPressed: onDelete,
+        trailing: readOnly
+            ? null
+            : IconButton(
+                tooltip: 'ลบข้อ',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: onDelete,
+              ),
+      ),
+    );
+  }
+}
+
+/// Another teacher's work in the teacher's homeroom (DESIGN §24.8).
+class _ReadOnlyBanner extends StatelessWidget {
+  const _ReadOnlyBanner({required this.assignment});
+
+  final Assignment assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      key: const ValueKey('assignment_read_only'),
+      color: scheme.secondaryContainer,
+      child: ListTile(
+        leading: Icon(
+          Icons.visibility_outlined,
+          color: scheme.onSecondaryContainer,
+        ),
+        title: Text(
+          'งานของครูประจำวิชา อ่านอย่างเดียว',
+          style: TextStyle(color: scheme.onSecondaryContainer),
+        ),
+        subtitle: Text(
+          '${assignment.courseLabel ?? 'รายวิชาของครูท่านอื่น'} · '
+          'ดูผลได้ แต่แก้ พิมพ์ สแกน หรือเผยแพร่ได้เฉพาะครูผู้สอน',
+          style: TextStyle(color: scheme.onSecondaryContainer),
         ),
       ),
     );

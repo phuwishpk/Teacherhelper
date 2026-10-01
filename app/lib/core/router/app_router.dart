@@ -22,7 +22,10 @@ import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
+import '../../features/classrooms/course_requests.dart';
+import '../../features/classrooms/course_requests_screen.dart';
 import '../../features/classrooms/merge_students_screen.dart';
+import '../../features/classrooms/request_classroom_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/courses/course_detail_screen.dart';
 import '../../features/courses/course_form_screen.dart';
@@ -155,6 +158,17 @@ abstract final class AppRoutes {
   static String course(int id) => '/courses/$id';
   static String courseEdit(int id) => '/courses/$id/edit';
 
+  /// "คำขอผูกรายวิชา" of shared homerooms (DESIGN §24.7): the requests to
+  /// the teacher's homerooms, or ([outgoing]) the teacher's own.
+  static const courseRequests = '/course-requests';
+  static const courseRequestsOutgoing = '/course-requests?box=outgoing';
+
+  /// "ขอสอนในห้องของครูท่านอื่น": the school's open classrooms, with
+  /// [courseId] preselected when opened from a course.
+  static String courseRequestNew({int? courseId}) => courseId == null
+      ? '/course-requests/new'
+      : '/course-requests/new?course=$courseId';
+
   /// The gradebook of a course (DESIGN §23.9), opened on [classroomId] and
   /// scrolled to [column] (`a{assignment id}` or `i{item id}`) when given.
   static String gradebook(int courseId, {int? classroomId, String? column}) {
@@ -264,8 +278,14 @@ abstract final class AppRoutes {
       '/student/courses/$courseId/grade';
 
   /// One student's skills and weaknesses, seen by the teacher.
-  static String studentMastery(int classroomId, int studentId) =>
-      '/classrooms/$classroomId/students/$studentId/mastery';
+  /// A subject teacher passes their [courseId] (DESIGN §24.20).
+  static String studentMastery(
+    int classroomId,
+    int studentId, {
+    int? courseId,
+  }) =>
+      '/classrooms/$classroomId/students/$studentId/mastery'
+      '${courseId == null ? '' : '?course=$courseId'}';
 
   /// Every student's AI analysis in a classroom and its auto-share switch
   /// (DESIGN §20.5).
@@ -550,6 +570,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => StudentMasteryScreen(
               classroomId: _id(state, 'id'),
               studentId: _id(state, 'sid'),
+              courseId: int.tryParse(state.uri.queryParameters['course'] ?? ''),
             ),
           ),
           GoRoute(
@@ -569,6 +590,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.courses,
         builder: (context, state) => const CoursesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.courseRequests,
+        builder: (context, state) => CourseRequestsScreen(
+          initialBox: state.uri.queryParameters['box'] == 'outgoing'
+              ? CourseRequestBox.outgoing
+              : CourseRequestBox.incoming,
+        ),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => RequestClassroomScreen(
+              courseId: int.tryParse(state.uri.queryParameters['course'] ?? ''),
+            ),
+          ),
+        ],
       ),
       // Before '/courses/:id', which would take "new" as an id.
       GoRoute(

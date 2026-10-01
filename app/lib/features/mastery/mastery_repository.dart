@@ -20,8 +20,9 @@ abstract class MasteryRepository {
     int? unitId,
   });
 
-  /// Teacher: `GET /students/{id}/mastery`.
-  Future<List<SkillMastery>> student(int studentId);
+  /// Teacher: `GET /students/{id}/mastery`. A subject teacher must pass
+  /// their [courseId] and sees only its indicators (DESIGN §24.20).
+  Future<List<SkillMastery>> student(int studentId, {int? courseId});
 }
 
 class ApiMasteryRepository implements MasteryRepository {
@@ -54,8 +55,11 @@ class ApiMasteryRepository implements MasteryRepository {
   }
 
   @override
-  Future<List<SkillMastery>> student(int studentId) async {
-    final res = await _dio.get<Object?>('/students/$studentId/mastery');
+  Future<List<SkillMastery>> student(int studentId, {int? courseId}) async {
+    final res = await _dio.get<Object?>(
+      '/students/$studentId/mastery',
+      queryParameters: {'course_id': ?courseId},
+    );
     return unwrapList(res.data).map(SkillMastery.fromJson).toList();
   }
 }
@@ -81,8 +85,13 @@ final classroomMasteryProvider = FutureProvider.autoDispose
           .classroom(q.classroomId, courseId: q.courseId, unitId: q.unitId);
     }, retry: apiRetry);
 
+/// One student's mastery, of one course's indicators when [courseId] is set.
+typedef StudentMasteryQuery = ({int studentId, int? courseId});
+
 final studentMasteryProvider = FutureProvider.autoDispose
-    .family<List<SkillMastery>, int>((ref, studentId) {
+    .family<List<SkillMastery>, StudentMasteryQuery>((ref, q) {
       watchSignedInUser(ref, keepAlive: false);
-      return ref.watch(masteryRepositoryProvider).student(studentId);
+      return ref
+          .watch(masteryRepositoryProvider)
+          .student(q.studentId, courseId: q.courseId);
     }, retry: apiRetry);

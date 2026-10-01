@@ -13,8 +13,13 @@ abstract class ChartsRepository {
   /// Chart (1). With [studentId]: the teacher's `GET
   /// /students/{id}/indicator-progress`; without: the student's own `GET
   /// /student/indicator-progress`. No [skillIds]: the server picks the
-  /// skills observed most recently.
-  Future<IndicatorProgress> progress({int? studentId, List<int>? skillIds});
+  /// skills observed most recently. A subject teacher names their
+  /// [courseId] and sees only its indicators (DESIGN §24.20).
+  Future<IndicatorProgress> progress({
+    int? studentId,
+    List<int>? skillIds,
+    int? courseId,
+  });
 
   /// Chart (2): `GET /classrooms/{id}/indicator-pass-rate`.
   Future<IndicatorPassRate> passRate(int classroomId, {int? courseId});
@@ -35,6 +40,7 @@ class ApiChartsRepository implements ChartsRepository {
   Future<IndicatorProgress> progress({
     int? studentId,
     List<int>? skillIds,
+    int? courseId,
   }) async {
     final res = await _dio.get<Object?>(
       studentId == null
@@ -43,6 +49,7 @@ class ApiChartsRepository implements ChartsRepository {
       queryParameters: {
         if (skillIds != null && skillIds.isNotEmpty)
           'skill_ids': skillIds.join(','),
+        if (studentId != null) 'course_id': ?courseId,
       },
     );
     return IndicatorProgress.fromJson(unwrapJson(res.data));
@@ -80,8 +87,9 @@ final chartsRepositoryProvider = Provider<ChartsRepository>(
 );
 
 /// Which progress lines: [studentId] null = the signed-in student's own;
-/// [skillIds] a comma list, or null for the server's pick.
-typedef ProgressQuery = ({int? studentId, String? skillIds});
+/// [skillIds] a comma list, or null for the server's pick; [courseId] the
+/// teacher's course the chart is opened from.
+typedef ProgressQuery = ({int? studentId, String? skillIds, int? courseId});
 
 final indicatorProgressProvider = FutureProvider.autoDispose
     .family<IndicatorProgress, ProgressQuery>((ref, q) {
@@ -90,6 +98,7 @@ final indicatorProgressProvider = FutureProvider.autoDispose
           .watch(chartsRepositoryProvider)
           .progress(
             studentId: q.studentId,
+            courseId: q.courseId,
             skillIds: q.skillIds == null
                 ? null
                 : [for (final s in q.skillIds!.split(',')) ?int.tryParse(s)],

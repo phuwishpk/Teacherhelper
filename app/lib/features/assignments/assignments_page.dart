@@ -155,12 +155,23 @@ class _AssignmentCard extends StatelessWidget {
       if (a.currentLayoutVersion != null) 'layout v${a.currentLayoutVersion}',
     ];
     final chips = [
+      // Another teacher's course work in the teacher's homeroom (§24.8).
+      if (!a.canManage)
+        StatusChip(
+          key: ValueKey('assignment_read_only_${a.id}'),
+          label: 'ครูประจำวิชา · อ่านอย่างเดียว',
+          color: scheme.secondary,
+        ),
       if (a.isExam) StatusChip(label: 'ข้อสอบ', color: scheme.primary),
-      if (a.isExam && !a.isManualExam && !a.keyApproved && a.status != 'closed')
+      if (a.canManage &&
+          a.isExam &&
+          !a.isManualExam &&
+          !a.keyApproved &&
+          a.status != 'closed')
         StatusChip(label: 'รออนุมัติเฉลย', color: scheme.error),
       if (a.fromClassroomWeb)
         StatusChip(label: 'สร้างในเว็บ Classroom', color: scheme.tertiary),
-      if (a.isFreeform && !a.keyApproved && a.status != 'closed')
+      if (a.canManage && a.isFreeform && !a.keyApproved && a.status != 'closed')
         StatusChip(label: 'รออนุมัติเฉลย', color: scheme.error),
     ];
     return Card(

@@ -10,6 +10,8 @@ import '../router/app_router.dart';
 /// | `appeal_opened`     | teacher | -                   | appeals list         |
 /// | `classroom_work_imported` | teacher | `assignment_id` | answer key (§19.3) |
 /// | `google_reconnect`  | teacher | -                   | settings (reconnect) |
+/// | `course_request`    | teacher | `request_id`, `classroom_id` | requests to decide (§24.7) |
+/// | `course_request_decided` | teacher | `request_id`, `classroom_id`, `course_id` | own requests |
 /// | `results_published` | student | `submission_id`     | result detail        |
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
 /// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
@@ -30,6 +32,9 @@ String? routeForPush(Map<String, String> data, User user) {
       'classroom_work_imported' when id('assignment_id') != null =>
         AppRoutes.answerKey(id('assignment_id')!),
       'google_reconnect' => AppRoutes.settings,
+      // Shared homerooms (DESIGN §24.7, §24.20).
+      'course_request' => AppRoutes.courseRequests,
+      'course_request_decided' => AppRoutes.courseRequestsOutgoing,
       _ => null,
     };
   }

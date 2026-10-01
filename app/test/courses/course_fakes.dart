@@ -182,6 +182,46 @@ class FakeCoursesRepository extends Fake implements CoursesRepository {
     ];
   }
 
+  /// Courses of other teachers taught in a room (DESIGN §24.12 B), by room.
+  Map<int, List<ClassroomCourse>> otherTeachers = {};
+  final List<(int, int)> unbound = [];
+  Object? unbindError;
+
+  @override
+  Future<List<ClassroomCourse>> taughtIn(int classroomId) async {
+    calls.add('taughtIn:$classroomId');
+    return [
+      for (final c in courses)
+        if (c.classroomIds.contains(classroomId)) ClassroomCourse.own(c),
+      ...?otherTeachers[classroomId],
+    ];
+  }
+
+  @override
+  Future<void> unbind(int classroomId, int courseId) async {
+    calls.add('unbind:$classroomId:$courseId');
+    if (unbindError case final e?) throw e;
+    unbound.add((classroomId, courseId));
+    otherTeachers[classroomId]?.removeWhere((c) => c.id == courseId);
+    final i = courses.indexWhere((c) => c.id == courseId);
+    if (i >= 0) {
+      final c = courses[i];
+      courses[i] = Course.fromJson({
+        'id': c.id,
+        'code': c.code,
+        'name': c.name,
+        'subject_id': c.subjectId,
+        'grade_level': c.gradeLevel,
+        'semester': c.semester,
+        'academic_year': c.academicYear,
+        'classrooms': [
+          for (final r in c.classrooms)
+            if (r.id != classroomId) {'id': r.id, 'name': r.name},
+        ],
+      });
+    }
+  }
+
   @override
   Future<Course> get(int id) async {
     calls.add('get:$id');
