@@ -65,7 +65,7 @@ class GradebookPublishTest extends TestCase
         $this->assertCount(1, $pushes);
         $this->assertSame(array_map(fn ($s) => $s->id, $this->students), $pushes[0][0]);
         $this->assertSame('ประกาศเกรด ค15101 แล้ว', $pushes[0][1]->body);
-        $this->assertSame(['type' => 'grades_published', 'course_id' => (string) $this->course->id], $pushes[0][1]->data());
+        $this->assertSame(['type' => 'grades_published', 'course_id' => (string) $this->course->id, 'classroom_id' => (string) $this->classroom->id], $pushes[0][1]->data());
 
         $list = $this->asUser($a)->getJson('/api/v1/student/grades')->assertOk()->json('data');
         $this->assertCount(1, $list);

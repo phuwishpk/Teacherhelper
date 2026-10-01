@@ -100,7 +100,7 @@ abstract class PushNotifier implements Notifier
         $this->push($studentIds, new PushMessage(
             PushMessage::GRADES_PUBLISHED,
             NoticeTexts::gradesPublished((string) $publication->course?->code),
-            ['course_id' => $publication->course_id],
+            ['course_id' => $publication->course_id, 'classroom_id' => $publication->classroom_id],
         ));
     }
 

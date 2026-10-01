@@ -4442,3 +4442,4 @@ route ของครูที่มีอยู่แล้วทั้งห�
 - **`PATCH /students/{id}` ชนกันพร้อมกัน**: สองคำขอตั้งเลขประจำตัวเดียวกันในเวลาเดียวกัน ตัวที่แพ้ได้ 422 `student_code_taken` (มี `existing_student` เมื่ออ่านเจ้าของได้) แทน 500
 - **`state` ของทางเว็บใช้ครั้งเดียวจริง** (§24.9.4): ใช้ marker `add()` แบบเดียวกับ ticket แทน `Cache::pull()` ที่อ่านแล้วลบสองขั้น
 - **test บน MariaDB**: test ของรอบนี้ 4 ตัวผ่านบน SQLite แต่ล้มบน MariaDB แก้แล้ว (ค่า ENUM ที่ไม่มีจริงใน fixture, `sqlite_master`/`PRAGMA` → `Schema::getForeignKeys`, trigger แบบ SQLite → hook `beforeExecuting` ของ connection, test ของ migration D ข้ามบน MariaDB เพราะ DDL ปิด transaction ของ test)
+- **push `grades_published` มี `classroom_id`** (ขยาย §23.7, §24.27): แอปเปิดเกรดของห้องนั้น (`/student/courses/{id}/grade?classroom=`) ไม่ใช่ฉบับใหม่สุดของรายวิชา เมื่อรายวิชาเดียวกันประกาศในสองห้องของนักเรียน

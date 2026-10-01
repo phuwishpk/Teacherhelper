@@ -15,7 +15,7 @@ namespace App\Domain\Notifications;
  *   retake_requested   student     assignment_id (Google Classroom, §18.2)
  *   classroom_work_imported teacher assignment_id (courseWork from the Classroom website, §19.3)
  *   google_reconnect   teacher     - (the Google grant stopped working, §19.3)
- *   grades_published   student     course_id (the classroom's grades were published, §23.7)
+ *   grades_published   student     course_id, classroom_id (the classroom's grades were published, §23.7, §24.28)
  *   course_request     teacher     request_id, classroom_id (a course waits to be bound to their homeroom, §24.7)
  *   course_request_decided teacher request_id, classroom_id, course_id (approved or declined, §24.7)
  *
