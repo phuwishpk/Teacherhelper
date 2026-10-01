@@ -536,7 +536,8 @@ class _StudentTile extends ConsumerWidget {
       context,
       title: 'รีเซ็ต PIN ของ ${student.name}?',
       message:
-          'PIN เดิมจะใช้ไม่ได้ และนักเรียนจะถูกออกจากระบบทุกเครื่อง PIN ใหม่จะแสดงครั้งเดียว',
+          'PIN เดิมจะใช้ไม่ได้ นักเรียนจะถูกออกจากระบบทุกเครื่อง '
+          'และการเชื่อมบัญชี Google (ถ้ามี) จะถูกยกเลิก PIN ใหม่จะแสดงครั้งเดียว',
       confirmLabel: 'รีเซ็ต PIN',
     );
     if (!ok || !context.mounted) return;
@@ -569,6 +570,14 @@ class _StudentTile extends ConsumerWidget {
                 'จดไว้ให้นักเรียนตอนนี้ ระบบจะไม่แสดง PIN นี้อีก',
                 textAlign: TextAlign.center,
               ),
+              if (reset.googleUnlinked) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'ยกเลิกการเชื่อมบัญชี Google แล้ว นักเรียนต้องเข้าด้วย PIN ใหม่แล้วเชื่อม Google อีกครั้ง',
+                  key: ValueKey('pin_reset_google_unlinked'),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
           ),
           actions: [

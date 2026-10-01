@@ -9,9 +9,12 @@ import 'school_students.dart';
 
 /// Result of `POST /students/{id}/pin`: the new PIN is shown exactly once.
 class PinReset {
-  const PinReset(this.pin);
+  const PinReset(this.pin, {this.googleUnlinked = false});
 
   final String pin;
+
+  /// The reset also removed the student's Google sign-in link (§24.9.5).
+  final bool googleUnlinked;
 }
 
 /// Teacher-side classroom endpoints (DESIGN §9.2).
@@ -333,7 +336,10 @@ class ApiClassroomsRepository implements ClassroomsRepository {
   Future<PinReset> resetPin(int studentId) async {
     final res = await _dio.post<Object?>('/students/$studentId/pin');
     final body = unwrapJson(res.data);
-    return PinReset(body['pin'].toString());
+    return PinReset(
+      body['pin'].toString(),
+      googleUnlinked: body['google_unlinked'] == true,
+    );
   }
 }
 

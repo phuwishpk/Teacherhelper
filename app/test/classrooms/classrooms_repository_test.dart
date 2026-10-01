@@ -217,6 +217,20 @@ void main() {
       expect(adapter.requests.single.uri.path, '/api/v1/students/4567/pin');
       expect(reset.pin, '048213', reason: 'leading zero must survive');
       expect(jsonEncode(adapter.requests.single.data ?? {}), '{}');
+      expect(reset.googleUnlinked, isFalse);
     },
   );
+
+  test('resetPin reports a removed Google link (DESIGN §24.9.5)', () async {
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(200, {
+        'student_id': 4567,
+        'pin': '111222',
+        'google_unlinked': true,
+      }),
+    );
+    final repo = ApiClassroomsRepository(fakeDio(adapter));
+    final reset = await repo.resetPin(4567);
+    expect(reset.googleUnlinked, isTrue);
+  });
 }
