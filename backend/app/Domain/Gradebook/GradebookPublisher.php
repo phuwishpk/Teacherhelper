@@ -10,6 +10,7 @@ use App\Models\GradebookCategory;
 use App\Models\GradebookPublication;
 use App\Models\GradebookPublishedGrade;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -93,13 +94,18 @@ final class GradebookPublisher
             ->first();
     }
 
-    /** "มีการเปลี่ยนแปลงหลังประกาศ": the live values differ from the snapshot (§23.7). */
-    public static function stale(GradebookPublication $publication, ClassroomGradebook $book): bool
+    /**
+     * "มีการเปลี่ยนแปลงหลังประกาศ": the live values differ from the snapshot (§23.7).
+     *
+     * @param  Collection<int, GradebookPublishedGrade>|null  $grades  the publication's rows when the caller loaded them in bulk
+     */
+    public static function stale(GradebookPublication $publication, ClassroomGradebook $book, ?Collection $grades = null): bool
     {
         if (! $book->complete()) {
             return true;
         }
-        $stored = GradebookPublishedGrade::query()->where('publication_id', $publication->id)->get()
+        $grades ??= GradebookPublishedGrade::query()->where('publication_id', $publication->id)->get();
+        $stored = $grades
             ->mapWithKeys(fn (GradebookPublishedGrade $g) => [$g->student_id => [
                 'breakdown' => $g->breakdown,
                 'total' => $g->total,
