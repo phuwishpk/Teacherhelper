@@ -38,6 +38,23 @@
 # (waiting_key) -> approve -> graded -> publish -> private announcement
 # posted (INDIVIDUAL_STUDENTS), no grade pushed to website coursework.
 #
+# School-wide accounts, shared homerooms and Google sign-in (DESIGN §24):
+# student 1 found by student code and enrolled in a second classroom with
+# the same PIN (PIN login through either room) -> roster copied from the
+# first classroom -> a duplicate account listed and merged -> a second
+# teacher asks to teach the first classroom, the homeroom teacher approves,
+# the subject teacher sees only their own course and cannot edit the
+# roster, the homeroom teacher reads but cannot edit their work -> Google
+# sign-in off on the server (503) -> with ID tokens signed by
+# tools/smoke-google.php (faked JWKS): a teacher linked by e-mail, an
+# unknown account gets a link ticket, a student confirms with the PIN once
+# and then signs in with Google, a Classroom student is linked from the
+# roster, unlink by the homeroom teacher and the student (the school's
+# switch is restored afterwards) -> the subject teacher imports their own
+# Google course: the existing classroom is suggested (100%), link-existing
+# makes a request, approval links the course, no new student accounts ->
+# the student's combined view over an open and a closed classroom.
+#
 # The general limit is 120 requests/minute per user; a 429 is waited out once.
 # Every run creates new rows in the dev database (a new teacher each time).
 #
@@ -82,6 +99,8 @@ export FIREBASE_CREDENTIALS=
 SERVER_PID=""
 STEPS=0
 cleanup() {
+  # The school's Google sign-in settings changed for the sign-in steps go back as they were.
+  if declare -F restore_school >/dev/null; then restore_school || true; fi
   if [ -n "$SERVER_PID" ]; then
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
@@ -1053,9 +1072,9 @@ GCOURSE="61${RUN}"
 jq -n --arg c "$GCOURSE" --arg r "$RUN" '{
   course: {id: $c, name: "คณิตศาสตร์", section: "ป.5/2"},
   students: [
-    {id: ("g1-" + $r), name: "ด.ญ. ขวัญใจ ทดสอบ", email: "kwan@example.com"},
-    {id: ("g2-" + $r), name: "ด.ช. กล้า ทดสอบ", email: "kla@example.com"},
-    {id: ("g3-" + $r), name: "Teacher Assistant", email: "ta@example.com"}
+    {id: ("g1-" + $r), name: "ด.ญ. ขวัญใจ ทดสอบ", email: ("kwan-" + $r + "@example.com")},
+    {id: ("g2-" + $r), name: "ด.ช. กล้า ทดสอบ", email: ("kla-" + $r + "@example.com")},
+    {id: ("g3-" + $r), name: "Teacher Assistant", email: ("ta-" + $r + "@example.com")}
   ],
   course_work: [], submissions: {}, drive: {}, recorded: []}' >"$GSTATE"
 gapi() { # METHOD PATH [JSON] -> STATUS, BODY (Google faked, uses $TOKEN)
@@ -1103,7 +1122,7 @@ check "any(.data[]; .course_id == \"$GCOURSE\" and .linked_classroom.id == $GCLA
 ok "classroom #$GCLASS_ID; importing again -> 409 course_already_linked"
 
 step "roster sync: a new student joins, the left-out assistant stays out"
-gstate --arg r "$RUN" '.students += [{id: ("g4-" + $r), name: "ด.ญ. ใหม่ ทดสอบ", email: "mai@example.com"}]'
+gstate --arg r "$RUN" '.students += [{id: ("g4-" + $r), name: "ด.ญ. ใหม่ ทดสอบ", email: ("mai-" + $r + "@example.com")}]'
 gapi POST "/classrooms/$GCLASS_ID/google-roster/sync"
 expect 200
 check '(.data.added | length) == 1 and (.data.added[0].pin | tostring | length) == 6 and (.data.left | length) == 0'
@@ -1202,6 +1221,302 @@ jq -e --arg u "g1-$RUN" '.assigneeMode == "INDIVIDUAL_STUDENTS" and .individualS
 [ "$(grecorded '[.recorded[] | select(.method == "PATCH" and (.url | test("studentSubmissions")))] | length')" = "0" ] \
   || fail "a grade was pushed to coursework the app does not own"
 ok "announcement to g1-$RUN only; no grade pushed to website coursework"
+
+# ---------------------------------------------------------------- school-wide students (DESIGN §24.4-§24.6)
+step "school-wide student: find student 1 and enrol the same account in a second classroom"
+TOKEN=$TEACHER_TOKEN
+api POST /classrooms '{"name":"ป.6/1 smoke","grade_level":6,"academic_year":2570}'
+expect 201
+ROOM2_ID=$(j '.data.id')
+ROOM2_CODE=$(j '.data.class_code')
+# A student code makes the search unique: every smoke run adds another "หนึ่ง ทดสอบ".
+SCODE="SM${RUN}"
+api PATCH "/students/${STUDENTS[0]}" "$(jq -nc --arg c "$(tr 'A-Z' 'a-z' <<<"$SCODE")" '{student_code:$c}')"
+expect 200
+check ".data.student_code == \"$SCODE\""
+api GET "/school-students?q=$SCODE"
+expect 200
+check "(.data | length) == 1 and .data[0].id == ${STUDENTS[0]} and .data[0].student_code == \"$SCODE\" and any(.data[0].classrooms[]; .id == $CLASSROOM_ID)"
+check 'all(.data[]; (has("email") or has("pin")) | not)'
+ENROL=$(jq -nc --argjson s "${STUDENTS[0]}" '{students:[{student_id:$s, student_number:7}]}')
+api POST "/classrooms/$ROOM2_ID/students" "$ENROL"
+expect 201
+check ".data[0].student_id == ${STUDENTS[0]} and .data[0].existing == true and .data[0].pin == null"
+api POST "/classrooms/$ROOM2_ID/students" "$ENROL"
+expect 422
+TOKEN=""
+api POST /auth/student/pin "$(jq -nc --arg c "$ROOM2_CODE" --arg p "$PIN1" '{class_code:$c, student_number:7, pin:$p}')"
+expect 200
+check ".user.id == ${STUDENTS[0]}"
+ok "student code $SCODE; classroom #$ROOM2_ID ($ROOM2_CODE): student ${STUDENTS[0]} enrolled with no new PIN; the old PIN logs in through either room; enrolling again -> 422"
+
+step "copy students from the first classroom (student 1 is already there)"
+TOKEN=$TEACHER_TOKEN
+api POST "/classrooms/$ROOM2_ID/students/from-classroom" "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson a "${STUDENTS[0]}" --argjson b "${STUDENTS[1]}" \
+  '{source_classroom_id:$c, student_ids:[$a,$b], numbering:"sorted", pin:"keep"}')"
+expect 201
+check "(.data.enrolled | length) == 1 and .data.enrolled[0].student_id == ${STUDENTS[1]} and .data.enrolled[0].pin == null"
+check "(.data.skipped | length) == 1 and .data.skipped[0].student_id == ${STUDENTS[0]} and .data.skipped[0].reason == \"already_enrolled\""
+ok "student ${STUDENTS[1]} copied with the old PIN, student ${STUDENTS[0]} skipped"
+
+step "a duplicate account shows up as a likely pair and is merged into student 3"
+api POST "/classrooms/$ROOM2_ID/students" '{"students":[{"name":"ด.ช. สาม ทดสอบ","student_number":20}]}'
+expect 201
+DUP_ID=$(j '.data[0].student_id')
+DUP_PIN=$(j '.data[0].pin')
+api GET /students/duplicate-candidates
+expect 200
+check "any(.data[]; ([.a.id, .b.id] | sort) == ([${STUDENTS[2]}, $DUP_ID] | sort) and (.reasons | index(\"name\")) != null)"
+api GET "/students/merge-preview?keep_id=${STUDENTS[2]}&merge_id=$DUP_ID"
+expect 200
+check '.data.can_merge == true and (.data.conflicts | length) == 0 and .data.keep.submissions.total >= 1'
+api POST /students/merge "$(jq -nc --argjson k "${STUDENTS[2]}" --argjson m "$DUP_ID" '{keep_id:$k, merge_id:$m}')"
+expect 200
+check ".data.kept_student.id == ${STUDENTS[2]} and .data.merge_id != null"
+api POST /students/merge "$(jq -nc --argjson k "${STUDENTS[2]}" --argjson m "$DUP_ID" '{keep_id:$k, merge_id:$m}')"
+expect 422
+api GET "/classrooms/$ROOM2_ID/roster"
+expect 200
+check "any(.data[]; .student_number == 20 and (.id // .student_id) == ${STUDENTS[2]}) and ([.data[] | select((.id // .student_id) == $DUP_ID)] | length) == 0"
+TOKEN=""
+api POST /auth/student/pin "$(jq -nc --arg c "$ROOM2_CODE" --arg p "$DUP_PIN" '{class_code:$c, student_number:20, pin:$p}')"
+expect 422 401 403
+ok "#$DUP_ID merged into #${STUDENTS[2]} (number 20 kept); merging again -> 422; the merged PIN no longer logs in ($STATUS)"
+
+# ---------------------------------------------------------------- shared homerooms (DESIGN §24.7-§24.8)
+EMAIL2="smoke2-${RUN}@example.com"
+step "a second teacher (subject teacher) asks to teach the first classroom"
+TOKEN=""
+api POST /auth/teacher/register "$(jq -nc --arg c "$SCHOOL_CODE" --arg e "$EMAIL2" --arg p "$PASSWORD" \
+  '{school_code:$c, name:"ครูวิชา smoke", email:$e, password:$p}')"
+expect 201
+TEACHER2_ID=$(j '.user.id')
+tinker "\$a = App\\Models\\User::where('role','admin')->value('id'); App\\Models\\User::findOrFail(${TEACHER2_ID})->forceFill(['status' => 'active', 'approved_by' => \$a])->save(); echo 'approved';" | tail -1
+api POST /auth/teacher/login "$(jq -nc --arg e "$EMAIL2" --arg p "$PASSWORD" '{email:$e, password:$p, device_name:"smoke2"}')"
+expect 200
+TEACHER2_TOKEN=$(j '.token')
+TOKEN=$TEACHER2_TOKEN
+api POST /courses "$(jq -nc --argjson s "$SUBJECT_ID" --argjson k "$SKILL1" \
+  '{code:"ค15201", name:"คณิตศาสตร์เพิ่มเติม 5 (smoke)", subject_id:$s, grade_level:5, semester:1, academic_year:2569, hours:40, skill_ids:[$k]}')"
+expect 201
+T2_COURSE=$(j '.data.id')
+api GET "/classrooms/directory?q=$(jq -rn --arg q 'ป.5/1 smoke' '$q | @uri')"
+expect 200
+check "any(.data[]; .id == $CLASSROOM_ID and .my_role == null and .homeroom_teacher.id == $TEACHER_ID) and all(.data[]; has(\"students\") | not)"
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$T2_COURSE" '{classroom_id:$c, course_id:$k, title:"ก่อนอนุมัติ"}')"
+expect 403 404 422
+api POST "/classrooms/$CLASSROOM_ID/course-requests" "$(jq -nc --argjson k "$T2_COURSE" '{course_id:$k, message:"ขอสอนคณิตเพิ่มเติม (smoke)"}')"
+expect 201
+REQ_ID=$(j '.data.id')
+check '.data.status == "pending"'
+api POST "/classrooms/$CLASSROOM_ID/course-requests" "$(jq -nc --argjson k "$T2_COURSE" '{course_id:$k}')"
+expect 409
+check '.code == "request_pending"'
+ok "teacher #$TEACHER2_ID, course #$T2_COURSE, request #$REQ_ID pending (again -> 409 request_pending, no assignment before approval)"
+
+step "the homeroom teacher approves the request"
+TOKEN=$TEACHER_TOKEN
+api GET /teacher/attention
+expect 200
+check '.data.course_requests_pending >= 1'
+api GET "/course-requests?box=incoming"
+expect 200
+check "any(.data[]; .id == $REQ_ID and .status == \"pending\" and .origin == \"teacher\")"
+api POST "/course-requests/$REQ_ID/approve"
+expect 200
+check '.data.status == "approved"'
+api POST "/course-requests/$REQ_ID/approve"
+expect 409
+check '.code == "request_closed"'
+ok "approved (deciding again -> 409 request_closed)"
+
+step "the subject teacher works in the room with their own course only; the homeroom teacher reads it"
+TOKEN=$TEACHER2_TOKEN
+api GET /classrooms
+expect 200
+check "any(.data[]; .id == $CLASSROOM_ID and .my_role == \"subject\")"
+api GET "/classrooms/$CLASSROOM_ID/roster"
+expect 200
+check '(.data | length) >= 3 and all(.data[]; .pin_pending == null)'
+api POST "/classrooms/$CLASSROOM_ID/students" '{"students":[{"name":"ไม่ควรเพิ่ม","student_number":90}]}'
+expect 403
+check '.code == "not_homeroom_teacher"'
+api POST /assignments "$(jq -nc --argjson c "$CLASSROOM_ID" --argjson k "$T2_COURSE" '{classroom_id:$c, course_id:$k, title:"คณิตเพิ่มเติม smoke"}')"
+expect 201
+T2_ASSIGNMENT=$(j '.data.id')
+api GET "/assignments?classroom_id=$CLASSROOM_ID"
+expect 200
+check "all(.data[]; .course_id == $T2_COURSE)"
+api GET "/assignments/$ASSIGNMENT_ID"
+expect 403 404
+TOKEN=$TEACHER_TOKEN
+api GET "/assignments/$T2_ASSIGNMENT"
+expect 200
+check '.data.can_manage == false'
+api PATCH "/assignments/$T2_ASSIGNMENT" '{"title":"แก้ของครูวิชา"}'
+expect 403
+check '.code == "not_course_teacher"'
+api GET "/classrooms/$CLASSROOM_ID/courses"
+expect 200
+check "any(.data[]; .course.id == $T2_COURSE and .is_mine == false and .teacher.id == $TEACHER2_ID) and any(.data[]; .course.id == $COURSE_ID and .is_mine == true)"
+ok "assignment #$T2_ASSIGNMENT; roster read-only (403 not_homeroom_teacher); homeroom teacher reads it, edits -> 403 not_course_teacher"
+
+# ---------------------------------------------------------------- Google sign-in (DESIGN §24.9)
+step "Google sign-in off on this server: config disabled, 503 google_signin_not_configured"
+TOKEN=""
+api GET /auth/google/config
+expect 200
+check '.data.enabled == false'
+api POST /auth/google '{"id_token":"x","intent":"staff"}'
+expect 503
+check '.code == "google_signin_not_configured"'
+TOKEN=$TEACHER_TOKEN
+api GET /me/google-identity
+expect 503
+ok "disabled; every sign-in route 503"
+
+# ID tokens are signed by tools/smoke-google.php with a key it keeps in the
+# state file; the faked JWKS endpoint answers with its public half.
+gtoken() { # CLAIMS_JSON -> a signed Google ID token
+  perl -e 'alarm 60; exec @ARGV' php tools/smoke-google.php "$GSTATE" idtoken "$1" 2>>"$WORK/google.log" \
+    || fail "smoke-google.php idtoken failed: $(tail -20 "$WORK/google.log")"
+}
+SCHOOL_ID=$(tinker "echo App\\Models\\User::findOrFail(${TEACHER_ID})->school_id;" | tail -1)
+SCHOOL_SIGNIN=$(tinker "echo json_encode(App\\Models\\School::findOrFail(${SCHOOL_ID})->only(['student_google_signin', 'google_signin_domains']));" | tail -1)
+restore_school() {
+  [ -n "${SCHOOL_SIGNIN:-}" ] || return 0
+  local saved=$SCHOOL_SIGNIN
+  SCHOOL_SIGNIN=""
+  tinker "\$v = json_decode('${saved}', true); App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(\$v)->save(); echo 'restored';" | tail -1
+}
+
+step "Google sign-in (faked ID tokens): a teacher is linked by e-mail, an unknown account gets a link ticket"
+# Students of the school may use Google, every domain (restored afterwards, also on failure).
+tinker "App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(['student_google_signin' => true, 'google_signin_domains' => null])->save(); echo 'school: student Google sign-in on';" | tail -1
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-t1-$RUN" --arg e "$EMAIL" '{sub:$s, email:$e, name:"ครูทดสอบ smoke"}')")" '{id_token:$t, intent:"staff", device_name:"smoke-google"}')"
+expect 200
+check ".user.id == $TEACHER_ID"
+TOKEN=$(j '.token')
+api GET /me
+expect 200
+check ".data.id == $TEACHER_ID"
+gapi GET /me/google-identity
+expect 200
+check '.data.linked == true and .data.linked_via == "teacher_email" and .data.notice_version == "gsi-1"'
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-x-$RUN" --arg e "nobody-$RUN@example.com" '{sub:$s, email:$e, name:"ไม่มีบัญชี"}')")" '{id_token:$t, intent:"staff"}')"
+expect 404
+check '.code == "google_not_linked" and (.link_ticket | length) == 48 and .registration.email != null'
+gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-t1-$RUN" --arg e "$EMAIL" '{sub:$s, email:$e, aud:"someone-else.apps.googleusercontent.com"}')")" '{id_token:$t, intent:"staff"}')"
+expect 422
+check '.code == "google_token_invalid"'
+ok "teacher signed in with Google (token works on the server); unknown -> 404 + link_ticket; wrong aud -> 422"
+
+step "Google sign-in: a student confirms with the PIN once, then signs in with Google; Classroom roster auto-link"
+S1_ID_TOKEN=$(gtoken "$(jq -nc --arg s "smoke-s1-$RUN" --arg e "s1-$RUN@example.com" '{sub:$s, email:$e, name:"หนึ่ง ทดสอบ"}')")
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$S1_ID_TOKEN" '{id_token:$t, intent:"student"}')"
+expect 404
+check '.code == "google_not_linked" and (.link_ticket | length) == 48'
+LINK=$(j '.link_ticket')
+gapi POST /auth/google/link-with-pin "$(jq -nc --arg l "$LINK" --arg c "$CLASS_CODE" --arg p "$PIN1" '{link_ticket:$l, class_code:$c, student_number:1, pin:$p}')"
+expect 422
+check '.code == "notice_required"'
+gapi POST /auth/google/link-with-pin "$(jq -nc --arg l "$LINK" --arg c "$CLASS_CODE" --arg p "$PIN1" '{link_ticket:$l, class_code:$c, student_number:1, pin:$p, accept_notice:true}')"
+expect 200
+check ".user.id == ${STUDENTS[0]}"
+gapi POST /auth/google "$(jq -nc --arg t "$S1_ID_TOKEN" '{id_token:$t, intent:"student"}')"
+expect 200
+check ".user.id == ${STUDENTS[0]}"
+S1_GOOGLE_TOKEN=$(j '.token')
+TOKEN=$S1_GOOGLE_TOKEN
+gapi GET /me/google-identity
+expect 200
+check '.data.linked == true and .data.linked_via == "pin_confirm"'
+# g1-$RUN / kwan-$RUN@example.com is on the roster imported from Google Classroom above.
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "g1-$RUN" --arg e "kwan-$RUN@example.com" '{sub:$s, email:$e, name:"ขวัญใจ"}')")" '{id_token:$t, intent:"student"}')"
+expect 200
+check '.user.role == "student"'
+KWAN_ID=$(j '.user.id')
+TOKEN=$TEACHER_TOKEN
+gapi GET "/classrooms/$GCLASS_ID/roster"
+check "any(.data[]; (.id // .student_id) == $KWAN_ID and .google_linked == true)"
+gapi DELETE "/students/$KWAN_ID/google-identity"
+expect 204
+gapi GET "/classrooms/$GCLASS_ID/roster"
+check "any(.data[]; (.id // .student_id) == $KWAN_ID and .google_linked == false)"
+TOKEN=$S1_GOOGLE_TOKEN
+gapi DELETE /me/google-identity
+expect 204
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$S1_ID_TOKEN" '{id_token:$t, intent:"student"}')"
+expect 404
+restore_school
+ok "PIN confirmation (notice required first), Google login, roster auto-link of #$KWAN_ID (classroom_roster), unlink by the homeroom teacher and by the student"
+
+# ---------------------------------------------------------------- Classroom import with existing students (DESIGN §24.10)
+step "the subject teacher imports their own Google course: the existing classroom is suggested"
+GCOURSE2="62${RUN}"
+gstate --arg c "$GCOURSE2" --arg r "$RUN" '.course = {id: $c, name: "คณิตศาสตร์เพิ่มเติม", section: "ป.5/2"}
+  | .students = [.students[] | select(.id != ("g3-" + $r))]'
+TOKEN=$TEACHER2_TOKEN
+gapi POST /google/connect '{"server_auth_code":"4/smoke-two-one-time-code"}'
+expect 200
+gapi GET "/google/courses/$GCOURSE2/import-preview"
+expect 200
+check ".data.suggested_classroom.id == $GCLASS_ID and .data.suggested_classroom.coverage == 1 and .data.suggested_classroom.owned_by_me == false"
+check 'all(.data.students[]; .match != null and .match.matched_by == "classroom_user")'
+gapi POST "/google/courses/$GCOURSE2/link-existing" "$(jq -nc --argjson c "$GCLASS_ID" --argjson k "$T2_COURSE" '{classroom_id:$c, app_course_id:$k}')"
+expect 202
+check '.data.status == "requested"'
+REQ2_ID=$(j '.data.request_id')
+TOKEN=$TEACHER_TOKEN
+gapi GET "/course-requests?box=incoming"
+check "any(.data[]; .id == $REQ2_ID and .origin == \"classroom_import\" and .google_course_name != null)"
+gapi POST "/course-requests/$REQ2_ID/approve"
+expect 200
+gwork
+TOKEN=$TEACHER2_TOKEN
+gapi GET "/classrooms/$GCLASS_ID"
+expect 200
+check ".data.my_role == \"subject\" and .data.google_link.course_id == \"$GCOURSE2\" and .data.google_link.app_course_id == $T2_COURSE"
+gapi POST "/classrooms/$GCLASS_ID/google-roster/sync"
+expect 200
+check '(.data.added | length) == 0 and (.data.enrolled | length) == 0 and (.data.not_in_classroom | length) == 0'
+gapi GET "/classrooms/$GCLASS_ID/roster"
+check '(.data | length) == 3'
+ok "suggested #$GCLASS_ID (coverage 100%), request #$REQ2_ID approved, course linked to the subject teacher, no new student accounts"
+
+# ---------------------------------------------------------------- one student, several classrooms (DESIGN §24.11)
+step "student 1's combined view: courses of both classrooms, the closed one read-only"
+TOKEN=$TEACHER_TOKEN
+api PUT "/courses/$COURSE_ID/classrooms" "$(jq -nc --argjson a "$CLASSROOM_ID" --argjson b "$GCLASS_ID" --argjson c "$ROOM2_ID" '{classroom_ids:[$a,$b,$c]}')"
+expect 200
+api POST "/classrooms/$ROOM2_ID/close"
+expect 200
+api POST "/classrooms/$ROOM2_ID/students" '{"students":[{"name":"ห้องปิดแล้ว","student_number":30}]}'
+expect 409
+check '.code == "classroom_closed"'
+api GET "/classrooms?state=closed"
+expect 200
+check "any(.data[]; .id == $ROOM2_ID)"
+TOKEN=$STUDENT_TOKEN
+api GET /student/overview
+expect 200
+check "any(.data.classrooms[]; .id == $CLASSROOM_ID and .closed == false) and any(.data.classrooms[]; .id == $ROOM2_ID and .closed == true)"
+check "any(.data.groups[]; .course.id == $COURSE_ID and .classroom.id == $CLASSROOM_ID and .results_count >= 1)"
+check "any(.data.groups[]; .course.id == $T2_COURSE and .classroom.id == $CLASSROOM_ID and .teacher_name == \"ครูวิชา smoke\")"
+check "any(.data.groups[]; .course.id == $COURSE_ID and .classroom.id == $ROOM2_ID and .classroom.closed == true and .todo_count == 0)"
+api GET "/student/assignments?classroom_id=$CLASSROOM_ID"
+expect 200
+check "all(.data[]; .classroom.id == $CLASSROOM_ID)"
+TOKEN=$TEACHER_TOKEN
+api POST "/classrooms/$ROOM2_ID/reopen"
+expect 200
+check '.data.closed_at == null'
+ok "groups by course over both classrooms (#$ROOM2_ID shown closed, nothing to hand in); closing -> 409 classroom_closed; reopened"
 
 # ---------------------------------------------------------------- wrap up
 step "health heartbeat and logout"
