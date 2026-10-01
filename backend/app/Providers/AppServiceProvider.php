@@ -136,6 +136,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('indicator-suggest', fn (Request $request) => self::perUser($request, 10));
         // "วิเคราะห์ตอนนี้" calls Gemini synchronously in the request (§20.5).
         RateLimiter::for('analysis-now', fn (Request $request) => self::perUser($request, 10));
+        // "ตรวจใหม่ทั้งห้อง" (§21.13): one request may queue a Gemini read of every hand-in.
+        RateLimiter::for('regrade', fn (Request $request) => self::perUser($request, 5));
         RateLimiter::for('documents', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));

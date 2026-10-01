@@ -181,6 +181,7 @@ class FakeAnalysisRepository implements AnalysisRepository {
   bool autoShare = false;
   Object? runError;
   final calls = <String>[];
+  final runGuidance = <String?>[];
   final edits = <({String? teacherText, String? studentText})>[];
 
   StudentAnalysis get _current => StudentAnalysis.fromJson(analysis);
@@ -206,14 +207,22 @@ class FakeAnalysisRepository implements AnalysisRepository {
   }
 
   @override
-  Future<StudentAnalysis> runNow(int studentId, int classroomId) async {
+  Future<StudentAnalysis> runNow(
+    int studentId,
+    int classroomId, {
+    String? guidance,
+  }) async {
     calls.add('run:$studentId:$classroomId');
+    runGuidance.add(guidance);
     if (runError != null) throw runError!;
-    analysis = teacherAnalysisJson(
-      teacherText: 'ข้อความใหม่สำหรับครู',
-      studentText: 'ข้อความใหม่ให้กำลังใจ',
-      sharedText: analysis['shared_student_text'] as String?,
-    )..['generated_via'] = 'now';
+    analysis =
+        teacherAnalysisJson(
+            teacherText: 'ข้อความใหม่สำหรับครู',
+            studentText: 'ข้อความใหม่ให้กำลังใจ',
+            sharedText: analysis['shared_student_text'] as String?,
+          )
+          ..['generated_via'] = 'now'
+          ..['guidance'] = guidance;
     return _current;
   }
 

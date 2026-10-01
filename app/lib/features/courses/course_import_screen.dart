@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
@@ -402,8 +403,11 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(title)),
         body: _extraction.failed
-            ? _FailedView(message: _extraction.error)
-            : const _WaitingView(),
+            ? _FailedView(
+                message: _extraction.error,
+                guidance: _extraction.guidance,
+              )
+            : _WaitingView(guidance: _extraction.guidance),
       );
     }
     return Scaffold(
@@ -493,6 +497,13 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSecondaryContainer,
                 ),
+              ),
+            ],
+            if (_extraction.guidance case final guidance?) ...[
+              const SizedBox(height: 6),
+              GuidanceUsedNote(
+                guidance: guidance,
+                color: theme.colorScheme.onSecondaryContainer,
               ),
             ],
           ],
@@ -769,26 +780,34 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
 }
 
 class _WaitingView extends StatelessWidget {
-  const _WaitingView();
+  const _WaitingView({this.guidance});
+
+  final String? guidance;
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
     child: Padding(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text(
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          const Text(
             'AI กำลังอ่านเอกสาร อาจใช้เวลา 1–2 นาที',
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            'ถ้าปิดหน้านี้ไปก่อน แนบไฟล์เดิมอีกครั้งภายหลังได้โดยไม่เสียค่าใช้จ่ายเพิ่ม',
+            guidance == null
+                ? 'ถ้าปิดหน้านี้ไปก่อน แนบไฟล์เดิมอีกครั้งภายหลังได้โดยไม่เสียค่าใช้จ่ายเพิ่ม'
+                : 'ถ้าปิดหน้านี้ไปก่อน แนบไฟล์เดิมพร้อมคำแนะนำเดิมอีกครั้งภายหลังได้โดยไม่เสียค่าใช้จ่ายเพิ่ม',
             textAlign: TextAlign.center,
           ),
+          if (guidance case final g?) ...[
+            const SizedBox(height: 12),
+            GuidanceUsedNote(guidance: g),
+          ],
         ],
       ),
     ),
@@ -796,15 +815,29 @@ class _WaitingView extends StatelessWidget {
 }
 
 class _FailedView extends StatelessWidget {
-  const _FailedView({this.message});
+  const _FailedView({this.message, this.guidance});
 
   final String? message;
+  final String? guidance;
 
   @override
-  Widget build(BuildContext context) => ErrorView(
-    message:
-        message ?? 'AI อ่านเอกสารไม่สำเร็จ ลองแนบไฟล์ใหม่ หรือกรอกในฟอร์มเอง',
-  );
+  Widget build(BuildContext context) {
+    final error = ErrorView(
+      message:
+          message ?? 'AI อ่านเอกสารไม่สำเร็จ ลองแนบไฟล์ใหม่ หรือกรอกในฟอร์มเอง',
+    );
+    final g = guidance;
+    if (g == null) return error;
+    return Column(
+      children: [
+        Expanded(child: error),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: GuidanceUsedNote(guidance: g),
+        ),
+      ],
+    );
+  }
 }
 
 class _IndicatorMatchTile extends StatelessWidget {

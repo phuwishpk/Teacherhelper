@@ -97,6 +97,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.layouts.index' => ['GET', 'assignments/{assignment}/layouts', 404, 404],
         'api.assignments.worksheets.store' => ['POST', 'assignments/{assignment}/worksheets', 404, 404],
         'api.assignments.requeue-missing-key' => ['POST', 'assignments/{assignment}/requeue-missing-key', 404, 404],
+        'api.assignments.regrade' => ['POST', 'assignments/{assignment}/regrade', 404, 404],
+        'api.assignments.regrade.estimate' => ['POST', 'assignments/{assignment}/regrade/estimate', 404, 404],
         'api.assignments.indicator-suggestions.store' => ['POST', 'assignments/{assignment}/indicator-suggestions', 404, 404],
         'api.assignments.indicator-suggestions.index' => ['GET', 'assignments/{assignment}/indicator-suggestions', 404, 404],
         'api.assignments.indicator-mapping' => ['PUT', 'assignments/{assignment}/indicator-mapping', 404, 404],

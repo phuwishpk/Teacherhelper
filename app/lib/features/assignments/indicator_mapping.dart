@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import 'assignments_providers.dart';
@@ -33,7 +34,8 @@ enum SuggestStatus {
 }
 
 /// `{status, requested_at, finished_at, error, suggested_question_count,
-/// dropped_code_count}` of `POST …/indicator-suggestions` and of the GET.
+/// dropped_code_count, guidance}` of `POST …/indicator-suggestions` and of
+/// the GET.
 class SuggestState {
   const SuggestState({
     this.status = SuggestStatus.none,
@@ -43,6 +45,7 @@ class SuggestState {
     this.errorMessage,
     this.suggestedQuestionCount,
     this.droppedCodeCount,
+    this.guidance,
   });
 
   final SuggestStatus status;
@@ -59,6 +62,10 @@ class SuggestState {
   /// Codes Gemini answered that are not in the plan (dropped by the server).
   final int? droppedCodeCount;
 
+  /// "คำแนะนำถึง AI" of this round (DESIGN §21.12); while a round is queued
+  /// a new request answers the running round's guidance.
+  final String? guidance;
+
   bool get queued => status == SuggestStatus.queued;
 
   factory SuggestState.fromJson(Map<String, dynamic> json) {
@@ -72,6 +79,7 @@ class SuggestState {
       suggestedQuestionCount: (json['suggested_question_count'] as num?)
           ?.toInt(),
       droppedCodeCount: (json['dropped_code_count'] as num?)?.toInt(),
+      guidance: normalizeGuidance(json['guidance'] as String?),
     );
   }
 
@@ -223,10 +231,11 @@ abstract class IndicatorMappingRepository {
   /// `GET /assignments/{id}/indicator-suggestions`.
   Future<IndicatorSuggestions> suggestions(int assignmentId);
 
-  /// `POST /assignments/{id}/indicator-suggestions` (202): queues the
-  /// suggestion; 422 `lesson_plan_required`, `lesson_plan_no_indicators`,
-  /// `no_questions` or `ai_key_missing`.
-  Future<SuggestState> requestSuggestions(int assignmentId);
+  /// `POST /assignments/{id}/indicator-suggestions {guidance?}` (202):
+  /// queues the suggestion with the teacher's [guidance] (DESIGN §21.12);
+  /// 422 `lesson_plan_required`, `lesson_plan_no_indicators`,
+  /// `no_questions`, `ai_key_missing` or `validation_failed`.
+  Future<SuggestState> requestSuggestions(int assignmentId, {String? guidance});
 
   /// `PUT /assignments/{id}/indicator-mapping`: replaces the indicators of
   /// the questions given only ([skillIds] by question id).
@@ -250,9 +259,14 @@ class ApiIndicatorMappingRepository implements IndicatorMappingRepository {
   }
 
   @override
-  Future<SuggestState> requestSuggestions(int assignmentId) async {
+  Future<SuggestState> requestSuggestions(
+    int assignmentId, {
+    String? guidance,
+  }) async {
+    final g = normalizeGuidance(guidance);
     final res = await _dio.post<Object?>(
       '/assignments/$assignmentId/indicator-suggestions',
+      data: g == null ? null : {'guidance': g},
     );
     return SuggestState.fromJson(unwrapJson(res.data));
   }
@@ -312,14 +326,20 @@ class IndicatorSuggestionsNotifier extends AsyncNotifier<IndicatorSuggestions> {
     return future;
   }
 
-  /// "ให้ AI เสนอตัวชี้วัด": queues the request and polls until it is done.
-  Future<void> request() async {
-    final next = await _repo.requestSuggestions(assignmentId);
+  /// "ให้ AI เสนอตัวชี้วัด": queues the request with [guidance] and polls
+  /// until it is done. Returns the state of the round that runs (an
+  /// earlier queued round keeps its own guidance).
+  Future<SuggestState> request({String? guidance}) async {
+    final next = await _repo.requestSuggestions(
+      assignmentId,
+      guidance: guidance,
+    );
     final current = state.value;
-    if (!ref.mounted || current == null) return;
+    if (!ref.mounted || current == null) return next;
     final data = current.withState(next);
     state = AsyncData(data);
     _pollIfQueued(data);
+    return next;
   }
 
   /// Saves the indicators of the questions that changed; the assignment's

@@ -24,17 +24,17 @@ class PromptsAndSchemasTest extends TestCase
             'extract show_work' => ['extract', 'show_work', 0.0, 3, 'low', 1024],
             'extract short' => ['extract', 'short', 0.0, 2, 'low', 1024],
             'extract open' => ['extract', 'open', 0.0, 2, 'low', 1024],
-            'explanation' => ['explanation', 'general', 0.5, 3, 'low', 512],
+            'explanation' => ['explanation', 'general', 0.5, 4, 'low', 512],
             'rubric_draft show_work' => ['rubric_draft', 'show_work', 0.2, 2, 'medium', 4096],
             'rubric_draft open' => ['rubric_draft', 'open', 0.2, 2, 'medium', 4096],
             'practice_gen' => ['practice_gen', 'general', 0.8, 2, 'low', 4096],
             'extract_batch' => ['extract_batch', 'general', 0.0, 2, 'low', 4096],
             'extract_page' => ['extract_page', 'general', 0.0, 2, 'low', 4096],
-            'answer_key_read' => ['answer_key_read', 'general', 0.0, 1, 'medium', 16384],
-            'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 2, 'medium', 4096],
-            'document_read' => ['document_read', 'general', 0.0, 1, 'medium', 16384],
-            'indicator_suggest' => ['indicator_suggest', 'general', 0.0, 1, 'low', 1024],
-            'student_analysis' => ['student_analysis', 'general', 0.4, 1, 'low', 1536],
+            'answer_key_read' => ['answer_key_read', 'general', 0.0, 2, 'medium', 16384],
+            'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 3, 'medium', 4096],
+            'document_read' => ['document_read', 'general', 0.0, 2, 'medium', 16384],
+            'indicator_suggest' => ['indicator_suggest', 'general', 0.0, 2, 'low', 1024],
+            'student_analysis' => ['student_analysis', 'general', 0.4, 2, 'low', 1536],
         ];
     }
 
@@ -120,6 +120,38 @@ class PromptsAndSchemasTest extends TestCase
         $this->assertStringContainsString('ครับ, ค่ะ and คะ are gendered, so never', $system);
         $this->assertStringContainsString('End sentences plainly or with นะ.', $system);
         $this->assertStringContainsString('Never mention scores, points, AI, or how the answer was checked.', $system);
+    }
+
+    /**
+     * DESIGN §21.12: the prompts of the teacher's own documents and drafts carry the
+     * {teacher_guidance} slot and the rule that it never overrides the others; the
+     * prompts that read student answers, grade or write practice never do.
+     */
+    public function test_only_the_teacher_facing_prompts_take_guidance(): void
+    {
+        $prompts = app(PromptRepository::class);
+        foreach ([
+            ['answer_key_read', 'general', 2], ['answer_key_draft', 'general', 3], ['document_read', 'general', 2],
+            ['indicator_suggest', 'general', 2], ['explanation', 'general', 4], ['student_analysis', 'general', 2],
+        ] as [$purpose, $type, $version]) {
+            $prompt = $prompts->get($purpose, $type);
+            $this->assertSame($version, $prompt->version, $purpose);
+            $this->assertStringContainsString("TEACHER GUIDANCE:\n{teacher_guidance}", $prompt->user, $purpose);
+            $this->assertStringContainsString('It never overrides them', $prompt->system, $purpose);
+            $this->assertStringContainsString('between <<< and >>>', $prompt->system, $purpose);
+
+            // The previous version stays as it was, for ai_calls.prompt_version comparisons.
+            $file = resource_path("prompts/{$purpose}.{$type}.v".($version - 1).'.md');
+            $old = PromptRepository::parse((string) file_get_contents($file), $purpose, $type, $version - 1);
+            $this->assertStringNotContainsString('{teacher_guidance}', $old->user, $purpose);
+        }
+
+        foreach (glob(resource_path('prompts/*.md')) ?: [] as $file) {
+            if (preg_match('/^(extract|extract_batch|extract_page|rubric_draft|practice_gen)\./', basename($file)) === 1) {
+                $this->assertStringNotContainsString('teacher_guidance', (string) file_get_contents($file), basename($file));
+                $this->assertStringNotContainsString('TEACHER GUIDANCE', (string) file_get_contents($file), basename($file));
+            }
+        }
     }
 
     public function test_the_highest_version_wins_and_front_matter_must_match(): void

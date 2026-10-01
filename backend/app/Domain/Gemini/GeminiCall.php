@@ -17,6 +17,10 @@ use Closure;
  * a call that answers many questions checks only its envelope there, and
  * each answer in `check`, so one bad answer never discards the others
  * (per-question fallback, DESIGN §21.4).
+ *
+ * guidance / guidanceBy: the teacher's guidance the prompt carries
+ * (TeacherGuidance, DESIGN §21.12) and who wrote it, logged to
+ * ai_calls.teacher_guidance / guidance_by. Null for every call without one.
  */
 final readonly class GeminiCall
 {
@@ -34,5 +38,7 @@ final readonly class GeminiCall
         public ?int $assignmentId = null,
         public ?int $questionCount = null,
         public ?array $validationSchema = null,
+        public ?string $guidance = null,
+        public ?int $guidanceBy = null,
     ) {}
 }

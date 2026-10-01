@@ -83,6 +83,8 @@ final class StudentAnalysisPayload
             'next_steps' => self::nextSteps($row, $skills),
             'shared_student_text' => $row->shared_student_text,
             'approved_by' => $row->approved_by,
+            // The teacher's guidance of the "วิเคราะห์ตอนนี้" that wrote the texts (§21.12); never in student().
+            'guidance' => $row->guidance,
         ];
     }
 

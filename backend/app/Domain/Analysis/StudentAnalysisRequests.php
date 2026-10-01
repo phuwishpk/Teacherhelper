@@ -9,6 +9,7 @@ use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\ResponseSchemas;
 use App\Domain\Gemini\RubricDraftRequest;
+use App\Domain\Gemini\TeacherGuidance;
 
 /**
  * The `student_analysis` call (DESIGN §20.5, §21.6: thinking low, 1,536
@@ -23,6 +24,9 @@ use App\Domain\Gemini\RubricDraftRequest;
  * the student text never says "อ่อน" (invalid output, so the gateway asks
  * once more), and next_step_skill_codes become skill ids of the input's
  * indicators that have approved practice (others are dropped, at most 3).
+ *
+ * $guidance: the teacher's guidance of "วิเคราะห์ตอนนี้" (DESIGN §21.12) in
+ * the {teacher_guidance} slot; the nightly batch never has one.
  */
 final class StudentAnalysisRequests
 {
@@ -44,7 +48,7 @@ final class StudentAnalysisRequests
 
     public function __construct(private readonly PromptRepository $prompts) {}
 
-    public function call(AnalysisInput $input, string $feature): GeminiCall
+    public function call(AnalysisInput $input, string $feature, ?string $guidance = null, ?int $guidanceBy = null): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, self::TYPE);
         $indicators = $input->promptIndicators();
@@ -69,6 +73,7 @@ final class StudentAnalysisRequests
                     'indicators_json' => (string) json_encode($indicators, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     'strength_codes' => $strengths === [] ? '-' : implode(', ', $strengths),
                     'area_codes' => $areas === [] ? '-' : implode(', ', $areas),
+                    'teacher_guidance' => TeacherGuidance::block($guidance),
                 ]),
                 responseSchema: ResponseSchemas::get(self::PURPOSE, self::TYPE),
                 temperature: $prompt->temperature,
@@ -84,6 +89,8 @@ final class StudentAnalysisRequests
             ),
             check: fn (array $data) => self::check($data, $input),
             feature: $feature,
+            guidance: $guidance,
+            guidanceBy: $guidanceBy,
         );
     }
 

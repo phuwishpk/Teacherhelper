@@ -141,8 +141,8 @@ class GradeScanJobTest extends TestCase
         $this->assertSame(['extract_batch', 'explanation'], $calls->pluck('purpose')->all());
         $this->assertSame([null, $work->id], $calls->pluck('response_id')->all());
         $this->assertSame([null, $this->work->id], $calls->pluck('question_id')->all());
-        // The version of each prompt file in use: extract_batch.general.v2, explanation.general.v3.
-        $this->assertSame(['v2', 'v3'], $calls->pluck('prompt_version')->all());
+        // The version of each prompt file in use: extract_batch.general.v2, explanation.general.v4.
+        $this->assertSame(['v2', 'v4'], $calls->pluck('prompt_version')->all());
         // §21.8 labels: the batch carries 2 questions in 3 images (working area,
         // final box, open answer), all at the default `high` until calibrated.
         $this->assertSame(['grading_crop', 'grading_crop'], $calls->pluck('feature')->all());

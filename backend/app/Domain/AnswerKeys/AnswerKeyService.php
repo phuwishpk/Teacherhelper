@@ -12,6 +12,7 @@ use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\RubricDraftRequest;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Exceptions\ApiException;
 use App\Jobs\DraftAnswerKeyJob;
 use App\Jobs\ExtractDocumentJob;
@@ -46,6 +47,11 @@ use Illuminate\Support\Str;
  * estimate(): POST /answer-key/estimate, the same lookup without queueing
  * anything: pages, cost estimate and whether the cache already has it.
  *
+ * guidance (§21.12): the teacher's optional guidance to the AI, {guidance}
+ * in the request body, is part of the cache key (TeacherGuidance::cacheKey:
+ * none = the key of before, so earlier reads still hit) and is kept on the
+ * document_extractions row, where the job reads it.
+ *
  * approve(): POST /answer-key/approve: every question complete
  * (KeyCompleteness), key_approved_at set, a freeform draft becomes ready,
  * and submissions that waited for the key are graded
@@ -70,7 +76,7 @@ final class AnswerKeyService
      * created on the Classroom website (DESIGN §19.3), drafted from them
      * and its materials when the mirror is imported.
      *
-     * @param  array<string, mixed>  $input  {document_ids[], page_from?, page_to?}
+     * @param  array<string, mixed>  $input  {document_ids[], page_from?, page_to?, guidance?}
      * @return array{extraction: DocumentExtraction, cached: bool, applied: array<string, mixed>|null, estimate: array<string, mixed>}
      *
      * @throws ApiException
@@ -83,13 +89,14 @@ final class AnswerKeyService
         }
         $read = $kind === AnswerKeyResult::KIND_READ;
         $selection = DocumentSelection::resolve($teacher, $input, required: $read);
+        $guidance = TeacherGuidance::fromInput($input);
         $questions = $assignment->questions()->get();
         $coursework = $read ? '' : trim($coursework);
         if (! $read && $selection->isEmpty() && $questions->isEmpty() && $coursework === '') {
             throw new ApiException('ยังไม่มีคำถาม พิมพ์โจทย์หรือแนบใบโจทย์ก่อนให้ AI ร่างเฉลย', 'assignment_empty', 422);
         }
 
-        $hash = $read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all(), $coursework);
+        $hash = TeacherGuidance::cacheKey($read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all(), $coursework), $guidance);
         $estimate = CostEstimate::forPages($selection->pageCount(), $questions->isEmpty() ? null : $questions->count());
         $existing = DocumentExtraction::query()
             ->where('school_id', $assignment->school_id)
@@ -108,7 +115,7 @@ final class AnswerKeyService
 
         $extraction = $existing ?? DocumentExtraction::createOrFirst(
             ['school_id' => $assignment->school_id, 'input_hash' => $hash, 'purpose' => DocumentExtraction::PURPOSE_ANSWER_KEY],
-            ['status' => DocumentExtraction::STATUS_QUEUED, 'requested_by' => $teacher->id],
+            ['status' => DocumentExtraction::STATUS_QUEUED, 'requested_by' => $teacher->id, 'guidance' => $guidance],
         );
         if ($extraction->isDone()) {
             return ['extraction' => $extraction, 'cached' => true, 'applied' => $this->applyTo($assignment, $extraction), 'estimate' => $estimate];
@@ -144,7 +151,7 @@ final class AnswerKeyService
      * school read it before (free). Nothing is queued and no Gemini key is
      * needed, so the app can show the estimate before every read (§19.5).
      *
-     * @param  array<string, mixed>  $input  {document_ids?[], page_from?, page_to?}
+     * @param  array<string, mixed>  $input  {document_ids?[], page_from?, page_to?, guidance?}
      * @return array{kind: string, pages: int, cached: bool, estimate: array{input_tokens: int, output_tokens: int, thb: float|null}}
      *
      * @throws ApiException
@@ -154,12 +161,13 @@ final class AnswerKeyService
         $assignment = Assignment::query()->with(['classroom', 'subject'])->findOrFail($assignment->id);
         $read = $kind === AnswerKeyResult::KIND_READ;
         $selection = DocumentSelection::resolve($teacher, $input, required: $read);
+        $guidance = TeacherGuidance::fromInput($input);
         $questions = $assignment->questions()->get();
         if (! $read && $selection->isEmpty() && $questions->isEmpty()) {
             throw new ApiException('ยังไม่มีคำถาม พิมพ์โจทย์หรือแนบใบโจทย์ก่อนให้ AI ร่างเฉลย', 'assignment_empty', 422);
         }
 
-        $hash = $read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all());
+        $hash = TeacherGuidance::cacheKey($read ? $selection->inputHash() : self::draftHash($assignment, $selection, $questions->all()), $guidance);
         $cached = DocumentExtraction::query()
             ->where('school_id', $assignment->school_id)
             ->where('input_hash', $hash)
@@ -219,10 +227,12 @@ final class AnswerKeyService
         $questions = Question::query()->where('assignment_id', $assignment->id)->orderBy('position')->get()->all();
         $subject = (string) $assignment->subject?->name;
         $grade = RubricDraftRequest::gradeLabel((int) $assignment->classroom?->grade_level);
+        $guidance = $extraction->guidance;
+        $guidanceBy = $guidance === null ? null : $extraction->requested_by;
         try {
             $result = $kind === AnswerKeyResult::KIND_READ
-                ? $this->reader->read($files, $questions, $subject, $grade, $key, $assignment->id)
-                : $this->reader->draft($files, $questions, $subject, $grade, $key, $assignment->id, $coursework);
+                ? $this->reader->read($files, $questions, $subject, $grade, $key, $assignment->id, $guidance, $guidanceBy)
+                : $this->reader->draft($files, $questions, $subject, $grade, $key, $assignment->id, $coursework, $guidance, $guidanceBy);
         } catch (GeminiException $e) {
             if ($e->status === GeminiException::ERROR && ! $lastAttempt) {
                 throw $e; // transient: the queue retries with backoff

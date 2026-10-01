@@ -5,17 +5,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/content_column.dart';
 import 'answer_key_models.dart';
 import 'answer_key_repository.dart';
 
-/// Asks the server for the cost of reading [documentIds] (and a page range).
+/// Asks the server for the cost of reading [documentIds] (and a page range)
+/// with the teacher's [guidance] (DESIGN §21.12: it is part of the cache
+/// key, so `cached` depends on it).
 typedef DocumentEstimator =
     Future<KeyEstimate> Function(
       WidgetRef ref,
       List<int> documentIds,
       int? pageFrom,
       int? pageTo,
+      String? guidance,
     );
 
 /// Sends the read; what it returns is popped as the screen's result.
@@ -25,12 +29,14 @@ typedef DocumentSender =
       List<int> documentIds,
       int? pageFrom,
       int? pageTo,
+      String? guidance,
     );
 
 /// Before a read or an AI draft is sent (DESIGN §19.5, §20.1): the files, a
 /// page range for a single PDF (required above [kMaxDocumentPages] pages)
 /// and the estimated cost of exactly that selection, asked from the server
-/// every time the range changes. "ส่ง" sends the read and pops its result.
+/// every time the range or the "คำแนะนำถึง AI" (§21.12) changes. "ส่ง" sends
+/// the read with that guidance and pops its result.
 ///
 /// The default constructor reads or drafts an assignment's answer key (pops
 /// the [KeyRequestResult]); [DocumentReadScreen.custom] serves other
@@ -42,6 +48,7 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
     required KeyRequestKind kind,
     this.documents = const [],
     this.debounce = const Duration(milliseconds: 400),
+    this.initialGuidance,
   }) : title = kind == KeyRequestKind.read
            ? 'ส่งให้ AI อ่านเฉลย'
            : 'ให้ AI ร่างเฉลย',
@@ -60,7 +67,10 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
        readBefore = kind == KeyRequestKind.read
            ? ((d) => d.keyReadBefore)
            : ((_) => false),
-       estimator = ((ref, ids, from, to) => ref
+       guidanceHint = kind == KeyRequestKind.read
+           ? kGuidanceHintKeyRead
+           : kGuidanceHintKeyDraft,
+       estimator = ((ref, ids, from, to, guidance) => ref
            .read(answerKeyRepositoryProvider)
            .estimate(
              assignmentId,
@@ -68,8 +78,9 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
              documentIds: ids,
              pageFrom: from,
              pageTo: to,
+             guidance: guidance,
            )),
-       sender = ((ref, ids, from, to) => ref
+       sender = ((ref, ids, from, to, guidance) => ref
            .read(answerKeyRepositoryProvider)
            .request(
              assignmentId,
@@ -77,6 +88,7 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
              documentIds: ids,
              pageFrom: from,
              pageTo: to,
+             guidance: guidance,
            ));
 
   const DocumentReadScreen.custom({
@@ -88,9 +100,11 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
     required this.readBefore,
     required this.estimator,
     required this.sender,
+    this.guidanceHint = kGuidanceHintCourse,
     this.note,
     this.documents = const [],
     this.debounce = const Duration(milliseconds: 400),
+    this.initialGuidance,
   });
 
   /// App bar title and the send button's label.
@@ -116,8 +130,16 @@ class DocumentReadScreen extends ConsumerStatefulWidget {
   /// Uploaded files; empty for an AI draft from the typed questions only.
   final List<SourceDocument> documents;
 
-  /// Wait after a keystroke in the range before asking for the estimate.
+  /// Wait after a keystroke in the range or the guidance before asking for
+  /// the estimate.
   final Duration debounce;
+
+  /// Examples in the empty "คำแนะนำถึง AI" field.
+  final String guidanceHint;
+
+  /// The guidance of the previous read (the server echoes it), so running
+  /// the read again starts from it.
+  final String? initialGuidance;
 
   @override
   ConsumerState<DocumentReadScreen> createState() => _DocumentReadScreenState();
@@ -133,6 +155,9 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
   late final _to = TextEditingController(
     text: '${(_pdf?.pageCount ?? 1).clamp(1, kMaxDocumentPages)}',
   );
+  late final _guidance = TextEditingController(
+    text: widget.initialGuidance ?? '',
+  );
 
   Timer? _debounce;
   int _serial = 0;
@@ -141,6 +166,9 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
   String? _estimateError;
   bool _sending = false;
   String? _sendError;
+
+  /// `errors.guidance` of the last estimate or send.
+  String? _guidanceError;
 
   @override
   void initState() {
@@ -153,6 +181,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
     _debounce?.cancel();
     _from.dispose();
     _to.dispose();
+    _guidance.dispose();
     super.dispose();
   }
 
@@ -186,11 +215,14 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
       ? (int.tryParse(_from.text.trim()), int.tryParse(_to.text.trim()))
       : (null, null);
 
+  String? get _guidanceText => normalizeGuidance(_guidance.text);
+
   void _changed() {
     setState(() {
       _estimate = null;
       _estimateError = null;
       _sendError = null;
+      _guidanceError = null;
     });
     _debounce?.cancel();
     _debounce = Timer(widget.debounce, _loadEstimate);
@@ -210,6 +242,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
         [for (final d in widget.documents) d.id],
         from,
         to,
+        _guidanceText,
       );
       if (!mounted || serial != _serial) return;
       setState(() {
@@ -220,6 +253,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
       if (!mounted || serial != _serial) return;
       setState(() {
         _estimateError = apiErrorMessage(e);
+        _guidanceError = guidanceErrorOf(e);
         _estimating = false;
       });
     }
@@ -237,10 +271,16 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
         [for (final d in widget.documents) d.id],
         from,
         to,
+        _guidanceText,
       );
       if (mounted) Navigator.of(context).pop(result);
     } catch (e) {
-      if (mounted) setState(() => _sendError = apiErrorMessage(e));
+      if (mounted) {
+        setState(() {
+          _sendError = apiErrorMessage(e);
+          _guidanceError = guidanceErrorOf(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -366,6 +406,14 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
             Text(lengthError, style: TextStyle(color: theme.colorScheme.error)),
           ],
           const SizedBox(height: 16),
+          AiGuidanceField(
+            controller: _guidance,
+            hintText: widget.guidanceHint,
+            enabled: !_sending,
+            errorText: _guidanceError,
+            onChanged: (_) => _changed(),
+          ),
+          const SizedBox(height: 12),
           _EstimateCard(
             loading: _estimating,
             estimate: _estimate,

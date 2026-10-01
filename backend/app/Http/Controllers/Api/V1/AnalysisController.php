@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Analysis\StudentAnalyses;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StudentAnalysisPayload;
 use App\Models\Classroom;
@@ -60,14 +61,17 @@ class AnalysisController extends Controller
     }
 
     /**
-     * POST /api/v1/students/{id}/analysis/run {classroom_id} -> {data:
-     * teacher payload}: "วิเคราะห์ตอนนี้", synchronous. 422 analysis_no_data,
-     * ai_key_missing, ai_key_invalid; 502 ai_unavailable.
+     * POST /api/v1/students/{id}/analysis/run {classroom_id, guidance?} ->
+     * {data: teacher payload (with `guidance`)}: "วิเคราะห์ตอนนี้",
+     * synchronous. guidance: the teacher's guidance to the AI (§21.12, at
+     * most 500 characters). 422 analysis_no_data, ai_key_missing,
+     * ai_key_invalid, validation_failed (errors.guidance); 502 ai_unavailable.
      */
     public function run(Request $request, int $id): JsonResponse
     {
         [$student, $classroom] = $this->studentAndClassroom($request, $id, $request->all());
-        $row = $this->analyses->runNow($student, $classroom);
+        $guidance = TeacherGuidance::fromInput($request->all());
+        $row = $this->analyses->runNow($student, $classroom, $guidance, $request->user()->id);
 
         return response()->json(['data' => self::teacherPayload($row)]);
     }

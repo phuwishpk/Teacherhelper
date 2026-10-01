@@ -12,6 +12,10 @@ use App\Models\RubricCriterion;
  * types and the key. The image is never sent twice. feature labels the
  * ai_calls row with the path that asked (grading_crop, grading_page,
  * review_regenerate; DESIGN §21.8).
+ *
+ * $guidance: the teacher's guidance of "ให้ AI เขียนคำอธิบายใหม่" (DESIGN
+ * §21.12) in the {teacher_guidance} slot; the grading paths never pass one,
+ * so their slot reads "(ไม่มี)".
  */
 final class ExplanationRequests
 {
@@ -39,7 +43,7 @@ final class ExplanationRequests
      * @param  array<string, mixed>  $extraction  validated output of `extract`
      * @param  list<RubricCriterion>  $criteria
      */
-    public function forResponse(Response $response, Question $question, array $criteria, string $gradeLabel, array $extraction, ?string $feature = null, ?int $assignmentId = null): GeminiCall
+    public function forResponse(Response $response, Question $question, array $criteria, string $gradeLabel, array $extraction, ?string $feature = null, ?int $assignmentId = null, ?string $guidance = null, ?int $guidanceBy = null): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, 'general');
         $vars = [
@@ -50,6 +54,7 @@ final class ExplanationRequests
             'error_types' => implode(', ', array_map(fn (string $t) => self::ERROR_TYPE_LABELS[$t] ?? $t, (array) ($extraction['error_types'] ?? []))) ?: 'none listed',
             'teacher_notes' => self::notes($extraction),
             'first_invalid_line' => self::firstInvalidLine($question->type, $extraction),
+            'teacher_guidance' => TeacherGuidance::block($guidance),
         ];
 
         $request = new GeminiRequest(
@@ -72,6 +77,8 @@ final class ExplanationRequests
             check: fn (array $data) => self::normalize($data),
             feature: $feature,
             assignmentId: $assignmentId,
+            guidance: $guidance,
+            guidanceBy: $guidanceBy,
         );
     }
 

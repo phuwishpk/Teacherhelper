@@ -11,6 +11,7 @@ use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\ResponseSchemas;
 use App\Domain\Gemini\RubricDraftRequest;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Models\Assignment;
 use App\Models\LessonPlan;
 use App\Models\Question;
@@ -30,6 +31,9 @@ use App\Models\Skill;
  *
  * All or nothing: when any call fails the whole suggestion fails
  * (GeminiException), so the job's retry asks again for every question.
+ *
+ * The teacher's guidance, if any, fills the {teacher_guidance} slot of
+ * every call (§21.12).
  */
 final class IndicatorSuggester
 {
@@ -68,7 +72,7 @@ final class IndicatorSuggester
      *
      * @throws GeminiException
      */
-    public function suggest(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators, GeminiKey $key): array
+    public function suggest(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators, GeminiKey $key, ?string $guidance = null, ?int $guidanceBy = null): array
     {
         if ($questions === [] || $indicators === []) {
             return ['suggestions' => [], 'dropped' => 0];
@@ -76,7 +80,7 @@ final class IndicatorSuggester
 
         $calls = [];
         foreach (array_chunk($questions, self::QUESTIONS_PER_CALL) as $i => $chunk) {
-            $calls[$i] = $this->call($assignment, $plan, $chunk, $indicators);
+            $calls[$i] = $this->call($assignment, $plan, $chunk, $indicators, $guidance, $guidanceBy);
         }
         $outcomes = $this->gateway->run($calls, $key);
 
@@ -136,7 +140,7 @@ final class IndicatorSuggester
      * @param  list<Question>  $questions
      * @param  list<Skill>  $indicators
      */
-    private function call(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators): GeminiCall
+    private function call(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators, ?string $guidance, ?int $guidanceBy): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, self::TYPE);
         $briefs = array_map(fn (Question $q) => [
@@ -160,6 +164,7 @@ final class IndicatorSuggester
                     'plan_objectives' => $objectives === '' ? '-' : self::cut($objectives, self::MAX_OBJECTIVES_CHARS),
                     'indicators_list' => implode("\n", array_map(fn (Skill $s) => '- '.$s->code.': '.trim($s->name), $indicators)),
                     'questions_json' => (string) json_encode($briefs, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    'teacher_guidance' => TeacherGuidance::block($guidance),
                 ]),
                 responseSchema: ResponseSchemas::get(self::PURPOSE, self::TYPE),
                 temperature: $prompt->temperature,
@@ -175,6 +180,8 @@ final class IndicatorSuggester
             feature: self::FEATURE,
             assignmentId: $assignment->id,
             questionCount: count($questions),
+            guidance: $guidance,
+            guidanceBy: $guidanceBy,
         );
     }
 

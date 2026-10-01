@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Gemini\TeacherGuidance;
 use App\Domain\Review\ResponseReviewer;
 use App\Domain\Review\ScoreRules;
 use App\Domain\Scans\ScanFiles;
@@ -59,17 +60,20 @@ class ResponseController extends Controller
     }
 
     /**
-     * POST /api/v1/responses/{id}/regenerate-explanation -> {data: detail}
-     * with the new `explanation` (written synchronously). 422
-     * explanation_unavailable / ai_key_missing / ai_key_invalid, 502
+     * POST /api/v1/responses/{id}/regenerate-explanation {guidance?} ->
+     * {data: detail} with the new `explanation` (written synchronously).
+     * guidance: the teacher's guidance to the AI (DESIGN §21.12, at most 500
+     * characters). 422 explanation_unavailable / ai_key_missing /
+     * ai_key_invalid / validation_failed (errors.guidance), 502
      * ai_unavailable, 409 submission_published / response_grading.
      */
     public function regenerateExplanation(Request $request, int $id): ResponseDetailResource
     {
         $response = self::find($request, $id);
         Gate::authorize('review', $response);
+        $guidance = TeacherGuidance::fromInput($request->all());
 
-        $updated = $this->reviewer->regenerateExplanation($response, $request->user());
+        $updated = $this->reviewer->regenerateExplanation($response, $request->user(), $guidance);
 
         return new ResponseDetailResource(self::loadDetail($updated));
     }

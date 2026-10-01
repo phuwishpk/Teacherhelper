@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Courses\IndicatorMapping;
 use App\Domain\Courses\IndicatorSuggestions;
+use App\Domain\Gemini\TeacherGuidance;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,23 +23,28 @@ class IndicatorSuggestionController extends Controller
     ) {}
 
     /**
-     * POST /api/v1/assignments/{id}/indicator-suggestions -> 202 {data:
-     * {status, requested_at, finished_at, error, suggested_question_count,
-     * dropped_code_count}}; 422 lesson_plan_required | lesson_plan_no_indicators
-     * | no_questions | ai_key_missing. The app polls the GET below.
+     * POST /api/v1/assignments/{id}/indicator-suggestions {guidance?} -> 202
+     * {data: {status, requested_at, finished_at, error,
+     * suggested_question_count, dropped_code_count, guidance}}; 422
+     * lesson_plan_required | lesson_plan_no_indicators | no_questions |
+     * ai_key_missing | validation_failed (errors.guidance). guidance: the
+     * teacher's guidance to the AI (DESIGN §21.12, at most 500 characters);
+     * while a round is queued the running round's guidance is returned.
+     * The app polls the GET below.
      */
     public function store(Request $request, int $id): JsonResponse
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('update', $assignment);
+        $guidance = TeacherGuidance::fromInput($request->all());
 
-        return response()->json(['data' => $this->suggestions->request($assignment)], 202);
+        return response()->json(['data' => $this->suggestions->request($assignment, $guidance, $request->user()->id)], 202);
     }
 
     /**
      * GET /api/v1/assignments/{id}/indicator-suggestions -> {data:
      * {assignment_id, lesson_plan, plan_indicators[], status, requested_at,
-     * finished_at, error, suggested_question_count, dropped_code_count,
+     * finished_at, error, suggested_question_count, dropped_code_count, guidance,
      * questions: [{question_id, position, type, prompt_text, skill_ids,
      * skills[], suggestions: [{skill, reason_th}]}], unmapped_question_count,
      * unmapped_warning}}

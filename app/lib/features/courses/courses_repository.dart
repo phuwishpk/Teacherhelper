@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/question.dart';
@@ -74,20 +75,24 @@ abstract class CoursesRepository {
   Future<LessonPlan> updatePlan(int planId, PlanDraft draft);
   Future<void> deletePlan(int planId);
 
-  /// `POST /courses/extract/estimate`: free, queues nothing.
+  /// `POST /courses/extract/estimate`: free, queues nothing. `cached` is
+  /// for exactly this [guidance] ("คำแนะนำถึง AI", DESIGN §21.12).
   Future<KeyEstimate> estimate({
     required CourseDocumentPurpose purpose,
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   });
 
-  /// `POST /courses/extract`: cached (done at once) or queued.
+  /// `POST /courses/extract`: cached (done at once) or queued; [guidance]
+  /// is echoed as `extraction.guidance`.
   Future<CourseExtraction> extract({
     required CourseDocumentPurpose purpose,
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   });
 
   /// `GET /document-extractions/{id}`, polled until done or failed.
@@ -216,10 +221,11 @@ class ApiCoursesRepository implements CoursesRepository {
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     final res = await _dio.post<Object?>(
       '/courses/extract/estimate',
-      data: _selection(purpose, documentIds, pageFrom, pageTo),
+      data: _selection(purpose, documentIds, pageFrom, pageTo, guidance),
     );
     return KeyEstimate.fromJson(unwrapJson(res.data));
   }
@@ -230,10 +236,11 @@ class ApiCoursesRepository implements CoursesRepository {
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     final res = await _dio.post<Object?>(
       '/courses/extract',
-      data: _selection(purpose, documentIds, pageFrom, pageTo),
+      data: _selection(purpose, documentIds, pageFrom, pageTo, guidance),
     );
     return CourseExtraction.fromJson(unwrapJson(res.data));
   }
@@ -273,6 +280,7 @@ class ApiCoursesRepository implements CoursesRepository {
     List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   ) => {
     'purpose': purpose.apiValue,
     'document_ids': documentIds,
@@ -280,6 +288,7 @@ class ApiCoursesRepository implements CoursesRepository {
       'page_from': pageFrom,
       'page_to': pageTo,
     },
+    'guidance': ?normalizeGuidance(guidance),
   };
 }
 

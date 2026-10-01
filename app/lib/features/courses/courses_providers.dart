@@ -35,6 +35,33 @@ final courseExtractionPollIntervalProvider = Provider<Duration>(
   (ref) => const Duration(seconds: 5),
 );
 
+/// The guidance ("คำแนะนำถึง AI", DESIGN §21.12) the server echoed for the
+/// last course or lesson-plan read of each purpose, so reading a document
+/// again starts from it. Forgotten when another user signs in.
+class CourseGuidanceMemory
+    extends Notifier<Map<CourseDocumentPurpose, String>> {
+  @override
+  Map<CourseDocumentPurpose, String> build() {
+    ref.watch(sessionProvider.select((s) => s is SignedIn ? s.user.id : null));
+    return const {};
+  }
+
+  void remember(CourseDocumentPurpose purpose, String? guidance) {
+    final next = {...state};
+    if (guidance == null) {
+      next.remove(purpose);
+    } else {
+      next[purpose] = guidance;
+    }
+    state = next;
+  }
+}
+
+final courseGuidanceMemoryProvider =
+    NotifierProvider<CourseGuidanceMemory, Map<CourseDocumentPurpose, String>>(
+      CourseGuidanceMemory.new,
+    );
+
 /// After any change to courses: lists and details are loaded again.
 void invalidateCourses(WidgetRef ref) {
   ref.invalidate(coursesProvider);

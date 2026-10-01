@@ -284,12 +284,14 @@ class FakeCoursesRepository extends Fake implements CoursesRepository {
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
     estimates.add({
       'purpose': purpose.apiValue,
       'document_ids': documentIds,
       'page_from': pageFrom,
       'page_to': pageTo,
+      'guidance': guidance,
     });
     return estimateResult;
   }
@@ -300,8 +302,13 @@ class FakeCoursesRepository extends Fake implements CoursesRepository {
     required List<int> documentIds,
     int? pageFrom,
     int? pageTo,
+    String? guidance,
   }) async {
-    extracts.add({'purpose': purpose.apiValue, 'document_ids': documentIds});
+    extracts.add({
+      'purpose': purpose.apiValue,
+      'document_ids': documentIds,
+      'guidance': guidance,
+    });
     return extractResult!;
   }
 

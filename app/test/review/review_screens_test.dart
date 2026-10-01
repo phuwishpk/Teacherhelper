@@ -34,6 +34,79 @@ void _phone(WidgetTester tester) {
 
 void main() {
   group('review detail (DESIGN §13)', () {
+    Future<FakeReviewRepository> pumpDetail(WidgetTester tester) async {
+      _phone(tester);
+      final repo = FakeReviewRepository(rows: [queueRow(id: 11)]);
+      await pumpScreen(
+        tester,
+        const ReviewDetailScreen(
+          assignmentId: 5,
+          responseId: 11,
+          band: PriorityBand.check,
+        ),
+        overrides: [
+          reviewRepositoryProvider.overrideWithValue(repo),
+          cropLoaderProvider.overrideWithValue(NoCropLoader()),
+        ],
+        extraRoutes: [
+          GoRoute(
+            path: '/settings',
+            builder: (_, _) => const Scaffold(body: Text('settings-page')),
+          ),
+        ],
+      );
+      return repo;
+    }
+
+    testWidgets('"ให้ AI เขียนใหม่" asks for guidance and sends it', (
+      tester,
+    ) async {
+      final repo = await pumpDetail(tester);
+      await tester.tap(find.byKey(const ValueKey('regenerate_explanation')));
+      await tester.pumpAndSettle();
+      expect(find.text('อย่าใส่ชื่อหรือข้อมูลของนักเรียน'), findsOneWidget);
+      expect(find.textContaining('นับทีละสิบ'), findsOneWidget);
+      await tester.tap(find.text('ยกเลิก'));
+      await tester.pumpAndSettle();
+      expect(repo.regenerated, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('regenerate_explanation')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('ai_guidance')),
+        'อธิบายด้วยการนับทีละสิบ',
+      );
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
+      expect(repo.regenerated, ['อธิบายด้วยการนับทีละสิบ']);
+      expect(find.text('คำอธิบายใหม่จาก AI'), findsOneWidget);
+
+      // The next time starts from the same guidance.
+      await tester.tap(find.byKey(const ValueKey('regenerate_explanation')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('ai_guidance')))
+            .controller!
+            .text,
+        'อธิบายด้วยการนับทีละสิบ',
+      );
+      repo.regenerateError = apiError(422, {
+        'message': 'no key',
+        'errors': {},
+        'code': 'ai_key_missing',
+      });
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('ยังไม่ได้ใส่ Gemini API key'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('ไปใส่ key'));
+      await tester.pumpAndSettle();
+      expect(find.text('settings-page'), findsOneWidget);
+    });
+
     testWidgets('shows what was read and why, and requires a reason when '
         'the score differs from the AI', (tester) async {
       _phone(tester);

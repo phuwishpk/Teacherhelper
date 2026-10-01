@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../core/api/teacher_guidance.dart';
 import 'assignment.dart';
 import 'question.dart';
 
@@ -176,6 +177,7 @@ class KeyExtraction {
     this.error,
     this.kind,
     this.notesTh,
+    this.guidance,
   });
 
   final int id;
@@ -190,6 +192,12 @@ class KeyExtraction {
   /// Gemini's notes for the teacher (e.g. an unreadable question).
   final String? notesTh;
 
+  /// "คำแนะนำถึง AI" the teacher sent with this read or draft (DESIGN
+  /// §21.12); null = none.
+  final String? guidance;
+
+  bool get isRead => kind == 'answer_key_read';
+
   bool get isQueued => status == 'queued';
 
   bool get isFailed => status == 'failed';
@@ -202,6 +210,7 @@ class KeyExtraction {
     error: json['error'] as String?,
     kind: json['kind'] as String?,
     notesTh: json['notes_th'] as String?,
+    guidance: normalizeGuidance(json['guidance'] as String?),
   );
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/answer_key_repository.dart';
@@ -9,6 +10,7 @@ import '../assignments/document_read_screen.dart';
 import '../assignments/key_document_sources.dart';
 import 'course_import_screen.dart';
 import 'course_models.dart';
+import 'courses_providers.dart';
 import 'courses_repository.dart';
 
 /// Course documents are cached for the whole school (DESIGN §20.9), so they
@@ -103,6 +105,7 @@ Future<Course?> runCourseDocumentImport(
   if (!context.mounted) return null;
 
   final repo = ref.read(coursesRepositoryProvider);
+  final memory = ref.read(courseGuidanceMemoryProvider.notifier);
   final extraction = await Navigator.of(context).push<Object?>(
     MaterialPageRoute(
       builder: (_) => DocumentReadScreen.custom(
@@ -113,22 +116,28 @@ Future<Course?> runCourseDocumentImport(
         cachedMessage: 'โรงเรียนเคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย',
         readBefore: (d) => d.cachedPurposes.contains(purpose.apiValue),
         documents: docs,
-        estimator: (ref, ids, from, to) => repo.estimate(
+        guidanceHint: kGuidanceHintCourse,
+        initialGuidance: ref.read(courseGuidanceMemoryProvider)[purpose],
+        estimator: (ref, ids, from, to, guidance) => repo.estimate(
           purpose: purpose,
           documentIds: ids,
           pageFrom: from,
           pageTo: to,
+          guidance: guidance,
         ),
-        sender: (ref, ids, from, to) => repo.extract(
+        sender: (ref, ids, from, to, guidance) => repo.extract(
           purpose: purpose,
           documentIds: ids,
           pageFrom: from,
           pageTo: to,
+          guidance: guidance,
         ),
       ),
     ),
   );
-  if (extraction is! CourseExtraction || !context.mounted) return null;
+  if (extraction is! CourseExtraction) return null;
+  memory.remember(purpose, extraction.guidance);
+  if (!context.mounted) return null;
 
   return Navigator.of(context).push<Course>(
     MaterialPageRoute(

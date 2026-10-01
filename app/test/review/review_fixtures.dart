@@ -216,6 +216,20 @@ class FakeReviewRepository extends Fake implements ReviewRepository {
     confirmed.add(scanId);
   }
 
+  /// `guidance` of each "ให้ AI เขียนใหม่".
+  final regenerated = <String?>[];
+
+  /// The new explanation (null = queued); [regenerateError] is thrown.
+  String? regeneratedText = 'คำอธิบายใหม่จาก AI';
+  Object? regenerateError;
+
+  @override
+  Future<String?> regenerateExplanation(int id, {String? guidance}) async {
+    regenerated.add(guidance);
+    if (regenerateError case final e?) throw e;
+    return regeneratedText;
+  }
+
   final graded = <int>[];
 
   /// When set, gradeSubmission() throws it.

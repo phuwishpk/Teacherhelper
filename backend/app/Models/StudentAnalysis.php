@@ -40,6 +40,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $shared_student_text
  * @property Carbon|null $shared_at
  * @property int|null $approved_by
+ * @property string|null $guidance the teacher's guidance of the "วิเคราะห์ตอนนี้" that wrote the texts (§21.12)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

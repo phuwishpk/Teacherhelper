@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
 import '../../core/widgets/submission_page_image.dart';
+import '../settings/ai_key_errors.dart';
 import 'extraction_view.dart';
 import 'fuzzy_trace.dart';
 import 'review_labels.dart';
@@ -92,6 +94,10 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
   String? _formError;
   bool _busy = false;
   bool _regenerating = false;
+
+  /// The guidance of the last "ให้ AI เขียนใหม่" of this response (the
+  /// server keeps it only in its call log).
+  String? _lastGuidance;
 
   ResponseDetail get d => widget.detail;
 
@@ -184,12 +190,23 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
     }
   }
 
+  /// "ให้ AI เขียนใหม่": a small dialog for the teacher's guidance
+  /// (DESIGN §21.12), then the explanation is written again with it.
   Future<void> _regenerate() async {
+    final choice = await showGuidanceDialog(
+      context,
+      title: 'ให้ AI เขียนคำอธิบายใหม่',
+      hintText: kGuidanceHintExplanation,
+      confirmLabel: 'เขียนใหม่',
+      initial: _lastGuidance,
+    );
+    if (choice == null || !mounted) return;
+    _lastGuidance = choice.guidance;
     setState(() => _regenerating = true);
     try {
       final text = await ref
           .read(reviewRepositoryProvider)
-          .regenerateExplanation(d.id);
+          .regenerateExplanation(d.id, guidance: choice.guidance);
       if (!mounted) return;
       if (text != null) {
         _explanation.text = text;
@@ -201,7 +218,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
         );
       }
     } catch (e) {
-      if (mounted) showMessage(context, apiErrorMessage(e));
+      if (mounted) showAiError(context, e);
     } finally {
       if (mounted) setState(() => _regenerating = false);
     }
@@ -418,6 +435,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
+                key: const ValueKey('regenerate_explanation'),
                 onPressed: _regenerating ? null : _regenerate,
                 icon: const Icon(Icons.auto_fix_high_outlined),
                 label: const Text('ให้ AI เขียนคำอธิบายใหม่'),

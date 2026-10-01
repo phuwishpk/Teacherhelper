@@ -207,8 +207,10 @@ final class ResponseReviewer
      * GradeScanJob uses; anything else calls Gemini with the transcription
      * and the teacher's error types. Without any text read from the answer
      * (mcq, never extracted) there is nothing to explain from.
+     * $guidance: the teacher's guidance to the AI (DESIGN §21.12), used only
+     * when Gemini is called.
      */
-    public function regenerateExplanation(Response $response, User $teacher): Response
+    public function regenerateExplanation(Response $response, User $teacher, ?string $guidance = null): Response
     {
         $response->loadMissing(['question.rubricCriteria', 'submission.assignment.classroom']);
         DB::transaction(fn () => self::lock($response)); // published / still grading -> 409
@@ -222,10 +224,10 @@ final class ResponseReviewer
         } elseif (($response->extraction['blank'] ?? false) === true) {
             $text = ['text' => FeedbackTemplates::BLANK, 'source' => Response::EXPLANATION_TEMPLATE];
         } else {
-            $text = ['text' => $this->askGemini($response), 'source' => Response::EXPLANATION_AI];
+            $text = ['text' => $this->askGemini($response, $guidance, $teacher->id), 'source' => Response::EXPLANATION_AI];
         }
 
-        return DB::transaction(function () use ($response, $text) {
+        return DB::transaction(function () use ($response, $text, $guidance) {
             $scanId = $response->scan_id;
             $pageId = $response->submission_page_id;
             [, $locked] = self::lock($response);
@@ -238,7 +240,9 @@ final class ResponseReviewer
             $locked->ai_explanation = null; // what the student sees is the AI's (or a template) again
             self::clearExplanationError($locked);
             $locked->save();
-            if ($text['source'] === Response::EXPLANATION_AI) {
+            // Text written with the teacher's guidance for this one answer is
+            // not shared with other students' identical answers (§21.12).
+            if ($text['source'] === Response::EXPLANATION_AI && ($guidance === null || trim($guidance) === '')) {
                 $this->rememberExplanation($locked, $text['text'], ExplanationCache::SOURCE_AI, replaceAi: true);
             }
 
@@ -246,7 +250,7 @@ final class ResponseReviewer
         });
     }
 
-    private function askGemini(Response $response): string
+    private function askGemini(Response $response, ?string $guidance, int $teacherId): string
     {
         $assignment = $response->submission->assignment;
         $key = $this->keys->forTeacher($assignment?->classroom?->teacher_id);
@@ -264,6 +268,8 @@ final class ResponseReviewer
             $extraction,
             self::FEATURE_REGENERATE,
             $assignment?->id,
+            $guidance,
+            $teacherId,
         );
         $outcome = $this->gateway->run(['explanation' => $call], $key)['explanation'];
 

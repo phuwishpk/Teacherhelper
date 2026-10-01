@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Gemini\GeminiKeyResolver;
+use App\Domain\Grading\ClassRegrade;
 use App\Domain\Grading\ScanGrader;
 use App\Domain\Pages\WholePageSubmissions;
 use App\Domain\Review\ReviewFlags;
@@ -16,13 +17,64 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * AI grading controls of an assignment (DESIGN §13).
  */
 class GradingController extends Controller
 {
-    public function __construct(private readonly GeminiKeyResolver $keys) {}
+    public function __construct(
+        private readonly GeminiKeyResolver $keys,
+        private readonly ClassRegrade $regrade,
+    ) {}
+
+    /**
+     * POST /api/v1/assignments/{id}/regrade {include_overridden?: bool} ->
+     * 202 {data: {queued_submissions, skipped_overridden, queued_responses,
+     * rescored_by_code, skipped_in_progress, skipped_missing_image,
+     * reopened_submissions}} (200 when nothing changed): "ตรวจใหม่ทั้งห้อง"
+     * with the current approved key (ClassRegrade, DESIGN §21.13). Published
+     * submissions with a changed answer are reopened for review. 409
+     * answer_key_not_approved / regrade_in_progress, 422 ai_key_missing /
+     * validation_failed.
+     */
+    public function regrade(Request $request, int $id): JsonResponse
+    {
+        $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
+        Gate::authorize('review', $assignment);
+
+        $outcome = $this->regrade->run($assignment, $request->user(), self::includeOverridden($request));
+
+        return response()->json(['data' => $outcome], $outcome['queued_submissions'] > 0 ? 202 : 200);
+    }
+
+    /**
+     * POST /api/v1/assignments/{id}/regrade/estimate {include_overridden?}
+     * -> {data: {submissions, queued_responses, mcq_by_code,
+     * whole_page_pages, skipped_overridden, skipped_in_progress,
+     * skipped_missing_image, published_submissions, in_progress, estimate:
+     * {input_tokens, output_tokens, thb}}}: what regrade would do and cost
+     * (an upper bound). Free, changes nothing. 409 answer_key_not_approved.
+     */
+    public function regradeEstimate(Request $request, int $id): JsonResponse
+    {
+        $assignment = AssignmentController::ownQuery($request)->findOrFail($id);
+        Gate::authorize('review', $assignment);
+
+        return response()->json(['data' => $this->regrade->estimate($assignment, self::includeOverridden($request))]);
+    }
+
+    private static function includeOverridden(Request $request): bool
+    {
+        $input = Validator::make($request->all(), [
+            'include_overridden' => ['sometimes', 'nullable', 'boolean'],
+        ], [
+            'include_overridden.boolean' => 'include_overridden ต้องเป็น true หรือ false',
+        ])->validate();
+
+        return (bool) ($input['include_overridden'] ?? false);
+    }
 
     /**
      * POST /api/v1/assignments/{id}/requeue-missing-key -> 202 {data: {requeued: n}}

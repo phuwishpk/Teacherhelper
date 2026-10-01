@@ -18,6 +18,11 @@ use Illuminate\Support\Carbon;
  * "draft|" prefix, so the same question sheet never returns a teacher's key
  * for a draft or the other way round. result: AnswerKeyResult::toArray().
  *
+ * guidance (DESIGN §21.12): the teacher's guidance the read or draft was
+ * made with. It is part of input_hash (TeacherGuidance::cacheKey), so the
+ * same files with other guidance are another row, and a row without
+ * guidance keeps the key it had before guidance existed.
+ *
  * @property int $id
  * @property int $school_id
  * @property string $input_hash
@@ -28,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $prompt_version
  * @property int $requested_by
  * @property string|null $error
+ * @property string|null $guidance
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -51,6 +57,7 @@ class DocumentExtraction extends Model
         'prompt_version',
         'requested_by',
         'error',
+        'guidance',
     ];
 
     protected $attributes = [
@@ -79,7 +86,9 @@ class DocumentExtraction extends Model
     }
 
     /**
-     * @return array{id: int, purpose: string, status: string, error: string|null, created_at: string|null, updated_at: string|null}
+     * guidance: what the teacher told the AI for this read ("คำแนะนำที่ใช้").
+     *
+     * @return array{id: int, purpose: string, status: string, error: string|null, guidance: string|null, created_at: string|null, updated_at: string|null}
      */
     public function toApi(): array
     {
@@ -88,6 +97,7 @@ class DocumentExtraction extends Model
             'purpose' => $this->purpose,
             'status' => $this->status,
             'error' => $this->error,
+            'guidance' => $this->guidance,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

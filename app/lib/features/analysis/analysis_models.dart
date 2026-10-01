@@ -1,3 +1,4 @@
+import '../../core/api/teacher_guidance.dart';
 import '../assignments/question.dart';
 
 DateTime? _time(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -165,6 +166,7 @@ class StudentAnalysis extends AnalysisSummary {
     this.sharedStudentText,
     this.approvedBy,
     this.updatedAt,
+    this.guidance,
   }) : super(
          hasText: teacherText != null || studentText != null,
          shared: sharedStudentText != null,
@@ -185,6 +187,10 @@ class StudentAnalysis extends AnalysisSummary {
   /// The teacher who approved; null with auto-share.
   final int? approvedBy;
   final DateTime? updatedAt;
+
+  /// "คำแนะนำถึง AI" of the last "วิเคราะห์ตอนนี้" (DESIGN §21.12); the
+  /// nightly batch writes null.
+  final String? guidance;
 
   /// The student still sees an earlier approved text.
   bool get showsOlderShared =>
@@ -209,6 +215,7 @@ class StudentAnalysis extends AnalysisSummary {
         sharedStudentText: json['shared_student_text'] as String?,
         approvedBy: (json['approved_by'] as num?)?.toInt(),
         updatedAt: _time(json['updated_at']),
+        guidance: normalizeGuidance(json['guidance'] as String?),
       );
 }
 
