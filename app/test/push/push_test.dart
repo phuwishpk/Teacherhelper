@@ -121,6 +121,18 @@ void main() {
       );
     });
 
+    test('an admin registers no device (DESIGN §7.4)', () async {
+      await c.onSession(
+        const SignedIn(User(id: 9, name: 'ผู้ดูแลระบบ', role: 'admin')),
+      );
+      expect(push.calls, isEmpty);
+      expect(devices.registered, isEmpty);
+      expect(c.user, isNull);
+
+      await c.onTokenRefresh('tok-2');
+      expect(devices.registered, isEmpty);
+    });
+
     test('registers the token on sign-in, once per user', () async {
       await c.onSession(const SessionRestoring());
       expect(devices.registered, isEmpty);

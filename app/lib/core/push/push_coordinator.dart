@@ -53,6 +53,10 @@ class PushCoordinator {
 
   Future<void> onSession(SessionState state) async {
     switch (state) {
+      // An admin token may not register a device (DESIGN §7.4): admins get
+      // no pushes.
+      case SignedIn(:final user) when user.isAdmin:
+        break;
       case SignedIn(:final user):
         _user = user;
         if (_registeredFor == user.id && _registeredToken != null) break;

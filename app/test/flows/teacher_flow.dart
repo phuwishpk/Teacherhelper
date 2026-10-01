@@ -15,6 +15,7 @@ import 'package:eduvision/features/upload_queue/upload_worker.dart';
 import 'package:eduvision/ml/ml_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,6 +47,7 @@ class TeacherFlowApp {
     WidgetTester tester, {
     FakeApiServer? server,
     String? storedToken,
+    List<Override> overrides = const [],
   }) async {
     final fake = server ?? FakeApiServer();
     final storage = InMemoryTokenStorage(token: storedToken);
@@ -72,6 +74,7 @@ class TeacherFlowApp {
         uploadSchedulerProvider.overrideWithValue(const NoopUploadScheduler()),
         digitModelRunnerFactoryProvider.overrideWithValue(null),
         cropLoaderProvider.overrideWithValue(NoCropLoader()),
+        ...overrides,
       ],
     );
     // Tear-downs run last-registered first: dispose providers (and their
@@ -131,7 +134,9 @@ void _expectMessageOnce(String text) {
 /// Splash -> login -> `POST /auth/teacher/login` -> `GET /me` -> teacher home.
 Future<void> signInAsTeacher(WidgetTester tester, TeacherFlowApp app) async {
   expect(app.location, AppRoutes.login);
-  expect(find.text('เข้าสู่ระบบสำหรับครู'), findsOneWidget);
+  // The unified login page opens on the teacher / admin tab.
+  expect(find.text('ครู / ผู้ดูแลระบบ'), findsOneWidget);
+  expect(find.widgetWithText(TextFormField, 'อีเมล'), findsOneWidget);
 
   await tester.enterText(
     find.widgetWithText(TextFormField, 'อีเมล'),

@@ -223,7 +223,11 @@ void main() {
         storage: storage,
       );
       String at() => router.routerDelegate.currentConfiguration.uri.path;
-      expect(at(), AppRoutes.studentLogin);
+      // The login page, on its student tab.
+      expect(
+        router.routerDelegate.currentConfiguration.uri.toString(),
+        AppRoutes.loginStudent,
+      );
 
       storage.token = 'tok';
       await container.read(sessionProvider.notifier).restore();
