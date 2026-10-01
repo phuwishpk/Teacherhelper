@@ -187,6 +187,8 @@ List<String> classroomDataLines(Object? counts) {
     if (n('submissions') > 0) '• งานที่ส่งแล้ว ${n('submissions')} ชิ้น',
     if (n('gradebook_entries') > 0)
       '• คะแนนในสมุดคะแนน ${n('gradebook_entries')} ช่อง',
+    if (n('gradebook_special_grades') > 0)
+      '• ร/มส ${n('gradebook_special_grades')} รายการ',
     if (n('gradebook_publications') > 0)
       '• ประกาศเกรดแล้ว ${n('gradebook_publications')} ครั้ง',
   ];

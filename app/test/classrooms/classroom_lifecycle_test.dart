@@ -143,6 +143,7 @@ void main() {
             'counts': {
               'submissions': 12,
               'gradebook_entries': 0,
+              'gradebook_special_grades': 2,
               'gradebook_publications': 1,
             },
           });
@@ -158,6 +159,7 @@ void main() {
         );
         expect(find.textContaining('งานที่ส่งแล้ว 12 ชิ้น'), findsOneWidget);
         expect(find.textContaining('ประกาศเกรดแล้ว 1 ครั้ง'), findsOneWidget);
+        expect(find.textContaining('ร/มส 2 รายการ'), findsOneWidget);
         expect(find.textContaining('คะแนนในสมุดคะแนน'), findsNothing);
 
         await tester.tap(find.text('ปิดห้องแทน'));
