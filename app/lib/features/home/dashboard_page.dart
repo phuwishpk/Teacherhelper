@@ -12,12 +12,14 @@ import '../google_classroom/google_reconnect_banner.dart';
 import '../review/review_providers.dart';
 import 'ai_key_card.dart';
 import 'teacher_attention.dart';
+import 'teacher_shell.dart' show teacherGradesIndex;
 
 /// Teacher landing page: greeting, the Gemini API key card (DESIGN §10.1),
 /// the Google reconnect banner and the "รอดำเนินการ" card (§19.11), live
 /// overview counts (classrooms, assignments, answers waiting for
 /// review, open appeals, practice drafts), shortcuts to the Phase 6
-/// dashboards (§14.3) and the getting-started steps of DESIGN §4.
+/// dashboards (§14.3) and to "ตัดเกรด" (§23.9), and the getting-started
+/// steps of DESIGN §4.
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({
     super.key,
@@ -179,6 +181,17 @@ class DashboardPage extends ConsumerWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
+                  ListTile(
+                    key: const ValueKey('dashboard_grades'),
+                    leading: const Icon(Icons.grading_outlined),
+                    title: const Text('ตัดเกรด'),
+                    subtitle: const Text(
+                      'สถานะสมุดคะแนนของทุกรายวิชาและห้อง ประกาศเกรดและส่งออก CSV',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onNavigate(teacherGradesIndex),
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.fitness_center_outlined),
                     title: const Text('คลังแบบฝึกและลิงก์ทบทวน'),

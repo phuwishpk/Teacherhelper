@@ -20,6 +20,14 @@ final gradebookSettingsProvider = FutureProvider.autoDispose
       return ref.watch(gradebookRepositoryProvider).settings(courseId);
     }, retry: apiRetry);
 
+/// "ตัดเกรด": every own course with each classroom's grading status.
+/// The page filters by year and semester itself, so one load serves them all.
+final gradebookOverviewProvider =
+    FutureProvider.autoDispose<List<GradebookOverviewCourse>>((ref) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(gradebookRepositoryProvider).overview();
+    }, retry: apiRetry);
+
 typedef GradebookKey = ({int courseId, int classroomId});
 
 /// The live grid of one classroom in one course.
@@ -68,8 +76,27 @@ final gradebookFileSharerProvider = Provider<GradebookFileSharer>(
   (ref) => const GradebookFileSharer(),
 );
 
-/// After a change to a course's gradebook: settings and grids load again.
+/// Downloads the CSV of one classroom (§23.8) and hands it to the share
+/// sheet: "ส่งออก CSV" of the gradebook and of the "ตัดเกรด" page.
+Future<void> shareGradebookCsv(
+  WidgetRef ref, {
+  required int courseId,
+  required int classroomId,
+  required String courseCode,
+  required String classroomName,
+}) async {
+  final file = await ref
+      .read(gradebookRepositoryProvider)
+      .exportCsv(courseId, classroomId);
+  await ref
+      .read(gradebookFileSharerProvider)
+      .share(file, subject: 'สมุดคะแนน $courseCode $classroomName');
+}
+
+/// After a change to a course's gradebook: settings, grids and the
+/// "ตัดเกรด" overview load again.
 void invalidateGradebook(WidgetRef ref) {
   ref.invalidate(gradebookSettingsProvider);
   ref.invalidate(gradebookGridProvider);
+  ref.invalidate(gradebookOverviewProvider);
 }

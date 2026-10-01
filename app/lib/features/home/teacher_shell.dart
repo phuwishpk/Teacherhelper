@@ -8,13 +8,15 @@ import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
+import '../gradebook/grades_home_page.dart';
 import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 
 /// Teacher-side navigation shell: a bottom NavigationBar on phones and a
 /// NavigationRail from tablet width up (the review queue is meant for
-/// tablets, DESIGN §13).
+/// tablets, DESIGN §13). Five destinations: หน้าหลัก, ห้องเรียน, การบ้าน,
+/// ตรวจทาน and ตัดเกรด (§23.9).
 class TeacherShell extends ConsumerStatefulWidget {
   const TeacherShell({super.key});
 
@@ -35,13 +37,21 @@ const _destinations = [
   _Destination('ห้องเรียน', Icons.groups_outlined, Icons.groups),
   _Destination('การบ้าน', Icons.assignment_outlined, Icons.assignment),
   _Destination('ตรวจทาน', Icons.rate_review_outlined, Icons.rate_review),
+  _Destination('ตัดเกรด', Icons.grading_outlined, Icons.grading),
 ];
+
+/// The index of "ตัดเกรด" (DESIGN §23.9): the gradebook overview of every
+/// course, also opened by the dashboard's shortcut.
+const teacherGradesIndex = 4;
 
 /// Material 3 "expanded" breakpoint: rail instead of bottom bar.
 const _railBreakpoint = 840.0;
 
 class _TeacherShellState extends ConsumerState<TeacherShell> {
   int _index = 0;
+
+  /// "ตัดเกรด" loads only once opened, like the student's "เกรด".
+  bool _gradesOpened = false;
 
   @override
   void initState() {
@@ -51,7 +61,10 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     syncDigitModelInBackground(ref);
   }
 
-  void _select(int index) => setState(() => _index = index);
+  void _select(int index) => setState(() {
+    _index = index;
+    if (index == teacherGradesIndex) _gradesOpened = true;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +77,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
       const ClassroomsPage(),
       const AssignmentsPage(),
       const ReviewHomePage(),
+      if (_gradesOpened) const GradesHomePage() else const SizedBox.shrink(),
     ];
     final body = IndexedStack(index: _index, children: pages);
 

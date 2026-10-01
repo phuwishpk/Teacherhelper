@@ -190,6 +190,47 @@ class FakeApiServer {
       case ('GET', ['courses', final id]):
         final row = _find(courses, id);
         return row == null ? _notFound() : (200, {'data': row});
+      // "ตัดเกรด" (DESIGN §23.11): no course of this fake has categories.
+      case ('GET', ['gradebook', 'overview']):
+        return (
+          200,
+          {
+            'data': {
+              'courses': [
+                for (final c in courses)
+                  {
+                    'id': c['id'],
+                    'code': c['code'],
+                    'name': c['name'],
+                    'grade_level': c['grade_level'],
+                    'semester': c['semester'],
+                    'academic_year': c['academic_year'],
+                    'configured': false,
+                    'category_count': 0,
+                    'classrooms': [
+                      for (final r in c['classrooms'] as List)
+                        {
+                          'id': r['id'],
+                          'name': r['name'],
+                          'student_count':
+                              _find(
+                                classrooms,
+                                '${r['id']}',
+                              )?['students_count'] ??
+                              0,
+                          'status': 'not_configured',
+                          'empty_categories': <String>[],
+                          'published_at': null,
+                          'stale': false,
+                          'at_risk_ms_count': 0,
+                          'special_counts': {'ร': 0, 'มส': 0},
+                        },
+                    ],
+                  },
+              ],
+            },
+          },
+        );
       // A course whose gradebook is not set up yet (DESIGN §23.11): the
       // assignment and exam forms show "ยังไม่ระบุหมวด".
       case ('GET', ['courses', final id, 'gradebook', 'settings']):
