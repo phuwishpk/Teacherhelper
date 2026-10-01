@@ -26,8 +26,7 @@ class GradebookAuthorizationTest extends TestCase
     {
         $colleague = $this->makeTeacher($this->teacher->school);
         $own = $this->makeCourse($colleague);
-        // Bound behind the API's back: the classroom still is not the colleague's.
-        $own->classrooms()->attach($this->classroom->id);
+        // Not bound to the classroom (binding would make the colleague its subject teacher, §24.7).
         $this->asUser($colleague)->putJson("/api/v1/courses/{$own->id}/gradebook/categories", ['template' => 'collect_final'])->assertOk();
         $category = $own->gradebookCategories()->first();
 

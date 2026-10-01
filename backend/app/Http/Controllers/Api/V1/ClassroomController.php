@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\ClassCodeGenerator;
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClassroomLifecycle;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreClassroomRequest;
@@ -17,9 +18,11 @@ use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Classrooms of the signed-in teacher (DESIGN §9.2). Every query is scoped to
- * the teacher and their school, so another teacher's classroom is a 404, and
- * the policy is checked on top of that.
+ * Classrooms of the signed-in teacher (DESIGN §9.2, §24.8): the ones they are
+ * the homeroom teacher of (my_role homeroom) and the ones an own course is
+ * bound to (my_role subject). Every query is scoped to those, so another
+ * teacher's classroom is a 404; the policy is checked on top of that (a
+ * subject teacher gets 403 not_homeroom_teacher on edits, close, delete).
  */
 class ClassroomController extends Controller
 {
@@ -42,7 +45,7 @@ class ClassroomController extends Controller
         $classrooms = $this->ownQuery($request)
             ->when($state === 'open', fn (Builder $q) => $q->whereNull('closed_at'), fn (Builder $q) => $q->whereNotNull('closed_at'))
             ->withCount('students')
-            ->with('googleLink')
+            ->with(['googleLink', 'teacher:id,name'])
             ->orderByDesc('academic_year')
             ->orderBy('grade_level')
             ->orderBy('name')
@@ -72,7 +75,7 @@ class ClassroomController extends Controller
     /** GET /api/v1/classrooms/{id} */
     public function show(Request $request, int $id): ClassroomResource
     {
-        $classroom = $this->ownQuery($request)->withCount('students')->with('googleLink')->findOrFail($id);
+        $classroom = $this->ownQuery($request)->withCount('students')->with(['googleLink', 'teacher:id,name'])->findOrFail($id);
         Gate::authorize('view', $classroom);
 
         return new ClassroomResource($classroom);
@@ -127,13 +130,13 @@ class ClassroomController extends Controller
         return response()->noContent();
     }
 
-    /** @return Builder<Classroom> */
+    /**
+     * Classrooms the teacher is the homeroom or a subject teacher of (DESIGN §24.8).
+     *
+     * @return Builder<Classroom>
+     */
     private function ownQuery(Request $request)
     {
-        $teacher = $request->user();
-
-        return Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id);
+        return ClassroomAccess::classrooms($request->user());
     }
 }

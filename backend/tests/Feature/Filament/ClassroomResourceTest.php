@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Classrooms\CourseRequests;
+use App\Exceptions\ApiException;
+use App\Filament\Resources\Classrooms\ClassroomResource;
 use App\Filament\Resources\Classrooms\Pages\ManageClassrooms;
 use App\Models\Assignment;
 use App\Models\Classroom;
+use App\Models\ClassroomCourseRequest;
 use App\Models\Submission;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
@@ -14,8 +18,9 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * DESIGN §24.6, §24.8: an admin of the school closes, reopens and deletes
- * classrooms in Filament with the same rules as the app.
+ * DESIGN §24.6, §24.7, §24.8: an admin of the school closes, reopens and
+ * deletes classrooms in Filament with the same rules as the app, and binds
+ * subject teachers' courses directly.
  */
 class ClassroomResourceTest extends TestCase
 {
@@ -105,5 +110,49 @@ class ClassroomResourceTest extends TestCase
         Livewire::test(ManageClassrooms::class)->assertCanNotSeeTableRecords([$this->classroom]);
         $this->assertFalse($this->makeAdmin(['school_id' => $this->makeSchool()->id])->can('close', $this->classroom));
         $this->assertTrue($this->makeAdmin()->can('delete', $this->classroom));
+    }
+
+    public function test_admin_binds_a_subject_teachers_course_directly(): void
+    {
+        $admin = $this->makeAdmin(['school_id' => $this->teacher->school_id]);
+        $this->actingAs($admin);
+        $subjectTeacher = $this->makeTeacher($this->teacher->school, ['name' => 'ครูวิทย์']);
+        $course = $this->makeCourse($subjectTeacher, [], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5']);
+        $otherSchool = $this->makeCourse($this->makeTeacher(), [], ['code' => 'ว15199']);
+        $pending = ClassroomCourseRequest::create(['classroom_id' => $this->classroom->id, 'course_id' => $course->id, 'requested_by' => $subjectTeacher->id]);
+
+        $options = ClassroomResource::courseOptions($this->classroom);
+        $this->assertArrayHasKey($course->id, $options);
+        $this->assertArrayNotHasKey($otherSchool->id, $options);
+        $this->assertStringContainsString('ครูวิทย์', $options[$course->id]);
+
+        Livewire::test(ManageClassrooms::class)
+            ->callAction(TestAction::make('assignCourse')->table($this->classroom), ['course_id' => $course->id])
+            ->assertHasNoActionErrors()
+            ->assertNotified('ผูกรายวิชา ว15101 กับห้อง ป.5/1 แล้ว');
+
+        $this->assertDatabaseHas('course_classroom', ['course_id' => $course->id, 'classroom_id' => $this->classroom->id]);
+        $this->assertSame(ClassroomCourseRequest::STATUS_CANCELLED, $pending->refresh()->status);
+        $row = ClassroomCourseRequest::query()->where('origin', ClassroomCourseRequest::ORIGIN_ADMIN)->sole();
+        $this->assertSame([ClassroomCourseRequest::STATUS_APPROVED, $admin->id, $admin->id], [$row->status, $row->requested_by, $row->decided_by]);
+        $this->assertSame(['ว15101 วิทยาศาสตร์ 5 (ครูวิทย์)'], ClassroomResource::subjectTeachers($this->classroom->refresh()->load('courses.creator')));
+        $this->assertArrayNotHasKey($course->id, ClassroomResource::courseOptions($this->classroom));
+        $html = (string) ClassroomResource::requestsHtml($this->classroom);
+        $this->assertStringContainsString('admin กำหนด', $html);
+        $this->assertStringContainsString('ยกเลิก', $html);
+
+        // Bound already (e.g. approved meanwhile): the admin is told, nothing changes.
+        try {
+            app(CourseRequests::class)->assignByAdmin($admin, $this->classroom, $course);
+            $this->fail('a bound course is refused');
+        } catch (ApiException $e) {
+            $this->assertSame('course_already_in_classroom', $e->errorCode);
+        }
+        $this->assertSame(1, ClassroomCourseRequest::query()->where('origin', ClassroomCourseRequest::ORIGIN_ADMIN)->count());
+
+        // A closed classroom takes no new subject teacher; another school's admin cannot.
+        $this->assertFalse($this->makeAdmin(['school_id' => $this->makeSchool()->id])->can('assignCourses', $this->classroom));
+        $this->classroom->forceFill(['closed_at' => now()])->save();
+        Livewire::test(ManageClassrooms::class)->assertTableActionHidden('assignCourse', $this->classroom);
     }
 }

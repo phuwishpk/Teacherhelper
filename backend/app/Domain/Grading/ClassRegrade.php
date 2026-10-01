@@ -2,6 +2,7 @@
 
 namespace App\Domain\Grading;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\MediaResolution;
@@ -136,7 +137,7 @@ final class ClassRegrade
 
         $plan = $this->plan($assignment, $includeOverridden);
         $needsGemini = collect($plan)->contains(fn (array $s) => in_array(self::KIND_CROP, $s['kinds'], true) || in_array(self::KIND_PAGE, $s['kinds'], true));
-        if ($needsGemini && $this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
+        if ($needsGemini && $this->keys->forTeacher(ClassroomAccess::managerId($assignment)) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 

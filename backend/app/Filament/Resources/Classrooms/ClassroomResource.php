@@ -3,12 +3,16 @@
 namespace App\Filament\Resources\Classrooms;
 
 use App\Domain\Classrooms\ClassroomLifecycle;
+use App\Domain\Classrooms\CourseRequests;
 use App\Exceptions\ApiException;
 use App\Filament\Resources\Classrooms\Pages\ManageClassrooms;
 use App\Models\Classroom;
+use App\Models\ClassroomCourseRequest;
+use App\Models\Course;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -18,11 +22,14 @@ use Filament\Tables\Table;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 /**
- * DESIGN §24.6, §24.8, §24.13: the admin of a school closes ("ห้องเก่า"),
- * reopens and deletes its classrooms with the same ClassroomLifecycle as the
- * app. Classrooms are created and edited by their homeroom teacher in the
+ * DESIGN §24.6, §24.7, §24.8, §24.13: the admin of a school closes
+ * ("ห้องเก่า"), reopens and deletes its classrooms with the same
+ * ClassroomLifecycle as the app, binds a subject teacher's course directly
+ * ("เพิ่มครูประจำวิชา", CourseRequests::assignByAdmin) and reads the
+ * classroom's course requests. Classrooms are created and edited by their homeroom teacher in the
  * app only. An admin of a school sees that school's classrooms; a system
  * admin (school_id null) sees all.
  */
@@ -58,6 +65,11 @@ class ClassroomResource extends Resource
                 TextColumn::make('school.name')->label('โรงเรียน')->sortable()
                     ->visible(fn () => self::admin()?->school_id === null),
                 TextColumn::make('students_count')->label('นักเรียน')->counts('students')->sortable(),
+                TextColumn::make('subject_teachers')
+                    ->label('ครูประจำวิชา')
+                    ->state(fn (Classroom $record) => self::subjectTeachers($record))
+                    ->listWithLineBreaks()
+                    ->placeholder('-'),
                 TextColumn::make('closed_at')
                     ->label('สถานะ')
                     ->badge()
@@ -79,6 +91,45 @@ class ClassroomResource extends Resource
                     ->visible(fn () => self::admin()?->school_id === null),
             ])
             ->recordActions([
+                Action::make('assignCourse')
+                    ->label('เพิ่มครูประจำวิชา')
+                    ->icon(Heroicon::OutlinedUserPlus)
+                    ->visible(fn (Classroom $record) => ! $record->isClosed())
+                    ->authorize('assignCourses')
+                    ->modalHeading(fn (Classroom $record) => "เพิ่มครูประจำวิชาของห้อง {$record->name}")
+                    ->modalDescription('เลือกรายวิชาของครูในโรงเรียน ครูเจ้าของรายวิชาจะสั่งงานและสอบในห้องนี้ได้ทันที เห็นเฉพาะผลของรายวิชาตัวเอง และแก้รายชื่อนักเรียนไม่ได้')
+                    ->modalSubmitActionLabel('เพิ่ม')
+                    ->schema(fn (Classroom $record) => [
+                        Select::make('course_id')
+                            ->label('รายวิชา')
+                            ->options(self::courseOptions($record))
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (Classroom $record, array $data) {
+                        $course = Course::query()->where('school_id', $record->school_id)->find((int) ($data['course_id'] ?? 0));
+                        if ($course === null) {
+                            Notification::make()->title('ไม่พบรายวิชานี้ในโรงเรียนของห้อง')->danger()->send();
+
+                            return;
+                        }
+                        try {
+                            app(CourseRequests::class)->assignByAdmin(self::admin(), $record, $course);
+                        } catch (ApiException $e) {
+                            Notification::make()->title('เพิ่มไม่ได้')->body($e->getMessage())->danger()->send();
+
+                            return;
+                        }
+                        Notification::make()->title("ผูกรายวิชา {$course->code} กับห้อง {$record->name} แล้ว")->success()->send();
+                    }),
+                Action::make('courseRequests')
+                    ->label('คำขอผูกรายวิชา')
+                    ->icon(Heroicon::OutlinedInbox)
+                    ->authorize('adminView')
+                    ->modalHeading(fn (Classroom $record) => "คำขอผูกรายวิชาของห้อง {$record->name}")
+                    ->modalContent(fn (Classroom $record) => self::requestsHtml($record))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('ปิด'),
                 Action::make('close')
                     ->label('ปิดห้อง')
                     ->icon(Heroicon::OutlinedArchiveBox)
@@ -131,6 +182,72 @@ class ClassroomResource extends Resource
             ]);
     }
 
+    public const STATUS_LABELS = [
+        ClassroomCourseRequest::STATUS_PENDING => 'รอครูประจำชั้น',
+        ClassroomCourseRequest::STATUS_APPROVED => 'อนุมัติแล้ว',
+        ClassroomCourseRequest::STATUS_DECLINED => 'ไม่อนุมัติ',
+        ClassroomCourseRequest::STATUS_CANCELLED => 'ยกเลิก',
+    ];
+
+    /**
+     * "ค15101 คณิตศาสตร์ (ครูสมศรี)" for each course of another teacher bound to the classroom.
+     *
+     * @return list<string>
+     */
+    public static function subjectTeachers(Classroom $classroom): array
+    {
+        return $classroom->courses
+            ->filter(fn (Course $c) => $c->created_by !== $classroom->teacher_id)
+            ->sortBy('code')
+            ->map(fn (Course $c) => "{$c->code} {$c->name} ({$c->creator?->name})")
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The school's courses not bound to the classroom yet, newest year first.
+     *
+     * @return array<int, string>
+     */
+    public static function courseOptions(Classroom $classroom): array
+    {
+        return Course::query()
+            ->where('school_id', $classroom->school_id)
+            ->whereDoesntHave('classrooms', fn (Builder $q) => $q->whereKey($classroom->id))
+            ->with('creator:id,name')
+            ->orderByDesc('academic_year')
+            ->orderBy('code')
+            ->orderBy('id')
+            ->limit(500)
+            ->get()
+            ->mapWithKeys(fn (Course $c) => [$c->id => "{$c->code} {$c->name} · {$c->creator?->name} · ปี {$c->academic_year}"])
+            ->all();
+    }
+
+    /** The classroom's course requests, newest first, as a small table for the modal. */
+    public static function requestsHtml(Classroom $classroom): HtmlString
+    {
+        $rows = ClassroomCourseRequest::query()
+            ->where('classroom_id', $classroom->id)
+            ->with(['course', 'requester:id,name'])
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+        if ($rows->isEmpty()) {
+            return new HtmlString('<p>ยังไม่มีคำขอ</p>');
+        }
+        $html = '<table class="w-full text-sm"><thead><tr><th class="text-start">รายวิชา</th><th class="text-start">ผู้ขอ</th><th class="text-start">สถานะ</th><th class="text-start">วันที่</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            $origin = $row->origin === ClassroomCourseRequest::ORIGIN_ADMIN ? ' (admin กำหนด)' : '';
+            $html .= '<tr><td>'.e(trim("{$row->course?->code} {$row->course?->name}")).'</td>'
+                .'<td>'.e((string) $row->requester?->name).e($origin).'</td>'
+                .'<td>'.e(self::STATUS_LABELS[$row->status] ?? $row->status).'</td>'
+                .'<td>'.e((string) $row->created_at?->setTimezone('Asia/Bangkok')->format('d/m/Y H:i')).'</td></tr>';
+        }
+
+        return new HtmlString($html.'</tbody></table>');
+    }
+
     /** "งานที่ส่ง 3, คะแนนในสมุดคะแนน 12" from the counts of classroom_has_data. */
     public static function blockersText(array $counts): string
     {
@@ -149,7 +266,7 @@ class ClassroomResource extends Resource
         $schoolId = self::admin()?->school_id;
 
         return parent::getEloquentQuery()
-            ->with(['school', 'teacher'])
+            ->with(['school', 'teacher', 'courses.creator:id,name'])
             ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
     }
 

@@ -13,7 +13,6 @@ use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -31,8 +30,10 @@ class MasteryController extends Controller
      * skill_ids}], students: [{id, name, student_number}], cells:
      * [{student_id, skill_id, value, n_obs, level}]}}
      *
-     * Without filters: every skill a student has mastery for (§14.3). With
-     * course_id (a course of the teacher bound to the classroom): every
+     * Without filters: every skill a student has mastery for (§14.3), for the
+     * homeroom teacher only; a subject teacher must give course_id (§24.8).
+     * With course_id (a course bound to the classroom; the teacher's own for
+     * a subject teacher): every
      * indicator planned in it, assessed or not; with unit_id too: those of
      * the unit (§20.4 chart 3). Columns are grouped by the standard above
      * them (standards in code order, the ungrouped last).
@@ -144,18 +145,13 @@ class MasteryController extends Controller
     /**
      * GET /api/v1/students/{id}/mastery -> the same payload as
      * GET /student/mastery for a student of the teacher's classrooms
-     * (others are 404).
+     * (others are 404); a subject teacher names an own course (?course_id=)
+     * and sees its indicators only (DESIGN §24.8).
      */
     public function student(Request $request, int $id): JsonResponse
     {
-        $teacher = $request->user();
-        $student = User::query()
-            ->where('role', User::ROLE_STUDENT)
-            ->where('school_id', $teacher->school_id)
-            ->whereHas('classrooms', fn ($q) => $q->where('teacher_id', $teacher->id))
-            ->findOrFail($id);
-        Gate::authorize('viewMastery', $student);
+        [$student, $allowed] = ChartController::visibleStudent($request, $id);
 
-        return response()->json(['student' => ['id' => $student->id, 'name' => $student->name]] + StudentMasteryController::payload($student->id));
+        return response()->json(['student' => ['id' => $student->id, 'name' => $student->name]] + StudentMasteryController::payload($student->id, $allowed));
     }
 }

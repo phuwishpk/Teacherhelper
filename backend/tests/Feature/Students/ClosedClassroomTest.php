@@ -89,6 +89,11 @@ class ClosedClassroomTest extends TestCase
         'api.student.practice.attempts' => null,
         // Merging may involve closed classrooms (§24.5).
         'api.students.merge' => null,
+        // A closed classroom's pending requests are cancelled when it closes, so a decision
+        // answers 409 request_closed (SharedHomeroomTest); the path names the request, not the classroom.
+        'api.course-requests.approve' => null,
+        'api.course-requests.decline' => null,
+        'api.course-requests.destroy' => null,
         // Student-level: only the homeroom teacher of an OPEN classroom edits a student (§24.2).
         'api.students.update' => 403,
         'api.students.pin' => 403,
@@ -308,7 +313,7 @@ class ClosedClassroomTest extends TestCase
             'courses' => $this->courseA->id,
             default => 0,
         };
-        $path = '/'.strtr($uri, ['{id}' => $id, '{student_id}' => $this->studentA->id]);
+        $path = '/'.strtr($uri, ['{id}' => $id, '{student_id}' => $this->studentA->id, '{course_id}' => $this->courseA->id]);
 
         if ($uri === 'api/v1/scans') {
             return $request->post($path, $this->scanBody(), ['Accept' => 'application/json']);
@@ -324,6 +329,7 @@ class ClosedClassroomTest extends TestCase
             'api/v1/courses/{id}/gradebook-items' => ['classroom_ids' => [$classroomId], 'category_id' => $this->gradebookItemA->category_id, 'name' => 'งานเก็บ', 'max_points' => 10],
             'api/v1/courses/{id}/gradebook/special-grades', 'api/v1/courses/{id}/gradebook/publish' => ['classroom_id' => $classroomId, 'student_id' => $this->studentA->id, 'special' => 'r'],
             'api/v1/students/{id}/analysis/run' => ['classroom_id' => $classroomId],
+            'api/v1/classrooms/{id}/course-requests' => ['course_id' => $this->courseA->id],
             default => [],
         };
 

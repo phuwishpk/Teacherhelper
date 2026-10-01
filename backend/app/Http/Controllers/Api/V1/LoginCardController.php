@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Students\LoginCardPrintService;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -31,10 +32,8 @@ class LoginCardController extends Controller
     public function storeForClassroom(Request $request, int $id): JsonResponse
     {
         $teacher = $request->user();
-        $classroom = Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
-            ->findOrFail($id);
+        // Seen as homeroom or subject teacher (else 404); printing is the homeroom teacher's (§24.8).
+        $classroom = ClassroomAccess::classrooms($teacher)->findOrFail($id);
         Gate::authorize('printLoginCards', $classroom);
         $data = $request->validate([
             'student_ids' => ['sometimes', 'array', 'list', 'min:1', 'max:100'],

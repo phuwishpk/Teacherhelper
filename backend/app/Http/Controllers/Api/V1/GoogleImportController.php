@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Google\ClassroomImporter;
 use App\Domain\Google\GoogleRosterSync;
 use App\Http\Controllers\Controller;
@@ -68,10 +69,7 @@ class GoogleImportController extends Controller
     public function syncRoster(Request $request, GoogleRosterSync $sync, int $id): JsonResponse
     {
         $teacher = $request->user();
-        $classroom = Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
-            ->findOrFail($id);
+        $classroom = ClassroomAccess::classrooms($teacher)->findOrFail($id);
         Gate::authorize('manageGoogle', $classroom);
 
         return response()->json(['data' => $sync->sync($teacher, $classroom)]);

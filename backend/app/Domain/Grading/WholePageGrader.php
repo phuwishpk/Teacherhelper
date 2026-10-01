@@ -2,6 +2,7 @@
 
 namespace App\Domain\Grading;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKey;
@@ -91,12 +92,12 @@ final class WholePageGrader
         }
         if ($page->state !== SubmissionPage::STATE_GRADING) {
             // Read already (a crash between saving and merging) or replaced by a newer hand-in.
-            $this->merge($page->submission_id, $this->keys->forTeacher($assignment->classroom?->teacher_id));
+            $this->merge($page->submission_id, $this->keys->forTeacher(ClassroomAccess::managerId($assignment)));
 
             return false;
         }
 
-        $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
+        $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
             $this->finish($page, SubmissionPage::STATE_FAILED, ['status' => self::PAGE_KEY_MISSING, 'questions' => []]);
             $this->merge($page->submission_id, null);
@@ -134,7 +135,7 @@ final class WholePageGrader
         if ($page->state === SubmissionPage::STATE_GRADING) {
             $this->finish($page, SubmissionPage::STATE_FAILED, ['status' => self::PAGE_ERROR, 'questions' => []]);
         }
-        $this->merge($page->submission_id, $this->keys->forTeacher($page->submission?->assignment?->classroom?->teacher_id));
+        $this->merge($page->submission_id, $this->keys->forTeacher($page->submission?->assignment === null ? null : ClassroomAccess::managerId($page->submission?->assignment)));
     }
 
     /**

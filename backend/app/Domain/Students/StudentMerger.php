@@ -95,6 +95,8 @@ final class StudentMerger
         'student_merges.kept_student_id' => self::UNRELATED,
         'student_merges.merged_student_id' => self::UNRELATED,
         'student_merges.merged_by' => self::UNRELATED,
+        'classroom_course_requests.requested_by' => self::UNRELATED,
+        'classroom_course_requests.decided_by' => self::UNRELATED,
     ];
 
     public function __construct(

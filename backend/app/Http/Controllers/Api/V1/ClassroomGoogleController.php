@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Google\ClassroomImporter;
 use App\Domain\Google\GoogleAccounts;
 use App\Domain\Google\GoogleApi;
@@ -152,11 +153,9 @@ class ClassroomGoogleController extends Controller
 
     private function find(Request $request, int $id): Classroom
     {
-        $teacher = $request->user();
-        $classroom = Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
-            ->findOrFail($id);
+        // Seen as homeroom or subject teacher (else 404); the Google link is the homeroom teacher's
+        // until build 4 gives each teacher their own course (§24.8, §24.10).
+        $classroom = ClassroomAccess::classrooms($request->user())->findOrFail($id);
         Gate::authorize('manageGoogle', $classroom);
 
         return $classroom;

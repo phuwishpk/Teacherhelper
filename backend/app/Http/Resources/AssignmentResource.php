@@ -14,7 +14,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  structure_locked_at, gradebook_category_id, excluded_from_grade, questions_count?, submissions_count? (list
  *  only: students with a submission row), missing_ai_key_count?,
  *  classroom?: {id, name},
- *  subject?: {id, code, name}, course?: {id, code, name}|null,
+ *  subject?: {id, code, name}, course?: {id, code, name}|null, can_manage? (with
+ *  course and classroom loaded: the caller manages it, DESIGN §24.8),
  *  lesson_plan?: {id, title, unit_id}|null, google_link?: {course_work_id, alternate_link,
  *  drive_file_id, has_blank_worksheet, posted_at, origin, can_push_grades,
  *  materials, last_synced_at}|null, questions?: [...], unmapped_question_count?,
@@ -89,6 +90,13 @@ class AssignmentResource extends JsonResource
                 'code' => $this->course->code,
                 'name' => $this->course->name,
             ]),
+            // DESIGN §24.8: false for a subject teacher's work seen by the homeroom teacher (read-only).
+            'can_manage' => $this->when(
+                $this->relationLoaded('course') && $this->relationLoaded('classroom'),
+                fn () => $this->course !== null
+                    ? $this->course->created_by === $request->user()?->id
+                    : $this->classroom?->teacher_id === $request->user()?->id,
+            ),
             'lesson_plan' => $this->whenLoaded('lessonPlan', fn () => $this->lessonPlan === null ? null : [
                 'id' => $this->lessonPlan->id,
                 'title' => $this->lessonPlan->title,

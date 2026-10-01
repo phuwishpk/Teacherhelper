@@ -545,6 +545,7 @@ class ClassroomSyncTest extends TestCase
                 'regrade_pending' => 1,
                 'pins_pending' => 0,
                 'needs_reconnect' => false,
+                'course_requests_pending' => 0,
             ]]);
 
         // Another teacher sees only their own.

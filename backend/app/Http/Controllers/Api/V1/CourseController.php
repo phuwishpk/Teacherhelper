@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\CourseEditor;
 use App\Domain\Courses\CourseInputs;
@@ -93,18 +94,23 @@ class CourseController extends Controller
 
     /**
      * PUT /api/v1/courses/{id}/classrooms {classroom_ids[]}: the teacher's
-     * own classrooms only; a classroom whose assignments use the course
-     * stays (409 course_in_use).
+     * own classrooms (homerooms) only; a classroom whose assignments use the
+     * course stays (409 course_in_use). Bindings to other teachers'
+     * classrooms (subject teacher, DESIGN §24.7) are kept: they change only
+     * through course requests and DELETE /classrooms/{id}/courses/{course_id}.
      */
     public function classrooms(Request $request, int $id): JsonResponse
     {
         $course = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $course);
         $ids = CourseInputs::classroomIds($request->user(), $request->input('classroom_ids'));
-        // Binding or unbinding a closed classroom is a write on it (§24.6).
         $current = $course->classrooms()->pluck('classrooms.id')->map(fn ($id) => (int) $id)->all();
-        ClosedClassrooms::assertAllOpen([...array_diff($ids, $current), ...array_diff($current, $ids)]);
-        $this->editor->setClassrooms($course, $ids);
+        $homerooms = ClassroomAccess::homeroomClassrooms($request->user())->whereIn('classrooms.id', $current === [] ? [0] : $current)
+            ->pluck('classrooms.id')->map(fn ($id) => (int) $id)->all();
+        $kept = array_values(array_diff($current, $homerooms));
+        // Binding or unbinding a closed classroom is a write on it (§24.6).
+        ClosedClassrooms::assertAllOpen([...array_diff($ids, $homerooms), ...array_diff($homerooms, $ids)]);
+        $this->editor->setClassrooms($course, array_values(array_unique([...$ids, ...$kept])));
 
         return self::detail($course);
     }

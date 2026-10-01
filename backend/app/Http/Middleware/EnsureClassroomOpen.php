@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Models\Classroom;
 use App\Models\User;
@@ -17,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
  * before the body is validated.
  *
  * Only a user who can see the classroom learns that it is closed: its
- * homeroom teacher, or a student enrolled in it. Anyone else passes on to the
+ * homeroom or a subject teacher (ClassroomAccess), or a student enrolled in it. Anyone else passes on to the
  * controller and gets its usual 404/403, so the 409 reveals nothing (§24.8).
  *
  * Writes that name the classroom in the body call ClosedClassrooms::assertOpen()
@@ -64,7 +65,7 @@ class EnsureClassroomOpen
     private static function sees(User $user, Classroom $classroom): bool
     {
         if ($user->isTeacher()) {
-            return $classroom->teacher_id === $user->id && $classroom->school_id === $user->school_id;
+            return ClassroomAccess::for($user, $classroom) !== null;
         }
         if ($user->isStudent()) {
             return $classroom->students()->whereKey($user->id)->exists();

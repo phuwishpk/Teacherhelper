@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  * standard or by unit, with coverage.
  *
  * - student_id: one student of a classroom of the course (the classroom
- *   given, or any the teacher teaches that the course is bound to);
+ *   given, or any the course is bound to);
  * - classroom_id only: the classroom's values plus each student's.
  *
  * Neither: 422 errors.classroom_id. A classroom not bound to the course,
@@ -47,7 +47,8 @@ class MasterySummaryController extends Controller
         ])->validate();
         $axis = $input['axis'] ?? CourseMasterySummary::AXIS_STANDARD;
 
-        $classrooms = $course->classrooms()->where('classrooms.teacher_id', $teacher->id);
+        // Every classroom the own course is bound to, as homeroom or subject teacher (§24.8).
+        $classrooms = $course->classrooms();
         $classroom = null;
         if (($input['classroom_id'] ?? null) !== null) {
             $classroom = (clone $classrooms)->where('classrooms.id', (int) $input['classroom_id'])->first();

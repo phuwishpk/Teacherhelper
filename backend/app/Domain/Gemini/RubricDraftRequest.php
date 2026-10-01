@@ -2,6 +2,7 @@
 
 namespace App\Domain\Gemini;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Question;
 
 /**
@@ -27,7 +28,7 @@ final readonly class RubricDraftRequest
 
         return new self(
             questionId: $question->id,
-            teacherId: $assignment->classroom->teacher_id,
+            teacherId: (int) ClassroomAccess::managerId($assignment),
             type: $question->type,
             subject: (string) $assignment->subject?->name,
             gradeLabel: self::gradeLabel($assignment->classroom->grade_level),

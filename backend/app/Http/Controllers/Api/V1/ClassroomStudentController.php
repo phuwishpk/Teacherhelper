@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Students\CredentialIssuer;
 use App\Exceptions\ApiException;
@@ -28,7 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Roster of a classroom (DESIGN §9.2, §24.4): add new or existing students,
  * list, change a student number, take a student out, and the PINs of
- * students the background roster sync added (§19.2). Homeroom teacher only.
+ * students the background roster sync added (§19.2). Homeroom teacher only;
+ * a subject teacher reads the roster and gets 403 not_homeroom_teacher on the rest (§24.8).
  */
 class ClassroomStudentController extends Controller
 {
@@ -137,13 +139,16 @@ class ClassroomStudentController extends Controller
     }
 
     /**
-     * GET /api/v1/classrooms/{id}/roster -> {data: [{student_id, student_number, name}]}
+     * GET /api/v1/classrooms/{id}/roster -> {data: [roster row]}
      * Not paginated: the app caches the whole roster for offline scanning.
+     * A subject teacher reads it without the PIN and Google state (DESIGN
+     * §24.8: pin_pending and left_course_at are null).
      */
     public function index(Request $request, int $id): AnonymousResourceCollection
     {
         $classroom = $this->ownClassroom($request, $id);
-        Gate::authorize('manageStudents', $classroom);
+        Gate::authorize('viewRoster', $classroom);
+        $request->attributes->set(RosterStudentResource::LIMITED, ! ClassroomAccess::homeroomOf($request->user(), $classroom));
 
         return RosterStudentResource::collection($classroom->students()->get());
     }
@@ -174,13 +179,9 @@ class ClassroomStudentController extends Controller
         return response()->json(['data' => $rows]);
     }
 
+    /** A classroom the teacher sees (homeroom or subject, else 404); the policy decides the rest. */
     private function ownClassroom(Request $request, int $id): Classroom
     {
-        $teacher = $request->user();
-
-        return Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
-            ->findOrFail($id);
+        return ClassroomAccess::classrooms($request->user())->findOrFail($id);
     }
 }

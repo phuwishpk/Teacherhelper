@@ -115,6 +115,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 404 unknown route, 405, 429 from throttle, abort(...) and friends.
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) use ($wantsApiError) {
-            return $wantsApiError($request) ? ApiErrorResponse::fromHttpException($e) : null;
+            if (! $wantsApiError($request)) {
+                return null;
+            }
+            // A policy denial that names its own code (Response::deny($message,
+            // 'not_course_teacher'), DESIGN §24.8) keeps its message and code. Laravel
+            // turns the AuthorizationException into this HTTP exception first.
+            $denied = $e->getPrevious();
+            if ($denied instanceof AuthorizationException && is_string($denied->getCode()) && preg_match('/\A[a-z_]+\z/', $denied->getCode()) === 1) {
+                return ApiErrorResponse::make($denied->getMessage(), $denied->getCode(), $e->getStatusCode());
+            }
+
+            return ApiErrorResponse::fromHttpException($e);
         });
     })->create();

@@ -16,8 +16,11 @@ use App\Domain\Notifications\FcmNotifier;
 use App\Domain\Notifications\LogNotifier;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Worksheets\QrSigner;
+use App\Models\ClassroomCourseRequest;
+use App\Policies\CourseRequestPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -78,6 +81,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // DESIGN §24.8 names it CourseRequestPolicy (auto-discovery would look for ClassroomCourseRequestPolicy).
+        Gate::policy(ClassroomCourseRequest::class, CourseRequestPolicy::class);
+
         // Rate limits (DESIGN §7.4). Every limiter is named: Laravel prefixes a
         // named limiter's key with its name, so each one below is its own
         // bucket. (A bare `throttle:N,M` keys on the user id alone, so every

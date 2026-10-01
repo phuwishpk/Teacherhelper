@@ -2,6 +2,7 @@
 
 namespace App\Domain\Review;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Exams\ExamSheetIngestor;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\ExplanationRequests;
@@ -260,7 +261,7 @@ final class ResponseReviewer
     private function askGemini(Response $response, ?string $guidance, int $teacherId): string
     {
         $assignment = $response->submission->assignment;
-        $key = $this->keys->forTeacher($assignment?->classroom?->teacher_id);
+        $key = $this->keys->forTeacher($assignment === null ? null : ClassroomAccess::managerId($assignment));
         if ($key === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }

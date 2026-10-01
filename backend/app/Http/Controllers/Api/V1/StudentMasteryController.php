@@ -22,11 +22,14 @@ class StudentMasteryController extends Controller
     }
 
     /**
+     * @param  list<int>|null  $allowed  only these indicators (a subject teacher's course, DESIGN §24.8); null = all
      * @return array{data: list<array<string, mixed>>, meta: array{available: bool, weaknesses: list<int>}}
      */
-    public static function payload(int $studentId): array
+    public static function payload(int $studentId, ?array $allowed = null): array
     {
-        $rows = MasteryResource::weakestFirst(Mastery::query()->where('student_id', $studentId)->with('skill')->get());
+        $rows = MasteryResource::weakestFirst(Mastery::query()->where('student_id', $studentId)
+            ->when($allowed !== null, fn ($q) => $q->whereIn('skill_id', $allowed === [] ? [0] : $allowed))
+            ->with('skill')->get());
 
         return [
             'data' => array_map(fn (Mastery $m) => MasteryResource::row($m), $rows),

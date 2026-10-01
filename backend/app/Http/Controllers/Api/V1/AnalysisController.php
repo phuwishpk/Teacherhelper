@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Analysis\StudentAnalyses;
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Gemini\TeacherGuidance;
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use App\Http\Resources\StudentAnalysisPayload;
 use App\Models\Classroom;
 use App\Models\StudentAnalysis;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -17,8 +19,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The per-student analysis (DESIGN §20.5, §20.7). Teachers see and edit the
- * analyses of their own classrooms (others 404); the student text reaches
+ * The per-student analysis (DESIGN §20.5, §20.7). Homeroom teachers see and
+ * edit the analyses of their classrooms (others 404, a subject teacher of
+ * the classroom 403 not_homeroom_teacher, §24.8); the student text reaches
  * the student only through approval or the classroom's auto-share, and the
  * student endpoint returns their own shared texts only (§20.9).
  */
@@ -33,7 +36,8 @@ class AnalysisController extends Controller
      */
     public function classroom(Request $request, int $id): JsonResponse
     {
-        $classroom = ChartController::ownClassroom($request, $id);
+        $classroom = ClassroomAccess::classrooms($request->user())->findOrFail($id);
+        Gate::authorize('viewAnalyses', $classroom);
         $students = $classroom->students()->get(['users.id', 'users.name']);
         $rows = StudentAnalysis::query()->where('classroom_id', $classroom->id)->get()->keyBy('student_id');
         $skills = StudentAnalysisPayload::skillsOf($rows);
@@ -138,9 +142,12 @@ class AnalysisController extends Controller
         $student = User::query()
             ->where('role', User::ROLE_STUDENT)
             ->where('school_id', $teacher->school_id)
-            ->whereHas('classrooms', fn ($q) => $q->where('teacher_id', $teacher->id))
             ->findOrFail($id);
-        Gate::authorize('viewMastery', $student);
+        if (ClassroomAccess::forStudent($teacher, $student) === null) {
+            throw (new ModelNotFoundException)->setModel(User::class, [$id]);
+        }
+        // A subject teacher sees the student but not the AI analysis (§24.8): 403 not_homeroom_teacher.
+        Gate::authorize('viewAnalysis', $student);
 
         $input = Validator::make($data, [
             'classroom_id' => ['required', 'integer'],
@@ -149,15 +156,13 @@ class AnalysisController extends Controller
             'classroom_id.integer' => 'รหัสห้องเรียนไม่ถูกต้อง',
         ])->validate();
 
-        $classroom = Classroom::query()
-            ->where('school_id', $teacher->school_id)
-            ->where('teacher_id', $teacher->id)
+        $classroom = ClassroomAccess::homeroomClassrooms($teacher)
             ->whereHas('students', fn ($q) => $q->where('users.id', $student->id))
             ->find((int) $input['classroom_id']);
         if ($classroom === null) {
             throw ValidationException::withMessages(['classroom_id' => 'นักเรียนคนนี้ไม่ได้อยู่ในห้องเรียนนี้ของครู']);
         }
-        Gate::authorize('viewMastery', $classroom);
+        Gate::authorize('viewAnalyses', $classroom);
 
         return [$student, $classroom];
     }
@@ -167,9 +172,9 @@ class AnalysisController extends Controller
     {
         $teacher = $request->user();
         $analysis = StudentAnalysis::query()
-            ->whereHas('classroom', fn ($q) => $q->where('teacher_id', $teacher->id)->where('school_id', $teacher->school_id))
+            ->whereIn('classroom_id', ClassroomAccess::classrooms($teacher)->select('classrooms.id'))
             ->findOrFail($id);
-        Gate::authorize('viewMastery', $analysis->classroom()->firstOrFail());
+        Gate::authorize('viewAnalyses', $analysis->classroom()->firstOrFail());
 
         return $analysis;
     }

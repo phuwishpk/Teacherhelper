@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Exams\ExamImages;
@@ -247,17 +248,15 @@ class AssignmentController extends Controller
     }
 
     /**
-     * Assignments of classrooms the teacher teaches, in the teacher's school.
+     * Assignments the teacher sees (DESIGN §24.8): every assignment of their
+     * homerooms and the ones of their own courses elsewhere. The policy then
+     * tells reading (view) from managing (update, print, scan, review).
      *
      * @return Builder<Assignment>
      */
     public static function ownQuery(Request $request): Builder
     {
-        $teacher = $request->user();
-
-        return Assignment::query()
-            ->where('school_id', $teacher->school_id)
-            ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id));
+        return ClassroomAccess::assignments($request->user());
     }
 
     public static function loadDetail(Assignment $assignment): Assignment

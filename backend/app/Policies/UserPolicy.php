@@ -2,8 +2,10 @@
 
 namespace App\Policies;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Classroom;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 /**
  * Admin abilities (Filament UserResource, DESIGN §7.5) and the teacher-side
@@ -81,10 +83,25 @@ class UserPolicy
         return self::isHomeroomOf($user, $keep, false) && self::isHomeroomOf($user, $merge, false);
     }
 
-    /** GET /students/{id}/mastery (DESIGN §9.6): any classroom of the teacher, open or closed. */
+    /**
+     * GET /students/{id}/mastery and indicator-progress (DESIGN §9.6, §24.8):
+     * a homeroom teacher of any classroom of the student (open or closed), or
+     * a subject teacher of one (who must then name an own course).
+     */
     public function viewMastery(User $user, User $student): bool
     {
-        return self::isHomeroomOf($user, $student, false);
+        return ClassroomAccess::forStudent($user, $student) !== null;
+    }
+
+    /** The per-student AI analysis (§20.5): homeroom teachers only, 403 not_homeroom_teacher for a subject teacher (§24.8). */
+    public function viewAnalysis(User $user, User $student): Response|bool
+    {
+        $access = ClassroomAccess::forStudent($user, $student);
+        if ($access === null) {
+            return false;
+        }
+
+        return $access['homeroom'] ? true : ClassroomAccess::denyNotHomeroom();
     }
 
     /** The editors of a student (DESIGN §24.2): the homeroom teacher of an open classroom of theirs. */

@@ -151,14 +151,19 @@ class GradebookOverviewTest extends TestCase
         $colleague = $this->makeTeacher($this->teacher->school);
         $theirRoom = $this->makeClassroom($colleague, ['name' => 'ป.6/1']);
         $theirs = $this->makeCourse($colleague, [$theirRoom], ['code' => 'ค16101']);
-        // A colleague's classroom bound to the teacher's course behind the API's back stays hidden.
-        $this->course->classrooms()->attach($theirRoom->id);
         $stranger = $this->makeTeacher();
         $this->makeCourse($stranger, [$this->makeClassroom($stranger)], ['code' => 'ค16102']);
 
         $courses = $this->overview()->json('data.courses');
         $this->assertSame([$this->course->id], array_column($courses, 'id'));
         $this->assertSame([$this->classroom->id], array_column($courses[0]['classrooms'], 'id'));
+
+        // Bound to a colleague's classroom, the teacher is its subject teacher (§24.7): it shows
+        // under the teacher's own course, while the colleague still sees only their own course.
+        $this->course->classrooms()->attach($theirRoom->id);
+        $courses = $this->overview()->json('data.courses');
+        $this->assertSame([$this->course->id], array_column($courses, 'id'));
+        $this->assertEqualsCanonicalizing([$this->classroom->id, $theirRoom->id], array_column($courses[0]['classrooms'], 'id'));
 
         $mine = $this->asUser($colleague)->getJson('/api/v1/gradebook/overview')->assertOk()->json('data.courses');
         $this->assertSame([$theirs->id], array_column($mine, 'id'));

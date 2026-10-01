@@ -10,10 +10,12 @@ use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
+use App\Http\Controllers\Api\V1\ClassroomCourseController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
 use App\Http\Controllers\Api\V1\CourseController;
 use App\Http\Controllers\Api\V1\CourseDocumentController;
+use App\Http\Controllers\Api\V1\CourseRequestController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExamController;
@@ -137,6 +139,17 @@ Route::prefix('v1')->group(function () {
                 Route::get('classrooms/{id}/roster', [ClassroomStudentController::class, 'index'])->name('api.classrooms.roster');
                 Route::post('classrooms/{id}/students/pending-pins', [ClassroomStudentController::class, 'pendingPins'])->name('api.classrooms.students.pending-pins');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
+
+                // Shared homerooms (§24.7): the directory to ask for, the courses of a classroom,
+                // course requests (homeroom teacher approves or declines, the requester cancels) and unbinding.
+                Route::get('classrooms/directory', [ClassroomCourseController::class, 'directory'])->name('api.classrooms.directory');
+                Route::get('classrooms/{id}/courses', [ClassroomCourseController::class, 'index'])->name('api.classrooms.courses.index');
+                Route::delete('classrooms/{id}/courses/{course_id}', [ClassroomCourseController::class, 'destroy'])->where('course_id', '[0-9]{1,18}')->name('api.classrooms.courses.destroy');
+                Route::post('classrooms/{id}/course-requests', [ClassroomCourseController::class, 'storeRequest'])->name('api.classrooms.course-requests.store');
+                Route::get('course-requests', [CourseRequestController::class, 'index'])->name('api.course-requests.index');
+                Route::post('course-requests/{id}/approve', [CourseRequestController::class, 'approve'])->name('api.course-requests.approve');
+                Route::post('course-requests/{id}/decline', [CourseRequestController::class, 'decline'])->name('api.course-requests.decline');
+                Route::delete('course-requests/{id}', [CourseRequestController::class, 'destroy'])->name('api.course-requests.destroy');
 
                 // One account per student across the school (§24.4, §24.5): search, edit, duplicates, merge.
                 Route::get('school-students', [SchoolStudentController::class, 'index'])->name('api.school-students.index');

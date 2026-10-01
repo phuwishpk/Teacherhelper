@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gradebook\ClassroomGradebook;
 use App\Domain\Gradebook\GradebookAccess;
 use App\Domain\Gradebook\GradebookCsv;
 use App\Domain\Gradebook\GradebookOverview;
 use App\Domain\Gradebook\GradebookPublisher;
 use App\Domain\Gradebook\GradebookSettings;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\GradebookSpecialGrade;
 use Illuminate\Http\JsonResponse;
@@ -114,8 +117,7 @@ class GradebookController extends Controller
     /** GET /api/v1/courses/{id}/gradebook?classroom_id= -> {data: grid} (§23.11) */
     public function show(Request $request, int $id): JsonResponse
     {
-        $course = $this->course($request, $id, 'view');
-        $classroom = GradebookAccess::classroom($request->user(), $course, $request->query('classroom_id'));
+        [$course, $classroom] = $this->readable($request, $id);
 
         return response()->json(['data' => ClassroomGradebook::of($course, $classroom)->grid()]);
     }
@@ -182,8 +184,7 @@ class GradebookController extends Controller
     /** GET /api/v1/courses/{id}/gradebook/export?classroom_id= -> text/csv (§23.8) */
     public function export(Request $request, int $id): Response
     {
-        $course = $this->course($request, $id, 'view');
-        $classroom = GradebookAccess::classroom($request->user(), $course, $request->query('classroom_id'));
+        [$course, $classroom] = $this->readable($request, $id);
         GradebookAccess::assertConfigured($course);
         $csv = GradebookCsv::build(ClassroomGradebook::of($course, $classroom));
         $name = GradebookCsv::fileName($course->code, $classroom->name);
@@ -194,6 +195,42 @@ class GradebookController extends Controller
             'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $name, $fallback),
             'Cache-Control' => 'no-store, private',
         ]);
+    }
+
+    /**
+     * The course and classroom of a read (grid, CSV): an own course and a
+     * classroom it is bound to, or, for a homeroom teacher, another teacher's
+     * course bound to their classroom (DESIGN §24.8: every course of the
+     * class, read-only). A course bound to none of the teacher's homerooms is
+     * a 404; a classroom outside the course is a 422.
+     *
+     * @return array{0: Course, 1: Classroom}
+     */
+    private function readable(Request $request, int $id): array
+    {
+        $teacher = $request->user();
+        $course = Course::query()
+            ->where('school_id', $teacher->school_id)
+            ->where(fn ($q) => $q->where('created_by', $teacher->id)
+                ->orWhereHas('classrooms', fn ($q) => $q->whereIn('classrooms.id', ClassroomAccess::homeroomClassrooms($teacher)->select('classrooms.id'))))
+            ->findOrFail($id);
+        if ($course->created_by === $teacher->id) {
+            Gate::authorize('view', $course);
+
+            return [$course, GradebookAccess::classroom($teacher, $course, $request->query('classroom_id'))];
+        }
+        $classroomId = $request->query('classroom_id');
+        $classroom = filter_var($classroomId, FILTER_VALIDATE_INT) === false ? null : ClassroomAccess::homeroomClassrooms($teacher)
+            ->whereHas('courses', fn ($q) => $q->whereKey($course->id))
+            ->find((int) $classroomId);
+        if ($classroom === null) {
+            $message = 'เลือกห้องเรียนของคุณที่ผูกกับรายวิชานี้';
+
+            throw new ApiException($message, 'validation_failed', 422, ['classroom_id' => [$message]]);
+        }
+        Gate::authorize('viewGradebook', [$course, $classroom]);
+
+        return [$course, $classroom];
     }
 
     private function course(Request $request, int $id, string $ability): Course

@@ -26,7 +26,11 @@ final class ClassroomLifecycle
     public function close(Classroom $classroom, User $actor): Classroom
     {
         if (! $classroom->isClosed()) {
-            $classroom->forceFill(['closed_at' => now(), 'closed_by' => $actor->id])->save();
+            DB::transaction(function () use ($classroom, $actor) {
+                $classroom->forceFill(['closed_at' => now(), 'closed_by' => $actor->id])->save();
+                // Pending course requests of a closed classroom are cancelled (§24.6).
+                CourseRequests::cancelAllPending($classroom, $actor);
+            });
         }
 
         return $classroom;

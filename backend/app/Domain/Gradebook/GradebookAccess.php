@@ -9,9 +9,11 @@ use App\Models\Course;
 use App\Models\User;
 
 /**
- * DESIGN §23.11: every teacher route works on a course the teacher created
- * (404 otherwise, via CourseController::ownQuery) and on a classroom bound
- * to that course that the teacher teaches (422 errors.classroom_id).
+ * DESIGN §23.11, §24.8: every teacher route works on a course the teacher
+ * created (404 otherwise, via CourseController::ownQuery) and on a classroom
+ * bound to that course (422 errors.classroom_id), whether the teacher is its
+ * homeroom or a subject teacher. The homeroom teacher also reads (grid, CSV)
+ * the courses of other teachers bound to their classroom: GradebookController::visibleCourse.
  */
 final class GradebookAccess
 {
@@ -20,8 +22,8 @@ final class GradebookAccess
      */
     public static function classroom(User $teacher, Course $course, mixed $classroomId, string $field = 'classroom_id'): Classroom
     {
+        // A classroom an own course is bound to is one the teacher teaches (homeroom or subject, §24.8).
         $classroom = filter_var($classroomId, FILTER_VALIDATE_INT) === false ? null : Classroom::query()
-            ->where('teacher_id', $teacher->id)
             ->where('school_id', $teacher->school_id)
             ->whereHas('courses', fn ($q) => $q->whereKey($course->id))
             ->find((int) $classroomId);

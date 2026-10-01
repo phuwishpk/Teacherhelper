@@ -2,6 +2,7 @@
 
 namespace App\Domain\Grading;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\CropMissing;
 use App\Domain\Gemini\ExtractionRequests;
@@ -111,7 +112,7 @@ final class ScanGrader
             $autoExplanations[$id] = AutoRules::explanation($id, $grade);
         }
 
-        $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
+        $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
             $manual = $responses->reject(fn (Response $r) => isset($auto[$r->id]))
                 ->mapWithKeys(fn (Response $r) => [$r->id => self::REASON_KEY_MISSING])->all();

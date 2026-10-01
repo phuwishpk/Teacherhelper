@@ -2,6 +2,7 @@
 
 namespace App\Domain\Courses;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
@@ -102,7 +103,7 @@ final class IndicatorSuggestions
         if (! Question::query()->where('assignment_id', $assignment->id)->exists()) {
             throw new ApiException($assignment->isExam() ? 'ข้อสอบนี้ยังไม่มีข้อ' : 'การบ้านนี้ยังไม่มีข้อ', 'no_questions', 422);
         }
-        if ($this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
+        if ($this->keys->forTeacher(ClassroomAccess::managerId($assignment)) === null) {
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 
@@ -126,7 +127,7 @@ final class IndicatorSuggestions
             // rows, cache status done): approving again must not pay for the same call.
             $suggested = $this->state($assignment->id)['status'] === self::STATUS_DONE
                 || IndicatorSuggestion::query()->whereIn('question_id', Question::query()->select('id')->where('assignment_id', $assignment->id))->exists();
-            if (! $unmapped || $suggested || $this->keys->forTeacher($assignment->classroom?->teacher_id) === null) {
+            if (! $unmapped || $suggested || $this->keys->forTeacher(ClassroomAccess::managerId($assignment)) === null) {
                 return;
             }
             $this->queue($assignment->id);
@@ -157,7 +158,7 @@ final class IndicatorSuggestions
 
             return;
         }
-        $key = $this->keys->forTeacher($assignment->classroom?->teacher_id);
+        $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
             $this->fail($assignmentId, 'ai_key_missing', 'ยังไม่มี Gemini API key ให้ใช้');
 

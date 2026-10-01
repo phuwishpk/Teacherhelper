@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gradebook\GradebookAccess;
 use App\Domain\Gradebook\GradebookScores;
 use App\Domain\Gradebook\GradebookSettings;
@@ -149,13 +150,13 @@ class GradebookItemController extends Controller
         ];
     }
 
-    /** An item of a course the teacher created, in a classroom the teacher teaches (404 otherwise). */
+    /** An item of a course the teacher created, in a classroom the teacher teaches as homeroom or subject teacher (404 otherwise). */
     private function item(Request $request, int $id): GradebookItem
     {
         $teacher = $request->user();
         $item = GradebookItem::query()
             ->whereIn('course_id', CourseController::ownQuery($request)->select('id'))
-            ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id)->where('school_id', $teacher->school_id))
+            ->whereIn('classroom_id', ClassroomAccess::classrooms($teacher)->select('classrooms.id'))
             ->findOrFail($id);
         Gate::authorize('update', $item->course()->firstOrFail());
 
