@@ -301,7 +301,8 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 |---|---|
 | `POST /auth/student/qr` | `{qr_token}` คือส่วนหลัง `EVL1.` ของ QR บนบัตร |
 | PIN ล็อก | 423 `code: pin_locked` → ข้อความล็อก โดยใช้เวลาที่เหลือจาก `errors.pin[0]` ถ้ามี; 429 (limiter ต่อ IP ของ `throttle:student-auth`) → "มีการเข้าสู่ระบบถี่เกินไป" ไม่ใช่ข้อความล็อก PIN |
-| `POST /classrooms/{id}/students` | body `{students: [{name, student_number}]}` ตอบ `201 {data: [{student_id, student_number, name, status, pin}]}` แอปแสดง PIN เริ่มต้นของทุกคนครั้งเดียว (คัดลอกได้) ก่อนออกจากหน้า |
+| `POST /classrooms/{id}/students` | body `{students: [{name, student_number, student_code?} \| {student_id, student_number, reissue_pin?}]}` (§24.4) ตอบ `201 {data: [{student_id, student_number, name, student_code, status, pin, existing}]}` แอปแสดงเฉพาะ PIN ที่ออกใหม่ครั้งเดียว (คัดลอกได้) ก่อนออกจากหน้า คนเดิม `pin: null` ไม่แสดง; 422 `student_code_taken` ใช้ `existing_student` และ key `errors.students.{i}.student_code` เสนอ "เพิ่มคนนี้เข้าห้องแทน" |
+| นักเรียนระดับโรงเรียนและห้องเก่า (§24.12 A) | request/response ทดสอบไว้ที่ `test/classrooms/school_students_repository_test.dart`; 409 `classroom_has_data` อ่าน `counts` ระดับบน (§24.18) |
 | งานพิมพ์บัตร QR | `202 {data: {id, status, classroom_id, student_id, download_url, status_url, error}}` แอป poll ที่ `status_url` (หรือ `GET /login-card-prints/{id}` ถ้าไม่มี) จน `status = ready` แล้วดาวน์โหลด `download_url` (รับทั้ง URL เต็มและ `/api/v1/...`) |
 | `POST /students/{id}/pin` | ตอบ `{pin}` (backend ส่ง `student_id` มาด้วย) แอปแสดง `pin` ครั้งเดียว |
 | `GET /subjects` | `{data: [{id, code, name}]}` ใช้ตอนสร้างการบ้าน |

@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../worksheets/print_job.dart';
 import 'classroom.dart';
+import 'school_students.dart';
 
 /// Result of `POST /students/{id}/pin`: the new PIN is shown exactly once.
 class PinReset {
@@ -15,7 +16,11 @@ class PinReset {
 
 /// Teacher-side classroom endpoints (DESIGN §9.2).
 abstract class ClassroomsRepository {
+  /// The open classrooms (`GET /classrooms`, DESIGN §24.6).
   Future<List<Classroom>> list();
+
+  /// "ห้องเก่า": `GET /classrooms?state=closed` (DESIGN §24.6).
+  Future<List<Classroom>> listClosed();
   Future<Classroom> get(int id);
   Future<Classroom> create({
     required String name,
@@ -29,10 +34,51 @@ abstract class ClassroomsRepository {
     int? academicYear,
   });
 
-  /// Enrols [students]; the answer carries each new student's initial PIN,
-  /// which the server never returns again.
-  Future<List<EnrolledStudent>> addStudents(int id, List<NewStudent> students);
+  /// Moves the classroom to "ห้องเก่า" / back (DESIGN §24.6).
+  Future<Classroom> close(int id);
+  Future<Classroom> reopen(int id);
+
+  /// Deletes an empty classroom; 409 `classroom_has_data` otherwise.
+  Future<void> delete(int id);
+
+  /// Enrols new and existing students (DESIGN §24.4); the answer carries
+  /// each new student's initial PIN, which the server never returns again.
+  Future<List<EnrolledStudent>> addStudents(
+    int id,
+    List<StudentEnrolment> students,
+  );
   Future<List<RosterStudent>> roster(int id);
+
+  /// `PATCH /classrooms/{id}/students/{student_id}` {student_number}.
+  Future<RosterStudent> updateStudentNumber(
+    int classroomId,
+    int studentId,
+    int studentNumber,
+  );
+
+  /// Takes the student out of the room; the account stays. 409
+  /// `student_has_data` once they have work or scores here.
+  Future<void> removeStudent(int classroomId, int studentId);
+
+  /// `GET /school-students?q=` (DESIGN §24.4), at least 2 characters.
+  Future<List<SchoolStudent>> searchSchoolStudents(String query);
+
+  /// `PATCH /students/{id}` {name, student_code}; an empty code clears it.
+  Future<SchoolStudent> updateStudent(
+    int studentId, {
+    required String name,
+    String? studentCode,
+  });
+
+  /// `GET /students/duplicate-candidates` (DESIGN §24.4).
+  Future<List<DuplicateCandidate>> duplicateCandidates();
+
+  /// `GET /students/merge-preview` and `POST /students/merge` (§24.5).
+  Future<MergePreview> mergePreview({
+    required int keepId,
+    required int mergeId,
+  });
+  Future<SchoolStudent> merge({required int keepId, required int mergeId});
 
   /// Queues the PDF with every student's QR login card.
   Future<PrintJob> requestLoginCards(int id);
@@ -58,6 +104,16 @@ class ApiClassroomsRepository implements ClassroomsRepository {
   @override
   Future<List<Classroom>> list() async {
     final rows = await fetchAllPages(_dio, '/classrooms');
+    return rows.map(Classroom.fromJson).toList();
+  }
+
+  @override
+  Future<List<Classroom>> listClosed() async {
+    final rows = await fetchAllPages(
+      _dio,
+      '/classrooms',
+      query: {'state': 'closed'},
+    );
     return rows.map(Classroom.fromJson).toList();
   }
 
@@ -103,17 +159,108 @@ class ApiClassroomsRepository implements ClassroomsRepository {
   }
 
   @override
+  Future<Classroom> close(int id) async {
+    final res = await _dio.post<Object?>('/classrooms/$id/close');
+    return Classroom.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<Classroom> reopen(int id) async {
+    final res = await _dio.post<Object?>('/classrooms/$id/reopen');
+    return Classroom.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<void> delete(int id) async {
+    await _dio.delete<Object?>('/classrooms/$id');
+  }
+
+  @override
   Future<List<EnrolledStudent>> addStudents(
     int id,
-    List<NewStudent> students,
+    List<StudentEnrolment> students,
   ) async {
-    // DESIGN §9.2: body {students: [...]}, answer 201 {data: [{student_id,
-    // student_number, name, status, pin}]}.
+    // DESIGN §9.2, §24.4: body {students: [{name, student_number,
+    // student_code?} | {student_id, student_number, reissue_pin?}]}, answer
+    // 201 {data: [{student_id, student_number, name, status, pin, existing}]}.
     final res = await _dio.post<Object?>(
       '/classrooms/$id/students',
       data: {'students': students.map((s) => s.toJson()).toList()},
     );
     return unwrapList(res.data).map(EnrolledStudent.fromJson).toList();
+  }
+
+  @override
+  Future<RosterStudent> updateStudentNumber(
+    int classroomId,
+    int studentId,
+    int studentNumber,
+  ) async {
+    final res = await _dio.patch<Object?>(
+      '/classrooms/$classroomId/students/$studentId',
+      data: {'student_number': studentNumber},
+    );
+    return RosterStudent.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<void> removeStudent(int classroomId, int studentId) async {
+    await _dio.delete<Object?>('/classrooms/$classroomId/students/$studentId');
+  }
+
+  @override
+  Future<List<SchoolStudent>> searchSchoolStudents(String query) async {
+    final res = await _dio.get<Object?>(
+      '/school-students',
+      queryParameters: {'q': query},
+    );
+    return unwrapList(res.data).map(SchoolStudent.fromJson).toList();
+  }
+
+  @override
+  Future<SchoolStudent> updateStudent(
+    int studentId, {
+    required String name,
+    String? studentCode,
+  }) async {
+    final res = await _dio.patch<Object?>(
+      '/students/$studentId',
+      data: {'name': name, 'student_code': studentCode},
+    );
+    return SchoolStudent.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<List<DuplicateCandidate>> duplicateCandidates() async {
+    final res = await _dio.get<Object?>('/students/duplicate-candidates');
+    return unwrapList(res.data).map(DuplicateCandidate.fromJson).toList();
+  }
+
+  @override
+  Future<MergePreview> mergePreview({
+    required int keepId,
+    required int mergeId,
+  }) async {
+    final res = await _dio.get<Object?>(
+      '/students/merge-preview',
+      queryParameters: {'keep_id': keepId, 'merge_id': mergeId},
+    );
+    return MergePreview.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<SchoolStudent> merge({
+    required int keepId,
+    required int mergeId,
+  }) async {
+    final res = await _dio.post<Object?>(
+      '/students/merge',
+      data: {'keep_id': keepId, 'merge_id': mergeId},
+    );
+    final body = unwrapJson(res.data);
+    return SchoolStudent.fromJson(
+      (body['kept_student'] as Map).cast<String, dynamic>(),
+    );
   }
 
   @override

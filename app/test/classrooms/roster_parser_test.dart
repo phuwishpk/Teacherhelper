@@ -27,6 +27,38 @@ void main() {
     expect(r.errors.map((e) => e.lineNumber), [1, 3, 4]);
   });
 
+  test('an optional student code follows the name (DESIGN §24.4)', () {
+    final r = parseRosterLines(
+      '1 ด.ช. สมชาย ใจดี 65001\n'
+      '2\tด.ญ. สมหญิง รักเรียน\tM-6502\n'
+      '3, เด็กหญิง มานี มีนา, ๖๕๐๐๓\n'
+      '4 ด.ช. ปิติ ชูใจ\n',
+    );
+    expect(r.ok, isTrue);
+    expect(r.students, const [
+      NewStudent(
+        studentNumber: 1,
+        name: 'ด.ช. สมชาย ใจดี',
+        studentCode: '65001',
+      ),
+      NewStudent(
+        studentNumber: 2,
+        name: 'ด.ญ. สมหญิง รักเรียน',
+        studentCode: 'M-6502',
+      ),
+      NewStudent(
+        studentNumber: 3,
+        name: 'เด็กหญิง มานี มีนา',
+        studentCode: '๖๕๐๐๓',
+      ),
+      NewStudent(studentNumber: 4, name: 'ด.ช. ปิติ ชูใจ'),
+    ]);
+    expect(r.students.last.toJson(), {
+      'student_number': 4,
+      'name': 'ด.ช. ปิติ ชูใจ',
+    }, reason: 'no code, no key');
+  });
+
   test('empty input is not ok', () {
     expect(parseRosterLines('  \n').ok, isFalse);
   });

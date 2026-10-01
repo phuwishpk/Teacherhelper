@@ -22,6 +22,7 @@ import '../../features/charts/course_charts_screen.dart';
 import '../../features/classrooms/classroom.dart';
 import '../../features/classrooms/classroom_detail_screen.dart';
 import '../../features/classrooms/classroom_form_screen.dart';
+import '../../features/classrooms/merge_students_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/courses/course_detail_screen.dart';
 import '../../features/courses/course_form_screen.dart';
@@ -98,6 +99,20 @@ abstract final class AppRoutes {
   static String classroom(int id) => '/classrooms/$id';
   static String classroomEdit(int id) => '/classrooms/$id/edit';
   static String studentsAdd(int id) => '/classrooms/$id/students/add';
+
+  /// "เลือกนักเรียนที่มีอยู่" of the add screen (DESIGN §24.4).
+  static String studentsAddExisting(int id) =>
+      '/classrooms/$id/students/add?mode=existing';
+
+  /// "รวมบัญชีนักเรียน" (DESIGN §24.5): find the other account of a student
+  /// of the room, then compare both before merging.
+  static String studentMerge(int classroomId, int studentId) =>
+      '/classrooms/$classroomId/students/$studentId/merge';
+  static String studentsMergePreview(
+    int classroomId, {
+    required int keepId,
+    required int mergeId,
+  }) => '/classrooms/$classroomId/merge?keep=$keepId&merge=$mergeId';
 
   /// Google Classroom (DESIGN §18.7): course picker, student matching and
   /// the submissions of a posted assignment.
@@ -487,8 +502,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'students/add',
-            builder: (context, state) =>
-                StudentsBulkAddScreen(classroomId: _id(state, 'id')),
+            builder: (context, state) => StudentsBulkAddScreen(
+              classroomId: _id(state, 'id'),
+              initialMode: state.uri.queryParameters['mode'] == 'existing'
+                  ? StudentsAddMode.existing
+                  : StudentsAddMode.newStudents,
+            ),
+          ),
+          GoRoute(
+            path: 'students/:sid/merge',
+            builder: (context, state) => MergeStudentSearchScreen(
+              classroomId: _id(state, 'id'),
+              studentId: _id(state, 'sid'),
+            ),
+          ),
+          GoRoute(
+            path: 'merge',
+            builder: (context, state) => MergePreviewScreen(
+              classroomId: _id(state, 'id'),
+              keepId:
+                  int.tryParse(state.uri.queryParameters['keep'] ?? '') ?? 0,
+              mergeId:
+                  int.tryParse(state.uri.queryParameters['merge'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: 'google-link',

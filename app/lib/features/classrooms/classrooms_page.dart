@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/google_providers.dart';
+import 'classroom.dart';
 import 'classrooms_providers.dart';
 
 /// "ห้องเรียน" tab of the teacher shell. It is a body only: the shell's
@@ -24,41 +26,135 @@ class ClassroomsPage extends ConsumerWidget {
       onRetry: () => ref.read(classroomsProvider.notifier).refresh(),
       data: (list) {
         if (list.isEmpty) {
-          return const EmptyView(
-            icon: Icons.groups_outlined,
-            title: 'ยังไม่มีห้องเรียน',
-            message:
-                'สร้างห้องเรียน เพิ่มรายชื่อนักเรียน แล้วพิมพ์บัตร QR สำหรับเข้าสู่ระบบ',
+          return const Column(
+            children: [
+              Expanded(
+                child: EmptyView(
+                  icon: Icons.groups_outlined,
+                  title: 'ยังไม่มีห้องเรียน',
+                  message:
+                      'สร้างห้องเรียน เพิ่มรายชื่อนักเรียน แล้วพิมพ์บัตร QR สำหรับเข้าสู่ระบบ',
+                ),
+              ),
+              ContentColumn(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 96),
+                child: ClosedClassroomsSection(),
+              ),
+            ],
           );
         }
         return RefreshIndicator(
-          onRefresh: () => ref.read(classroomsProvider.notifier).refresh(),
+          onRefresh: () async {
+            ref.invalidate(closedClassroomsProvider);
+            await ref.read(classroomsProvider.notifier).refresh();
+          },
           child: ContentColumn(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             child: ListView.builder(
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final c = list[i];
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text(gradeLevelLabel(c.gradeLevel)),
-                    ),
-                    title: Text(c.name),
-                    subtitle: Text(
-                      'ปีการศึกษา ${c.academicYear} · รหัสห้อง ${c.classCode}'
-                      '${c.studentCount != null ? ' · นักเรียน ${c.studentCount} คน' : ''}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(AppRoutes.classroom(c.id)),
-                  ),
-                );
-              },
+              itemCount: list.length + 1,
+              itemBuilder: (context, i) => i == list.length
+                  ? const ClosedClassroomsSection()
+                  : ClassroomCard(classroom: list[i]),
             ),
           ),
         );
       },
     );
+  }
+}
+
+/// One classroom of the list with the teacher's role in it (DESIGN §24.13).
+class ClassroomCard extends StatelessWidget {
+  const ClassroomCard({super.key, required this.classroom});
+
+  final Classroom classroom;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = classroom;
+    final closedAt = c.closedAt;
+    return Card(
+      key: ValueKey('classroom_card_${c.id}'),
+      child: ListTile(
+        leading: CircleAvatar(child: Text(gradeLevelLabel(c.gradeLevel))),
+        title: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(c.name),
+            StatusChip(
+              key: ValueKey('classroom_role_${c.id}'),
+              label: c.myRole.label,
+              color: c.isHomeroom
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.tertiary,
+            ),
+          ],
+        ),
+        subtitle: Text(
+          'ปีการศึกษา ${c.academicYear} · รหัสห้อง ${c.classCode}'
+          '${c.studentCount != null ? ' · นักเรียน ${c.studentCount} คน' : ''}'
+          '${closedAt != null ? ' · ปิดเมื่อ ${formatThaiDate(closedAt.toLocal())}' : ''}',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push(AppRoutes.classroom(c.id)),
+      ),
+    );
+  }
+}
+
+/// "ห้องเก่า" (DESIGN §24.6, §24.13): the closed rooms, folded until the
+/// teacher opens the section, which is when they are loaded.
+class ClosedClassroomsSection extends StatelessWidget {
+  const ClosedClassroomsSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: ExpansionTile(
+        key: const ValueKey('closed_classrooms'),
+        leading: const Icon(Icons.inventory_2_outlined),
+        title: const Text('ห้องเก่า'),
+        subtitle: const Text('ห้องที่ปิดแล้ว ดูผลและส่งออกได้ แก้ไขไม่ได้'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+        childrenPadding: EdgeInsets.zero,
+        children: const [_ClosedClassroomsList()],
+      ),
+    );
+  }
+}
+
+class _ClosedClassroomsList extends ConsumerWidget {
+  const _ClosedClassroomsList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref
+        .watch(closedClassroomsProvider)
+        .when(
+          skipLoadingOnRefresh: true,
+          loading: () => const Padding(
+            padding: EdgeInsets.all(16),
+            child: LinearProgressIndicator(),
+          ),
+          error: (e, _) => ListTile(
+            title: Text(apiErrorMessage(e)),
+            trailing: TextButton(
+              onPressed: () => ref.invalidate(closedClassroomsProvider),
+              child: const Text('ลองใหม่'),
+            ),
+          ),
+          data: (list) => list.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('ยังไม่มีห้องเก่า'),
+                )
+              : Column(
+                  children: [for (final c in list) ClassroomCard(classroom: c)],
+                ),
+        );
   }
 }
 

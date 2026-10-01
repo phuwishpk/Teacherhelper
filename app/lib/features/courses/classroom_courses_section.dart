@@ -11,9 +11,16 @@ import 'courses_screen.dart';
 /// of the classroom picks one of them, DESIGN §20.1), each with a link to
 /// its charts in this classroom (§20.4), and "เพิ่มรายวิชา".
 class ClassroomCoursesSection extends ConsumerWidget {
-  const ClassroomCoursesSection({super.key, required this.classroomId});
+  const ClassroomCoursesSection({
+    super.key,
+    required this.classroomId,
+    this.readOnly = false,
+  });
 
   final int classroomId;
+
+  /// A closed room ("ห้องเก่า", DESIGN §24.6) binds no new course.
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,13 +36,15 @@ class ClassroomCoursesSection extends ConsumerWidget {
             subtitle: const Text(
               'การบ้านใหม่ของห้องนี้เลือกได้จากรายวิชาเหล่านี้',
             ),
-            trailing: TextButton.icon(
-              key: const ValueKey('classroom_add_course'),
-              onPressed: () =>
-                  startNewCourse(context, ref, classroomId: classroomId),
-              icon: const Icon(Icons.add),
-              label: const Text('เพิ่มรายวิชา'),
-            ),
+            trailing: readOnly
+                ? null
+                : TextButton.icon(
+                    key: const ValueKey('classroom_add_course'),
+                    onPressed: () =>
+                        startNewCourse(context, ref, classroomId: classroomId),
+                    icon: const Icon(Icons.add),
+                    label: const Text('เพิ่มรายวิชา'),
+                  ),
           ),
           ...courses.when(
             skipLoadingOnRefresh: true,

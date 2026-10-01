@@ -108,6 +108,26 @@ String? apiErrorCode(Object error) {
   return null;
 }
 
+/// The whole error body (DESIGN §9 `{message, errors, code}` plus any extra
+/// top-level field, e.g. `existing_student` or `counts`), if it is JSON.
+Map<String, dynamic>? apiErrorBody(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map) return data.cast<String, dynamic>();
+  }
+  return null;
+}
+
+/// Every message of the body's `errors` map, in order (DESIGN §9).
+List<String> apiErrorMessages(Object error) {
+  final errors = apiErrorBody(error)?['errors'];
+  if (errors is! Map) return const [];
+  return [
+    for (final v in errors.values)
+      if (v is List) ...v.map((m) => m.toString()) else v.toString(),
+  ];
+}
+
 int? apiStatusCode(Object error) =>
     error is DioException ? error.response?.statusCode : null;
 
