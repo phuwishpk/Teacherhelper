@@ -52,6 +52,7 @@ class ClassroomResource extends Resource
     public const COUNT_LABELS = [
         'submissions' => 'งานที่ส่ง',
         'gradebook_entries' => 'คะแนนในสมุดคะแนน',
+        'gradebook_special_grades' => 'ร/มส',
         'gradebook_publications' => 'การประกาศเกรด',
     ];
 

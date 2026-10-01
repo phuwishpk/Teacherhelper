@@ -3,11 +3,13 @@
 namespace Tests\Feature\Auth;
 
 use App\Domain\Auth\Google\GoogleCerts;
+use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Models\Classroom;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
@@ -534,6 +536,20 @@ class GoogleSignInTest extends TestCase
         $ticket = substr($location, strrpos($location, '=') + 1);
         $this->postJson('/api/v1/auth/google/ticket', ['ticket' => $ticket])->assertOk()->assertJsonPath('user.id', $this->teacher->id);
         $this->postJson('/api/v1/auth/google/ticket', ['ticket' => $ticket])->assertStatus(422)->assertJsonPath('code', 'google_ticket_invalid');
+    }
+
+    public function test_a_state_another_callback_already_spent_is_refused_even_while_it_is_still_stored(): void
+    {
+        $tickets = app(GoogleSignInTickets::class);
+        $state = $tickets->issueState(['purpose' => 'login', 'intent' => 'staff', 'nonce' => 'n', 'user_id' => null, 'accept_notice' => false]);
+        // The other callback won the add() marker but has not forgotten the state yet.
+        Cache::store('database')->add('google-signin:state:'.hash('sha256', $state).':used', 1, 600);
+
+        $this->assertNull($tickets->consumeState($state));
+
+        $fresh = $tickets->issueState(['purpose' => 'login', 'intent' => 'staff', 'nonce' => 'n', 'user_id' => null, 'accept_notice' => false]);
+        $this->assertSame('login', $tickets->consumeState($fresh)['purpose'] ?? null);
+        $this->assertNull($tickets->consumeState($fresh), 'single use');
     }
 
     public function test_the_login_ticket_lives_sixty_seconds_and_answers_like_post_auth_google(): void

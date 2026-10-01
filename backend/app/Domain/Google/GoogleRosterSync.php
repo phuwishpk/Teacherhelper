@@ -39,6 +39,12 @@ use Illuminate\Validation\ValidationException;
  *              with the PIN and QR card they have (no pin_pending_at);
  *   added      any other account not in the ignore list: a new student.
  *
+ * An account that passes 1-3 tie to a student who is already a member under
+ * another account (a second Google account of the same student) is neither
+ * added nor rematched: one membership holds one account, and moving the match
+ * would flip it back and forth with the course that uses the other account.
+ * It stays unmatched (logged) instead of becoming a duplicate student.
+ *
  * Both get numbers after the highest, in ThaiNameSorter order, and are
  * matched at once. The PIN of a new student is in the answer, shown once.
  * The background sync ($background) has nobody to show it to: the student
@@ -212,17 +218,34 @@ final class GoogleRosterSync
                 $rematched[] = self::row($free[$studentId]);
             }
 
-            $rest = array_values(array_filter($unmatched, fn (array $a) => ! isset($matched[$a['google_user_id']])));
+            // A second account of a student who is already a member, matched to another
+            // account (in this course, or in another course of the classroom, or unknown
+            // because that course cannot be read now). One membership holds one account,
+            // so it stays unmatched rather than becoming a duplicate student or taking the
+            // match away from the account the other course uses.
+            $memberIds = array_flip(array_map(fn ($m) => (int) $m->student_id, $members->all()));
+            $rest = [];
+            foreach ($unmatched as $account) {
+                if (isset($matched[$account['google_user_id']])) {
+                    continue;
+                }
+                $studentId = $school[$account['google_user_id']]['student_id'] ?? null;
+                if ($studentId !== null && isset($memberIds[$studentId])) {
+                    Log::info('google.roster_second_account', ['classroom_id' => $classroom->id, 'link_id' => $link->id, 'student_id' => $studentId]);
+
+                    continue;
+                }
+                $rest[] = $account;
+            }
             $added = [];
             $enrolled = [];
             $notInClassroom = [];
             if ($homeroom) {
                 // Everyone else joins: existing students of the school keep their account.
-                $memberIds = array_flip(array_map(fn ($m) => (int) $m->student_id, $members->all()));
                 $existing = [];
                 foreach ($rest as $account) {
                     $studentId = $school[$account['google_user_id']]['student_id'] ?? null;
-                    if ($studentId !== null && ! isset($memberIds[$studentId])) {
+                    if ($studentId !== null) {
                         $existing[$account['google_user_id']] = $studentId;
                     }
                 }

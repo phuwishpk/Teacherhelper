@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Classroom;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,20 +43,33 @@ class StudentController extends Controller
             'student_code.max' => 'เลขประจำตัวยาวเกินไป',
         ]);
 
-        DB::transaction(function () use ($student, $data) {
-            if (array_key_exists('name', $data)) {
-                $student->name = trim($data['name']);
-            }
-            if (array_key_exists('student_code', $data)) {
-                $code = StudentCode::parse($data['student_code'], 'student_code');
-                $holder = $code === null ? null : StudentCode::holder((int) $student->school_id, $code, $student->id);
-                if ($holder !== null) {
-                    throw StudentCode::taken($holder, $code, 'student_code');
+        $code = array_key_exists('student_code', $data) ? StudentCode::parse($data['student_code'], 'student_code') : null;
+        try {
+            DB::transaction(function () use ($student, $data, $code) {
+                if (array_key_exists('name', $data)) {
+                    $student->name = trim($data['name']);
                 }
-                $student->student_code = $code;
+                if (array_key_exists('student_code', $data)) {
+                    $holder = $code === null ? null : StudentCode::holder((int) $student->school_id, $code, $student->id);
+                    if ($holder !== null) {
+                        throw StudentCode::taken($holder, $code, 'student_code');
+                    }
+                    $student->student_code = $code;
+                }
+                $student->save();
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // Two requests set the same code at once: the one that lost sees uq_users_student_code.
+            if ($code === null) {
+                throw $e;
             }
-            $student->save();
-        });
+            $holder = StudentCode::holder((int) $student->school_id, $code, $student->id);
+            if ($holder !== null) {
+                throw StudentCode::taken($holder, $code, 'student_code');
+            }
+            $message = 'เลขประจำตัว '.$code.' ถูกใช้แล้ว';
+            throw new ApiException($message, 'student_code_taken', 422, ['student_code' => [$message]]);
+        }
 
         return response()->json(['data' => $this->students->payloads(collect([$student->refresh()]))[0]]);
     }

@@ -4,7 +4,7 @@ namespace Tests\Feature\Students;
 
 use App\Domain\Students\StudentMerger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -19,10 +19,14 @@ class StudentMergeCoverageTest extends TestCase
     public function test_every_foreign_key_to_users_is_handled_by_the_merge(): void
     {
         $columns = [];
-        foreach (DB::select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'") as $table) {
-            foreach (DB::select('PRAGMA foreign_key_list("'.$table->name.'")') as $fk) {
-                if ($fk->table === 'users') {
-                    $columns[] = $table->name.'.'.$fk->from;
+        // Schema::getForeignKeys reads PRAGMA foreign_key_list on SQLite and
+        // information_schema on MariaDB, so the suite checks both engines.
+        foreach (Schema::getTableListing(schemaQualified: false) as $table) {
+            foreach (Schema::getForeignKeys($table) as $fk) {
+                if ($fk['foreign_table'] === 'users') {
+                    foreach ($fk['columns'] as $column) {
+                        $columns[] = $table.'.'.$column;
+                    }
                 }
             }
         }

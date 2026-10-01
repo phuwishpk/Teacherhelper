@@ -14,6 +14,7 @@ use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
 use App\Models\StudentCredential;
 use App\Models\User;
+use App\Models\UserGoogleIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -171,6 +172,21 @@ class RosterSyncTest extends TestCase
         $this->assertSame([2], array_column($data['rematched'], 'student_number'));
         $this->assertSame([], $data['added']);
         $this->assertSame('g-2-new', $this->member(2)->google_user_id);
+    }
+
+    public function test_a_second_account_of_a_member_is_neither_added_nor_moves_the_match(): void
+    {
+        // Student 2 signs in with another Google account (pass 1), and that account
+        // is in the course next to the one the membership is matched to.
+        UserGoogleIdentity::create(['user_id' => $this->students[2]->id, 'google_sub' => 'g-2-other', 'email' => 'two@home.example', 'linked_via' => 'self', 'linked_at' => now()]);
+        $this->roster([...self::current(), self::courseStudent('g-2-other', 'สอง มีสุข', 'two@home.example')]);
+        $before = User::query()->where('role', 'student')->count();
+
+        $this->assertSame(self::NOTHING, $this->sync());
+
+        $this->assertSame($before, User::query()->where('role', 'student')->count(), 'no duplicate student');
+        $this->assertSame('g-2', $this->member(2)->google_user_id, 'the match stays');
+        $this->assertSame(3, ClassroomStudent::query()->where('classroom_id', $this->classroom->id)->count());
     }
 
     public function test_names_in_the_app_are_never_overwritten(): void

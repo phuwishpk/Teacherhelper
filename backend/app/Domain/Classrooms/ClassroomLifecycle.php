@@ -48,7 +48,10 @@ final class ClassroomLifecycle
     /**
      * What keeps the classroom from being deleted (all zero = deletable).
      *
-     * @return array{submissions: int, gradebook_entries: int, gradebook_publications: int}
+     * ร / มส (gradebook_special_grades) count too: they cascade with the
+     * classroom and would otherwise be dropped without a word.
+     *
+     * @return array{submissions: int, gradebook_entries: int, gradebook_special_grades: int, gradebook_publications: int}
      */
     public static function blockers(Classroom $classroom): array
     {
@@ -57,6 +60,7 @@ final class ClassroomLifecycle
                 ->whereIn('assignment_id', DB::table('assignments')->select('id')->where('classroom_id', $classroom->id))
                 ->count(),
             'gradebook_entries' => DB::table('gradebook_entries')->where('classroom_id', $classroom->id)->count(),
+            'gradebook_special_grades' => DB::table('gradebook_special_grades')->where('classroom_id', $classroom->id)->count(),
             'gradebook_publications' => DB::table('gradebook_publications')->where('classroom_id', $classroom->id)->count(),
         ];
     }

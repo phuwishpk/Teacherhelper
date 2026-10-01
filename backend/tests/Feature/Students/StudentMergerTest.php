@@ -153,7 +153,10 @@ class StudentMergerTest extends TestCase
         $rows = DB::table('classroom_students')->where('classroom_id', $this->room1->id)->get();
         $this->assertCount(1, $rows);
         $this->assertSame([$k->id, 1, 'g-9', 'som@school.ac.th'], [(int) $rows[0]->student_id, (int) $rows[0]->student_number, $rows[0]->google_user_id, $rows[0]->google_email]);
-        $this->assertSame([$this->room1->id], StudentMerge::query()->sole()->summary['classroom_students']['kept']);
+        $summary = StudentMerge::query()->sole()->summary['classroom_students'];
+        $this->assertSame([$this->room1->id], $summary['kept']);
+        $this->assertSame('g-9', $summary['dropped'][0]['google_user_id']);
+        $this->assertArrayNotHasKey('google_email', $summary['dropped'][0], 'no e-mail in the summary (§24.14)');
     }
 
     public function test_a_pin_pending_row_of_d_is_not_pending_for_k_who_has_a_pin(): void
@@ -332,8 +335,13 @@ class StudentMergerTest extends TestCase
         $k = $this->keep['student'];
         $d = $this->merge['student'];
         $this->realSubmission($this->assignment($this->room2), $d, Submission::STATUS_PUBLISHED);
-        // The very last write of a merge fails.
-        DB::statement("CREATE TRIGGER fail_merge BEFORE UPDATE OF merged_into_id ON users BEGIN SELECT RAISE(ABORT, 'boom'); END");
+        // The very last write of a merge fails. (A hook on the connection rather than a
+        // trigger: CREATE TRIGGER commits the test's transaction on MariaDB.)
+        DB::connection()->beforeExecuting(function (string $query, array $bindings, $connection) {
+            if (str_starts_with(strtolower($query), 'update') && str_contains($query, 'merged_into_id')) {
+                throw new QueryException($connection->getName(), $query, $bindings, new \RuntimeException('boom'));
+            }
+        });
 
         try {
             app(StudentMerger::class)->merge($k, $d, $this->teacher);

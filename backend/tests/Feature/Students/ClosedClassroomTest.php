@@ -255,6 +255,20 @@ class ClosedClassroomTest extends TestCase
         $this->assertNotNull(Classroom::find($this->classroomA->id));
     }
 
+    public function test_a_classroom_with_only_a_special_grade_cannot_be_deleted(): void
+    {
+        $classroom = $this->makeClassroom($this->teacherA);
+        $student = $this->enrollStudent($classroom, 1, 'นักเรียน ร')['student'];
+        $course = $this->makeCourse($this->teacherA, [$classroom]);
+        DB::table('gradebook_special_grades')->insert(['course_id' => $course->id, 'classroom_id' => $classroom->id, 'student_id' => $student->id, 'special' => 'r', 'set_by' => $this->teacherA->id, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->asUser($this->teacherA)->deleteJson("/api/v1/classrooms/{$classroom->id}")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'classroom_has_data')
+            ->assertJsonPath('counts.gradebook_special_grades', 1);
+        $this->assertDatabaseHas('gradebook_special_grades', ['classroom_id' => $classroom->id, 'student_id' => $student->id]);
+    }
+
     public function test_an_empty_classroom_is_deleted_with_its_drafts_and_files_and_the_students_stay(): void
     {
         $classroom = $this->makeClassroom($this->teacherA);

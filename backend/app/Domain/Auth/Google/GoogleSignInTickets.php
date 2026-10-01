@@ -96,9 +96,18 @@ final class GoogleSignInTickets
         if ($state === null || preg_match('/^[A-Za-z0-9_-]{43,128}$/', $state) !== 1) {
             return null;
         }
-        $data = self::store()->pull(self::STATE.hash('sha256', $state));
+        // Spent like a ticket: pull() reads and forgets in two steps, so two
+        // callbacks with the same state could both read it; the add() marker
+        // lets exactly one of them through (DESIGN §24.9.4 "single use").
+        $key = self::STATE.hash('sha256', $state);
+        $store = self::store();
+        $data = $store->get($key);
+        if (! is_array($data) || ! is_string($data['nonce'] ?? null) || ! $store->add($key.':used', 1, self::STATE_TTL)) {
+            return null;
+        }
+        $store->forget($key);
 
-        return is_array($data) && is_string($data['nonce'] ?? null) ? $data : null;
+        return $data;
     }
 
     /** 32 random bytes, base64url without padding (a state or a nonce). */

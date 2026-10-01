@@ -220,7 +220,7 @@ class StudentOverviewTest extends TestCase
         $this->math->indicators()->attach($math->id);
         $this->thai->indicators()->attach($thai->id);
         // Older work without a course assesses the art indicator through its question.
-        $legacyQuestion = $this->legacyResult->assignment->questions()->create(['position' => 1, 'type' => 'short_answer', 'max_points' => 1, 'prompt_text' => 'วาด']);
+        $legacyQuestion = $this->legacyResult->assignment->questions()->create(['position' => 1, 'type' => 'short', 'max_points' => 1, 'prompt_text' => 'วาด']);
         $legacyQuestion->skills()->attach($art->id);
         foreach ([[$math, 0.9], [$thai, 0.4], [$art, 0.6]] as [$skill, $value]) {
             Mastery::create(['student_id' => $this->student->id, 'skill_id' => $skill->id, 'value' => $value, 'n_obs' => 3]);

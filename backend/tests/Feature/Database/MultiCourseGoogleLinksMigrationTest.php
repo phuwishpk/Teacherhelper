@@ -21,6 +21,12 @@ class MultiCourseGoogleLinksMigrationTest extends TestCase
 
     public function test_rows_are_copied_and_the_rollback_keeps_the_homeroom_course(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            // DDL commits the test's transaction on MariaDB (RefreshDatabase could not roll
+            // the rows back). Migration D was run up, down and up again by hand on MariaDB 11
+            // (DESIGN §24.24); this test covers the copy rules on SQLite.
+            $this->markTestSkipped('migration rollback inside the test transaction needs SQLite');
+        }
         $teacher = $this->makeTeacher();
         $subject = $this->makeTeacher($teacher->school);
         $one = $this->makeClassroom($teacher);

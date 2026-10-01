@@ -205,6 +205,27 @@ class SchoolStudentsTest extends TestCase
         $this->postJson("/api/v1/students/{$student->id}/pin")->assertStatus(403);
     }
 
+    public function test_a_code_taken_at_the_same_moment_answers_422_not_500(): void
+    {
+        $student = $this->enrollStudent($this->room1, 1, 'คนแก้')['student'];
+        $other = $this->enrollStudent($this->room1, 2, 'คนที่ได้ก่อน')['student'];
+        // The other request saves the same code between the check and this save. (Its write
+        // is rolled back with this request's savepoint in the test, so the answer cannot
+        // name the holder here; on a real race it does.)
+        $raced = false;
+        User::updating(function (User $user) use ($other, &$raced) {
+            if (! $raced && $user->student_code === '555') {
+                $raced = true;
+                DB::table('users')->where('id', $other->id)->update(['student_code' => '555']);
+            }
+        });
+
+        $this->asUser($this->teacher)->patchJson("/api/v1/students/{$student->id}", ['student_code' => '555'])
+            ->assertStatus(422)->assertJsonPath('code', 'student_code_taken');
+        $this->assertTrue($raced);
+        $this->assertNull($student->refresh()->student_code);
+    }
+
     public function test_the_roster_number_changes_and_a_student_leaves_while_they_have_no_work(): void
     {
         $student = $this->enrollStudent($this->room1, 1, 'ก')['student'];

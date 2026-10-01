@@ -363,7 +363,8 @@ final class StudentMerger
             // Same classroom: K's row and number stay. D's row goes first so
             // its Google account can move to K without hitting uq_class_google_user.
             DB::table('classroom_students')->where('classroom_id', $row->classroom_id)->where('student_id', $mergeId)->delete();
-            $out['dropped'][] = (array) $row;
+            // The summary keeps ids, never an e-mail address (DESIGN §24.14).
+            $out['dropped'][] = array_diff_key((array) $row, ['google_email' => true]);
             $out['kept'][] = (int) $row->classroom_id;
             if ($kRow->google_user_id === null && $row->google_user_id !== null) {
                 DB::table('classroom_students')->where('classroom_id', $row->classroom_id)->where('student_id', $keepId)->update([
