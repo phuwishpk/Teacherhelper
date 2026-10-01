@@ -31,7 +31,10 @@ class SecurityHeaders
 
         $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('X-Frame-Options', 'SAMEORIGIN');
-        $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        // A route may ask for a stricter policy (the admin handoff link: no-referrer).
+        if (! $headers->has('Referrer-Policy')) {
+            $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        }
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
 
         if ($request->isSecure()) {

@@ -9,11 +9,13 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * `role:teacher`, `role:student` or `role:teacher,student` (DESIGN §7.4): the
- * account's role AND the token's ability must both match. Login issues a
- * token with the ability of the account's role, so this is belt and braces:
- * a token that somehow carries the other ability never opens the other
- * role's routes, and the policies behind it check the role again.
+ * `role:teacher`, `role:student`, `role:teacher,student` or `role:admin`
+ * (DESIGN §7.4): the account's role AND the token's ability must both match.
+ * Login issues a token with the ability of the account's role, so this is
+ * belt and braces: a token that somehow carries the other ability never
+ * opens the other role's routes, and the policies behind it check the role
+ * again. An admin's token carries only `admin`, so it never opens a teacher
+ * or student route even if a policy there forgot to check the role.
  */
 class EnsureRole
 {

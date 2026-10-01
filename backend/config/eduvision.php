@@ -153,5 +153,7 @@ return [
     'token_ttl_days' => [
         'teacher' => 30,
         'student' => 180,
+        // An admin token opens only /me, logout and the panel handoff (§7.4).
+        'admin' => 1,
     ],
 ];

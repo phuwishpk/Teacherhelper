@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminHandoffController;
 use App\Http\Controllers\Api\V1\AiKeyController;
 use App\Http\Controllers\Api\V1\AnalysisController;
 use App\Http\Controllers\Api\V1\AnalyticsController;
@@ -99,7 +100,14 @@ Route::prefix('v1')->group(function () {
         // Every other route also requires status = active (`active` middleware).
         Route::middleware('active')->group(function () {
             Route::get('me', MeController::class)->name('api.me');
-            Route::post('devices', [DeviceController::class, 'store'])->name('api.devices.store');
+            // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
+            // logout and the handoff below.
+            Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');
+
+            // Admin-only (§7.4): a one-time link from the app's unified login to the Filament panel.
+            Route::post('auth/admin-handoff', [AdminHandoffController::class, 'store'])
+                ->middleware(['role:admin', 'throttle:admin-handoff'])
+                ->name('api.auth.admin-handoff');
 
             // Teacher-only (§9.2, §9.3): role + token ability `teacher` (EnsureRole) plus a policy per action.
             Route::middleware('role:teacher')->group(function () {

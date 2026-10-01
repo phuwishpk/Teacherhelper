@@ -15,7 +15,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * Teacher auth (DESIGN §9.1, §7.4): register, login, logout.
+ * Teacher auth (DESIGN §9.1, §7.4): register, login (teachers and admins), logout.
  */
 class TeacherAuthController extends Controller
 {
@@ -57,8 +57,17 @@ class TeacherAuthController extends Controller
         ], 201);
     }
 
+    /** Sanctum token lifetime for admins: their token only opens the panel handoff. */
+    public const ADMIN_TOKEN_TTL_DAYS = 1;
+
     /**
      * POST /api/v1/auth/teacher/login -> 200 {token, user}
+     *
+     * The unified login page of the app (DESIGN §7.4) sends teachers and
+     * admins here. The token carries the ability of the account's role:
+     * `teacher` opens the teacher API as before; `admin` opens nothing but
+     * /me, logout and POST /auth/admin-handoff (`role:admin`), because the
+     * admin works in the Filament panel. `user.role` tells the app which.
      */
     public function login(TeacherLoginRequest $request): JsonResponse
     {
@@ -66,7 +75,7 @@ class TeacherAuthController extends Controller
 
         $user = User::query()
             ->where('email', $data['email'])
-            ->where('role', User::ROLE_TEACHER)
+            ->whereIn('role', [User::ROLE_TEACHER, User::ROLE_ADMIN])
             ->first();
 
         if ($user === null || $user->password === null || ! Hash::check($data['password'], $user->password)) {
@@ -88,11 +97,10 @@ class TeacherAuthController extends Controller
             );
         }
 
-        $token = $user->createToken(
-            $data['device_name'] ?? 'app',
-            ['teacher'],
-            now()->addDays((int) config('eduvision.token_ttl_days.teacher', self::TOKEN_TTL_DAYS)),
-        );
+        $ttlDays = $user->isAdmin()
+            ? (int) config('eduvision.token_ttl_days.admin', self::ADMIN_TOKEN_TTL_DAYS)
+            : (int) config('eduvision.token_ttl_days.teacher', self::TOKEN_TTL_DAYS);
+        $token = $user->createToken($data['device_name'] ?? 'app', [$user->role], now()->addDays($ttlDays));
 
         return response()->json([
             'token' => $token->plainTextToken,
