@@ -953,7 +953,7 @@ CREATE TABLE training_samples (
 | POST | `/students/{id}/login-card` | ออกบัตรใหม่ ยกเลิก token เดิม ตอบ `202` พร้อม print job |
 | GET | `/login-card-prints/{id}` | สถานะ print job `{id, status: queued\|rendering\|ready\|failed, classroom_id, student_id, download_url, status_url, error, created_at}` (`download_url` มีค่าเมื่อ `ready`) |
 | GET | `/login-card-prints/{id}/file` | ดาวน์โหลด PDF บัตร (ตรวจสิทธิ์) |
-| POST | `/students/{id}/pin` | รีเซ็ต PIN ยกเลิก token เดิม ตอบ `{pin}` ครั้งเดียว |
+| POST | `/students/{id}/pin` | รีเซ็ต PIN ยกเลิก token เดิมและการเชื่อม Google (เว้นแต่ `keep_google=true`, §24.9.5) ตอบ `{pin, google_unlinked}` ครั้งเดียว |
 | GET | `/subjects` | รายการวิชา `{data: [{id, code, name}]}` ใช้ตอนสร้างการบ้าน |
 
 ### 9.3 การบ้าน, rubric และใบงาน (ครู)
@@ -4153,7 +4153,7 @@ ALTER TABLE classroom_google_links
 | นักเรียน | หน้า "บัญชีของฉัน" หลัง login ด้วย PIN/QR กด "เชื่อมบัญชี Google" | ข้อความแจ้ง PDPA (§24.14) ต้องกดยอมรับ → `POST /me/google-identity` (`self`) |
 
 - ทุกทางตรวจ: โดเมน, สวิตช์นักเรียน, `sub` ยังไม่เป็นของผู้ใช้อื่น (409 `google_already_linked`) และผู้ใช้ยังไม่มีบัญชี Google อื่น (409 `google_identity_exists` ต้องยกเลิกก่อน) นักเรียนต้องส่ง `accept_notice: true` (ไม่ส่ง 422 `notice_required`) ครูและ admin เห็นข้อความเดียวกันก่อนกดเชื่อมและใต้ปุ่ม Google ในหน้า login
-- **ยกเลิกการเชื่อม**: เจ้าของบัญชี `DELETE /me/google-identity` ผู้แก้ข้อมูลนักเรียน `DELETE /students/{id}/google-identity` admin ใน Filament ลบแถวทันที token ที่ออกไปแล้วยังใช้ได้จนหมดอายุ ถ้าต้องการตัดทุกเครื่องให้รีเซ็ต PIN (นักเรียน) หรือเปลี่ยนรหัสผ่าน **การรีเซ็ต PIN ไม่ลบการเชื่อม Google**: คนที่รู้ PIN ของนักเรียนเชื่อม Google ของตัวเองผ่าน `link-with-pin` ได้ ถ้าสงสัยว่าเกิดขึ้น ครูประจำชั้นต้องกด "ยกเลิกการเชื่อม Google" ด้วย นอกจากรีเซ็ต PIN (build 6 §24.28)
+- **ยกเลิกการเชื่อม**: เจ้าของบัญชี `DELETE /me/google-identity` ผู้แก้ข้อมูลนักเรียน `DELETE /students/{id}/google-identity` admin ใน Filament ลบแถวทันที token ที่ออกไปแล้วยังใช้ได้จนหมดอายุ ถ้าต้องการตัดทุกเครื่องให้รีเซ็ต PIN (นักเรียน) หรือเปลี่ยนรหัสผ่าน **การรีเซ็ต PIN ยกเลิกการเชื่อม Google ด้วย** (แก้ 2 ต.ค. 2569): คนที่รู้ PIN ของนักเรียนอาจเชื่อม Google ของตัวเองผ่าน `link-with-pin` ไว้แล้ว `POST /students/{id}/pin` จึงลบแถว `user_google_identities` ของนักเรียนคนนั้นเสมอ เว้นแต่ครูส่ง `keep_google=true` คำตอบมี `google_unlinked` และแอปแจ้งครูว่านักเรียนต้องเข้าด้วย PIN ใหม่แล้วเชื่อม Google อีกครั้ง (แทนข้อตกลงเดิมใน build 6 §24.28)
 - limiter ใหม่ `google-signin` 10 ครั้ง/นาที ต่อ IP สำหรับ `/auth/google*` และ `google-signin-callback` 20 ครั้ง/นาที ต่อ IP
 
 ### 24.10 นำเข้าและซิงก์จาก Google Classroom (build 4, แก้ §19.2)
