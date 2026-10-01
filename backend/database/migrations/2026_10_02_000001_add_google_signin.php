@@ -30,7 +30,9 @@ return new class extends Migration
             $table->enum('linked_via', ['teacher_email', 'registration', 'self', 'pin_confirm', 'classroom_roster']);
             $table->foreignId('linked_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('notice_version', 20)->nullable();
-            $table->timestamp('linked_at');
+            // An explicit default: without it MariaDB < 10.10 adds ON UPDATE
+            // CURRENT_TIMESTAMP and every sign-in would overwrite linked_at.
+            $table->timestamp('linked_at')->useCurrent();
             $table->timestamp('last_login_at')->nullable();
             $table->timestamps();
         });
