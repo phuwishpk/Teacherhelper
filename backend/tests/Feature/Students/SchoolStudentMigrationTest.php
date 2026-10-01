@@ -33,8 +33,9 @@ class SchoolStudentMigrationTest extends TestCase
 
     public function test_the_migration_rolls_back_and_forward(): void
     {
-        // Step 3: the build-2 (classroom_course_requests) and build-3 (Google sign-in) migrations run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 3])->assertSuccessful();
+        // Step 4: the build-2 (classroom_course_requests), build-3 (Google sign-in) and build-4
+        // (several Google courses per classroom) migrations run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 4])->assertSuccessful();
         $this->assertFalse(DB::getSchemaBuilder()->hasColumn('users', 'student_code'));
         $this->assertFalse(DB::getSchemaBuilder()->hasTable('student_merges'));
         $this->artisan('migrate')->assertSuccessful();

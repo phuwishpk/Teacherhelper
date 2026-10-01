@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Classrooms\RosterCopier;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Students\CredentialIssuer;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BulkStoreStudentsRequest;
+use App\Http\Requests\Api\V1\StudentsFromClassroomRequest;
 use App\Http\Resources\RosterStudentResource;
 use App\Models\Assignment;
 use App\Models\Classroom;
@@ -69,6 +71,37 @@ class ClassroomStudentController extends Controller
                 'existing' => $row['existing'],
             ], $created),
         ], 201);
+    }
+
+    /**
+     * POST /api/v1/classrooms/{id}/students/from-classroom {source_classroom_id,
+     * student_ids[], numbering: keep|sorted, pin: keep|new} -> 201 {data:
+     * {enrolled: [{student_id, student_number, name, student_code, status,
+     * pin, existing}], skipped: [{student_id, name, reason:
+     * already_enrolled|not_active}]}} ("นำนักเรียนจากห้องเดิม", DESIGN §24.6,
+     * RosterCopier). The source is any classroom of the school (404 otherwise);
+     * 422 for an id not in it, the classroom itself, or numbers above 255.
+     */
+    public function fromClassroom(StudentsFromClassroomRequest $request, RosterCopier $copier, int $id): JsonResponse
+    {
+        $classroom = $this->ownClassroom($request, $id);
+        Gate::authorize('manageStudents', $classroom);
+        $source = Classroom::query()->where('school_id', $classroom->school_id)->findOrFail((int) $request->validated('source_classroom_id'));
+
+        $result = $copier->copy($classroom, $source, $request->studentIds(), (string) $request->validated('numbering'), (string) $request->validated('pin'));
+
+        return response()->json(['data' => [
+            'enrolled' => array_map(fn (array $row) => [
+                'student_id' => $row['student']->id,
+                'student_number' => $row['student_number'],
+                'name' => $row['student']->name,
+                'student_code' => $row['student']->student_code,
+                'status' => $row['student']->status,
+                'pin' => $row['pin'],
+                'existing' => $row['existing'],
+            ], $result['enrolled']),
+            'skipped' => $result['skipped'],
+        ]], 201);
     }
 
     /**

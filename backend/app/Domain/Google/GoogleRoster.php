@@ -3,6 +3,7 @@
 namespace App\Domain\Google;
 
 use App\Exceptions\ApiException;
+use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
@@ -174,15 +175,26 @@ final class GoogleRoster
     }
 
     /**
-     * The link of a classroom, or 422 classroom_not_linked.
+     * The link $ownerId made in the classroom (one per teacher since build 4,
+     * DESIGN §24.10), or 422 classroom_not_linked.
      */
-    public static function linkOf(Classroom $classroom): ClassroomGoogleLink
+    public static function linkOf(Classroom $classroom, int $ownerId): ClassroomGoogleLink
     {
-        $link = $classroom->googleLink()->first();
-        if ($link === null) {
-            throw new ApiException('ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ผูกที่หน้าห้องเรียนก่อน', 'classroom_not_linked', 422);
-        }
+        return ClassroomGoogleLink::of($classroom->id, $ownerId) ?? throw self::notLinked();
+    }
 
-        return $link;
+    /**
+     * The link an assignment is posted and synced through: the one of the
+     * teacher who manages its work (ClassroomGoogleLink::forAssignment), or
+     * 422 classroom_not_linked.
+     */
+    public static function linkOfAssignment(Assignment $assignment): ClassroomGoogleLink
+    {
+        return ClassroomGoogleLink::forAssignment($assignment) ?? throw self::notLinked();
+    }
+
+    public static function notLinked(): ApiException
+    {
+        return new ApiException('ห้องเรียนนี้ยังไม่ได้ผูกกับคอร์สของคุณใน Google Classroom ผูกที่หน้าห้องเรียนก่อน', 'classroom_not_linked', 422);
     }
 }

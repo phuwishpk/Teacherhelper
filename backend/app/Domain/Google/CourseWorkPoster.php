@@ -62,7 +62,8 @@ final class CourseWorkPoster
         if (! $ready) {
             throw new ApiException('โพสต์ได้เฉพาะการบ้านที่พร้อมพิมพ์แล้ว (อนุมัติ rubric และสร้าง layout ก่อน)', 'assignment_not_ready', 409);
         }
-        $link = GoogleRoster::linkOf($assignment->classroom()->firstOrFail());
+        // The course of the teacher who manages the work (DESIGN §24.10).
+        $link = GoogleRoster::linkOfAssignment($assignment);
         $this->accounts->accountOf($teacher);
 
         return $this->accounts->call($teacher, function (GoogleApi $api) use ($teacher, $assignment, $link, $input) {

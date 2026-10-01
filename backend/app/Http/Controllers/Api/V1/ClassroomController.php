@@ -45,7 +45,7 @@ class ClassroomController extends Controller
         $classrooms = $this->ownQuery($request)
             ->when($state === 'open', fn (Builder $q) => $q->whereNull('closed_at'), fn (Builder $q) => $q->whereNotNull('closed_at'))
             ->withCount('students')
-            ->with(['googleLink', 'teacher:id,name'])
+            ->with(['googleLinks.owner:id,name', 'teacher:id,name'])
             ->orderByDesc('academic_year')
             ->orderBy('grade_level')
             ->orderBy('name')
@@ -67,7 +67,7 @@ class ClassroomController extends Controller
             ...$request->validated(),
             'class_code' => ClassCodeGenerator::unique(),
         ]);
-        $classroom->loadCount('students')->load('googleLink');
+        $classroom->loadCount('students')->load('googleLinks.owner:id,name');
 
         return (new ClassroomResource($classroom))->response()->setStatusCode(201);
     }
@@ -75,7 +75,7 @@ class ClassroomController extends Controller
     /** GET /api/v1/classrooms/{id} */
     public function show(Request $request, int $id): ClassroomResource
     {
-        $classroom = $this->ownQuery($request)->withCount('students')->with(['googleLink', 'teacher:id,name'])->findOrFail($id);
+        $classroom = $this->ownQuery($request)->withCount('students')->with(['googleLinks.owner:id,name', 'teacher:id,name'])->findOrFail($id);
         Gate::authorize('view', $classroom);
 
         return new ClassroomResource($classroom);
@@ -88,7 +88,7 @@ class ClassroomController extends Controller
         Gate::authorize('update', $classroom);
 
         $classroom->fill($request->validated())->save();
-        $classroom->loadCount('students')->load('googleLink');
+        $classroom->loadCount('students')->load('googleLinks.owner:id,name');
 
         return new ClassroomResource($classroom);
     }
@@ -101,7 +101,7 @@ class ClassroomController extends Controller
 
         $this->lifecycle->close($classroom, $request->user());
 
-        return new ClassroomResource($classroom->loadCount('students')->load('googleLink'));
+        return new ClassroomResource($classroom->loadCount('students')->load('googleLinks.owner:id,name'));
     }
 
     /** POST /api/v1/classrooms/{id}/reopen -> {data: classroom}: undoes a close made by mistake */
@@ -112,7 +112,7 @@ class ClassroomController extends Controller
 
         $this->lifecycle->reopen($classroom);
 
-        return new ClassroomResource($classroom->loadCount('students')->load('googleLink'));
+        return new ClassroomResource($classroom->loadCount('students')->load('googleLinks.owner:id,name'));
     }
 
     /**

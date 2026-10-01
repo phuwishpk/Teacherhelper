@@ -67,6 +67,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.show' => ['GET', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.update' => ['PATCH', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.students.store' => ['POST', 'classrooms/{classroom}/students', 404, 404],
+        'api.classrooms.students.from-classroom' => ['POST', 'classrooms/{classroom}/students/from-classroom', 404, 404],
         'api.classrooms.roster' => ['GET', 'classrooms/{classroom}/roster', 404, 404],
         'api.classrooms.students.pending-pins' => ['POST', 'classrooms/{classroom}/students/pending-pins', 404, 404],
         'api.classrooms.login-cards' => ['POST', 'classrooms/{classroom}/login-cards', 404, 404],
@@ -255,6 +256,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.google.oauth-url' => ['POST', 'google/oauth/url', self::OK, self::OK],
         'api.google.courses' => ['GET', 'google/courses', self::OK, self::OK],
         'api.google.courses.import-preview' => ['GET', 'google/courses/{course}/import-preview', self::OK, self::OK],
+        'api.google.courses.link-existing' => ['POST', 'google/courses/{course}/link-existing', self::OK, self::OK],
         'api.classrooms.import-google' => ['POST', 'classrooms/import-google', self::OK, self::OK],
         'api.classrooms.google-roster.sync' => ['POST', 'classrooms/{classroom}/google-roster/sync', 404, 404],
         'api.classrooms.google-link.store' => ['POST', 'classrooms/{classroom}/google-link', 404, 404],
@@ -285,6 +287,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.show' => self::OK,
         'api.classrooms.update' => '403 not_homeroom_teacher',
         'api.classrooms.students.store' => '403 not_homeroom_teacher',
+        'api.classrooms.students.from-classroom' => '403 not_homeroom_teacher',
         'api.classrooms.roster' => self::OK,
         'api.classrooms.students.pending-pins' => '403 not_homeroom_teacher',
         'api.classrooms.login-cards' => '403 not_homeroom_teacher',
@@ -303,12 +306,14 @@ class AuthorizationMatrixTest extends TestCase
         'api.students.analysis.run' => '403 not_homeroom_teacher',
         'api.analyses.update' => '403 not_homeroom_teacher',
         'api.analyses.approve' => '403 not_homeroom_teacher',
-        'api.classrooms.google-roster.sync' => '403 not_homeroom_teacher',
-        'api.classrooms.google-link.store' => '403 not_homeroom_teacher',
-        'api.classrooms.google-link.destroy' => '403 not_homeroom_teacher',
-        'api.classrooms.google-roster.show' => '403 not_homeroom_teacher',
+        // Build 4 (§24.10): each teacher links and syncs their own course (a subject
+        // teacher's only matches); pairing accounts by hand stays the homeroom teacher's.
+        'api.classrooms.google-roster.sync' => self::OK,
+        'api.classrooms.google-link.store' => self::OK,
+        'api.classrooms.google-link.destroy' => self::OK,
+        'api.classrooms.google-roster.show' => self::OK,
         'api.classrooms.google-roster.update' => '403 not_homeroom_teacher',
-        'api.classrooms.google-sync' => '403 not_homeroom_teacher',
+        'api.classrooms.google-sync' => self::OK,
         'api.course-requests.destroy' => 404,
     ];
 

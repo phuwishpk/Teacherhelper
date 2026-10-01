@@ -2,9 +2,12 @@
 
 namespace App\Domain\Classrooms;
 
+use App\Domain\Google\ClassroomGoogleLinks;
+use App\Domain\Google\ClassroomImporter;
 use App\Events\CourseRequestCreated;
 use App\Events\CourseRequestDecided;
 use App\Exceptions\ApiException;
+use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\ClassroomCourseRequest;
@@ -15,11 +18,13 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Shared homerooms (DESIGN §24.7): a subject teacher asks to bind an own
- * course to another teacher's classroom, the homeroom teacher approves or
- * declines, the requester may cancel while it is pending, and an admin binds
+ * course to another teacher's classroom (or, from a Google Classroom
+ * import, to have their Google course linked there too, §24.10), the
+ * homeroom teacher approves or declines, the requester may cancel while it is pending, and an admin binds
  * directly in Filament. course_classroom stays the source of truth; the
  * requests are the record of who asked and who decided.
  *
@@ -76,14 +81,73 @@ final class CourseRequests
     }
 
     /**
+     * "ผูกกับห้องที่มีอยู่" by a teacher who is not the homeroom teacher
+     * (DESIGN §24.10): a request with origin classroom_import that carries
+     * the Google course, linked as the requester's course when approved.
+     *
+     * @param  array{course_id: string, name: string}  $googleCourse
+     *
+     * @throws ApiException 409 classroom_closed | course_already_in_classroom | request_pending
+     */
+    public function requestImport(User $teacher, Classroom $classroom, Course $course, array $googleCourse): ClassroomCourseRequest
+    {
+        ClosedClassrooms::assertOpen($classroom);
+
+        return self::locked($classroom->id, $course->id, function () use ($teacher, $classroom, $course, $googleCourse) {
+            return DB::transaction(function () use ($teacher, $classroom, $course, $googleCourse) {
+                if (self::bound($classroom->id, $course->id)) {
+                    throw self::alreadyBound();
+                }
+                if (self::pendingQuery($classroom->id, $course->id)->exists()) {
+                    throw new ApiException('มีคำขอผูกรายวิชานี้กับห้องนี้รอครูประจำชั้นอยู่แล้ว', 'request_pending', 409);
+                }
+                $request = ClassroomCourseRequest::create([
+                    'classroom_id' => $classroom->id,
+                    'course_id' => $course->id,
+                    'requested_by' => $teacher->id,
+                    'origin' => ClassroomCourseRequest::ORIGIN_CLASSROOM_IMPORT,
+                    'status' => ClassroomCourseRequest::STATUS_PENDING,
+                    'google_course_id' => $googleCourse['course_id'],
+                    'google_course_name' => mb_substr($googleCourse['name'] !== '' ? $googleCourse['name'] : $googleCourse['course_id'], 0, 255),
+                ]);
+                CourseRequestCreated::dispatch($request->id);
+
+                return $request;
+            });
+        });
+    }
+
+    /**
+     * The homeroom teacher binds an own course to their classroom, as
+     * request() does, without a 409 when it is bound already.
+     */
+    public function bindOwn(User $homeroom, Classroom $classroom, Course $course): void
+    {
+        self::locked($classroom->id, $course->id, function () use ($homeroom, $classroom, $course) {
+            DB::transaction(function () use ($homeroom, $classroom, $course) {
+                $classroom->courses()->syncWithoutDetaching([$course->id]);
+                self::cancelPending($classroom->id, $course->id, $homeroom);
+            });
+        });
+    }
+
+    /**
      * The homeroom teacher approves: the course is bound to the classroom.
+     * A request from a Classroom import (origin classroom_import, DESIGN
+     * §24.10) also links its Google course as the requester's course and
+     * queues a match-only roster sync of it. When the Google course cannot
+     * be linked any more (another classroom took it, or the requester's
+     * posted work is in their previous course of the classroom), the course
+     * is still bound and the skip is logged: the requester links a course
+     * from the classroom page.
      *
      * @throws ApiException 409 request_closed | classroom_closed
      */
     public function approve(User $homeroom, ClassroomCourseRequest $request): ClassroomCourseRequest
     {
-        return self::locked($request->classroom_id, $request->course_id, function () use ($homeroom, $request) {
-            return DB::transaction(function () use ($homeroom, $request) {
+        $linkId = null;
+        $row = self::locked($request->classroom_id, $request->course_id, function () use ($homeroom, $request, &$linkId) {
+            return DB::transaction(function () use ($homeroom, $request, &$linkId) {
                 $row = $this->lockPending($request);
                 $classroom = Classroom::query()->findOrFail($row->classroom_id);
                 ClosedClassrooms::assertOpen($classroom);
@@ -93,11 +157,36 @@ final class CourseRequests
                     'decided_by' => $homeroom->id,
                     'decided_at' => now(),
                 ])->save();
+                if ($row->origin === ClassroomCourseRequest::ORIGIN_CLASSROOM_IMPORT && $row->google_course_id !== null) {
+                    $linkId = self::linkImportedCourse($row, $classroom);
+                }
                 CourseRequestDecided::dispatch($row->id);
 
                 return $row;
             });
         });
+        if ($linkId !== null) {
+            SyncClassroomRosterJob::dispatch($row->classroom_id, $linkId);
+        }
+
+        return $row;
+    }
+
+    /** The link id, or null when the Google course could not be linked (logged). */
+    private static function linkImportedCourse(ClassroomCourseRequest $row, Classroom $classroom): ?int
+    {
+        $requester = User::query()->find($row->requested_by);
+        if ($requester === null) {
+            return null;
+        }
+        $course = ['course_id' => (string) $row->google_course_id, 'name' => (string) ($row->google_course_name ?? '')];
+        try {
+            return ClassroomImporter::underCourseLock($course['course_id'], fn () => ClassroomGoogleLinks::put($classroom, $requester, $course, $row->course_id))->id;
+        } catch (ApiException $e) {
+            Log::warning('google.import_request_link_skipped', ['request_id' => $row->id, 'code' => $e->errorCode]);
+
+            return null;
+        }
     }
 
     /**

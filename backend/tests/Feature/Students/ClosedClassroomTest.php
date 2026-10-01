@@ -340,6 +340,7 @@ class ClosedClassroomTest extends TestCase
             'api/v1/courses/{id}/gradebook/special-grades', 'api/v1/courses/{id}/gradebook/publish' => ['classroom_id' => $classroomId, 'student_id' => $this->studentA->id, 'special' => 'r'],
             'api/v1/students/{id}/analysis/run' => ['classroom_id' => $classroomId],
             'api/v1/classrooms/{id}/course-requests' => ['course_id' => $this->courseA->id],
+            'api/v1/google/courses/{course_id}/link-existing' => ['classroom_id' => $classroomId],
             default => [],
         };
 

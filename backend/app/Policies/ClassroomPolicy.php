@@ -56,8 +56,18 @@ class ClassroomPolicy
         return $this->homeroom($user, $classroom);
     }
 
-    /** Link a Google Classroom course and match its students (§18.6; subject teachers' courses: build 4). */
-    public function manageGoogle(User $user, Classroom $classroom): Response|bool
+    /**
+     * Link the teacher's own Google Classroom course, read its roster and
+     * sync it (§18.6, §24.10): the homeroom teacher and each subject teacher,
+     * one course each. A subject teacher's sync only matches, never adds.
+     */
+    public function manageGoogle(User $user, Classroom $classroom): bool
+    {
+        return ClassroomAccess::for($user, $classroom) !== null;
+    }
+
+    /** Pair Google accounts with students by hand (PUT google-roster): roster data, the homeroom teacher's (#65). */
+    public function editGoogleRoster(User $user, Classroom $classroom): Response|bool
     {
         return $this->homeroom($user, $classroom);
     }

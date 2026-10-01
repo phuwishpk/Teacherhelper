@@ -4,7 +4,6 @@ namespace App\Domain\Google;
 
 use App\Domain\AnswerKeys\AnswerKeyResult;
 use App\Domain\AnswerKeys\AnswerKeyService;
-use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Documents\SourceDocuments;
 use App\Domain\Gradebook\GradebookSettings;
 use App\Domain\Notifications\Notifier;
@@ -14,6 +13,7 @@ use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
+use App\Models\Course;
 use App\Models\GoogleAccount;
 use App\Models\SourceDocument;
 use App\Models\User;
@@ -103,10 +103,12 @@ final class CourseWorkImporter
      *
      * @throws GoogleApiException only transient ones (the job retries)
      */
-    public function import(int $classroomId, array $work): ?Assignment
+    public function import(int $classroomId, array $work, ?int $linkId = null): ?Assignment
     {
-        $classroom = Classroom::query()->with('googleLink')->find($classroomId);
-        $link = $classroom?->googleLink;
+        $classroom = Classroom::query()->find($classroomId);
+        $link = $classroom === null ? null : ($linkId !== null
+            ? ClassroomGoogleLink::query()->where('classroom_id', $classroom->id)->find($linkId)
+            : ClassroomGoogleLink::of($classroom->id, (int) $classroom->teacher_id));
         $courseWorkId = (string) ($work['id'] ?? '');
         if ($classroom === null || $link === null || $courseWorkId === '' || $this->mirrored($classroom, $courseWorkId)) {
             return null;
@@ -127,9 +129,10 @@ final class CourseWorkImporter
                 return null;
             }
             $title = trim((string) ($work['title'] ?? ''));
-            // DESIGN §19.3 after Phase 9: the classroom's only course, if it has
-            // exactly one; otherwise the teacher picks one when approving the key.
-            $course = AssignmentCourses::onlyCourseOf($classroom->id);
+            // DESIGN §19.3 after Phase 9, §24.10: the app course of the link, else the
+            // link owner's only course in the classroom; otherwise the teacher picks
+            // one when approving the key.
+            $course = self::courseOf($link);
             $assignment = Assignment::create([
                 'school_id' => $classroom->school_id,
                 'classroom_id' => $classroom->id,
@@ -170,6 +173,28 @@ final class CourseWorkImporter
         }
 
         return $assignment->refresh();
+    }
+
+    /**
+     * The app course a mirror of the link's courseWork belongs to: the link's
+     * app_course_id while it is the owner's and bound to the classroom, else
+     * the owner's only course bound to it, else null.
+     */
+    public static function courseOf(ClassroomGoogleLink $link): ?Course
+    {
+        $own = Course::query()
+            ->where('created_by', $link->owner_user_id)
+            ->whereHas('classrooms', fn ($q) => $q->whereKey($link->classroom_id))
+            ->orderBy('id');
+        if ($link->app_course_id !== null) {
+            $course = (clone $own)->find($link->app_course_id);
+            if ($course !== null) {
+                return $course;
+            }
+        }
+        $courses = $own->limit(2)->get();
+
+        return $courses->count() === 1 ? $courses->first() : null;
     }
 
     private function mirrored(Classroom $classroom, string $courseWorkId): bool

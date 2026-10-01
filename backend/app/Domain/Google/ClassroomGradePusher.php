@@ -3,6 +3,7 @@
 namespace App\Domain\Google;
 
 use App\Models\Assignment;
+use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GoogleAccount;
@@ -53,7 +54,7 @@ final class ClassroomGradePusher
      */
     public function push(int $submissionId): string
     {
-        $submission = Submission::query()->with('assignment.classroom.googleLink', 'assignment.googleLink')->find($submissionId);
+        $submission = Submission::query()->with('assignment.classroom', 'assignment.googleLink')->find($submissionId);
         $assignment = $submission?->assignment;
         $posted = $assignment?->googleLink;
         if ($submission === null || ! $submission->isPublished() || $posted === null) {
@@ -83,7 +84,7 @@ final class ClassroomGradePusher
                 : 'บัญชี Google ของงานที่ส่งไม่ตรงกับนักเรียนคนนี้ ตรวจสอบป้าย identity_mismatch ในคิวตรวจทาน คะแนนของเจ้าของบัญชีจะส่งเมื่อเผยแพร่งานของเขา');
         }
 
-        $link = $assignment->classroom?->googleLink;
+        $link = ClassroomGoogleLink::forAssignment($assignment);
         if ($link === null) {
             return $this->fail($import, $submission, 'ห้องเรียนไม่ได้ผูกกับ Google Classroom แล้ว ผูกคอร์สเดิมอีกครั้งแล้วกดส่งคะแนนอีกครั้ง');
         }

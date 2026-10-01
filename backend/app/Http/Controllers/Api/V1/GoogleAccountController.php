@@ -80,7 +80,8 @@ class GoogleAccountController extends Controller
      * to the course (DESIGN §19.2: shown faded, cannot be imported);
      * for another teacher's classroom (a co-taught course) id is null and
      * name is generic, and linked_classroom_id (kept for older clients)
-     * names only the teacher's own classroom.
+     * names only the teacher's own classroom (or the one the teacher linked
+     * the course to as a subject teacher, DESIGN §24.10).
      */
     public function courses(Request $request): JsonResponse
     {
@@ -95,8 +96,10 @@ class GoogleAccountController extends Controller
             ->keyBy('course_id');
 
         return response()->json(['data' => array_map(function (array $course) use ($links, $teacher) {
-            $classroom = $links[$course['course_id']]->classroom ?? null;
-            $own = $classroom !== null && $classroom->teacher_id === $teacher->id;
+            $link = $links[$course['course_id']] ?? null;
+            $classroom = $link?->classroom;
+            // The teacher's own classroom, or one they linked their course to as a subject teacher (§24.10).
+            $own = $classroom !== null && ($classroom->teacher_id === $teacher->id || $link->owner_user_id === $teacher->id);
 
             return [
                 ...$course,

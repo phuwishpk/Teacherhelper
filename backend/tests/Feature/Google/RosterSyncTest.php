@@ -29,6 +29,9 @@ class RosterSyncTest extends TestCase
     use GoogleFixtures;
     use RefreshDatabase;
 
+    /** A sync that changes nothing (DESIGN §24.10 added enrolled and not_in_classroom). */
+    private const NOTHING = ['added' => [], 'enrolled' => [], 'left' => [], 'rematched' => [], 'not_in_classroom' => []];
+
     private User $teacher;
 
     private Classroom $classroom;
@@ -115,10 +118,10 @@ class RosterSyncTest extends TestCase
         $this->assertSame([], $data['rematched']);
         $this->assertSame('g-new-a', $this->member(6)->google_user_id);
         $this->assertSame('bella@student.example', $this->member(7)->google_email);
-        $this->assertNotNull(ClassroomGoogleLink::query()->find($this->classroom->id)->roster_synced_at);
+        $this->assertNotNull(ClassroomGoogleLink::query()->where('classroom_id', $this->classroom->id)->sole()->roster_synced_at);
 
         // Nothing new the second time.
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
     }
 
     public function test_an_account_that_left_is_unmatched_and_labelled_and_matched_back_by_email_when_it_returns(): void
@@ -141,7 +144,7 @@ class RosterSyncTest extends TestCase
         // Still gone: the time it left does not move.
         $leftAt = $member->left_course_at->toIso8601String();
         $this->travel(1)->days();
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
         $this->assertSame($leftAt, $this->member(2)->left_course_at->toIso8601String());
 
         // Back with the same account (Google shows the e-mail in another case).
@@ -188,7 +191,7 @@ class RosterSyncTest extends TestCase
         ClassroomGoogleIgnoredUser::query()->insert(['classroom_id' => $this->classroom->id, 'google_user_id' => 'g-parent', 'name' => 'ผู้ปกครอง', 'created_at' => now()]);
         $this->roster([...self::current(), self::courseStudent('g-parent', 'ผู้ปกครอง', 'parent@example.com')]);
 
-        $this->assertSame(['added' => [], 'left' => [], 'rematched' => []], $this->sync());
+        $this->assertSame(self::NOTHING, $this->sync());
         $this->assertDatabaseMissing('classroom_students', ['google_user_id' => 'g-parent']);
     }
 

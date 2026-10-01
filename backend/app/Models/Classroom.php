@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -122,9 +121,14 @@ class Classroom extends Model
         return $this->belongsToMany(Course::class, 'course_classroom');
     }
 
-    /** The linked Google Classroom course (DESIGN §18.4). @return HasOne<ClassroomGoogleLink, $this> */
-    public function googleLink(): HasOne
+    /**
+     * The linked Google Classroom courses (DESIGN §18.4, §24.10): one per
+     * teacher, the homeroom teacher's and each subject teacher's own.
+     *
+     * @return HasMany<ClassroomGoogleLink, $this>
+     */
+    public function googleLinks(): HasMany
     {
-        return $this->hasOne(ClassroomGoogleLink::class);
+        return $this->hasMany(ClassroomGoogleLink::class)->orderBy('id');
     }
 }

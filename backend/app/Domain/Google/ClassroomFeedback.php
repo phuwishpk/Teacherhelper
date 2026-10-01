@@ -3,6 +3,7 @@
 namespace App\Domain\Google;
 
 use App\Models\ClassroomFeedbackPost;
+use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
 use App\Models\GoogleAccount;
 use App\Models\Question;
@@ -50,10 +51,11 @@ final class ClassroomFeedback
     public static function queue(int $submissionId, ?bool &$created = null): ?ClassroomFeedbackPost
     {
         $created = false;
-        $submission = Submission::query()->with('assignment.googleLink', 'assignment.classroom.googleLink')->find($submissionId);
+        $submission = Submission::query()->with('assignment.googleLink', 'assignment.classroom')->find($submissionId);
         $assignment = $submission?->assignment;
+        $link = $assignment === null ? null : ClassroomGoogleLink::forAssignment($assignment);
         if ($submission === null || ! $submission->isPublished() || $submission->published_at === null
-            || $assignment?->googleLink === null || $assignment->classroom?->googleLink === null) {
+            || $assignment?->googleLink === null || $link === null) {
             return null;
         }
         $googleUserId = self::matchedAccount($assignment->classroom_id, $submission->student_id);
@@ -64,7 +66,7 @@ final class ClassroomFeedback
         try {
             $post = ClassroomFeedbackPost::query()->firstOrCreate(
                 ['submission_id' => $submission->id, 'published_at' => $submission->published_at],
-                ['course_id' => $assignment->classroom->googleLink->course_id, 'google_user_id' => $googleUserId],
+                ['course_id' => $link->course_id, 'google_user_id' => $googleUserId],
             );
         } catch (UniqueConstraintViolationException) {
             return ClassroomFeedbackPost::query()
@@ -90,7 +92,7 @@ final class ClassroomFeedback
         if ($post === null || $post->state === ClassroomFeedbackPost::STATE_POSTED) {
             return self::SKIPPED;
         }
-        $submission = Submission::query()->with('assignment.googleLink', 'assignment.classroom.googleLink')->find($post->submission_id);
+        $submission = Submission::query()->with('assignment.googleLink', 'assignment.classroom')->find($post->submission_id);
         if ($submission === null || ! $submission->isPublished() || $submission->published_at === null
             || ! $submission->published_at->equalTo($post->published_at)) {
             // Reopened or published again since: that publish has its own
@@ -101,7 +103,7 @@ final class ClassroomFeedback
         }
         $assignment = $submission->assignment;
         $posted = $assignment?->googleLink;
-        $link = $assignment?->classroom?->googleLink;
+        $link = $assignment === null ? null : ClassroomGoogleLink::forAssignment($assignment);
         if ($posted === null || $link === null) {
             return $this->fail($post, 'การบ้านหรือห้องเรียนนี้ไม่ได้ผูกกับ Google Classroom แล้ว');
         }
@@ -159,14 +161,14 @@ final class ClassroomFeedback
      */
     public static function requeue(ClassroomFeedbackPost $post): bool
     {
-        $submission = Submission::query()->with('assignment.classroom.googleLink')->find($post->submission_id);
+        $submission = Submission::query()->with('assignment.classroom')->find($post->submission_id);
         if ($submission === null || ! $submission->isPublished() || $submission->published_at === null
             || ! $submission->published_at->equalTo($post->published_at)) {
             $post->delete();
 
             return false;
         }
-        $link = $submission?->assignment?->classroom?->googleLink;
+        $link = $submission->assignment === null ? null : ClassroomGoogleLink::forAssignment($submission->assignment);
         $googleUserId = $submission !== null && $link !== null ? self::matchedAccount($submission->assignment->classroom_id, $submission->student_id) : null;
         if ($link === null || $googleUserId === null) {
             $post->last_error = $link === null

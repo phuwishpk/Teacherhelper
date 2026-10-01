@@ -244,7 +244,7 @@ class ClassroomSyncTest extends TestCase
         $this->assertSame([$this->teacher->id], $pushes[0][0]);
         $this->assertSame(['type' => 'classroom_work_imported', 'assignment_id' => (string) $mirror->id], $pushes[0][1]->data());
         $this->assertStringContainsString('มีงานใหม่จาก Classroom รออนุมัติเฉลย', $pushes[0][1]->body);
-        $this->assertNotNull($this->classroom->googleLink()->sole()->work_synced_at);
+        $this->assertNotNull($this->classroom->googleLinks()->sole()->work_synced_at);
 
         $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$mirror->id}")
             ->assertOk()

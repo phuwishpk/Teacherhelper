@@ -15,24 +15,41 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
- * "ซิงก์รายชื่อ" (DESIGN §19.2, POST /classrooms/{id}/google-roster/sync and
- * SyncClassroomRosterJob) brings a linked classroom in line with the course:
+ * "ซิงก์รายชื่อ" (DESIGN §19.2, §24.10, POST /classrooms/{id}/google-roster/sync
+ * and SyncClassroomRosterJob) brings a classroom in line with one of its
+ * linked courses (one per teacher since build 4):
  *
- *   left       a matched account no longer in the course: left_course_at is
- *              set and the match cleared (google_email stays for the
- *              teacher to see). The student and their scores stay.
- *   rematched  an unmatched account that is an existing student: the same
- *              e-mail as a student who left (they came back), or else the
- *              same full name (RosterMatcher passes 1-2, unique on both
- *              sides) as a student never matched, e.g. in a room linked by
- *              hand (§18.7) before its roster was matched. left_course_at is
- *              cleared.
- *   added      any other account not in the ignore list: a new student after
- *              the highest number, in ThaiNameSorter order, matched at once.
- *              Their PIN is in the answer, shown once. The background sync
- *              ($background) has nobody to show it to: the student is marked
- *              pin_pending_at, and the teacher issues the PINs later
- *              (POST /classrooms/{id}/students/pending-pins).
+ *   left       a matched account that is in none of the classroom's courses:
+ *              left_course_at is set and the match cleared (google_email
+ *              stays for the teacher to see). The student and their scores
+ *              stay. When the roster of another course of the classroom
+ *              cannot be read, nobody is marked left in that round.
+ *   rematched  an unmatched account that is a student of this classroom
+ *              without an account: the school-wide match (SchoolStudentMatcher
+ *              passes 1-3: Google sign-in, the account in another classroom,
+ *              the same e-mail), or else the same full name (RosterMatcher
+ *              passes 1-2, unique on both sides) as a student never
+ *              matched, e.g. in a room linked by hand (§18.7) before its
+ *              roster was matched. left_course_at is cleared.
+ *
+ * The homeroom teacher's course also changes the roster:
+ *
+ *   enrolled   an account that is an existing student of the school (passes
+ *              1-3) but not of this classroom: their one account is enrolled
+ *              with the PIN and QR card they have (no pin_pending_at);
+ *   added      any other account not in the ignore list: a new student.
+ *
+ * Both get numbers after the highest, in ThaiNameSorter order, and are
+ * matched at once. The PIN of a new student is in the answer, shown once.
+ * The background sync ($background) has nobody to show it to: the student
+ * is marked pin_pending_at, and the teacher issues the PINs later
+ * (POST /classrooms/{id}/students/pending-pins). A name alone never enrols
+ * or matches anyone outside the classroom; a new student whose name equals
+ * an existing one shows up in "คู่ที่น่าจะซ้ำ".
+ *
+ * A subject teacher's course only matches (#65): an account that is not a
+ * student of the classroom is reported in not_in_classroom for the homeroom
+ * teacher to add.
  *
  * Names in the app are never overwritten. Import rows that are not scanned
  * yet follow the new matches (GoogleRoster::followRoster).
@@ -42,30 +59,92 @@ final class GoogleRosterSync
     public function __construct(
         private readonly GoogleAccounts $accounts,
         private readonly StudentEnroller $enroller,
+        private readonly SchoolStudentMatcher $matcher,
     ) {}
 
     /**
-     * @return array{added: list<array{student_id: int, student_number: int, name: string, pin: string}>, left: list<array{student_id: int, student_number: int, name: string}>, rematched: list<array{student_id: int, student_number: int, name: string}>}
+     * The teacher's own course of the classroom ("ซิงก์รายชื่อ").
+     *
+     * @return array{added: list<array{student_id: int, student_number: int, name: string, pin: string}>, enrolled: list<array{student_id: int, student_number: int, name: string, pin: string|null}>, left: list<array{student_id: int, student_number: int, name: string}>, rematched: list<array{student_id: int, student_number: int, name: string}>, not_in_classroom: list<array{google_user_id: string, name: string, email: string|null}>}
      *
      * @throws ApiException Google errors, 422 classroom_not_linked
      */
     public function sync(User $teacher, Classroom $classroom, bool $background = false): array
     {
-        $link = GoogleRoster::linkOf($classroom);
+        $link = GoogleRoster::linkOf($classroom, $teacher->id);
+
+        return $this->syncLink($teacher, $classroom, $link, $background);
+    }
+
+    /**
+     * One link of the classroom with the given teacher's Google account.
+     *
+     * @return array<string, list<array<string, mixed>>> as sync()
+     *
+     * @throws ApiException Google errors of this link's course
+     */
+    public function syncLink(User $teacher, Classroom $classroom, ClassroomGoogleLink $link, bool $background = false): array
+    {
         $accounts = $this->accounts->call($teacher, fn (GoogleApi $api) => $api->courseStudents($link->course_id), GoogleRoster::COURSE_GONE);
 
-        return $this->apply($classroom, $link, $accounts, $background);
+        return $this->apply($classroom, $link, $accounts, $background, $this->elsewhere($classroom, $link));
+    }
+
+    /**
+     * Account ids of the classroom's other courses, read with their owners'
+     * accounts; null when one of them cannot be read (nobody is marked left then).
+     *
+     * @param  array<int, list<array{google_user_id: string, name: string, email: string|null}>|null>  $known  rosters already read, by link id
+     * @return array<string, true>|null
+     */
+    public function elsewhere(Classroom $classroom, ClassroomGoogleLink $link, array $known = []): ?array
+    {
+        $ids = [];
+        foreach (ClassroomGoogleLink::query()->where('classroom_id', $classroom->id)->whereKeyNot($link->id)->get() as $other) {
+            $roster = array_key_exists($other->id, $known) ? $known[$other->id] : $this->rosterOf($other);
+            if ($roster === null) {
+                return null;
+            }
+            foreach ($roster as $account) {
+                $ids[$account['google_user_id']] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * The roster of a link's course with its owner's account; null when it
+     * cannot be read (logged).
+     *
+     * @return list<array{google_user_id: string, name: string, email: string|null}>|null
+     */
+    public function rosterOf(ClassroomGoogleLink $link): ?array
+    {
+        $owner = User::query()->find($link->owner_user_id);
+        if ($owner === null) {
+            return null;
+        }
+        try {
+            return $this->accounts->call($owner, fn (GoogleApi $api) => $api->courseStudents($link->course_id), GoogleRoster::COURSE_GONE);
+        } catch (ApiException $e) {
+            Log::warning('google.roster_read_failed', ['classroom_id' => $link->classroom_id, 'link_id' => $link->id, 'code' => $e->errorCode]);
+
+            return null;
+        }
     }
 
     /**
      * @param  list<array{google_user_id: string, name: string, email: string|null}>  $accounts  the course roster from Google
      * @param  bool  $background  nobody sees the answer: new students are marked pin_pending_at
-     * @return array{added: list<array{student_id: int, student_number: int, name: string, pin: string}>, left: list<array{student_id: int, student_number: int, name: string}>, rematched: list<array{student_id: int, student_number: int, name: string}>}
+     * @param  array<string, true>|null  $elsewhere  accounts of the classroom's other courses (null: unknown)
+     * @return array{added: list<array{student_id: int, student_number: int, name: string, pin: string}>, enrolled: list<array{student_id: int, student_number: int, name: string, pin: string|null}>, left: list<array{student_id: int, student_number: int, name: string}>, rematched: list<array{student_id: int, student_number: int, name: string}>, not_in_classroom: list<array{google_user_id: string, name: string, email: string|null}>}
      */
-    public function apply(Classroom $classroom, ClassroomGoogleLink $link, array $accounts, bool $background = false): array
+    public function apply(Classroom $classroom, ClassroomGoogleLink $link, array $accounts, bool $background = false, ?array $elsewhere = []): array
     {
-        $result = DB::transaction(function () use ($classroom, $link, $accounts, $background) {
+        $result = DB::transaction(function () use ($classroom, $link, $accounts, $background, $elsewhere) {
             Classroom::query()->whereKey($classroom->id)->lockForUpdate()->first();
+            $homeroom = $link->isHomeroomLink($classroom);
 
             $byId = array_column($accounts, null, 'google_user_id');
             $ignored = array_flip(array_map('strval', ClassroomGoogleIgnoredUser::query()->where('classroom_id', $classroom->id)->pluck('google_user_id')->all()));
@@ -92,6 +171,9 @@ final class GoogleRosterSync
                     continue;
                 }
                 if ($googleId !== null) {
+                    if ($elsewhere === null || isset($elsewhere[$googleId])) {
+                        continue; // in another course of the classroom (or that course cannot be read now)
+                    }
                     $this->updateMember($classroom, $member->student_id, ['google_user_id' => null, 'left_course_at' => $member->left_course_at ?? now()]);
                     $left[] = self::row($member);
                     $pairs[$googleId] = null;
@@ -102,33 +184,24 @@ final class GoogleRosterSync
             }
 
             $unmatched = array_values(array_filter($accounts, fn (array $a) => ! isset($matched[$a['google_user_id']]) && ! isset($ignored[$a['google_user_id']])));
+            $school = $this->matcher->match((int) $classroom->school_id, $unmatched, byName: false);
 
-            // Back in the course with the same account e-mail.
-            $byEmail = [];
+            // A student of this classroom without an account, found school-wide.
             foreach ($unmatched as $account) {
-                if ($account['email'] !== null) {
-                    $byEmail[mb_strtolower($account['email'])][] = $account;
-                }
-            }
-            foreach ($free as $studentId => $member) {
-                $email = $member->google_email !== null ? mb_strtolower($member->google_email) : null;
-                if ($email === null || count($byEmail[$email] ?? []) !== 1) {
-                    continue;
-                }
-                $account = $byEmail[$email][0];
-                if (isset($matched[$account['google_user_id']])) {
+                $studentId = $school[$account['google_user_id']]['student_id'] ?? null;
+                if ($studentId === null || ! isset($free[$studentId])) {
                     continue;
                 }
                 $this->match($classroom, $studentId, $account);
                 $matched[$account['google_user_id']] = true;
                 $pairs[$account['google_user_id']] = $studentId;
-                $rematched[] = self::row($member);
+                $rematched[] = self::row($free[$studentId]);
                 unset($free[$studentId]);
             }
 
             // The same full name as a student never matched (a room linked by hand). Who
-            // left, earlier or in this round, only comes back by e-mail: a namesake with
-            // another account is someone else.
+            // left, earlier or in this round, only comes back by the passes above: a
+            // namesake with another account is someone else.
             $unmatched = array_values(array_filter($unmatched, fn (array $a) => ! isset($matched[$a['google_user_id']])));
             $candidates = array_map(fn ($m) => ['id' => (int) $m->student_id, 'name' => (string) $m->name], array_values(array_intersect_key($free, $neverMatched)));
             foreach (RosterMatcher::suggest($unmatched, $candidates, false) as $googleId => $studentId) {
@@ -139,28 +212,55 @@ final class GoogleRosterSync
                 $rematched[] = self::row($free[$studentId]);
             }
 
-            // Everyone else is new.
-            $new = array_values(array_filter($unmatched, fn (array $a) => ! isset($matched[$a['google_user_id']])));
-            $added = $this->add($classroom, $new, $members->max('student_number') ?? 0, $background);
-            foreach ($added as $row) {
-                $pairs[$row['google_user_id']] = $row['student_id'];
+            $rest = array_values(array_filter($unmatched, fn (array $a) => ! isset($matched[$a['google_user_id']])));
+            $added = [];
+            $enrolled = [];
+            $notInClassroom = [];
+            if ($homeroom) {
+                // Everyone else joins: existing students of the school keep their account.
+                $memberIds = array_flip(array_map(fn ($m) => (int) $m->student_id, $members->all()));
+                $existing = [];
+                foreach ($rest as $account) {
+                    $studentId = $school[$account['google_user_id']]['student_id'] ?? null;
+                    if ($studentId !== null && ! isset($memberIds[$studentId])) {
+                        $existing[$account['google_user_id']] = $studentId;
+                    }
+                }
+                foreach ($this->add($classroom, $rest, $existing, $members->max('student_number') ?? 0, $background) as $row) {
+                    $pairs[$row['google_user_id']] = $row['student_id'];
+                    $public = array_diff_key($row, ['google_user_id' => true, 'existing' => true]);
+                    if ($row['existing']) {
+                        $enrolled[] = $public;
+                    } else {
+                        $added[] = $public;
+                    }
+                }
+            } else {
+                foreach ($rest as $account) {
+                    $notInClassroom[] = ['google_user_id' => $account['google_user_id'], 'name' => GoogleRoster::studentName($account), 'email' => $account['email']];
+                }
             }
 
             GoogleRoster::followRoster($classroom, $pairs);
             $link->forceFill(['roster_synced_at' => now()])->save();
 
             return [
-                'added' => array_map(fn (array $r) => array_diff_key($r, ['google_user_id' => true]), $added),
+                'added' => $added,
+                'enrolled' => $enrolled,
                 'left' => $left,
                 'rematched' => $rematched,
+                'not_in_classroom' => $notInClassroom,
             ];
         });
 
         Log::info('google.roster_synced', [
             'classroom_id' => $classroom->id,
+            'link_id' => $link->id,
             'added' => count($result['added']),
+            'enrolled' => count($result['enrolled']),
             'left' => count($result['left']),
             'rematched' => count($result['rematched']),
+            'not_in_classroom' => count($result['not_in_classroom']),
         ]);
 
         return $result;
@@ -168,9 +268,10 @@ final class GoogleRosterSync
 
     /**
      * @param  list<array{google_user_id: string, name: string, email: string|null}>  $accounts
-     * @return list<array{google_user_id: string, student_id: int, student_number: int, name: string, pin: string}>
+     * @param  array<string, int>  $existing  google_user_id => the existing student to enrol
+     * @return list<array{google_user_id: string, student_id: int, student_number: int, name: string, pin: string|null, existing: bool}>
      */
-    private function add(Classroom $classroom, array $accounts, int $highest, bool $background): array
+    private function add(Classroom $classroom, array $accounts, array $existing, int $highest, bool $background): array
     {
         if ($accounts === []) {
             return [];
@@ -186,11 +287,14 @@ final class GoogleRosterSync
         foreach (array_chunk($sorted, ClassroomImporter::CHUNK) as $chunk) {
             $rows = [];
             foreach ($chunk as $account) {
-                $rows[] = ['name' => $account['sort_name'], 'student_number' => $next++];
+                $studentId = $existing[$account['google_user_id']] ?? null;
+                $rows[] = $studentId !== null
+                    ? ['student_id' => $studentId, 'student_number' => $next++]
+                    : ['name' => $account['sort_name'], 'student_number' => $next++];
             }
             foreach ($this->enroller->enroll($classroom, $rows) as $i => $created) {
                 $this->match($classroom, $created['student']->id, $chunk[$i]);
-                if ($background) {
+                if ($background && $created['pin'] !== null) {
                     $this->updateMember($classroom, $created['student']->id, ['pin_pending_at' => now()]);
                 }
                 $added[] = [
@@ -199,6 +303,7 @@ final class GoogleRosterSync
                     'student_number' => $created['student_number'],
                     'name' => $created['student']->name,
                     'pin' => $created['pin'],
+                    'existing' => $created['existing'],
                 ];
             }
         }

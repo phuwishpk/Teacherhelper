@@ -162,6 +162,8 @@ Route::prefix('v1')->group(function () {
                 Route::delete('classrooms/{id}/students/{student_id}', [ClassroomStudentController::class, 'destroy'])->name('api.classrooms.students.destroy');
                 Route::get('classrooms/{id}/roster', [ClassroomStudentController::class, 'index'])->name('api.classrooms.roster');
                 Route::post('classrooms/{id}/students/pending-pins', [ClassroomStudentController::class, 'pendingPins'])->name('api.classrooms.students.pending-pins');
+                // "นำนักเรียนจากห้องเดิม" (§24.6): enrol students of another classroom of the school.
+                Route::post('classrooms/{id}/students/from-classroom', [ClassroomStudentController::class, 'fromClassroom'])->name('api.classrooms.students.from-classroom');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
 
                 // Shared homerooms (§24.7): the directory to ask for, the courses of a classroom,
@@ -387,6 +389,7 @@ Route::prefix('v1')->group(function () {
                         Route::get('google/courses', [GoogleAccountController::class, 'courses'])->name('api.google.courses');
                         // Import a classroom from a course and sync its roster (§19.2).
                         Route::get('google/courses/{course_id}/import-preview', [GoogleImportController::class, 'preview'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.import-preview');
+                        Route::post('google/courses/{course_id}/link-existing', [GoogleImportController::class, 'linkExisting'])->where('course_id', '[A-Za-z0-9_-]{1,64}')->name('api.google.courses.link-existing');
                         Route::post('classrooms/import-google', [GoogleImportController::class, 'import'])->name('api.classrooms.import-google');
                         Route::post('classrooms/{id}/google-roster/sync', [GoogleImportController::class, 'syncRoster'])->name('api.classrooms.google-roster.sync');
                         // "ซิงก์ตอนนี้": one sync round of the classroom (§19.3).

@@ -89,7 +89,8 @@ final class GoogleSubmissionSync
 
     /**
      * The cron's sync of one assignment (ClassroomSyncJob), with the Google
-     * account of the teacher who linked the course.
+     * account of the teacher who linked the course the assignment goes
+     * through (its manager's, DESIGN §24.10).
      *
      * @throws ApiException
      */
@@ -115,7 +116,7 @@ final class GoogleSubmissionSync
             throw new ApiException('การบ้านนี้ยังไม่ได้โพสต์ลง Google Classroom', 'not_posted', 409);
         }
 
-        return [$posted, GoogleRoster::linkOf($assignment->classroom()->firstOrFail())];
+        return [$posted, GoogleRoster::linkOfAssignment($assignment)];
     }
 
     /**

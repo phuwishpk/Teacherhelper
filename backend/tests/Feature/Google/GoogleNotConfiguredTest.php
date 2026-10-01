@@ -75,6 +75,7 @@ class GoogleNotConfiguredTest extends TestCase
             'api.google.connect',
             'api.google.courses',
             'api.google.courses.import-preview',
+            'api.google.courses.link-existing',
             'api.google.disconnect',
             'api.google.oauth-url',
         ], array_keys($routes));
