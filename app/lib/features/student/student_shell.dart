@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../auth/sign_out_action.dart';
+import '../gradebook/student_grades.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
 import '../practice/practice_page.dart';
@@ -25,12 +26,17 @@ const _destinations = [
   ),
   _Destination('แบบฝึก', Icons.fitness_center_outlined, Icons.fitness_center),
   _Destination('ทักษะ', Icons.insights_outlined, Icons.insights),
+  _Destination('เกรด', Icons.school_outlined, Icons.school),
 ];
+
+/// The index of "เกรด" (DESIGN §23.9 "เกรดของฉัน").
+const _gradesIndex = 4;
 
 const _railBreakpoint = 840.0;
 
 /// Student-side shell: work to hand in (DESIGN §19.6), published results,
-/// practice by weak skill and mastery per skill (§9.7, §14.1, §14.2).
+/// practice by weak skill, mastery per skill (§9.7, §14.1, §14.2) and the
+/// published grades of each course (§23.9).
 class StudentShell extends ConsumerStatefulWidget {
   const StudentShell({super.key});
 
@@ -40,6 +46,14 @@ class StudentShell extends ConsumerStatefulWidget {
 
 class _StudentShellState extends ConsumerState<StudentShell> {
   int _index = 0;
+
+  /// "เกรด" loads only once opened: most visits never look at grades.
+  bool _gradesOpened = false;
+
+  void _select(int i) => setState(() {
+    _index = i;
+    if (i == _gradesIndex) _gradesOpened = true;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +65,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       const ResultsPage(),
       const PracticePage(),
       MasteryPage(onPractice: () => setState(() => _index = 2)),
+      if (_gradesOpened) const MyGradesPage() else const SizedBox.shrink(),
     ];
     final body = IndexedStack(index: _index, children: pages);
 
@@ -70,7 +85,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
               children: [
                 NavigationRail(
                   selectedIndex: _index,
-                  onDestinationSelected: (i) => setState(() => _index = i),
+                  onDestinationSelected: _select,
                   labelType: NavigationRailLabelType.all,
                   destinations: [
                     for (final d in _destinations)
@@ -90,7 +105,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
           ? null
           : NavigationBar(
               selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              onDestinationSelected: _select,
               destinations: [
                 for (final d in _destinations)
                   NavigationDestination(

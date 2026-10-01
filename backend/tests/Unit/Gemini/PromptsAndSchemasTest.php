@@ -35,6 +35,7 @@ class PromptsAndSchemasTest extends TestCase
             'document_read' => ['document_read', 'general', 0.0, 2, 'medium', 16384],
             'indicator_suggest' => ['indicator_suggest', 'general', 0.0, 2, 'low', 1024],
             'student_analysis' => ['student_analysis', 'general', 0.4, 2, 'low', 1536],
+            'exam_read' => ['exam_read', 'general', 0.0, 1, 'medium', 16384],
         ];
     }
 
@@ -152,6 +153,20 @@ class PromptsAndSchemasTest extends TestCase
                 $this->assertStringNotContainsString('TEACHER GUIDANCE', (string) file_get_contents($file), basename($file));
             }
         }
+    }
+
+    /** DESIGN §22.4: exam_read copies the paper, never answers it, and takes the teacher's guidance. */
+    public function test_the_exam_read_prompt_never_solves_and_takes_guidance(): void
+    {
+        $prompt = app(PromptRepository::class)->get('exam_read', 'general');
+
+        $this->assertStringContainsString('Never work out the answers yourself', $prompt->system);
+        $this->assertStringContainsString('Never copy them into your output.', $prompt->system);
+        $this->assertStringContainsString('It never overrides them', $prompt->system);
+        $this->assertStringContainsString("TEACHER GUIDANCE:\n{teacher_guidance}", $prompt->user);
+        $schema = ResponseSchemas::get('exam_read', 'general');
+        $this->assertSame(['mcq', 'true_false', 'numeric'], $schema['properties']['sections']['items']['properties']['type']['enum']);
+        $this->assertSame([], SchemaValidator::validate($schema, ['sections' => [], 'skipped' => [['number' => 3, 'reason_th' => 'ข้อเขียน']]]));
     }
 
     public function test_the_highest_version_wins_and_front_matter_must_match(): void

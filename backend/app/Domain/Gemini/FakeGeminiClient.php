@@ -39,6 +39,9 @@ use Illuminate\Support\Str;
  * `document_read` (DESIGN §20.1) answers a fixed course of two units and
  * three lesson plans; see courseDocument() for its markers.
  *
+ * `exam_read` (DESIGN §22.4) answers a fixed exam of three sections with
+ * figures and a printed key; see examDocument() for its markers.
+ *
  * `indicator_suggest` (DESIGN §20.3) picks, per question, the plan's
  * indicators whose code the question text mentions, else the first one;
  * see indicatorSuggestions() for its markers.
@@ -172,6 +175,7 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
             'rubric_draft' => $this->rubric($request, $has('rubric-invalid')),
             'answer_key_read', 'answer_key_draft' => self::answerKey($request),
             'document_read' => self::courseDocument($request),
+            'exam_read' => self::examDocument($request),
             'indicator_suggest' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
@@ -599,6 +603,81 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
             ],
             'lesson_plans' => $plans,
             'notes_th' => 'หน้า 3 อ่านไม่ชัด',
+        ];
+    }
+
+    /**
+     * A teacher's exam file (hints.pages: pages sent per file). Markers in
+     * the document bytes: [fake:error] (HTTP 503), [fake:invalid] (not
+     * JSON), [fake:empty] (nothing found: invalid after the check),
+     * [fake:many] (one mcq section of 150 questions). Otherwise:
+     *
+     * - ตอนที่ 1 mcq, 4 options: q1 (figure on file 1 page 1, key ค), q2
+     *   (option ข is a picture on the last page sent of file 1, key ก and ง),
+     *   q3 ("ถูกทุกข้อ", lock_options, no key);
+     * - ตอนที่ 2 true_false: q4 (ถูก), q5 (ผ);
+     * - ตอนที่ 3 numeric, 3 digits with decimals: q6 (".5"), q7 ("12345",
+     *   too long for the block);
+     * - skipped: q8 (a written answer).
+     *
+     * @return array<string, mixed>|string|GeminiReply
+     */
+    private static function examDocument(GeminiRequest $request): array|string|GeminiReply
+    {
+        $markers = self::imageMarkers($request);
+        if (str_contains($markers, '[fake:error]')) {
+            return GeminiReply::error('HTTP 503: fake outage', 0, 503);
+        }
+        if (str_contains($markers, '[fake:invalid]')) {
+            return 'Here is the exam: {not json';
+        }
+        if (str_contains($markers, '[fake:empty]')) {
+            return ['sections' => [], 'skipped' => [], 'notes_th' => 'ไม่พบข้อสอบในไฟล์'];
+        }
+        if (str_contains($markers, '[fake:many]')) {
+            $questions = [];
+            for ($i = 1; $i <= 150; $i++) {
+                $questions[] = ['number' => $i, 'text' => "ข้อที่ {$i}", 'options' => [['label' => 'ก', 'text' => '1'], ['label' => 'ข', 'text' => '2'], ['label' => 'ค', 'text' => '3'], ['label' => 'ง', 'text' => '4']], 'answer' => ['options' => ['ก']]];
+            }
+
+            return ['sections' => [['title' => 'ตอนที่ 1', 'type' => 'mcq', 'option_count' => 4, 'questions' => $questions]], 'skipped' => []];
+        }
+        $lastPage = max(1, (int) (((array) ($request->hints['pages'] ?? [1]))[0] ?? 1));
+
+        return [
+            'kind' => 'exam',
+            'notes_th' => 'หน้า 2 อ่านไม่ชัด',
+            'sections' => [
+                [
+                    'title' => 'ตอนที่ 1 ปรนัย', 'instructions' => 'เลือกคำตอบที่ถูกที่สุด', 'type' => 'mcq', 'option_count' => 4,
+                    'questions' => [
+                        ['number' => 1, 'text' => 'จากรูป รูปใดเป็นสามเหลี่ยม', 'figure' => ['file' => 1, 'page' => 1, 'box_2d' => [100, 100, 500, 600]],
+                            'options' => [['label' => 'ก', 'text' => 'รูป 1'], ['label' => 'ข', 'text' => 'รูป 2'], ['label' => 'ค', 'text' => 'รูป 3'], ['label' => 'ง', 'text' => 'รูป 4']],
+                            'answer' => ['options' => ['ค']]],
+                        ['number' => 2, 'text' => 'ข้อใดเป็นจำนวนคู่',
+                            'options' => [['label' => 'ก', 'text' => '2'], ['label' => 'ข', 'text' => '', 'figure' => ['file' => 1, 'page' => $lastPage, 'box_2d' => [600, 200, 700, 400]]], ['label' => 'ค', 'text' => '3'], ['label' => 'ง', 'text' => '4']],
+                            'answer' => ['options' => ['ก', 'ง']]],
+                        ['number' => 3, 'text' => 'ข้อใดถูกต้อง',
+                            'options' => [['label' => 'ก', 'text' => '1 + 1 = 2'], ['label' => 'ข', 'text' => '2 + 2 = 4'], ['label' => 'ค', 'text' => '3 + 3 = 6'], ['label' => 'ง', 'text' => 'ถูกทุกข้อ']],
+                            'lock_options' => true],
+                    ],
+                ],
+                [
+                    'title' => 'ตอนที่ 2 ถูกหรือผิด', 'type' => 'true_false',
+                    'questions' => [
+                        ['number' => 4, 'text' => '5 เป็นจำนวนคี่', 'answer' => ['options' => ['ถูก']]],
+                        ['number' => 5, 'text' => '4 เป็นจำนวนคี่', 'answer' => ['options' => ['ผ']]],
+                    ],
+                ],
+                [
+                    'title' => 'ตอนที่ 3 เติมตัวเลข', 'type' => 'numeric', 'numeric' => ['digits' => 3, 'allow_negative' => false, 'allow_decimal' => true],
+                    'questions' => [
+                        ['number' => 6, 'text' => 'ครึ่งหนึ่งเขียนเป็นทศนิยมได้เท่าใด', 'answer' => ['values' => ['.5']]],
+                        ['number' => 7, 'text' => 'หนึ่งหมื่นสองพันสามร้อยสี่สิบห้า', 'answer' => ['values' => ['12345']]],
+                    ],
+                ],
+            ],
+            'skipped' => [['number' => 8, 'reason_th' => 'ข้อเขียนตอบ ฝนไม่ได้']],
         ];
     }
 

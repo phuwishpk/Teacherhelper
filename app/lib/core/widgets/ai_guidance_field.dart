@@ -13,6 +13,8 @@ const kGuidanceHintKeyRead =
     'เช่น "เฉลยอยู่หน้าสุดท้าย วงกลมสีแดงคือคำตอบ" หรือ "ข้อ 3 รับคำตอบเป็นเศษส่วนด้วย"';
 const kGuidanceHintKeyDraft =
     'เช่น "ข้อ 3 รับคำตอบเป็นเศษส่วนด้วย" หรือ "ใช้หน่วยเป็นเซนติเมตร"';
+const kGuidanceHintExamRead =
+    'เช่น "เฉลยอยู่ท้ายไฟล์" หรือ "ข้อ 1–20 เป็นปรนัย 4 ตัวเลือก ข้าม ตอนที่ 3"';
 const kGuidanceHintCourse =
     'เช่น "แผนอยู่หน้า 3 ถึง 5" หรือ "ตัวชี้วัดอยู่ในตารางท้ายเอกสาร"';
 const kGuidanceHintIndicators =

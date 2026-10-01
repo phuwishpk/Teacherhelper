@@ -8,6 +8,7 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../exams/exam_screen.dart';
 import '../google_classroom/assignment_google_section.dart';
 import '../hand_in/teacher_upload_screen.dart';
 import '../worksheets/print_flow.dart';
@@ -82,6 +83,8 @@ class AssignmentDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(assignmentDetailProvider(assignmentId));
     final theme = Theme.of(context);
+    // An exam opened through an assignment link has its own screens (§22).
+    if (detail.value?.isExam ?? false) return ExamScreen(examId: assignmentId);
 
     return Scaffold(
       appBar: AppBar(

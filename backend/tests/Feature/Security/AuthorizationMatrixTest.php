@@ -87,6 +87,23 @@ class AuthorizationMatrixTest extends TestCase
         'api.courses.import' => ['POST', 'courses/import', self::OK, self::OK],
         'api.courses.mastery-summary' => ['GET', 'courses/{own_course}/mastery-summary', 404, 404],
         'api.courses.plan-progress' => ['GET', 'courses/{own_course}/plan-progress', 404, 404],
+        // The gradebook (§23.11, §23.12): the owner's courses and items only; another teacher gets 404.
+        'api.gradebook.templates' => ['GET', 'gradebook/templates', self::OK, self::OK],
+        'api.courses.gradebook.settings' => ['GET', 'courses/{own_course}/gradebook/settings', 404, 404],
+        'api.courses.gradebook.categories' => ['PUT', 'courses/{own_course}/gradebook/categories', 404, 404],
+        'api.courses.gradebook.cutoffs' => ['PUT', 'courses/{own_course}/gradebook/cutoffs', 404, 404],
+        'api.courses.gradebook.show' => ['GET', 'courses/{own_course}/gradebook', 404, 404],
+        'api.courses.gradebook.special-grades' => ['PUT', 'courses/{own_course}/gradebook/special-grades', 404, 404],
+        'api.courses.gradebook.publish' => ['POST', 'courses/{own_course}/gradebook/publish', 404, 404],
+        'api.courses.gradebook.withdraw' => ['DELETE', 'courses/{own_course}/gradebook/publish', 404, 404],
+        'api.courses.gradebook.export' => ['GET', 'courses/{own_course}/gradebook/export', 404, 404],
+        'api.courses.gradebook-items.store' => ['POST', 'courses/{own_course}/gradebook-items', 404, 404],
+        'api.gradebook-items.update' => ['PATCH', 'gradebook-items/{gradebook_item}', 404, 404],
+        'api.gradebook-items.destroy' => ['DELETE', 'gradebook-items/{gradebook_item}', 404, 404],
+        'api.gradebook-items.scores' => ['PUT', 'gradebook-items/{gradebook_item}/scores', 404, 404],
+        'api.gradebook-items.fill-full' => ['POST', 'gradebook-items/{gradebook_item}/fill-full', 404, 404],
+        'api.assignments.gradebook-scores' => ['PUT', 'assignments/{assignment}/gradebook-scores', 404, 404],
+        'api.assignments.gradebook-scores.fill-full' => ['POST', 'assignments/{assignment}/gradebook-scores/fill-full', 404, 404],
         'api.assignments.index' => ['GET', 'assignments', self::OK, self::OK],
         'api.assignments.store' => ['POST', 'assignments', self::OK, self::OK],
         'api.assignments.show' => ['GET', 'assignments/{assignment}', 404, 404],
@@ -103,13 +120,53 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.indicator-suggestions.index' => ['GET', 'assignments/{assignment}/indicator-suggestions', 404, 404],
         'api.assignments.indicator-mapping' => ['PUT', 'assignments/{assignment}/indicator-mapping', 404, 404],
         'api.documents.store' => ['POST', 'documents', self::OK, self::OK],
-        // The read-once cache is shared by the school (§19.5): a colleague may read it.
-        'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', self::OK, 404],
+        // An answer-key read (the fixture) is shown only to a teacher tied to it (§19.9, §22.17):
+        // a colleague who guesses the id gets 404. Course reads stay school-wide (CourseDocumentTest).
+        'api.document-extractions.show' => ['GET', 'document-extractions/{extraction}', 404, 404],
         'api.assignments.answer-key.show' => ['GET', 'assignments/{assignment}/answer-key', 404, 404],
         'api.assignments.answer-key.extract' => ['POST', 'assignments/{assignment}/answer-key/extract', 404, 404],
         'api.assignments.answer-key.draft' => ['POST', 'assignments/{assignment}/answer-key/draft', 404, 404],
         'api.assignments.answer-key.estimate' => ['POST', 'assignments/{assignment}/answer-key/estimate', 404, 404],
         'api.assignments.answer-key.approve' => ['POST', 'assignments/{assignment}/answer-key/approve', 404, 404],
+        // Exams (§22.15, §22.17): the owner's exams only; another teacher gets 404, even in the same school.
+        'api.exams.show' => ['GET', 'exams/{exam}', 404, 404],
+        'api.exams.sections.store' => ['POST', 'exams/{exam}/sections', 404, 404],
+        'api.exams.questions.approve' => ['POST', 'exams/{exam}/questions/approve', 404, 404],
+        'api.exams.answer-key' => ['PUT', 'exams/{exam}/answer-key', 404, 404],
+        'api.exams.versions' => ['GET', 'exams/{exam}/versions', 404, 404],
+        'api.exams.versions.reshuffle' => ['POST', 'exams/{exam}/versions/reshuffle', 404, 404],
+        'api.exams.unlock-structure' => ['POST', 'exams/{exam}/unlock-structure', 404, 404],
+        'api.exams.prints.store' => ['POST', 'exams/{exam}/prints', 404, 404],
+        'api.exams.scan-kit' => ['GET', 'exams/{exam}/scan-kit', 404, 404],
+        'api.exams.sheet-status' => ['GET', 'exams/{exam}/sheet-status', 404, 404],
+        'api.exams.key-sheet-read' => ['POST', 'exams/{exam}/key-sheet-read', 404, 404],
+        'api.exams.option-analysis' => ['GET', 'exams/{exam}/option-analysis', 404, 404],
+        // The QR names the exam; the scan policy answers 403 like POST /scans.
+        'api.exam-sheets.store' => ['POST', 'exam-sheets', 403, 403],
+        // Review of a scanned page (§22.11): looked up among the owner's exams only.
+        'api.exam-sheets.version' => ['POST', 'exam-sheets/{exam_scan}/version', 404, 404],
+        'api.exam-responses.resolve' => ['POST', 'exam-responses/{exam_response}/resolve', 404, 404],
+        'api.exam-sections.update' => ['PATCH', 'exam-sections/{exam_section}', 404, 404],
+        'api.exam-sections.destroy' => ['DELETE', 'exam-sections/{exam_section}', 404, 404],
+        'api.exam-sections.questions.store' => ['POST', 'exam-sections/{exam_section}/questions', 404, 404],
+        'api.questions.image.show' => ['GET', 'questions/{exam_question}/image', 404, 404],
+        'api.questions.image.store' => ['POST', 'questions/{exam_question}/image', 404, 404],
+        'api.questions.image.destroy' => ['DELETE', 'questions/{exam_question}/image', 404, 404],
+        'api.question-options.image.show' => ['GET', 'question-options/{exam_option}/image', 404, 404],
+        'api.question-options.image.store' => ['POST', 'question-options/{exam_option}/image', 404, 404],
+        'api.question-options.image.destroy' => ['DELETE', 'question-options/{exam_option}/image', 404, 404],
+        // Reading an exam file and copying questions (§22.4, §22.17): the owner's exams only.
+        'api.exams.import' => ['POST', 'exams/{exam}/import', 404, 404],
+        'api.exams.import.estimate' => ['POST', 'exams/{exam}/import/estimate', 404, 404],
+        'api.exams.page-images.store' => ['POST', 'exams/{exam}/page-images', 404, 404],
+        'api.exam-page-images.show' => ['GET', 'exam-page-images/{exam_page_image}', 404, 404],
+        // Even a teacher of the same school who guesses the document id gets 404 (§22.4).
+        'api.exams.documents.file' => ['GET', 'exams/{exam}/documents/{exam_document}/file', 404, 404],
+        'api.questions.figure' => ['PUT', 'questions/{exam_question}/figure', 404, 404],
+        'api.question-options.figure' => ['PUT', 'question-options/{exam_option}/figure', 404, 404],
+        // The library lists the caller's own exams only: anyone gets an answer, never others' questions.
+        'api.teacher.exam-questions' => ['GET', 'teacher/exam-questions', self::OK, self::OK],
+        'api.exams.copy-questions' => ['POST', 'exams/{exam}/copy-questions', 404, 404],
         'api.questions.update' => ['PATCH', 'questions/{question}', 404, 404],
         'api.questions.destroy' => ['DELETE', 'questions/{question}', 404, 404],
         'api.questions.rubric.draft' => ['POST', 'questions/{question}/rubric/draft', 404, 404],
@@ -188,6 +245,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.courses.index' => ['GET', 'student/courses', self::OK, self::OK],
         // A classmate reads the same course (their own values only); another school's student does not see it.
         'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
+        // Their own row of the latest publication only (§23.12): a classmate reads their own row, another school's student nothing.
+        'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
+        'api.student.courses.grade' => ['GET', 'student/courses/{own_course}/grade', self::OK, 404],
         // Always the signed-in student's own lines (§20.9).
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
         // Always the signed-in student's own shared texts (§20.5).
@@ -400,10 +460,22 @@ class AuthorizationMatrixTest extends TestCase
             '{unit}' => $this->unitA->id,
             '{lesson_plan}' => $this->lessonPlanA->id,
             '{analysis}' => $this->analysisA->id,
+            '{exam}' => $this->examA->id,
+            '{exam_section}' => $this->examSectionA->id,
+            '{exam_question}' => $this->examQuestionA->id,
+            '{exam_option}' => $this->examOptionA->id,
+            '{exam_scan}' => $this->examScanA->id,
+            '{exam_response}' => $this->examResponseA->id,
+            '{exam_page_image}' => $this->examPageImageA->id,
+            '{exam_document}' => $this->examDocumentA->id,
+            '{gradebook_item}' => $this->gradebookItemA->id,
         ]);
 
         if ($uri === 'scans') {
             return $request->post($path, $this->scanBody(), ['Accept' => 'application/json']);
+        }
+        if ($uri === 'exam-sheets') {
+            return $request->post($path, $this->examSheetBody(), ['Accept' => 'application/json']);
         }
 
         return $request->json($method, $path, []);

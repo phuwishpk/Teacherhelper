@@ -50,6 +50,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $ai_explanation Gemini's text once the teacher edited the explanation (§19.4)
  * @property string|null $explanation_source ai|template|reused|teacher
  * @property string|null $auto_rule blank_ink|cnn_match: decided by code without Gemini (§21.3)
+ * @property array<string, mixed>|null $exam_answer exam answer sheets (§22.14): {sheet_no, version_no, selected, value, doubts}
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
  * @property Carbon|null $created_at
@@ -116,6 +117,7 @@ class Response extends Model
         'ai_explanation',
         'explanation_source',
         'auto_rule',
+        'exam_answer',
         'reviewed_by',
         'reviewed_at',
     ];
@@ -145,6 +147,7 @@ class Response extends Model
             'final_error_types' => 'array',
             'explanation_edited' => 'boolean',
             'reviewed_at' => 'datetime',
+            'exam_answer' => 'array',
         ];
     }
 

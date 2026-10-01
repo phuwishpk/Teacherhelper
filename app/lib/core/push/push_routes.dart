@@ -13,6 +13,7 @@ import '../router/app_router.dart';
 /// | `results_published` | student | `submission_id`     | result detail        |
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
 /// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
+/// | `grades_published`  | student | `course_id`         | the course grade     |
 ///
 /// Only these types are routed; anything else just opens the app. Returns
 /// null when the message is not for this user's role.
@@ -41,6 +42,10 @@ String? routeForPush(Map<String, String> data, User user) {
       // Google Classroom "ตีกลับให้ถ่ายใหม่" (§18.2): the reason is shown
       // at the top of the results tab.
       'retake_requested' => AppRoutes.student,
+      // The course grade was published (§23.7, §23.11).
+      'grades_published' when id('course_id') != null =>
+        AppRoutes.myCourseGrade(id('course_id')!),
+      'grades_published' => AppRoutes.student,
       _ => null,
     };
   }

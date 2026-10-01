@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/drift.dart' show DatabaseConnection, Value;
 import 'package:drift/native.dart';
 import 'package:eduvision/core/api/api_client.dart';
 import 'package:eduvision/core/auth/auth_repository.dart';
@@ -97,6 +97,16 @@ Future<File?> _seed(AppDatabase db, {Directory? dir}) async {
         ),
       );
   await db
+      .into(db.cachedExamKits)
+      .insert(
+        CachedExamKitsCompanion.insert(
+          assignmentId: const Value(301),
+          kitHash: 'h',
+          json: '{}',
+          fetchedAt: DateTime.utc(2026, 10, 1),
+        ),
+      );
+  await db
       .into(db.modelCache)
       .insert(
         ModelCacheCompanion.insert(
@@ -114,6 +124,7 @@ Future<Map<String, int>> _counts(AppDatabase db) async => {
   'scan_queue': (await db.select(db.scanQueue).get()).length,
   'cached_rosters': (await db.select(db.cachedRosters).get()).length,
   'cached_layouts': (await db.select(db.cachedLayouts).get()).length,
+  'cached_exam_kits': (await db.select(db.cachedExamKits).get()).length,
   'model_cache': (await db.select(db.modelCache).get()).length,
 };
 
@@ -121,12 +132,14 @@ const _wiped = {
   'scan_queue': 0,
   'cached_rosters': 0,
   'cached_layouts': 0,
+  'cached_exam_kits': 0,
   'model_cache': 1,
 };
 const _untouched = {
   'scan_queue': 1,
   'cached_rosters': 1,
   'cached_layouts': 1,
+  'cached_exam_kits': 1,
   'model_cache': 1,
 };
 

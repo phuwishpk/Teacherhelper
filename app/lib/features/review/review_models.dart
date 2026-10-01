@@ -1,3 +1,4 @@
+import 'exam_answer.dart';
 import 'fuzzy_trace.dart';
 import 'review_labels.dart';
 
@@ -108,6 +109,7 @@ class ReviewItem {
     this.submissionStatus,
     this.submissionPageId,
     this.autoRule,
+    this.examAnswer,
   });
 
   /// The response id.
@@ -139,6 +141,15 @@ class ReviewItem {
   /// How code decided this answer without Gemini (DESIGN §21.3):
   /// `blank_ink` ("ไม่ได้ตอบ"), `cnn_match` ("อ่านด้วย CNN") or null.
   final String? autoRule;
+
+  /// An answer read from an exam answer sheet (DESIGN §22.11), else null.
+  final ExamQueueAnswer? examAnswer;
+
+  bool get isExam => examAnswer != null;
+
+  /// The number the teacher sees on the sheet: the sheet number of an exam
+  /// answer, else the question position.
+  int get displayNumber => examAnswer?.sheetNo ?? questionPosition;
 
   bool get isAutoBlank => autoRule == autoRuleBlankInk;
   bool get isCnnMatch => autoRule == autoRuleCnnMatch;
@@ -222,6 +233,7 @@ class ReviewItem {
           (json['submission_status'] ?? submission?['status']) as String?,
       submissionPageId: _int(json['submission_page_id']),
       autoRule: json['auto_rule'] as String?,
+      examAnswer: ExamQueueAnswer.fromJson(json['exam_answer']),
     );
   }
 }
@@ -525,6 +537,7 @@ class ResponseDetail {
     this.explanationSource,
     this.totalOverridden = false,
     this.autoRule,
+    this.exam,
   });
 
   final int id;
@@ -588,6 +601,12 @@ class ResponseDetail {
 
   /// `blank_ink` / `cnn_match` / null (DESIGN §21.3), see [ReviewItem.autoRule].
   final String? autoRule;
+
+  /// An answer read from an exam answer sheet (DESIGN §22.11): the page,
+  /// the marks and the teacher's reading. Null for homework.
+  final ExamAnswerView? exam;
+
+  bool get isExam => exam != null;
 
   bool get isAutoBlank => autoRule == autoRuleBlankInk;
   bool get isCnnMatch => autoRule == autoRuleCnnMatch;
@@ -664,6 +683,7 @@ class ResponseDetail {
         json['total_overridden'] ?? submission?['total_overridden'],
       ),
       autoRule: json['auto_rule'] as String?,
+      exam: ExamAnswerView.fromJson(json['exam']),
     );
   }
 }

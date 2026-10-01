@@ -1,0 +1,901 @@
+{
+ "about": "Golden fixtures of ExamSheetScorer (DESIGN §22.9): run by backend/tests/Unit/Exams/ExamSheetScorerTest.php and app/test/exams/exam_sheet_scorer_test.dart. Keep both copies identical.",
+ "cases": [
+  {
+   "name": "every row of the scoring table on a one-version sheet",
+   "version_count": 1,
+   "page": 1,
+   "version_fill": null,
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       3
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     },
+     {
+      "sheet_no": 3,
+      "question_id": 503,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 4,
+      "question_id": 504,
+      "type": "mcq",
+      "points": 2,
+      "accepted_options": [
+       2,
+       4
+      ]
+     },
+     {
+      "sheet_no": 5,
+      "question_id": 505,
+      "type": "true_false",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 6,
+      "question_id": 506,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 7,
+      "question_id": 507,
+      "type": "mcq",
+      "points": 2,
+      "accepted_options": [
+       2,
+       4
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.91,
+     "4": 0.01
+    },
+    "2": {
+     "1": 0.88,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "3": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "4": {
+     "1": 0.02,
+     "2": 0.9,
+     "3": 0.02,
+     "4": 0.85
+    },
+    "5": {
+     "1": 0.3,
+     "2": 0.02
+    },
+    "6": {
+     "1": 0.8,
+     "2": 0.25,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "7": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.77
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 1,
+    "version_source": "single",
+    "version_doubtful": false,
+    "score": 4,
+    "max_score": 9,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       3
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     },
+     {
+      "sheet_no": 2,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     },
+     {
+      "sheet_no": 3,
+      "selected": [],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     },
+     {
+      "sheet_no": 4,
+      "selected": [
+       2,
+       4
+      ],
+      "value": null,
+      "score": 0,
+      "doubts": [
+       "double_mark"
+      ]
+     },
+     {
+      "sheet_no": 5,
+      "selected": [],
+      "value": null,
+      "score": 0,
+      "doubts": [
+       "ambiguous_mark"
+      ]
+     },
+     {
+      "sheet_no": 6,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": [
+       "ambiguous_mark"
+      ]
+     },
+     {
+      "sheet_no": 7,
+      "selected": [
+       4
+      ],
+      "value": null,
+      "score": 2,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "fill thresholds: 0.45 is a mark, 0.20 is unclear, below 0.20 is blank",
+   "version_count": 1,
+   "page": 1,
+   "version_fill": null,
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 3,
+      "question_id": 503,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 4,
+      "question_id": 504,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.45,
+     "2": 0.0
+    },
+    "2": {
+     "1": 0.4499,
+     "2": 0.0
+    },
+    "3": {
+     "1": 0.2,
+     "2": 0.0
+    },
+    "4": {
+     "1": 0.1999,
+     "2": 0.0
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 1,
+    "version_source": "single",
+    "version_doubtful": false,
+    "score": 1,
+    "max_score": 4,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     },
+     {
+      "sheet_no": 2,
+      "selected": [],
+      "value": null,
+      "score": 0,
+      "doubts": [
+       "ambiguous_mark"
+      ]
+     },
+     {
+      "sheet_no": 3,
+      "selected": [],
+      "value": null,
+      "score": 0,
+      "doubts": [
+       "ambiguous_mark"
+      ]
+     },
+     {
+      "sheet_no": 4,
+      "selected": [],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "version ข from its bubble uses the key of version ข (displayed positions)",
+   "version_count": 2,
+   "page": 1,
+   "version_fill": {
+    "1": 0.02,
+    "2": 0.93
+   },
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       3
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 1,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       4
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "2": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.9,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 2,
+    "version_source": "bubble",
+    "version_doubtful": false,
+    "score": 1,
+    "max_score": 2,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     },
+     {
+      "sheet_no": 2,
+      "selected": [
+       3
+      ],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same marks read as version ก score differently",
+   "version_count": 2,
+   "page": 1,
+   "version_fill": {
+    "1": 0.88,
+    "2": 0.01
+   },
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       3
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 1,
+      "question_id": 502,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     },
+     {
+      "sheet_no": 2,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       4
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "2": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.9,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 1,
+    "version_source": "bubble",
+    "version_doubtful": false,
+    "score": 0,
+    "max_score": 2,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     },
+     {
+      "sheet_no": 2,
+      "selected": [
+       3
+      ],
+      "value": null,
+      "score": 0,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "an unclear second version bubble keeps the clear one and flags it",
+   "version_count": 4,
+   "page": 1,
+   "version_fill": {
+    "1": 0.3,
+    "2": 0.02,
+    "3": 0.95,
+    "4": 0.01
+   },
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     }
+    ],
+    "3": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       3
+      ]
+     }
+    ],
+    "4": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       4
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.02,
+     "2": 0.03,
+     "3": 0.9,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 3,
+    "version_source": "bubble",
+    "version_doubtful": true,
+    "score": 1,
+    "max_score": 1,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       3
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "two marked version bubbles: version unknown, nothing scored",
+   "version_count": 2,
+   "page": 1,
+   "version_fill": {
+    "1": 0.9,
+    "2": 0.8
+   },
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": null,
+    "version_source": null,
+    "version_doubtful": false,
+    "score": null,
+    "max_score": null,
+    "items": []
+   }
+  },
+  {
+   "name": "no version bubble marked: version unknown",
+   "version_count": 3,
+   "page": 1,
+   "version_fill": {
+    "1": 0.1,
+    "2": 0.05,
+    "3": 0.3
+   },
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     }
+    ],
+    "3": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       3
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": null,
+    "version_source": null,
+    "version_doubtful": false,
+    "score": null,
+    "max_score": null,
+    "items": []
+   }
+  },
+  {
+   "name": "page 2 takes the version of page 1",
+   "version_count": 2,
+   "page": 2,
+   "version_fill": null,
+   "page_one_version": 2,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 101,
+      "question_id": 601,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 101,
+      "question_id": 601,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "101": {
+     "1": 0.02,
+     "2": 0.9,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 2,
+    "version_source": "page_one",
+    "version_doubtful": false,
+    "score": 1,
+    "max_score": 1,
+    "items": [
+     {
+      "sheet_no": 101,
+      "selected": [
+       2
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "page 2 before page 1 waits for page 1",
+   "version_count": 2,
+   "page": 2,
+   "version_fill": null,
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 101,
+      "question_id": 601,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ],
+    "2": [
+     {
+      "sheet_no": 101,
+      "question_id": 601,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       2
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "101": {
+     "1": 0.02,
+     "2": 0.9,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": null,
+    "version_source": null,
+    "version_doubtful": false,
+    "score": null,
+    "max_score": null,
+    "items": []
+   }
+  },
+  {
+   "name": "page 2 of a one-version exam is version ก",
+   "version_count": 1,
+   "page": 2,
+   "version_fill": null,
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 101,
+      "question_id": 601,
+      "type": "mcq",
+      "points": 1,
+      "accepted_options": [
+       1
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "101": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 1,
+    "version_source": "single",
+    "version_doubtful": false,
+    "score": 1,
+    "max_score": 1,
+    "items": [
+     {
+      "sheet_no": 101,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 1,
+      "doubts": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "readings without a key item are skipped",
+   "version_count": 1,
+   "page": 1,
+   "version_fill": null,
+   "page_one_version": null,
+   "keys": {
+    "1": [
+     {
+      "sheet_no": 1,
+      "question_id": 501,
+      "type": "mcq",
+      "points": 1.5,
+      "accepted_options": [
+       1
+      ]
+     }
+    ]
+   },
+   "rows": {
+    "1": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    },
+    "2": {
+     "1": 0.9,
+     "2": 0.03,
+     "3": 0.02,
+     "4": 0.01
+    }
+   },
+   "digits": {},
+   "expected": {
+    "version_no": 1,
+    "version_source": "single",
+    "version_doubtful": false,
+    "score": 1.5,
+    "max_score": 1.5,
+    "items": [
+     {
+      "sheet_no": 1,
+      "selected": [
+       1
+      ],
+      "value": null,
+      "score": 1.5,
+      "doubts": []
+     }
+    ]
+   }
+  }
+ ]
+}

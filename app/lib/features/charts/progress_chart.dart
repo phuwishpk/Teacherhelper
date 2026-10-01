@@ -310,6 +310,12 @@ class ProgressLineChart extends StatelessWidget {
     isUtc: true,
   );
 
+  /// The day's last observation of that line came from an exam (§22.13).
+  bool _fromExam(LineBarSpot spot) {
+    final daily = series[spot.barIndex].daily;
+    return spot.spotIndex < daily.length && daily[spot.spotIndex].fromExam;
+  }
+
   @override
   Widget build(BuildContext context) {
     final days = [
@@ -378,7 +384,8 @@ class ProgressLineChart extends StatelessWidget {
                 for (final spot in spots)
                   LineTooltipItem(
                     '${series[spot.barIndex].skill.code} '
-                    '${spot.y.round()}% · ${shortThaiDay(_day(spot.x))}',
+                    '${spot.y.round()}% · ${shortThaiDay(_day(spot.x))}'
+                    '${_fromExam(spot) ? ' · ข้อสอบ' : ''}',
                     TextStyle(
                       color: Theme.of(context).colorScheme.onInverseSurface,
                       fontSize: 12,

@@ -82,6 +82,15 @@ void main() {
       );
       expect(routeForPush({'type': 'results_published'}, _student), '/student');
       expect(
+        routeForPush({'type': 'grades_published', 'course_id': '9'}, _student),
+        '/student/courses/9/grade',
+      );
+      expect(routeForPush({'type': 'grades_published'}, _student), '/student');
+      expect(
+        routeForPush({'type': 'grades_published', 'course_id': '9'}, _teacher),
+        isNull,
+      );
+      expect(
         routeForPush({'type': 'grading_done', 'assignment_id': '5'}, _student),
         isNull,
       );

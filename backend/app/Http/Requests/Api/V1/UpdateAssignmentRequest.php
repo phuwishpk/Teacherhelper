@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Domain\Exams\ExamVersions;
 use App\Models\Assignment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
  * PATCH /api/v1/assignments/{id} — {title?, strictness?, due_at?, status?,
- * mode?, accept_late?, score_only?, course_id?, lesson_plan_id?}. status accepts `closed` (close) and
+ * mode?, accept_late?, score_only?, course_id?, lesson_plan_id?, and for an
+ * exam grading_method?, version_count?, duration_minutes?,
+ * show_key_to_students?, manual_full_marks?, and gradebook_category_id?,
+ * excluded_from_grade? (DESIGN §23.3)}. status accepts `closed` (close) and
  * `draft` (reopen). `ready` is reached only through POST
  * /assignments/{id}/layout (worksheet, checks the rubrics) or POST
  * /assignments/{id}/answer-key/approve (freeform, DESIGN §19.5). mode
@@ -37,6 +41,15 @@ class UpdateAssignmentRequest extends FormRequest
             'score_only' => ['sometimes', 'required', 'boolean'],
             'course_id' => ['sometimes', 'required', 'integer', 'min:1'],
             'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            // Exams (DESIGN §22.15): kind cannot change; the other exam fields are checked against the row in the controller.
+            'kind' => ['sometimes', 'required', Rule::in(Assignment::KINDS)],
+            'grading_method' => ['sometimes', 'required', Rule::in(Assignment::GRADING_METHODS)],
+            'version_count' => ['sometimes', 'required', 'integer', 'min:1', 'max:'.ExamVersions::maxVersions()],
+            'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
+            'show_key_to_students' => ['sometimes', 'required', 'boolean'],
+            'manual_full_marks' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
+            'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'excluded_from_grade' => ['sometimes', 'required', 'boolean'],
         ];
     }
 

@@ -725,6 +725,16 @@ class $ScanQueueTable extends ScanQueue
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       ).withConverter<ScanState>($ScanQueueTable.$converterstate);
+  @override
+  late final GeneratedColumnWithTypeConverter<ScanKind, String> kind =
+      GeneratedColumn<String>(
+        'kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('worksheet'),
+      ).withConverter<ScanKind>($ScanQueueTable.$converterkind);
   static const VerificationMeta _metaJsonMeta = const VerificationMeta(
     'metaJson',
   );
@@ -819,6 +829,7 @@ class $ScanQueueTable extends ScanQueue
   List<GeneratedColumn> get $columns => [
     clientScanId,
     state,
+    kind,
     metaJson,
     filesJson,
     attempts,
@@ -932,6 +943,12 @@ class $ScanQueueTable extends ScanQueue
           data['${effectivePrefix}state'],
         )!,
       ),
+      kind: $ScanQueueTable.$converterkind.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}kind'],
+        )!,
+      ),
       metaJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}meta_json'],
@@ -974,12 +991,17 @@ class $ScanQueueTable extends ScanQueue
 
   static TypeConverter<ScanState, String> $converterstate =
       const ScanStateConverter();
+  static TypeConverter<ScanKind, String> $converterkind =
+      const ScanKindConverter();
 }
 
 class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
   /// UUID generated on the phone; the server de-duplicates on it.
   final String clientScanId;
   final ScanState state;
+
+  /// Worksheet page or exam answer-sheet page (added in schema 2).
+  final ScanKind kind;
 
   /// The `meta` JSON object exactly as it will be sent (§9.4).
   final String metaJson;
@@ -1000,6 +1022,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
   const ScanQueueData({
     required this.clientScanId,
     required this.state,
+    required this.kind,
     required this.metaJson,
     required this.filesJson,
     required this.attempts,
@@ -1016,6 +1039,11 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
     {
       map['state'] = Variable<String>(
         $ScanQueueTable.$converterstate.toSql(state),
+      );
+    }
+    {
+      map['kind'] = Variable<String>(
+        $ScanQueueTable.$converterkind.toSql(kind),
       );
     }
     map['meta_json'] = Variable<String>(metaJson);
@@ -1039,6 +1067,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
     return ScanQueueCompanion(
       clientScanId: Value(clientScanId),
       state: Value(state),
+      kind: Value(kind),
       metaJson: Value(metaJson),
       filesJson: Value(filesJson),
       attempts: Value(attempts),
@@ -1064,6 +1093,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
     return ScanQueueData(
       clientScanId: serializer.fromJson<String>(json['clientScanId']),
       state: serializer.fromJson<ScanState>(json['state']),
+      kind: serializer.fromJson<ScanKind>(json['kind']),
       metaJson: serializer.fromJson<String>(json['metaJson']),
       filesJson: serializer.fromJson<String>(json['filesJson']),
       attempts: serializer.fromJson<int>(json['attempts']),
@@ -1080,6 +1110,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
     return <String, dynamic>{
       'clientScanId': serializer.toJson<String>(clientScanId),
       'state': serializer.toJson<ScanState>(state),
+      'kind': serializer.toJson<ScanKind>(kind),
       'metaJson': serializer.toJson<String>(metaJson),
       'filesJson': serializer.toJson<String>(filesJson),
       'attempts': serializer.toJson<int>(attempts),
@@ -1094,6 +1125,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
   ScanQueueData copyWith({
     String? clientScanId,
     ScanState? state,
+    ScanKind? kind,
     String? metaJson,
     String? filesJson,
     int? attempts,
@@ -1105,6 +1137,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
   }) => ScanQueueData(
     clientScanId: clientScanId ?? this.clientScanId,
     state: state ?? this.state,
+    kind: kind ?? this.kind,
     metaJson: metaJson ?? this.metaJson,
     filesJson: filesJson ?? this.filesJson,
     attempts: attempts ?? this.attempts,
@@ -1122,6 +1155,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
           ? data.clientScanId.value
           : this.clientScanId,
       state: data.state.present ? data.state.value : this.state,
+      kind: data.kind.present ? data.kind.value : this.kind,
       metaJson: data.metaJson.present ? data.metaJson.value : this.metaJson,
       filesJson: data.filesJson.present ? data.filesJson.value : this.filesJson,
       attempts: data.attempts.present ? data.attempts.value : this.attempts,
@@ -1142,6 +1176,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
     return (StringBuffer('ScanQueueData(')
           ..write('clientScanId: $clientScanId, ')
           ..write('state: $state, ')
+          ..write('kind: $kind, ')
           ..write('metaJson: $metaJson, ')
           ..write('filesJson: $filesJson, ')
           ..write('attempts: $attempts, ')
@@ -1158,6 +1193,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
   int get hashCode => Object.hash(
     clientScanId,
     state,
+    kind,
     metaJson,
     filesJson,
     attempts,
@@ -1173,6 +1209,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
       (other is ScanQueueData &&
           other.clientScanId == this.clientScanId &&
           other.state == this.state &&
+          other.kind == this.kind &&
           other.metaJson == this.metaJson &&
           other.filesJson == this.filesJson &&
           other.attempts == this.attempts &&
@@ -1186,6 +1223,7 @@ class ScanQueueData extends DataClass implements Insertable<ScanQueueData> {
 class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
   final Value<String> clientScanId;
   final Value<ScanState> state;
+  final Value<ScanKind> kind;
   final Value<String> metaJson;
   final Value<String> filesJson;
   final Value<int> attempts;
@@ -1198,6 +1236,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
   const ScanQueueCompanion({
     this.clientScanId = const Value.absent(),
     this.state = const Value.absent(),
+    this.kind = const Value.absent(),
     this.metaJson = const Value.absent(),
     this.filesJson = const Value.absent(),
     this.attempts = const Value.absent(),
@@ -1211,6 +1250,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
   ScanQueueCompanion.insert({
     required String clientScanId,
     required ScanState state,
+    this.kind = const Value.absent(),
     required String metaJson,
     required String filesJson,
     this.attempts = const Value.absent(),
@@ -1229,6 +1269,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
   static Insertable<ScanQueueData> custom({
     Expression<String>? clientScanId,
     Expression<String>? state,
+    Expression<String>? kind,
     Expression<String>? metaJson,
     Expression<String>? filesJson,
     Expression<int>? attempts,
@@ -1242,6 +1283,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
     return RawValuesInsertable({
       if (clientScanId != null) 'client_scan_id': clientScanId,
       if (state != null) 'state': state,
+      if (kind != null) 'kind': kind,
       if (metaJson != null) 'meta_json': metaJson,
       if (filesJson != null) 'files_json': filesJson,
       if (attempts != null) 'attempts': attempts,
@@ -1257,6 +1299,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
   ScanQueueCompanion copyWith({
     Value<String>? clientScanId,
     Value<ScanState>? state,
+    Value<ScanKind>? kind,
     Value<String>? metaJson,
     Value<String>? filesJson,
     Value<int>? attempts,
@@ -1270,6 +1313,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
     return ScanQueueCompanion(
       clientScanId: clientScanId ?? this.clientScanId,
       state: state ?? this.state,
+      kind: kind ?? this.kind,
       metaJson: metaJson ?? this.metaJson,
       filesJson: filesJson ?? this.filesJson,
       attempts: attempts ?? this.attempts,
@@ -1291,6 +1335,11 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
     if (state.present) {
       map['state'] = Variable<String>(
         $ScanQueueTable.$converterstate.toSql(state.value),
+      );
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(
+        $ScanQueueTable.$converterkind.toSql(kind.value),
       );
     }
     if (metaJson.present) {
@@ -1328,6 +1377,7 @@ class ScanQueueCompanion extends UpdateCompanion<ScanQueueData> {
     return (StringBuffer('ScanQueueCompanion(')
           ..write('clientScanId: $clientScanId, ')
           ..write('state: $state, ')
+          ..write('kind: $kind, ')
           ..write('metaJson: $metaJson, ')
           ..write('filesJson: $filesJson, ')
           ..write('attempts: $attempts, ')
@@ -1711,6 +1761,317 @@ class ModelCacheCompanion extends UpdateCompanion<ModelCacheData> {
   }
 }
 
+class $CachedExamKitsTable extends CachedExamKits
+    with TableInfo<$CachedExamKitsTable, CachedExamKit> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedExamKitsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _assignmentIdMeta = const VerificationMeta(
+    'assignmentId',
+  );
+  @override
+  late final GeneratedColumn<int> assignmentId = GeneratedColumn<int>(
+    'assignment_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _kitHashMeta = const VerificationMeta(
+    'kitHash',
+  );
+  @override
+  late final GeneratedColumn<String> kitHash = GeneratedColumn<String>(
+    'kit_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _jsonMeta = const VerificationMeta('json');
+  @override
+  late final GeneratedColumn<String> json = GeneratedColumn<String>(
+    'json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fetchedAt = GeneratedColumn<DateTime>(
+    'fetched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    assignmentId,
+    kitHash,
+    json,
+    fetchedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_exam_kits';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedExamKit> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('assignment_id')) {
+      context.handle(
+        _assignmentIdMeta,
+        assignmentId.isAcceptableOrUnknown(
+          data['assignment_id']!,
+          _assignmentIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('kit_hash')) {
+      context.handle(
+        _kitHashMeta,
+        kitHash.isAcceptableOrUnknown(data['kit_hash']!, _kitHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kitHashMeta);
+    }
+    if (data.containsKey('json')) {
+      context.handle(
+        _jsonMeta,
+        json.isAcceptableOrUnknown(data['json']!, _jsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_jsonMeta);
+    }
+    if (data.containsKey('fetched_at')) {
+      context.handle(
+        _fetchedAtMeta,
+        fetchedAt.isAcceptableOrUnknown(data['fetched_at']!, _fetchedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fetchedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {assignmentId};
+  @override
+  CachedExamKit map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedExamKit(
+      assignmentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}assignment_id'],
+      )!,
+      kitHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kit_hash'],
+      )!,
+      json: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}json'],
+      )!,
+      fetchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fetched_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CachedExamKitsTable createAlias(String alias) {
+    return $CachedExamKitsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedExamKit extends DataClass implements Insertable<CachedExamKit> {
+  final int assignmentId;
+  final String kitHash;
+
+  /// The `data` object of `GET /exams/{id}/scan-kit` as JSON text.
+  final String json;
+  final DateTime fetchedAt;
+  const CachedExamKit({
+    required this.assignmentId,
+    required this.kitHash,
+    required this.json,
+    required this.fetchedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['assignment_id'] = Variable<int>(assignmentId);
+    map['kit_hash'] = Variable<String>(kitHash);
+    map['json'] = Variable<String>(json);
+    map['fetched_at'] = Variable<DateTime>(fetchedAt);
+    return map;
+  }
+
+  CachedExamKitsCompanion toCompanion(bool nullToAbsent) {
+    return CachedExamKitsCompanion(
+      assignmentId: Value(assignmentId),
+      kitHash: Value(kitHash),
+      json: Value(json),
+      fetchedAt: Value(fetchedAt),
+    );
+  }
+
+  factory CachedExamKit.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedExamKit(
+      assignmentId: serializer.fromJson<int>(json['assignmentId']),
+      kitHash: serializer.fromJson<String>(json['kitHash']),
+      json: serializer.fromJson<String>(json['json']),
+      fetchedAt: serializer.fromJson<DateTime>(json['fetchedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'assignmentId': serializer.toJson<int>(assignmentId),
+      'kitHash': serializer.toJson<String>(kitHash),
+      'json': serializer.toJson<String>(json),
+      'fetchedAt': serializer.toJson<DateTime>(fetchedAt),
+    };
+  }
+
+  CachedExamKit copyWith({
+    int? assignmentId,
+    String? kitHash,
+    String? json,
+    DateTime? fetchedAt,
+  }) => CachedExamKit(
+    assignmentId: assignmentId ?? this.assignmentId,
+    kitHash: kitHash ?? this.kitHash,
+    json: json ?? this.json,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+  );
+  CachedExamKit copyWithCompanion(CachedExamKitsCompanion data) {
+    return CachedExamKit(
+      assignmentId: data.assignmentId.present
+          ? data.assignmentId.value
+          : this.assignmentId,
+      kitHash: data.kitHash.present ? data.kitHash.value : this.kitHash,
+      json: data.json.present ? data.json.value : this.json,
+      fetchedAt: data.fetchedAt.present ? data.fetchedAt.value : this.fetchedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedExamKit(')
+          ..write('assignmentId: $assignmentId, ')
+          ..write('kitHash: $kitHash, ')
+          ..write('json: $json, ')
+          ..write('fetchedAt: $fetchedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(assignmentId, kitHash, json, fetchedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedExamKit &&
+          other.assignmentId == this.assignmentId &&
+          other.kitHash == this.kitHash &&
+          other.json == this.json &&
+          other.fetchedAt == this.fetchedAt);
+}
+
+class CachedExamKitsCompanion extends UpdateCompanion<CachedExamKit> {
+  final Value<int> assignmentId;
+  final Value<String> kitHash;
+  final Value<String> json;
+  final Value<DateTime> fetchedAt;
+  const CachedExamKitsCompanion({
+    this.assignmentId = const Value.absent(),
+    this.kitHash = const Value.absent(),
+    this.json = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+  });
+  CachedExamKitsCompanion.insert({
+    this.assignmentId = const Value.absent(),
+    required String kitHash,
+    required String json,
+    required DateTime fetchedAt,
+  }) : kitHash = Value(kitHash),
+       json = Value(json),
+       fetchedAt = Value(fetchedAt);
+  static Insertable<CachedExamKit> custom({
+    Expression<int>? assignmentId,
+    Expression<String>? kitHash,
+    Expression<String>? json,
+    Expression<DateTime>? fetchedAt,
+  }) {
+    return RawValuesInsertable({
+      if (assignmentId != null) 'assignment_id': assignmentId,
+      if (kitHash != null) 'kit_hash': kitHash,
+      if (json != null) 'json': json,
+      if (fetchedAt != null) 'fetched_at': fetchedAt,
+    });
+  }
+
+  CachedExamKitsCompanion copyWith({
+    Value<int>? assignmentId,
+    Value<String>? kitHash,
+    Value<String>? json,
+    Value<DateTime>? fetchedAt,
+  }) {
+    return CachedExamKitsCompanion(
+      assignmentId: assignmentId ?? this.assignmentId,
+      kitHash: kitHash ?? this.kitHash,
+      json: json ?? this.json,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (assignmentId.present) {
+      map['assignment_id'] = Variable<int>(assignmentId.value);
+    }
+    if (kitHash.present) {
+      map['kit_hash'] = Variable<String>(kitHash.value);
+    }
+    if (json.present) {
+      map['json'] = Variable<String>(json.value);
+    }
+    if (fetchedAt.present) {
+      map['fetched_at'] = Variable<DateTime>(fetchedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedExamKitsCompanion(')
+          ..write('assignmentId: $assignmentId, ')
+          ..write('kitHash: $kitHash, ')
+          ..write('json: $json, ')
+          ..write('fetchedAt: $fetchedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1718,6 +2079,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CachedRostersTable cachedRosters = $CachedRostersTable(this);
   late final $ScanQueueTable scanQueue = $ScanQueueTable(this);
   late final $ModelCacheTable modelCache = $ModelCacheTable(this);
+  late final $CachedExamKitsTable cachedExamKits = $CachedExamKitsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1727,6 +2089,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cachedRosters,
     scanQueue,
     modelCache,
+    cachedExamKits,
   ];
 }
 
@@ -2139,6 +2502,7 @@ typedef $$ScanQueueTableCreateCompanionBuilder =
     ScanQueueCompanion Function({
       required String clientScanId,
       required ScanState state,
+      Value<ScanKind> kind,
       required String metaJson,
       required String filesJson,
       Value<int> attempts,
@@ -2153,6 +2517,7 @@ typedef $$ScanQueueTableUpdateCompanionBuilder =
     ScanQueueCompanion Function({
       Value<String> clientScanId,
       Value<ScanState> state,
+      Value<ScanKind> kind,
       Value<String> metaJson,
       Value<String> filesJson,
       Value<int> attempts,
@@ -2181,6 +2546,12 @@ class $$ScanQueueTableFilterComposer
   ColumnWithTypeConverterFilters<ScanState, ScanState, String> get state =>
       $composableBuilder(
         column: $table.state,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnWithTypeConverterFilters<ScanKind, ScanKind, String> get kind =>
+      $composableBuilder(
+        column: $table.kind,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
 
@@ -2244,6 +2615,11 @@ class $$ScanQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get metaJson => $composableBuilder(
     column: $table.metaJson,
     builder: (column) => ColumnOrderings(column),
@@ -2301,6 +2677,9 @@ class $$ScanQueueTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<ScanState, String> get state =>
       $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<ScanKind, String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   GeneratedColumn<String> get metaJson =>
       $composableBuilder(column: $table.metaJson, builder: (column) => column);
@@ -2364,6 +2743,7 @@ class $$ScanQueueTableTableManager
               ({
                 Value<String> clientScanId = const Value.absent(),
                 Value<ScanState> state = const Value.absent(),
+                Value<ScanKind> kind = const Value.absent(),
                 Value<String> metaJson = const Value.absent(),
                 Value<String> filesJson = const Value.absent(),
                 Value<int> attempts = const Value.absent(),
@@ -2376,6 +2756,7 @@ class $$ScanQueueTableTableManager
               }) => ScanQueueCompanion(
                 clientScanId: clientScanId,
                 state: state,
+                kind: kind,
                 metaJson: metaJson,
                 filesJson: filesJson,
                 attempts: attempts,
@@ -2390,6 +2771,7 @@ class $$ScanQueueTableTableManager
               ({
                 required String clientScanId,
                 required ScanState state,
+                Value<ScanKind> kind = const Value.absent(),
                 required String metaJson,
                 required String filesJson,
                 Value<int> attempts = const Value.absent(),
@@ -2402,6 +2784,7 @@ class $$ScanQueueTableTableManager
               }) => ScanQueueCompanion.insert(
                 clientScanId: clientScanId,
                 state: state,
+                kind: kind,
                 metaJson: metaJson,
                 filesJson: filesJson,
                 attempts: attempts,
@@ -2657,6 +3040,194 @@ typedef $$ModelCacheTableProcessedTableManager =
       ModelCacheData,
       PrefetchHooks Function()
     >;
+typedef $$CachedExamKitsTableCreateCompanionBuilder =
+    CachedExamKitsCompanion Function({
+      Value<int> assignmentId,
+      required String kitHash,
+      required String json,
+      required DateTime fetchedAt,
+    });
+typedef $$CachedExamKitsTableUpdateCompanionBuilder =
+    CachedExamKitsCompanion Function({
+      Value<int> assignmentId,
+      Value<String> kitHash,
+      Value<String> json,
+      Value<DateTime> fetchedAt,
+    });
+
+class $$CachedExamKitsTableFilterComposer
+    extends Composer<_$AppDatabase, $CachedExamKitsTable> {
+  $$CachedExamKitsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get assignmentId => $composableBuilder(
+    column: $table.assignmentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kitHash => $composableBuilder(
+    column: $table.kitHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedExamKitsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CachedExamKitsTable> {
+  $$CachedExamKitsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get assignmentId => $composableBuilder(
+    column: $table.assignmentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kitHash => $composableBuilder(
+    column: $table.kitHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedExamKitsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CachedExamKitsTable> {
+  $$CachedExamKitsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get assignmentId => $composableBuilder(
+    column: $table.assignmentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get kitHash =>
+      $composableBuilder(column: $table.kitHash, builder: (column) => column);
+
+  GeneratedColumn<String> get json =>
+      $composableBuilder(column: $table.json, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => column);
+}
+
+class $$CachedExamKitsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CachedExamKitsTable,
+          CachedExamKit,
+          $$CachedExamKitsTableFilterComposer,
+          $$CachedExamKitsTableOrderingComposer,
+          $$CachedExamKitsTableAnnotationComposer,
+          $$CachedExamKitsTableCreateCompanionBuilder,
+          $$CachedExamKitsTableUpdateCompanionBuilder,
+          (
+            CachedExamKit,
+            BaseReferences<_$AppDatabase, $CachedExamKitsTable, CachedExamKit>,
+          ),
+          CachedExamKit,
+          PrefetchHooks Function()
+        > {
+  $$CachedExamKitsTableTableManager(
+    _$AppDatabase db,
+    $CachedExamKitsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedExamKitsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedExamKitsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedExamKitsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> assignmentId = const Value.absent(),
+                Value<String> kitHash = const Value.absent(),
+                Value<String> json = const Value.absent(),
+                Value<DateTime> fetchedAt = const Value.absent(),
+              }) => CachedExamKitsCompanion(
+                assignmentId: assignmentId,
+                kitHash: kitHash,
+                json: json,
+                fetchedAt: fetchedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> assignmentId = const Value.absent(),
+                required String kitHash,
+                required String json,
+                required DateTime fetchedAt,
+              }) => CachedExamKitsCompanion.insert(
+                assignmentId: assignmentId,
+                kitHash: kitHash,
+                json: json,
+                fetchedAt: fetchedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$CachedExamKitsTable, CachedExamKit>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $CachedExamKitsTable,
+                    CachedExamKit
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedExamKitsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CachedExamKitsTable,
+      CachedExamKit,
+      $$CachedExamKitsTableFilterComposer,
+      $$CachedExamKitsTableOrderingComposer,
+      $$CachedExamKitsTableAnnotationComposer,
+      $$CachedExamKitsTableCreateCompanionBuilder,
+      $$CachedExamKitsTableUpdateCompanionBuilder,
+      (
+        CachedExamKit,
+        BaseReferences<_$AppDatabase, $CachedExamKitsTable, CachedExamKit>,
+      ),
+      CachedExamKit,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2669,4 +3240,6 @@ class $AppDatabaseManager {
       $$ScanQueueTableTableManager(_db, _db.scanQueue);
   $$ModelCacheTableTableManager get modelCache =>
       $$ModelCacheTableTableManager(_db, _db.modelCache);
+  $$CachedExamKitsTableTableManager get cachedExamKits =>
+      $$CachedExamKitsTableTableManager(_db, _db.cachedExamKits);
 }

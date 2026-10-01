@@ -190,6 +190,24 @@ class FakeApiServer {
       case ('GET', ['courses', final id]):
         final row = _find(courses, id);
         return row == null ? _notFound() : (200, {'data': row});
+      // A course whose gradebook is not set up yet (DESIGN §23.11): the
+      // assignment and exam forms show "ยังไม่ระบุหมวด".
+      case ('GET', ['courses', final id, 'gradebook', 'settings']):
+        return _find(courses, id) == null
+            ? _notFound()
+            : (
+                200,
+                {
+                  'data': {
+                    'configured': false,
+                    'template': null,
+                    'categories': <Object>[],
+                    'cutoffs': [80, 75, 70, 65, 60, 55, 50],
+                    'default_cutoffs': [80, 75, 70, 65, 60, 55, 50],
+                    'uncategorised_count': 0,
+                  },
+                },
+              );
       case ('GET', ['assignments']):
         return (
           200,

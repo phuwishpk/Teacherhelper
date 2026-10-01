@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:eduvision/core/api/response_crops.dart';
+import 'package:eduvision/features/review/exam_answer.dart';
 import 'package:eduvision/features/review/review_models.dart';
 import 'package:eduvision/features/review/review_repository.dart';
 import 'package:eduvision/features/settings/ai_key.dart';
@@ -214,6 +215,25 @@ class FakeReviewRepository extends Fake implements ReviewRepository {
   @override
   Future<void> confirmReplace(int scanId) async {
     confirmed.add(scanId);
+  }
+
+  /// `POST /exam-responses/{id}/resolve` calls; [resolveError] is thrown.
+  final examResolutions = <(int, Map<String, dynamic>)>[];
+  Object? resolveError;
+
+  @override
+  Future<ResponseDetail> resolveExamAnswer(
+    int id,
+    ExamResolution resolution,
+  ) async {
+    examResolutions.add((id, resolution.toJson()));
+    if (resolveError case final e?) throw e;
+    final json = {
+      ...responses[id] ?? responseJson(id: id),
+      'reviewed_at': '2026-10-01T02:00:00Z',
+    };
+    responses[id] = json;
+    return ResponseDetail.fromJson(json);
   }
 
   /// `guidance` of each "ให้ AI เขียนใหม่".

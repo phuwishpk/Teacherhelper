@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Pages\PageUploads;
 use App\Domain\Pages\WholePageSubmissions;
 use App\Exceptions\ApiException;
@@ -51,6 +52,8 @@ class StudentAssignmentController extends Controller
         $studentId = (int) $request->user()->id;
         $assignments = self::own($request)
             ->where('status', Assignment::STATUS_READY)
+            // Exams are done on paper only (DESIGN §22.1).
+            ->where('kind', Assignment::KIND_HOMEWORK)
             ->with(['classroom:id,name', 'subject:id,name'])
             ->orderByRaw('CASE WHEN due_at IS NULL THEN 1 ELSE 0 END')
             ->orderBy('due_at')
@@ -97,6 +100,7 @@ class StudentAssignmentController extends Controller
     {
         $student = $request->user();
         $assignment = self::own($request)->findOrFail($id);
+        ExamGuard::homeworkOnly($assignment);
         if (! $assignment->isReady()) {
             throw new ApiException('การบ้านนี้ยังไม่เปิดให้ส่ง หรือปิดรับแล้ว', 'assignment_not_ready', 409);
         }

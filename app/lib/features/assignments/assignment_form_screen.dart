@@ -9,6 +9,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/course_picker.dart';
+import '../gradebook/gradebook_category_field.dart';
 import 'assignment.dart';
 import 'assignments_providers.dart';
 
@@ -54,7 +55,8 @@ class AssignmentEditScreen extends ConsumerWidget {
 /// strictness and due date; its course (required for a new assignment, the
 /// subject follows it) and lesson plan (DESIGN §20.1); the mode (worksheet
 /// or not, §19.5) while it is a draft without a layout, "รับงานส่งช้า" and
-/// "เฉพาะคะแนน" (§21.7).
+/// "เฉพาะคะแนน" (§21.7), and its gradebook category and "ไม่นับเกรด"
+/// (§23.3).
 class AssignmentFormScreen extends ConsumerStatefulWidget {
   const AssignmentFormScreen({
     super.key,
@@ -83,6 +85,12 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   late AssignmentMode _mode = widget.existing?.mode ?? AssignmentMode.worksheet;
   late bool _acceptLate = widget.existing?.acceptLate ?? true;
   late bool _scoreOnly = widget.existing?.scoreOnly ?? false;
+  late int? _categoryId = widget.existing?.gradebookCategoryId;
+
+  /// The teacher picked a category; otherwise a new assignment (or one
+  /// moved to another course) gets the course's homework default.
+  bool _categoryTouched = false;
+  late bool _excluded = widget.existing?.excludedFromGrade ?? false;
   bool _busy = false;
 
   /// The server refuses a mode change once a layout was built or work was
@@ -129,6 +137,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     });
     try {
       if (widget.existing case final a?) {
+        final categoryChanged =
+            _categoryTouched && _categoryId != a.gradebookCategoryId;
         await ref
             .read(assignmentDetailProvider(a.id).notifier)
             .edit(
@@ -144,6 +154,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   ? _lessonPlanId
                   : null,
               clearLessonPlan: _lessonPlanId == null && a.lessonPlanId != null,
+              gradebookCategoryId: categoryChanged ? _categoryId : null,
+              clearGradebookCategory: categoryChanged && _categoryId == null,
+              excludedFromGrade: _excluded != a.excludedFromGrade
+                  ? _excluded
+                  : null,
             );
         if (!mounted) return;
         showMessage(context, 'บันทึกแล้ว');
@@ -161,6 +176,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               mode: _mode,
               acceptLate: _acceptLate,
               scoreOnly: _scoreOnly,
+              gradebookCategoryId: _categoryTouched ? _categoryId : null,
+              excludedFromGrade: _excluded,
             );
         if (!mounted) return;
         showMessage(
@@ -238,7 +255,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 value: courseId,
                 isRequired: widget.existing?.courseId != null || !editing,
                 onChanged: (c) => setState(() {
-                  if (c?.id != _courseId) _lessonPlanId = null;
+                  if (c?.id != _courseId) {
+                    _lessonPlanId = null;
+                    _categoryId = null;
+                    _categoryTouched = false;
+                  }
                   _courseId = c?.id;
                 }),
               ),
@@ -251,6 +272,23 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 onChanged: (v) => setState(() => _lessonPlanId = v),
               ),
               const SizedBox(height: 16),
+              GradebookCategoryField(
+                courseId: courseId,
+                value: _categoryId,
+                allowNone: editing,
+                showHomeworkDefault:
+                    !_categoryTouched &&
+                    (!editing || courseId != widget.existing?.courseId),
+                onChanged: (v) => setState(() {
+                  _categoryId = v;
+                  _categoryTouched = true;
+                }),
+              ),
+              ExcludedFromGradeSwitch(
+                value: _excluded,
+                onChanged: (v) => setState(() => _excluded = v),
+              ),
+              const SizedBox(height: 8),
             ],
             Text('รูปแบบการบ้าน', style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),

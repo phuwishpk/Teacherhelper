@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Validator;
 
 /**
  * The documents one read uses ({document_ids[], page_from?, page_to?},
- * DESIGN §19.5): uploaded in the teacher's school, at most
+ * DESIGN §19.5): uploaded by the teacher (their own source_documents
+ * rows; a colleague's id is "not found", so an id guessed in the same school
+ * reveals neither the read nor the file), at most
  * eduvision.documents.max_pages pages in all, or one PDF with a page range
  * of at most that many pages (422 document_too_long without one).
  *
@@ -65,6 +67,7 @@ final readonly class DocumentSelection
         $ids = array_values(array_map('intval', $validated['document_ids'] ?? []));
         $found = SourceDocument::query()
             ->where('school_id', $teacher->school_id)
+            ->where('uploaded_by', $teacher->id)
             ->whereIn('id', $ids === [] ? [0] : $ids)
             ->get()
             ->keyBy('id');

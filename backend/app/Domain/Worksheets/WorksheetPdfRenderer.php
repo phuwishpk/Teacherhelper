@@ -67,9 +67,9 @@ class WorksheetPdfRenderer
                 $page = $index + 1;
                 $mpdf->AddPage();
                 $this->withoutPageBreaks($mpdf, function () use ($mpdf, $markers, $assignment, $student, $page, $plan, $layout) {
-                    $this->drawMarkers($mpdf, $markers);
+                    self::drawMarkers($mpdf, $markers);
                     $this->drawHeader($mpdf, $assignment, $student, $page, $plan->pageCount());
-                    $this->drawQr($mpdf, $this->qrSigner->sign($assignment->id, $student?->id ?? 0, $page, $layout->version));
+                    self::drawQr($mpdf, $this->qrSigner->sign($assignment->id, $student?->id ?? 0, $page, $layout->version));
                     $this->drawFooter($mpdf, $layout->version);
                 });
 
@@ -82,7 +82,8 @@ class WorksheetPdfRenderer
         return $mpdf->Output('', Destination::STRING_RETURN);
     }
 
-    private function drawMarkers(Mpdf $mpdf, ArucoMarkers $markers): void
+    /** The ArUco markers 0–3 centred on the frame corners (shared with exam answer sheets). */
+    public static function drawMarkers(Mpdf $mpdf, ArucoMarkers $markers): void
     {
         $size = $markers->imageSizeMm;
         foreach ($markers->markers as $marker) {
@@ -131,7 +132,8 @@ class WorksheetPdfRenderer
         $mpdf->Line(WorksheetGeometry::CONTENT_LEFT, WorksheetGeometry::HEADER_RULE_Y, WorksheetGeometry::CONTENT_RIGHT, WorksheetGeometry::HEADER_RULE_Y);
     }
 
-    private function drawQr(Mpdf $mpdf, string $payload): void
+    /** The signed QR at its fixed place in the header (shared with exam answer sheets). */
+    public static function drawQr(Mpdf $mpdf, string $payload): void
     {
         $qr = new QrCode($payload, 'M');
         $qr->disableBorder(); // the blank paper around it is the quiet zone

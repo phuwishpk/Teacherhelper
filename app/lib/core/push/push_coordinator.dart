@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/assignments/assignments_providers.dart';
 import '../../features/google_classroom/google_providers.dart';
+import '../../features/gradebook/gradebook_providers.dart';
 import '../../features/home/teacher_attention.dart';
 import '../../features/results/results_repository.dart';
 import '../../features/review/review_providers.dart';
@@ -170,6 +171,10 @@ final pushCoordinatorProvider = Provider<PushCoordinator>((ref) {
         ref.invalidate(studentResultsProvider);
       case 'retake_requested':
         ref.invalidate(studentRetakeRequestsProvider);
+      case 'grades_published':
+        ref.invalidate(myGradesProvider);
+        final courseId = int.tryParse(data['course_id'] ?? '');
+        if (courseId != null) ref.invalidate(myCourseGradeProvider(courseId));
       case 'classroom_work_imported':
         ref.invalidate(assignmentsProvider);
         ref.invalidate(teacherAttentionProvider);

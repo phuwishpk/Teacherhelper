@@ -5,6 +5,8 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
 import '../charts/score_distribution_chart.dart';
+import '../exams/exam_option_analysis.dart';
+import '../exams/exam_option_analysis_card.dart';
 import '../review/review_labels.dart';
 import 'analytics_models.dart';
 import 'analytics_repository.dart';
@@ -25,7 +27,9 @@ String errorTypeShortLabel(ErrorType t) => switch (t) {
 
 /// Item analysis of one assignment for the teacher (DESIGN §9.6, §14.3):
 /// the most-missed questions, p and r per question, and the skill x error
-/// type heatmap. Built from published results only.
+/// type heatmap. Built from published results only. An exam shows the
+/// option analysis of §22.13 in place of the heatmap (exam answers carry no
+/// error types).
 class AssignmentAnalyticsScreen extends ConsumerWidget {
   const AssignmentAnalyticsScreen({super.key, required this.assignmentId});
 
@@ -34,10 +38,9 @@ class AssignmentAnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final analytics = ref.watch(assignmentAnalyticsProvider(assignmentId));
-    final title = ref
-        .watch(assignmentDetailProvider(assignmentId))
-        .value
-        ?.title;
+    final assignment = ref.watch(assignmentDetailProvider(assignmentId)).value;
+    final title = assignment?.title;
+    final isExam = assignment?.isExam ?? false;
     return Scaffold(
       appBar: AppBar(
         title: Text(title == null ? 'วิเคราะห์ผล' : 'วิเคราะห์ผล: $title'),
@@ -47,8 +50,14 @@ class AssignmentAnalyticsScreen extends ConsumerWidget {
         onRetry: () =>
             ref.invalidate(assignmentAnalyticsProvider(assignmentId)),
         data: (a) => RefreshIndicator(
-          onRefresh: () =>
-              ref.refresh(assignmentAnalyticsProvider(assignmentId).future),
+          onRefresh: () {
+            if (isExam) {
+              ref.invalidate(examOptionAnalysisProvider(assignmentId));
+            }
+            return ref.refresh(
+              assignmentAnalyticsProvider(assignmentId).future,
+            );
+          },
           child: a.publishedCount == 0 || a.items.isEmpty
               ? ListView(
                   children: const [
@@ -85,12 +94,15 @@ class AssignmentAnalyticsScreen extends ConsumerWidget {
                         child: _ItemTable(analytics: a),
                       ),
                       const SizedBox(height: 16),
-                      _Section(
-                        title: 'ทักษะ × ประเภทข้อผิดพลาด',
-                        subtitle:
-                            'จำนวนข้อที่ครูยืนยันประเภทข้อผิดพลาดนั้น แตะค้างที่ช่องเพื่อดูรายละเอียด',
-                        child: _ErrorHeatmap(analytics: a),
-                      ),
+                      if (isExam)
+                        ExamOptionAnalysisCard(examId: assignmentId)
+                      else
+                        _Section(
+                          title: 'ทักษะ × ประเภทข้อผิดพลาด',
+                          subtitle:
+                              'จำนวนข้อที่ครูยืนยันประเภทข้อผิดพลาดนั้น แตะค้างที่ช่องเพื่อดูรายละเอียด',
+                          child: _ErrorHeatmap(analytics: a),
+                        ),
                       const SizedBox(height: 24),
                     ],
                   ),

@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 /**
  * GET /assignments/{id}/analytics (DESIGN §9.6, §14.3): p, r from the 27 %
- * groups once 20 students are published, most-missed order and the
+ * groups (by the total that counts, §22.13) once 20 students are published, most-missed order and the
  * skill × error type heatmap.
  */
 class AssignmentAnalyticsTest extends TestCase
@@ -84,6 +84,28 @@ class AssignmentAnalyticsTest extends TestCase
             ['ค 1.1 ป.5/2', 'concept', 11],
         ], $heat);
         $this->assertSame($this->s1->id, $res->json('data.skill_error_counts.0.skill.id'));
+    }
+
+    public function test_the_27_percent_groups_use_the_total_that_counts(): void
+    {
+        $this->publishAll();
+        // Totals taken from Classroom (total_override, §19.3, §22.13) turn the ranking around:
+        // the six best by total_score become the bottom six and the other way round.
+        foreach ($this->students as $index => $student) {
+            $i = $index + 1;
+            $override = match (true) {
+                $i <= 11 && $i % 2 === 1 => 0.5,
+                $i > 11 && $i % 2 === 0 => 9.5,
+                default => null,
+            };
+            $this->submission($student)->forceFill(['total_override' => $override])->save();
+        }
+
+        $items = collect($this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/analytics")->assertOk()->json('data.items'))->keyBy('question_id');
+        $this->assertEquals(-1.0, $items[$this->q['q1']->id]['r']);
+        $this->assertEquals(-0.5, $items[$this->q['q4']->id]['r']);
+        // p never depends on the groups.
+        $this->assertEquals(0.5, $items[$this->q['q1']->id]['p']);
     }
 
     public function test_r_needs_twenty_published_students_and_unpublished_work_never_counts(): void

@@ -36,6 +36,7 @@ class SchemaTest extends TestCase
             'skill_observations.observed_at' => ['skill_observations', 'observed_at'],
             'mastery.updated_at' => ['mastery', 'updated_at'],
             'practice_attempts.created_at' => ['practice_attempts', 'created_at'],
+            'gradebook_publications.published_at' => ['gradebook_publications', 'published_at'],
         ];
     }
 

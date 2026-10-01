@@ -39,6 +39,7 @@ class QueuedScan {
   QueuedScan({
     required this.clientScanId,
     required this.state,
+    this.kind = ScanKind.worksheet,
     required this.meta,
     required this.files,
     required this.attempts,
@@ -52,6 +53,7 @@ class QueuedScan {
   factory QueuedScan.fromRow(ScanQueueData row) => QueuedScan(
     clientScanId: row.clientScanId,
     state: row.state,
+    kind: row.kind,
     meta: (jsonDecode(row.metaJson) as Map).cast<String, dynamic>(),
     files: (jsonDecode(row.filesJson) as Map).cast<String, String>(),
     attempts: row.attempts,
@@ -64,6 +66,9 @@ class QueuedScan {
 
   final String clientScanId;
   final ScanState state;
+
+  /// Worksheet page (`POST /scans`) or exam answer sheet (`POST /exam-sheets`).
+  final ScanKind kind;
 
   /// The `meta` object of DESIGN §9.4.
   final Map<String, dynamic> meta;

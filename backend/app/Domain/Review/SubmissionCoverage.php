@@ -3,6 +3,8 @@
 namespace App\Domain\Review;
 
 use App\Models\Assignment;
+use App\Models\ExamSheetRead;
+use App\Models\ExamVersion;
 use App\Models\Layout;
 use App\Models\Question;
 use App\Models\Scan;
@@ -22,6 +24,12 @@ use App\Models\Submission;
  * else the assignment's current layout), minus questions deleted after
  * printing (LayoutPageMatcher skips those as well). With no layout row at
  * all, every question of the assignment is expected.
+ *
+ * An exam (DESIGN §22.11) expects every question: its layout regions carry
+ * the number on the sheet, not a question, and which question a number is
+ * depends on the student's version. The page of a question is looked up
+ * through that version's question_order once a page of the submission has
+ * a version, else null.
  */
 final class SubmissionCoverage
 {
@@ -82,6 +90,9 @@ final class SubmissionCoverage
     public function expected(Submission $submission): array
     {
         $positions = $this->positions();
+        if ($this->assignment->isExam()) {
+            return $this->examExpected($submission, $positions);
+        }
         $layout = $this->layout($this->versionOf($submission)) ?? $this->layout($this->assignment->current_layout_version);
         if ($layout === null) {
             return array_fill_keys(array_keys($positions), null);
@@ -113,6 +124,39 @@ final class SubmissionCoverage
         sort($pages);
 
         return $pages;
+    }
+
+    /**
+     * @param  array<int, int>  $positions
+     * @return array<int, int|null>
+     */
+    private function examExpected(Submission $submission, array $positions): array
+    {
+        $expected = array_fill_keys(array_keys($positions), null);
+        $layout = $this->layout($this->versionOf($submission)) ?? $this->layout($this->assignment->current_layout_version);
+        $versionNo = ExamSheetRead::query()
+            ->whereIn('scan_id', Scan::query()->select('id')->where('submission_id', $submission->id)->where('state', Scan::STATE_ACTIVE))
+            ->whereNotNull('version_no')
+            ->orderBy('scan_id')
+            ->value('version_no');
+        $order = $versionNo === null ? null : ExamVersion::query()
+            ->where('assignment_id', $this->assignment->id)
+            ->where('version_no', $versionNo)
+            ->first()?->question_order;
+        if ($layout === null || ! is_array($order)) {
+            return $expected;
+        }
+        foreach ($layout->pages as $index => $page) {
+            $pageNo = (int) ($page['page'] ?? $index + 1);
+            foreach ((array) ($page['regions'] ?? []) as $region) {
+                $questionId = (int) ($order[((int) ($region['sheet_no'] ?? 0)) - 1] ?? 0);
+                if (array_key_exists($questionId, $expected)) {
+                    $expected[$questionId] = $pageNo;
+                }
+            }
+        }
+
+        return $expected;
     }
 
     private function versionOf(Submission $submission): ?int

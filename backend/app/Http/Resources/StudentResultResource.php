@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Exams\ExamResult;
 use App\Models\Appeal;
 use App\Models\Response;
 use App\Models\Submission;
@@ -31,6 +32,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * max_score is the assignment's full marks (Σ questions.max_points, loaded
  * as the `max_score` attribute by the controller).
  *
+ * kind is homework | exam. The detail of an exam (DESIGN §22.12, §22.15)
+ * has no per-question `responses` (always []); it adds ExamResult:
+ * {version_label, total, max, sections: [{title, score, max}], items: [...]
+ * | null}, items only when the teacher shows the key to students.
+ *
  * @mixin Submission
  */
 class StudentResultResource extends JsonResource
@@ -48,6 +54,7 @@ class StudentResultResource extends JsonResource
         return [
             'id' => $submission->id,
             'submission_id' => $submission->id,
+            'kind' => $assignment?->kind ?? 'homework',
             'assignment_id' => $submission->assignment_id,
             'title' => $assignment?->title,
             'subject_name' => $subject?->name,
@@ -62,11 +69,12 @@ class StudentResultResource extends JsonResource
             'published_at' => $submission->published_at?->toIso8601String(),
             // Detail only: the teacher asked for a new photo in Google Classroom (§18.2).
             'retake_reason' => $this->when(array_key_exists('retake_reason', $submission->getAttributes()), fn () => $submission->getAttribute('retake_reason')),
-            'responses' => $this->whenLoaded('responses', fn () => $submission->responses
+            'responses' => $this->whenLoaded('responses', fn () => $assignment?->isExam() ? [] : $submission->responses
                 ->sortBy(fn (Response $r) => [(int) $r->question?->position, $r->id])
                 ->values()
                 ->map(fn (Response $r) => self::answer($r))
                 ->all()),
+            $this->mergeWhen($assignment?->isExam() === true && $submission->relationLoaded('responses'), fn () => ExamResult::forStudent($submission, $assignment)),
         ];
     }
 

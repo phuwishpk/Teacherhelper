@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Pages\PageFiles;
 use App\Domain\Pages\PageUploads;
 use App\Domain\Pages\WholePageSubmissions;
@@ -42,6 +43,7 @@ class SubmissionPageController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('scan', $assignment);
+        ExamGuard::homeworkOnly($assignment);
         ClassroomStudent::query()
             ->where('classroom_id', $assignment->classroom_id)
             ->where('student_id', $studentId)

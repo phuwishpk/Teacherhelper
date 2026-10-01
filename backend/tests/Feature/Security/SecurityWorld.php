@@ -13,7 +13,15 @@ use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\Course;
 use App\Models\DocumentExtraction;
+use App\Models\ExamImport;
+use App\Models\ExamPageImage;
+use App\Models\ExamSection;
+use App\Models\ExamSheetRead;
 use App\Models\GoogleAccount;
+use App\Models\GradebookCategory;
+use App\Models\GradebookItem;
+use App\Models\GradebookPublication;
+use App\Models\GradebookPublishedGrade;
 use App\Models\GradeConflict;
 use App\Models\Layout;
 use App\Models\LearningResource;
@@ -22,10 +30,12 @@ use App\Models\LoginCardPrint;
 use App\Models\ModelVersion;
 use App\Models\PracticeItem;
 use App\Models\Question;
+use App\Models\QuestionOption;
 use App\Models\Response;
 use App\Models\Scan;
 use App\Models\School;
 use App\Models\Skill;
+use App\Models\SourceDocument;
 use App\Models\StudentAnalysis;
 use App\Models\Subject;
 use App\Models\Submission;
@@ -91,6 +101,25 @@ trait SecurityWorld
 
     protected Assignment $assignmentA;
 
+    /** An exam of classroom A (DESIGN §22) with one mcq section, one question and images. */
+    protected Assignment $examA;
+
+    protected ExamSection $examSectionA;
+
+    protected Question $examQuestionA;
+
+    protected QuestionOption $examOptionA;
+
+    /** A photo of the exam file examA read (§22.4) and the page image its figures come from. */
+    protected SourceDocument $examDocumentA;
+
+    protected ExamPageImage $examPageImageA;
+
+    /** A scanned answer-sheet page of the exam and its answer (§22.11), not published. */
+    protected Scan $examScanA;
+
+    protected Response $examResponseA;
+
     protected Question $shortA;
 
     protected Question $openA;
@@ -135,6 +164,12 @@ trait SecurityWorld
     protected Unit $unitA;
 
     protected LessonPlan $lessonPlanA;
+
+    /** A gradebook item of course A in classroom A (DESIGN §23.3). */
+    protected GradebookItem $gradebookItemA;
+
+    /** Published grades of classroom A in course A: rows of student A and A2 (§23.7). */
+    protected GradebookPublication $publicationA;
 
     protected function makeSecurityWorld(): void
     {
@@ -219,6 +254,23 @@ trait SecurityWorld
         $this->unitA = Unit::create(['course_id' => $this->courseA->id, 'position' => 1, 'title' => 'จำนวนนับ']);
         $this->lessonPlanA = LessonPlan::create(['course_id' => $this->courseA->id, 'unit_id' => $this->unitA->id, 'position' => 1, 'title' => 'การอ่านจำนวน']);
 
+        // The gradebook of course A (§23): one category, an item of classroom A and a publication.
+        $categoryA = GradebookCategory::create(['course_id' => $this->courseA->id, 'position' => 1, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'is_homework_default' => true]);
+        $this->gradebookItemA = GradebookItem::create([
+            'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'category_id' => $categoryA->id,
+            'name' => 'การแต่งกาย', 'max_points' => 10, 'position' => 1, 'created_by' => $this->teacherA->id,
+        ]);
+        $this->publicationA = GradebookPublication::create([
+            'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'categories' => [['id' => $categoryA->id, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'drop_lowest' => 0]],
+            'cutoffs' => [80, 75, 70, 65, 60, 55, 50], 'published_by' => $this->teacherA->id, 'published_at' => now(),
+        ]);
+        foreach ([$this->studentA, $this->studentA2] as $student) {
+            GradebookPublishedGrade::create([
+                'publication_id' => $this->publicationA->id, 'student_id' => $student->id, 'breakdown' => [],
+                'total' => 80, 'total_rounded' => 80, 'grade' => 4, 'attendance_warning' => false,
+            ]);
+        }
+
         $this->practiceItemA = PracticeItem::create([
             'school_id' => $this->schoolA->id, 'skill_id' => $this->skillA->id, 'answer_type' => 'numeric',
             'prompt_text' => '3 + 4 = ?', 'options' => null,
@@ -247,6 +299,54 @@ trait SecurityWorld
             'submission_id' => $this->submissionA->id, 'import_id' => $this->importA->id,
             'app_score' => 5, 'classroom_score' => 4, 'detected_at' => now(),
         ]);
+
+        // An exam of classroom A with a figure on its question and on its first option (§22.15).
+        $this->examA = Assignment::factory()->for_classroom($this->classroomA)->create([
+            'subject_id' => $this->subject->id, 'course_id' => $this->courseA->id, 'kind' => Assignment::KIND_EXAM,
+            'grading_method' => Assignment::GRADING_APP, 'due_at' => now()->addWeek(), 'title' => 'สอบกลางภาค',
+        ]);
+        $this->examSectionA = ExamSection::create(['assignment_id' => $this->examA->id, 'position' => 1, 'type' => ExamSection::TYPE_MCQ, 'option_count' => 4]);
+        $this->examQuestionA = Question::create([
+            'assignment_id' => $this->examA->id, 'section_id' => $this->examSectionA->id, 'position' => 1, 'type' => Question::TYPE_MCQ,
+            'prompt_text' => '2 + 2 = ?', 'max_points' => 1, 'answer_key' => ['accepted_options' => [2]],
+            'origin' => Question::ORIGIN_TEACHER, 'approved_at' => now(),
+        ]);
+        foreach (['3', '4', '5', '6'] as $i => $text) {
+            $option = QuestionOption::create(['question_id' => $this->examQuestionA->id, 'position' => $i + 1, 'text' => $text]);
+            $this->examOptionA ??= $option;
+        }
+        $this->examQuestionA->forceFill(['prompt_image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/q{$this->examQuestionA->id}.jpg"])->save();
+        $this->examOptionA->forceFill(['image_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/figures/o{$this->examOptionA->id}.jpg"])->save();
+        $disk->put($this->examQuestionA->prompt_image_path, 'jpeg-bytes');
+        $disk->put($this->examOptionA->image_path, 'jpeg-bytes');
+        // The exam read a photo of its paper (§22.4): the import row lets the owner download it again.
+        $this->examDocumentA = SourceDocument::create([
+            'school_id' => $this->schoolA->id, 'uploaded_by' => $this->teacherA->id, 'sha256' => str_repeat('e', 64),
+            'original_name' => 'exam.jpg', 'mime_type' => 'image/jpeg', 'size_bytes' => 10, 'page_count' => 1,
+            'file_path' => "documents/{$this->schoolA->id}/".str_repeat('e', 64).'.jpg',
+        ]);
+        $disk->put($this->examDocumentA->file_path, 'jpeg-bytes');
+        ExamImport::create([
+            'assignment_id' => $this->examA->id, 'documents' => [['source_document_id' => $this->examDocumentA->id, 'page_from' => 1, 'page_to' => 1]],
+            'requested_by' => $this->teacherA->id, 'applied_at' => now(),
+        ]);
+        $this->examPageImageA = ExamPageImage::create([
+            'school_id' => $this->schoolA->id, 'assignment_id' => $this->examA->id, 'source_document_id' => $this->examDocumentA->id,
+            'page_no' => 1, 'width_px' => 10, 'height_px' => 10, 'uploaded_by' => $this->teacherA->id,
+        ]);
+        $this->examPageImageA->forceFill(['file_path' => "exams/{$this->schoolA->id}/{$this->examA->id}/pages/{$this->examPageImageA->id}.jpg"])->save();
+        $disk->put($this->examPageImageA->file_path, 'jpeg-bytes');
+        $examSubmission = Submission::create(['assignment_id' => $this->examA->id, 'student_id' => $this->studentA->id, 'status' => Submission::STATUS_NEEDS_REVIEW]);
+        $this->examScanA = Scan::create([
+            'client_scan_id' => (string) Str::uuid(), 'submission_id' => $examSubmission->id, 'page_no' => 1, 'layout_version' => 1,
+            'uploaded_by' => $this->teacherA->id, 'scanned_at' => now(), 'blur_score' => 150.0, 'state' => Scan::STATE_ACTIVE,
+        ]);
+        ExamSheetRead::create(['scan_id' => $this->examScanA->id, 'assignment_id' => $this->examA->id, 'rows_fill' => ['1' => ['1' => 0.9, '2' => 0.9]]]);
+        $this->examResponseA = Response::create(['submission_id' => $examSubmission->id, 'question_id' => $this->examQuestionA->id, 'scan_id' => $this->examScanA->id]);
+        $this->examResponseA->forceFill([
+            'grading_state' => Response::STATE_SCORED, 'ai_score' => 0, 'ai_understanding' => 'not_yet', 'priority_band' => 'check',
+            'exam_answer' => ['sheet_no' => 1, 'version_no' => 1, 'selected' => [1, 2], 'value' => null, 'doubts' => ['double_mark']],
+        ])->save();
 
         // The analysis of student A in classroom A (§20.5), with a draft for the student.
         $this->analysisA = StudentAnalysis::create([
@@ -315,6 +415,27 @@ trait SecurityWorld
             'page' => UploadedFile::fake()->createWithContent('page.webp', $this->scanFixture('page.webp')),
             'crop_short' => UploadedFile::fake()->createWithContent('crop.webp', $this->scanFixture('crop.webp')),
             'crop_open' => UploadedFile::fake()->createWithContent('crop.webp', $this->scanFixture('crop.webp')),
+        ];
+    }
+
+    /**
+     * A validly signed answer-sheet page of examA (POST /exam-sheets, §22.11).
+     *
+     * @return array<string, mixed>
+     */
+    protected function examSheetBody(): array
+    {
+        $meta = [
+            'client_scan_id' => (string) Str::uuid(),
+            'qr' => app(QrSigner::class)->signExamSheet($this->examA->id, $this->studentA->id, 1, 1),
+            'scanned_at' => '2026-09-20T09:15:00+07:00',
+            'blur_score' => 182.4,
+            'rows' => ['1' => ['1' => 0.9, '2' => 0.02, '3' => 0.02, '4' => 0.02]],
+        ];
+
+        return [
+            'meta' => json_encode($meta),
+            'page' => UploadedFile::fake()->createWithContent('page.webp', $this->scanFixture('page.webp')),
         ];
     }
 }

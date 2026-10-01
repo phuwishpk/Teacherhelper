@@ -26,6 +26,8 @@ use Illuminate\Support\Carbon;
  * @property int $academic_year Buddhist year (พ.ศ.)
  * @property int|null $hours
  * @property string|null $description
+ * @property list<int>|null $grade_cutoffs the 7 minimums of grades 4 … 1 (DESIGN §23.2); NULL = the default
+ * @property string|null $gradebook_template the template the gradebook categories started from
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -44,6 +46,8 @@ class Course extends Model
         'academic_year',
         'hours',
         'description',
+        'grade_cutoffs',
+        'gradebook_template',
     ];
 
     protected $attributes = [
@@ -63,6 +67,7 @@ class Course extends Model
             'semester' => 'integer',
             'academic_year' => 'integer',
             'hours' => 'integer',
+            'grade_cutoffs' => 'array',
         ];
     }
 
@@ -112,5 +117,11 @@ class Course extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(Assignment::class);
+    }
+
+    /** The weighted gradebook categories in order (DESIGN §23.2). @return HasMany<GradebookCategory, $this> */
+    public function gradebookCategories(): HasMany
+    {
+        return $this->hasMany(GradebookCategory::class)->orderBy('position');
     }
 }

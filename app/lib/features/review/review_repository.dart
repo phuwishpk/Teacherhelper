@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/teacher_guidance.dart';
 import '../../core/auth/auth_repository.dart';
+import 'exam_answer.dart';
 import 'review_models.dart';
 
 /// Teacher review, publishing and appeals (DESIGN §9.5, §9.4 confirm-replace).
@@ -14,6 +15,11 @@ abstract class ReviewRepository {
 
   /// `PATCH /responses/{id}`: saving also marks the response reviewed.
   Future<ResponseDetail> saveReview(int id, ReviewDecision decision);
+
+  /// `POST /exam-responses/{id}/resolve` (DESIGN §22.11): the answer the
+  /// teacher sees the student meant on the sheet, scored by code and
+  /// marked reviewed. 409 `submission_published` once published.
+  Future<ResponseDetail> resolveExamAnswer(int id, ExamResolution resolution);
 
   /// `POST /responses/{id}/regenerate-explanation {guidance?}` with the
   /// teacher's "คำแนะนำถึง AI" (DESIGN §21.12). Returns the new explanation
@@ -91,6 +97,18 @@ class ApiReviewRepository implements ReviewRepository {
       return ResponseDetail.fromJson(unwrapJson(body));
     }
     return response(id);
+  }
+
+  @override
+  Future<ResponseDetail> resolveExamAnswer(
+    int id,
+    ExamResolution resolution,
+  ) async {
+    final res = await _dio.post<Object?>(
+      '/exam-responses/$id/resolve',
+      data: resolution.toJson(),
+    );
+    return ResponseDetail.fromJson(unwrapJson(res.data));
   }
 
   @override

@@ -31,6 +31,30 @@ class ScanStateConverter extends TypeConverter<ScanState, String> {
   String toSql(ScanState value) => value.dbValue;
 }
 
+/// What a queued scan is (DESIGN §22.14 `scan_queue.kind`): a worksheet
+/// page (`POST /scans`) or an exam answer-sheet page (`POST /exam-sheets`).
+enum ScanKind {
+  worksheet('worksheet'),
+  examSheet('exam_sheet');
+
+  const ScanKind(this.dbValue);
+
+  final String dbValue;
+
+  static ScanKind fromDb(String value) =>
+      values.firstWhere((k) => k.dbValue == value, orElse: () => worksheet);
+}
+
+class ScanKindConverter extends TypeConverter<ScanKind, String> {
+  const ScanKindConverter();
+
+  @override
+  ScanKind fromSql(String fromDb) => ScanKind.fromDb(fromDb);
+
+  @override
+  String toSql(ScanKind value) => value.dbValue;
+}
+
 /// One page of a layout version (DESIGN §5.3), cached for offline cropping.
 class CachedLayouts extends Table {
   IntColumn get assignmentId => integer()();
@@ -60,6 +84,11 @@ class ScanQueue extends Table {
   TextColumn get clientScanId => text()();
   TextColumn get state => text().map(const ScanStateConverter())();
 
+  /// Worksheet page or exam answer-sheet page (added in schema 2).
+  TextColumn get kind => text()
+      .map(const ScanKindConverter())
+      .withDefault(const Constant('worksheet'))();
+
   /// The `meta` JSON object exactly as it will be sent (§9.4).
   TextColumn get metaJson => text()();
 
@@ -81,6 +110,21 @@ class ScanQueue extends Table {
   Set<Column<Object>> get primaryKey => {clientScanId};
 }
 
+/// The scan kit of an exam (DESIGN §22.9, §22.14 `cached_exam_kits`):
+/// layouts, the key of every version and the roster, so answer sheets can be
+/// read and scored offline. Deleted after 30 days.
+class CachedExamKits extends Table {
+  IntColumn get assignmentId => integer()();
+  TextColumn get kitHash => text()();
+
+  /// The `data` object of `GET /exams/{id}/scan-kit` as JSON text.
+  TextColumn get json => text()();
+  DateTimeColumn get fetchedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {assignmentId};
+}
+
 /// Downloaded TFLite models (§9.8); one row per model name.
 class ModelCache extends Table {
   TextColumn get name => text()();
@@ -96,12 +140,25 @@ class ModelCache extends Table {
   Set<Column<Object>> get primaryKey => {name};
 }
 
-@DriftDatabase(tables: [CachedLayouts, CachedRosters, ScanQueue, ModelCache])
+@DriftDatabase(
+  tables: [CachedLayouts, CachedRosters, ScanQueue, ModelCache, CachedExamKits],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
+  /// 2: `scan_queue.kind` and `cached_exam_kits` (exam answer sheets).
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(scanQueue, scanQueue.kind);
+        await m.createTable(cachedExamKits);
+      }
+    },
+  );
 
   /// ISO-8601 text keeps the UTC flag of timestamps across a round trip.
   @override

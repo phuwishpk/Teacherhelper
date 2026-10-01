@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Domain\AnswerKeys\KeyCompleteness;
+use App\Domain\Exams\ExamKeyCheck;
 use Database\Factories\AssignmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -47,6 +48,16 @@ use Illuminate\Support\Carbon;
  * @property int|null $key_extraction_id
  * @property int|null $course_id required for new assignments (DESIGN §20.1); NULL for older ones and Classroom mirrors until approved
  * @property int|null $lesson_plan_id
+ * @property string $kind homework|exam (DESIGN §22.1)
+ * @property string|null $grading_method app|manual, exams only
+ * @property int $version_count 1..config('eduvision.exams.max_versions') shuffled versions (§22.5)
+ * @property int|null $duration_minutes
+ * @property bool $show_key_to_students
+ * @property float|null $manual_full_marks full marks of a grading_method = manual exam
+ * @property int $shuffle_nonce
+ * @property Carbon|null $structure_locked_at set by the first print of an exam (§22.2)
+ * @property int|null $gradebook_category_id the gradebook category of the course (DESIGN §23.3); NULL = not counted
+ * @property bool $excluded_from_grade "ไม่นับเกรด": shown in the gradebook, never in the formula
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -79,6 +90,20 @@ class Assignment extends Model
 
     public const KEY_AI_DRAFT = 'ai_draft';
 
+    public const KIND_HOMEWORK = 'homework';
+
+    public const KIND_EXAM = 'exam';
+
+    public const KINDS = [self::KIND_HOMEWORK, self::KIND_EXAM];
+
+    /** "ตรวจด้วยแอป": printed answer sheets scanned and scored by code (DESIGN §22.1). */
+    public const GRADING_APP = 'app';
+
+    /** "ครูตรวจเอง": the teacher grades outside the app and types the totals. */
+    public const GRADING_MANUAL = 'manual';
+
+    public const GRADING_METHODS = [self::GRADING_APP, self::GRADING_MANUAL];
+
     protected $fillable = [
         'school_id',
         'classroom_id',
@@ -99,6 +124,16 @@ class Assignment extends Model
         'key_extraction_id',
         'course_id',
         'lesson_plan_id',
+        'kind',
+        'grading_method',
+        'version_count',
+        'duration_minutes',
+        'show_key_to_students',
+        'manual_full_marks',
+        'shuffle_nonce',
+        'structure_locked_at',
+        'gradebook_category_id',
+        'excluded_from_grade',
     ];
 
     protected $attributes = [
@@ -108,6 +143,11 @@ class Assignment extends Model
         'source' => self::SOURCE_APP,
         'accept_late' => true,
         'score_only' => false,
+        'kind' => self::KIND_HOMEWORK,
+        'version_count' => 1,
+        'show_key_to_students' => false,
+        'shuffle_nonce' => 0,
+        'excluded_from_grade' => false,
     ];
 
     /**
@@ -127,6 +167,14 @@ class Assignment extends Model
             'lesson_plan_id' => 'integer',
             // Compared strictly with courses.subject_id (AssignmentCourses): PDO may return strings.
             'subject_id' => 'integer',
+            'version_count' => 'integer',
+            'duration_minutes' => 'integer',
+            'show_key_to_students' => 'boolean',
+            'manual_full_marks' => 'float',
+            'shuffle_nonce' => 'integer',
+            'structure_locked_at' => 'datetime',
+            'gradebook_category_id' => 'integer',
+            'excluded_from_grade' => 'boolean',
         ];
     }
 
@@ -154,6 +202,12 @@ class Assignment extends Model
         return $this->belongsTo(Course::class);
     }
 
+    /** @return BelongsTo<GradebookCategory, $this> */
+    public function gradebookCategory(): BelongsTo
+    {
+        return $this->belongsTo(GradebookCategory::class);
+    }
+
     /** @return BelongsTo<LessonPlan, $this> */
     public function lessonPlan(): BelongsTo
     {
@@ -170,6 +224,18 @@ class Assignment extends Model
     public function questions(): HasMany
     {
         return $this->hasMany(Question::class)->orderBy('position');
+    }
+
+    /** Sections of an exam in order (DESIGN §22.2). @return HasMany<ExamSection, $this> */
+    public function examSections(): HasMany
+    {
+        return $this->hasMany(ExamSection::class)->orderBy('position');
+    }
+
+    /** Stored permutations of the shuffled versions (DESIGN §22.5). @return HasMany<ExamVersion, $this> */
+    public function examVersions(): HasMany
+    {
+        return $this->hasMany(ExamVersion::class)->orderBy('version_no');
     }
 
     /** @return HasMany<Layout, $this> */
@@ -234,6 +300,23 @@ class Assignment extends Model
         return $this->mode === self::MODE_FREEFORM;
     }
 
+    public function isExam(): bool
+    {
+        return $this->kind === self::KIND_EXAM;
+    }
+
+    /** An exam the teacher grades outside the app: no key gate, `ready` from the start (DESIGN §22.1). */
+    public function isManualExam(): bool
+    {
+        return $this->isExam() && $this->grading_method === self::GRADING_MANUAL;
+    }
+
+    /** Structural changes of an exam are locked once anything was printed (DESIGN §22.2). */
+    public function structureLocked(): bool
+    {
+        return $this->structure_locked_at !== null;
+    }
+
     /** Whole pages are graded only once the teacher approved the key (DESIGN §19.5). */
     public function keyApproved(): bool
     {
@@ -269,11 +352,18 @@ class Assignment extends Model
      *
      * A freeform assignment has no printed page: it stays `ready` while its
      * key is still complete (KeyCompleteness), and otherwise loses its
-     * approval with the status (ready ⇔ approved, DESIGN §19.5).
+     * approval with the status (ready ⇔ approved, DESIGN §19.5). An exam
+     * follows ExamKeyCheck::keepApprovalValid (an app exam is ready while its
+     * approved key stays complete; a manual exam stays ready, §22.1).
      */
     public function backToDraft(): void
     {
         if (! $this->isReady()) {
+            return;
+        }
+        if ($this->isExam()) {
+            ExamKeyCheck::keepApprovalValid($this);
+
             return;
         }
         if ($this->isFreeform()) {

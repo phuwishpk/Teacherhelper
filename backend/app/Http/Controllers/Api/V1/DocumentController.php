@@ -8,7 +8,9 @@ use App\Domain\Documents\SourceDocuments;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\DocumentExtraction;
+use App\Models\ExamImport;
 use App\Models\SourceDocument;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -63,11 +65,20 @@ class DocumentController extends Controller
      * (404 otherwise). result: the structured key (or course, DESIGN
      * §20.1) once `done`. A course or lesson-plan read adds
      * indicator_matches: [{code, skill|null}] for the teacher's school.
+     *
+     * An exam or answer-key read holds a teacher's questions and printed
+     * answers, so it is answered only to a teacher tied to it (DESIGN §19.9,
+     * §22.17): see visibleTo(). A same-school id guessed by anyone else is
+     * 404 like an id of another school.
      */
     public function extraction(Request $request, int $id): JsonResponse
     {
-        $schoolId = $request->user()->school_id;
+        $teacher = $request->user();
+        $schoolId = $teacher->school_id;
         $extraction = DocumentExtraction::query()->where('school_id', $schoolId)->findOrFail($id);
+        if (! self::visibleTo($request, $extraction)) {
+            throw (new ModelNotFoundException)->setModel(DocumentExtraction::class, [$id]);
+        }
 
         if (in_array($extraction->purpose, CourseDocumentResult::KINDS, true)) {
             return response()->json(['data' => $extraction->toApi() + $this->courseDocuments->payload($extraction, $schoolId)]);
@@ -76,5 +87,30 @@ class DocumentController extends Controller
         return response()->json(['data' => $extraction->toApi() + [
             'result' => $extraction->isDone() ? $extraction->result : null,
         ]]);
+    }
+
+    /**
+     * Course and lesson-plan reads are the school's shared curriculum
+     * (§20.1). An exam read: the teacher has an exam_imports row for it (every
+     * import request writes one). An answer-key read: the teacher asked for
+     * it last, or one of their own assignments uses it as its key. Any other
+     * purpose (none is created today): only the teacher who asked for it.
+     */
+    private static function visibleTo(Request $request, DocumentExtraction $extraction): bool
+    {
+        $teacherId = (int) $request->user()->id;
+
+        return match ($extraction->purpose) {
+            DocumentExtraction::PURPOSE_EXAM => ExamImport::query()
+                ->where('extraction_id', $extraction->id)
+                ->where('requested_by', $teacherId)
+                ->exists(),
+            DocumentExtraction::PURPOSE_ANSWER_KEY => (int) $extraction->requested_by === $teacherId
+                || AssignmentController::ownQuery($request)->where('key_extraction_id', $extraction->id)->exists(),
+            // Course and lesson-plan reads are school-wide (§19.9); any other
+            // purpose only to the teacher who asked for it.
+            CourseDocumentResult::KIND_COURSE, CourseDocumentResult::KIND_LESSON_PLAN => true,
+            default => (int) $extraction->requested_by === $teacherId,
+        };
     }
 }

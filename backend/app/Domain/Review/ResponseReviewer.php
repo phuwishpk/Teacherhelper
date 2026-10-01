@@ -2,6 +2,7 @@
 
 namespace App\Domain\Review;
 
+use App\Domain\Exams\ExamSheetIngestor;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\ExplanationRequests;
 use App\Domain\Gemini\GeminiGateway;
@@ -130,7 +131,13 @@ final class ResponseReviewer
                 }
             }
 
-            SubmissionStatus::refresh($submission);
+            $assignment = Assignment::query()->find($submission->assignment_id);
+            if ($assignment?->isExam()) {
+                // A page still waiting for its version, or a missing page, keeps it in review (§22.11).
+                ExamSheetIngestor::refreshStatus($submission, $assignment);
+            } else {
+                SubmissionStatus::refresh($submission);
+            }
 
             return $response;
         });

@@ -108,6 +108,47 @@ return [
     // Baht per US dollar for the cost estimate (DESIGN §19.5); empty = no baht figure.
     'usd_thb_rate' => env('USD_THB_RATE'),
 
+    // Exams (DESIGN §22.2, §22.5): at most max_questions questions in
+    // max_sections sections, 1..max_versions shuffled versions (ก ข ค ง),
+    // at most max_blank_questions blank questions per section request, and
+    // question/option images up to image_max_kb, stored as JPEG with the
+    // long side at most image_max_px.
+    'exams' => [
+        'max_questions' => 200,
+        'max_sections' => 10,
+        'max_versions' => max(1, min(10, (int) env('EXAM_MAX_VERSIONS', 4))),
+        'max_blank_questions' => 100,
+        'image_max_kb' => 5120,
+        'image_max_px' => 1600,
+        // Answer sheets rendered per RenderAnswerSheetsJob (DESIGN §22.6: 20 students).
+        'sheet_batch_size' => max(1, (int) env('EXAM_SHEET_BATCH_SIZE', 20)),
+    ],
+
+    // Gradebook (DESIGN §23.2): the templates a teacher starts a course's
+    // categories from (then edits freely; no table), and the default cutoffs
+    // of grades 4, 3.5, 3, 2.5, 2, 1.5 and 1 (below the last one: 0).
+    'gradebook' => [
+        'default_cutoffs' => [80, 75, 70, 65, 60, 55, 50],
+        'templates' => [
+            'collect_final' => [
+                'name' => 'คะแนนเก็บ 70 : ปลายภาค 30',
+                'categories' => [
+                    ['name' => 'คะแนนเก็บ', 'weight' => 70, 'is_homework_default' => true],
+                    ['name' => 'ปลายภาค', 'weight' => 30, 'is_homework_default' => false],
+                ],
+            ],
+            'hw_mid_final_affective' => [
+                'name' => 'การบ้าน 30, กลางภาค 20, ปลายภาค 30, จิตพิสัย 20',
+                'categories' => [
+                    ['name' => 'การบ้าน', 'weight' => 30, 'is_homework_default' => true],
+                    ['name' => 'กลางภาค', 'weight' => 20, 'is_homework_default' => false],
+                    ['name' => 'ปลายภาค', 'weight' => 30, 'is_homework_default' => false],
+                    ['name' => 'จิตพิสัย', 'weight' => 20, 'is_homework_default' => false],
+                ],
+            ],
+        ],
+    ],
+
     // Sanctum token lifetimes in days per DESIGN §7.4.
     'token_ttl_days' => [
         'teacher' => 30,

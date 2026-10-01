@@ -54,9 +54,11 @@ final class QuestionPositions
     }
 
     /**
+     * Writes positions 1..n in the given order (every question of the assignment).
+     *
      * @param  list<int>  $orderedIds
      */
-    private static function rewrite(int $assignmentId, array $orderedIds): void
+    public static function rewrite(int $assignmentId, array $orderedIds): void
     {
         $current = Question::query()->where('assignment_id', $assignmentId)->pluck('position', 'id');
         $changed = array_filter($orderedIds, fn (int $id, int $i) => (int) $current[$id] !== $i + 1, ARRAY_FILTER_USE_BOTH);

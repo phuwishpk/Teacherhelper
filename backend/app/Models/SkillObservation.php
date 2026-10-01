@@ -8,14 +8,15 @@ use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §8.5 `skill_observations`: one score ratio of one student on one
- * skill, from a published answer (`homework`, response_id) or a practice
+ * skill, from a published answer of homework (`homework`, response_id) or
+ * of an exam answer sheet (`exam`, response_id, §22.13) or a practice
  * attempt (`practice`, practice_attempt_id). The EWMA mastery (§14.2) is a
  * pure function of these rows ordered by observed_at.
  *
  * @property int $id
  * @property int $student_id
  * @property int $skill_id
- * @property string $source homework|practice
+ * @property string $source homework|practice|exam
  * @property int|null $response_id
  * @property int|null $practice_attempt_id
  * @property float $score_ratio
@@ -26,6 +27,9 @@ class SkillObservation extends Model
     public const SOURCE_HOMEWORK = 'homework';
 
     public const SOURCE_PRACTICE = 'practice';
+
+    /** A published exam answer (DESIGN §22.13): α = 0.30 like homework. */
+    public const SOURCE_EXAM = 'exam';
 
     protected $fillable = [
         'student_id',

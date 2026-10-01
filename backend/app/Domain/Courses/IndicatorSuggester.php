@@ -13,14 +13,16 @@ use App\Domain\Gemini\ResponseSchemas;
 use App\Domain\Gemini\RubricDraftRequest;
 use App\Domain\Gemini\TeacherGuidance;
 use App\Models\Assignment;
-use App\Models\LessonPlan;
 use App\Models\Question;
+use App\Models\QuestionOption;
 use App\Models\Skill;
 
 /**
  * `indicator_suggest` (DESIGN §10.1, §20.3): Gemini picks, for each
  * question of an assignment, indicators from the linked lesson plan's
- * indicators only, with a short reason. Text only (no images), thinking
+ * indicators only (or, for an exam without a plan, the course's planned
+ * indicators, §22.13; see IndicatorScope), with a short reason. The text
+ * of an exam question carries its option texts (ก. … ข. …) as well. Text only (no images), thinking
  * low, 1,024 output tokens (§21.6), so the questions go in calls of
  * QUESTIONS_PER_CALL sent in parallel.
  *
@@ -66,21 +68,21 @@ final class IndicatorSuggester
      * indicator is absent); dropped counts the codes that were not
      * indicators of the plan.
      *
-     * @param  list<Question>  $questions  in position order
-     * @param  list<Skill>  $indicators  the lesson plan's indicators
+     * @param  list<Question>  $questions  in position order (options loaded for an exam)
      * @return array{suggestions: array<int, list<array{skill_id: int, reason_th: string|null}>>, dropped: int}
      *
      * @throws GeminiException
      */
-    public function suggest(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators, GeminiKey $key, ?string $guidance = null, ?int $guidanceBy = null): array
+    public function suggest(Assignment $assignment, IndicatorScope $scope, array $questions, GeminiKey $key, ?string $guidance = null, ?int $guidanceBy = null): array
     {
+        $indicators = $scope->indicators;
         if ($questions === [] || $indicators === []) {
             return ['suggestions' => [], 'dropped' => 0];
         }
 
         $calls = [];
         foreach (array_chunk($questions, self::QUESTIONS_PER_CALL) as $i => $chunk) {
-            $calls[$i] = $this->call($assignment, $plan, $chunk, $indicators, $guidance, $guidanceBy);
+            $calls[$i] = $this->call($assignment, $scope, $chunk, $guidance, $guidanceBy);
         }
         $outcomes = $this->gateway->run($calls, $key);
 
@@ -138,18 +140,19 @@ final class IndicatorSuggester
 
     /**
      * @param  list<Question>  $questions
-     * @param  list<Skill>  $indicators
      */
-    private function call(Assignment $assignment, LessonPlan $plan, array $questions, array $indicators, ?string $guidance, ?int $guidanceBy): GeminiCall
+    private function call(Assignment $assignment, IndicatorScope $scope, array $questions, ?string $guidance, ?int $guidanceBy): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, self::TYPE);
+        $indicators = $scope->indicators;
         $briefs = array_map(fn (Question $q) => [
             'question_no' => (int) $q->position,
             'type' => $q->type,
-            'text' => self::cut(trim($q->prompt_text), self::MAX_QUESTION_CHARS),
+            'text' => self::cut(self::questionText($assignment, $q), self::MAX_QUESTION_CHARS),
         ], $questions);
         $codes = array_map(fn (Skill $s) => $s->code, $indicators);
-        $objectives = trim((string) $plan->objectives);
+        $objectives = $scope->promptObjectives();
+        $course = $scope->course;
 
         return new GeminiCall(
             request: new GeminiRequest(
@@ -158,9 +161,9 @@ final class IndicatorSuggester
                 promptVersion: $prompt->versionLabel(),
                 systemInstruction: $prompt->renderSystem(),
                 userText: $prompt->renderUser([
-                    'subject' => (string) ($assignment->subject?->name ?? $plan->course?->subject?->name ?? '-'),
-                    'grade_label' => RubricDraftRequest::gradeLabel((int) ($plan->course?->grade_level ?? $assignment->classroom?->grade_level ?? 1)),
-                    'plan_title' => trim($plan->title),
+                    'subject' => (string) ($assignment->subject?->name ?? $course?->subject?->name ?? '-'),
+                    'grade_label' => RubricDraftRequest::gradeLabel((int) ($course?->grade_level ?? $assignment->classroom?->grade_level ?? 1)),
+                    'plan_title' => $scope->promptTitle($assignment),
                     'plan_objectives' => $objectives === '' ? '-' : self::cut($objectives, self::MAX_OBJECTIVES_CHARS),
                     'indicators_list' => implode("\n", array_map(fn (Skill $s) => '- '.$s->code.': '.trim($s->name), $indicators)),
                     'questions_json' => (string) json_encode($briefs, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -183,6 +186,28 @@ final class IndicatorSuggester
             guidance: $guidance,
             guidanceBy: $guidanceBy,
         );
+    }
+
+    /**
+     * The prompt text; an exam question adds its option texts in original
+     * order ("ก. … ข. …"), since a multiple-choice stem alone often says
+     * little about what it assesses.
+     */
+    private static function questionText(Assignment $assignment, Question $question): string
+    {
+        $text = trim((string) $question->prompt_text);
+        if (! $assignment->isExam() || ! $question->relationLoaded('options')) {
+            return $text;
+        }
+        $options = [];
+        foreach ($question->options->sortBy('position') as $option) {
+            $optionText = trim((string) $option->text);
+            if ($optionText !== '') {
+                $options[] = QuestionOption::label((int) $option->position).'. '.$optionText;
+            }
+        }
+
+        return $options === [] ? $text : trim($text."\n".implode(' ', $options));
     }
 
     private static function reason(mixed $reason): ?string

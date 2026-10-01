@@ -48,7 +48,10 @@ class MergeWorksheetsJob implements ShouldQueue
                 }
             }
             if ($parts === []) {
-                $print->markFailed('ห้องนี้ไม่มีนักเรียนแล้ว');
+                // Worksheets and answer sheets have a part per batch of students; a booklet or key sheet always has one.
+                $print->markFailed(in_array($print->kind, [WorksheetPrint::KIND_WORKSHEET, WorksheetPrint::KIND_ANSWER_SHEET], true)
+                    ? 'ห้องนี้ไม่มีนักเรียนแล้ว'
+                    : 'ไม่พบไฟล์'.$print->fileNoun().'ที่สร้างไว้ กรุณาสั่งพิมพ์ใหม่');
 
                 return;
             }
@@ -72,7 +75,7 @@ class MergeWorksheetsJob implements ShouldQueue
                 'ms' => (int) ((hrtime(true) - $started) / 1e6),
             ]);
         } catch (Throwable $e) {
-            $print->markFailed('รวมไฟล์ใบงานไม่สำเร็จ กรุณาลองใหม่');
+            $print->markFailed('รวมไฟล์'.$print->fileNoun().'ไม่สำเร็จ กรุณาลองใหม่');
             report($e);
         }
     }
@@ -81,7 +84,7 @@ class MergeWorksheetsJob implements ShouldQueue
     {
         $print = WorksheetPrint::query()->find($this->printId);
         if ($print !== null && ! $print->isFinished()) {
-            $print->markFailed('รวมไฟล์ใบงานไม่ทันเวลา กรุณาลองใหม่');
+            $print->markFailed('รวมไฟล์'.$print->fileNoun().'ไม่ทันเวลา กรุณาลองใหม่');
         }
     }
 }

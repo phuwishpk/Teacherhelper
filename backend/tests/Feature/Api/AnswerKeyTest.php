@@ -232,6 +232,10 @@ class AnswerKeyTest extends TestCase
         $this->assertSame(['correct' => 'C'], $this->assignment->questions()->where('position', 1)->sole()->answer_key);
         $this->assertSame('C', DocumentExtraction::query()->sole()->result['questions'][0]['answer_key']['correct']);
 
+        // A teacher of the school tied to neither read nor key who guesses the id: 404 (§19.9).
+        $bystander = $this->makeTeacher($this->teacher->school);
+        $this->asUser($bystander)->getJson('/api/v1/document-extractions/'.DocumentExtraction::query()->sole()->id)->assertNotFound();
+
         // Another school reads it again.
         $other = $this->makeTeacher();
         $otherAssignment = $this->freeform($this->makeClassroom($other));

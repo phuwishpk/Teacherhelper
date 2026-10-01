@@ -293,6 +293,66 @@ class PageCrops {
   }
 }
 
+/// What one downscaled camera frame shows (DESIGN §22.10): enough to decide
+/// whether to take the full photo, nothing is warped or cropped.
+class FrameDetection {
+  FrameDetection({
+    required this.markersFound,
+    this.qrPayload,
+    required this.blurScore,
+  });
+
+  /// Number of the corner markers id 0..3 found (0..4).
+  int markersFound;
+
+  /// Raw QR text, or null when no QR could be read.
+  String? qrPayload;
+
+  /// Variance of the Laplacian of the marker frame warped at the frame's
+  /// own resolution (0 when fewer than four markers were found).
+  double blurScore;
+
+  List<Object?> _toList() {
+    return <Object?>[markersFound, qrPayload, blurScore];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static FrameDetection decode(Object result) {
+    result as List<Object?>;
+    return FrameDetection(
+      markersFound: result[0]! as int,
+      qrPayload: result[1] as String?,
+      blurScore: result[2]! as double,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! FrameDetection || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(markersFound, other.markersFound) &&
+        _deepEquals(qrPayload, other.qrPayload) &&
+        _deepEquals(blurScore, other.blurScore);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+
+  @override
+  String toString() {
+    return 'FrameDetection(markersFound: $markersFound, qrPayload: $qrPayload, blurScore: $blurScore)';
+  }
+}
+
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
   @override
@@ -309,6 +369,9 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is PageCrops) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
+    } else if (value is FrameDetection) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -323,6 +386,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return RegionCrop.decode(readValue(buffer)!);
       case 131:
         return PageCrops.decode(readValue(buffer)!);
+      case 132:
+        return FrameDetection.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -393,5 +458,117 @@ class ScanPipelineApi {
       isNullValid: false,
     );
     return pigeonVar_replyValue! as PageCrops;
+  }
+
+  /// Exam answer sheets (DESIGN §22.9): warps the marker frame like
+  /// [cropPage] and measures every bubble of the `version_bubbles`,
+  /// `omr_row` and `digit_block` regions of [layoutJson] (one page, sheet
+  /// `exam`). Returns JSON: {warped_page_path, blur_score, baseline,
+  /// version_fill, rows, digits}, fills after the page baseline.
+  Future<String> readAnswerSheet(
+    String imagePath,
+    PageDetection detection,
+    String layoutJson,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.eduvision.ScanPipelineApi.readAnswerSheet$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[imagePath, detection, layoutJson],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
+  }
+
+  /// Markers, QR and blur of one camera frame (the Y plane of a YUV_420
+  /// image, [bytesPerRow] per row) for continuous scanning (§22.10).
+  Future<FrameDetection> detectFrame(
+    Uint8List yPlane,
+    int width,
+    int height,
+    int bytesPerRow,
+    int rotation,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.eduvision.ScanPipelineApi.detectFrame$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[yPlane, width, height, bytesPerRow, rotation],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as FrameDetection;
+  }
+}
+
+/// Pages of a teacher's exam file for cropping its figures (DESIGN §22.4):
+/// the server cannot render a PDF or decode HEIC, so the phone does and
+/// uploads the page (`POST /exams/{id}/page-images`).
+class DocumentPageApi {
+  /// Constructor for [DocumentPageApi]. The [binaryMessenger] named argument is
+  /// available for dependency injection. If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  DocumentPageApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
+
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  /// Renders page [pageNo] (1-based) of the PDF at [path] with
+  /// `PdfRenderer`, or decodes the photo at [path] (HEIC/HEIF, JPEG, PNG,
+  /// WebP; [pageNo] must be 1), on white, scaled so the long side is at most
+  /// [maxLongSide] px. Writes a JPEG (quality 90) to the app cache and
+  /// returns its path. Errors: `document_unreadable`, `page_out_of_range`,
+  /// `unsupported` (HEIC before Android 9), `storage_failed`.
+  Future<String> renderDocumentPage(
+    String path,
+    String mimeType,
+    int pageNo,
+    int maxLongSide,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.eduvision.DocumentPageApi.renderDocumentPage$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[path, mimeType, pageNo, maxLongSide],
+    );
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
+    return pigeonVar_replyValue! as String;
   }
 }

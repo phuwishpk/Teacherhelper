@@ -6,10 +6,13 @@ import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/course_models.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:eduvision/features/courses/indicator_widgets.dart';
+import 'package:eduvision/features/gradebook/gradebook_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+
+import '../gradebook/gradebook_fakes.dart';
 
 const fraction = Skill(
   id: 1,
@@ -406,12 +409,18 @@ class FakeSkills extends Fake implements AssignmentsRepository {
   }
 }
 
-List<Override> overrides(FakeCoursesRepository courses, {FakeSkills? skills}) =>
-    [
-      coursesRepositoryProvider.overrideWithValue(courses),
-      assignmentsRepositoryProvider.overrideWithValue(skills ?? FakeSkills()),
-      classroomsRepositoryProvider.overrideWithValue(FakeClassrooms()),
-    ];
+List<Override> overrides(
+  FakeCoursesRepository courses, {
+  FakeSkills? skills,
+  FakeGradebookRepository? gradebook,
+}) => [
+  coursesRepositoryProvider.overrideWithValue(courses),
+  assignmentsRepositoryProvider.overrideWithValue(skills ?? FakeSkills()),
+  classroomsRepositoryProvider.overrideWithValue(FakeClassrooms()),
+  gradebookRepositoryProvider.overrideWithValue(
+    gradebook ?? FakeGradebookRepository(),
+  ),
+];
 
 void tall(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 2600);

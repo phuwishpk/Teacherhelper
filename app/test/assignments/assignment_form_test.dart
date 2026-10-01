@@ -6,11 +6,14 @@ import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/course_models.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
+import 'package:eduvision/features/gradebook/gradebook_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import '../courses/course_fakes.dart';
+import '../gradebook/gradebook_fakes.dart';
 import '../helpers/pump_screen.dart';
 
 class _FakeClassrooms extends Fake implements ClassroomsRepository {
@@ -36,6 +39,9 @@ class _FakeClassrooms extends Fake implements ClassroomsRepository {
 class _FakeAssignments extends Fake implements AssignmentsRepository {
   final created = <Map<String, Object?>>[];
 
+  /// The gradebook fields of every create and update (DESIGN §23.3).
+  final gradebook = <Map<String, Object?>>[];
+
   @override
   Future<List<Assignment>> list({int? classroomId}) async => const [];
 
@@ -55,7 +61,13 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     AssignmentMode mode = AssignmentMode.worksheet,
     bool acceptLate = true,
     bool scoreOnly = false,
+    int? gradebookCategoryId,
+    bool excludedFromGrade = false,
   }) async {
+    gradebook.add({
+      'gradebook_category_id': gradebookCategoryId,
+      'excluded_from_grade': excludedFromGrade,
+    });
     created.add({
       'classroom_id': classroomId,
       'course_id': courseId,
@@ -96,7 +108,15 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     int? courseId,
     int? lessonPlanId,
     bool clearLessonPlan = false,
+    int? gradebookCategoryId,
+    bool clearGradebookCategory = false,
+    bool? excludedFromGrade,
   }) async {
+    gradebook.add({
+      'gradebook_category_id': gradebookCategoryId,
+      'clear_gradebook_category': clearGradebookCategory,
+      'excluded_from_grade': excludedFromGrade,
+    });
     updates.add({
       'title': title,
       'mode': mode?.apiValue,
@@ -161,6 +181,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(assignments),
         coursesRepositoryProvider.overrideWithValue(courses),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
       extraRoutes: [
         GoRoute(
@@ -244,6 +267,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(assignments),
         coursesRepositoryProvider.overrideWithValue(_courses()),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
       extraRoutes: [
         GoRoute(
@@ -298,6 +324,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(_FakeAssignments()),
         coursesRepositoryProvider.overrideWithValue(courses),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
       extraRoutes: [
         GoRoute(
@@ -346,6 +375,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(assignments),
         coursesRepositoryProvider.overrideWithValue(_courses()),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
     );
     expect(find.text('ค15101 คณิตศาสตร์ 5'), findsOneWidget);
@@ -393,6 +425,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(assignments),
         coursesRepositoryProvider.overrideWithValue(_courses()),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
     );
     expect(
@@ -417,6 +452,9 @@ void main() {
         classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
         assignmentsRepositoryProvider.overrideWithValue(assignments),
         coursesRepositoryProvider.overrideWithValue(_courses()),
+        gradebookRepositoryProvider.overrideWithValue(
+          FakeGradebookRepository(),
+        ),
       ],
     );
     await tester.ensureVisible(
@@ -427,5 +465,122 @@ void main() {
     expect(find.text('กรอกชื่อการบ้าน'), findsOneWidget);
     expect(find.text('เลือกรายวิชา'), findsOneWidget);
     expect(assignments.created, isEmpty);
+  });
+
+  group('gradebook category (DESIGN §23.3)', () {
+    List<Override> configured(_FakeAssignments assignments) => [
+      classroomsRepositoryProvider.overrideWithValue(_FakeClassrooms()),
+      assignmentsRepositoryProvider.overrideWithValue(assignments),
+      coursesRepositoryProvider.overrideWithValue(_courses()),
+      gradebookRepositoryProvider.overrideWithValue(
+        FakeGradebookRepository(settings: settingsJson()),
+      ),
+    ];
+
+    testWidgets('new homework shows the homework default and sends a pick', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final assignments = _FakeAssignments();
+      await pumpScreen(
+        tester,
+        const AssignmentFormScreen(initialClassroomId: 7),
+        overrides: configured(assignments),
+        extraRoutes: [
+          GoRoute(path: '/assignments/:id', builder: (_, _) => const Text('d')),
+        ],
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'ชื่อการบ้าน'),
+        'ใบงาน 1',
+      );
+      await _pickCourse(tester, 'ค15101 คณิตศาสตร์ 5');
+      expect(find.text('การบ้าน (30%)'), findsOneWidget);
+      expect(
+        find.text('ยังไม่ระบุหมวด (ไม่นับ)'),
+        findsNothing,
+        reason: 'a new assignment without a pick gets the default',
+      );
+      final submit = find.widgetWithText(FilledButton, 'สร้างการบ้าน');
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(assignments.gradebook.single, {
+        'gradebook_category_id': null,
+        'excluded_from_grade': false,
+      });
+    });
+
+    testWidgets('picking a category and "ไม่นับเกรด" are sent', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final assignments = _FakeAssignments();
+      await pumpScreen(
+        tester,
+        const AssignmentFormScreen(initialClassroomId: 7),
+        overrides: configured(assignments),
+        extraRoutes: [
+          GoRoute(path: '/assignments/:id', builder: (_, _) => const Text('d')),
+        ],
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'ชื่อการบ้าน'),
+        'งานฝึก',
+      );
+      await _pickCourse(tester, 'ค15101 คณิตศาสตร์ 5');
+      await tester.tap(find.text('การบ้าน (30%)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('จิตพิสัย (20%)').last);
+      await tester.pumpAndSettle();
+      final excluded = find.byKey(const ValueKey('excluded_from_grade'));
+      await tester.ensureVisible(excluded);
+      await tester.tap(excluded);
+      await tester.pumpAndSettle();
+      final submit = find.widgetWithText(FilledButton, 'สร้างการบ้าน');
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(assignments.gradebook.single, {
+        'gradebook_category_id': 13,
+        'excluded_from_grade': true,
+      });
+    });
+
+    testWidgets('editing can clear the category', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final assignments = _FakeAssignments();
+      await pumpScreen(
+        tester,
+        const AssignmentFormScreen(
+          existing: Assignment(
+            id: 56,
+            classroomId: 7,
+            subjectId: 1,
+            courseId: 4,
+            title: 'ทบทวน',
+            gradebookCategoryId: 10,
+          ),
+        ),
+        overrides: configured(assignments),
+      );
+      await tester.tap(find.text('การบ้าน (30%)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ยังไม่ระบุหมวด (ไม่นับ)').last);
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'บันทึก');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(assignments.gradebook.single, {
+        'gradebook_category_id': null,
+        'clear_gradebook_category': true,
+        'excluded_from_grade': null,
+      });
+    });
   });
 }

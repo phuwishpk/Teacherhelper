@@ -7,7 +7,8 @@ import '../db/app_database.dart';
 import '../db/database_provider.dart';
 
 /// What a signed-in user leaves in drift (DESIGN §6.4): the offline cache
-/// (`cached_rosters` with student names, `cached_layouts`) and the upload
+/// (`cached_rosters` with student names, `cached_layouts`, the exam scan
+/// kits in `cached_exam_kits` with answer keys) and the upload
 /// queue (`scan_queue` with crops of student handwriting). A school phone is
 /// often shared, so none of it may carry over to the next user; the next
 /// teacher's token would also upload the previous teacher's scans.
@@ -41,6 +42,8 @@ class LocalUserData {
     await _db.transaction(() async {
       await _db.delete(_db.cachedRosters).go();
       await _db.delete(_db.cachedLayouts).go();
+      // Exam scan kits hold answer keys and the roster (§22.17).
+      await _db.delete(_db.cachedExamKits).go();
     });
   }
 }

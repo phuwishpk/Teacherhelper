@@ -3,7 +3,6 @@
 namespace Tests\Feature\Worksheets;
 
 use App\Domain\Worksheets\LayoutBuilder;
-use App\Domain\Worksheets\PdfMerger;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\WorksheetLayoutException;
 use App\Domain\Worksheets\WorksheetMpdfFactory;
@@ -14,6 +13,7 @@ use App\Models\Classroom;
 use App\Models\Layout;
 use App\Models\Subject;
 use Mpdf\Mpdf;
+use Tests\Support\PdfStreams;
 use Tests\TestCase;
 
 /**
@@ -56,27 +56,11 @@ class WorksheetPdfRendererTest extends TestCase
         return $assignment;
     }
 
-    private function pageCount(string $pdf): int
-    {
-        $path = tempnam(sys_get_temp_dir(), 'ws').'.pdf';
-        file_put_contents($path, $pdf);
-        try {
-            return PdfMerger::pageCount($path);
-        } finally {
-            @unlink($path);
-        }
-    }
-
     /** @return list<array{float, float, float, float}> every `re` operator in the page streams, in points */
     private function rectangles(string $pdf): array
     {
-        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
         $rects = [];
-        foreach ($streams[1] as $stream) {
-            $content = @gzuncompress($stream);
-            if ($content === false) {
-                $content = $stream;
-            }
+        foreach (PdfStreams::decoded($pdf) as $content) {
             preg_match_all('/(-?\d+\.\d+) (-?\d+\.\d+) (-?\d+\.\d+) (-?\d+\.\d+) re/', $content, $m, PREG_SET_ORDER);
             foreach ($m as $r) {
                 $rects[] = [(float) $r[1], (float) $r[2], (float) $r[3], (float) $r[4]];
@@ -103,7 +87,7 @@ class WorksheetPdfRendererTest extends TestCase
         ]);
 
         $this->assertStringStartsWith('%PDF', $pdf);
-        $this->assertSame(2 * $pageCount, $this->pageCount($pdf));
+        $this->assertSame(2 * $pageCount, PdfStreams::pageCount($pdf));
         $this->assertStringContainsString('Sarabun', $pdf, 'the Sarabun font is embedded');
 
         $expected = [];

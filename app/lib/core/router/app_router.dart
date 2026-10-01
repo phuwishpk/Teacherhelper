@@ -28,7 +28,21 @@ import '../../features/courses/course_form_screen.dart';
 import '../../features/courses/course_models.dart';
 import '../../features/courses/courses_screen.dart';
 import '../../features/dashboard/assignment_analytics_screen.dart';
+import '../../features/exams/exam_answer_key_screen.dart';
+import '../../features/exams/exam_copy_questions_screen.dart';
+import '../../features/exams/exam_form_screen.dart';
+import '../../features/exams/exam_import_review_screen.dart';
+import '../../features/exams/exam_key_sheet_scan_screen.dart';
+import '../../features/exams/exam_print_screen.dart';
+import '../../features/exams/exam_results_screen.dart';
+import '../../features/exams/exam_scan_screen.dart';
+import '../../features/exams/exam_question_screen.dart';
+import '../../features/exams/exam_screen.dart';
+import '../../features/exams/exam_versions_screen.dart';
 import '../../features/google_classroom/classroom_feedback_screen.dart';
+import '../../features/gradebook/gradebook_screen.dart';
+import '../../features/gradebook/gradebook_settings_screen.dart';
+import '../../features/gradebook/student_grades.dart';
 import '../../features/google_classroom/classroom_import_screen.dart';
 import '../../features/google_classroom/course_picker_screen.dart';
 import '../../features/google_classroom/grade_conflicts_screen.dart';
@@ -114,6 +128,19 @@ abstract final class AppRoutes {
   static String course(int id) => '/courses/$id';
   static String courseEdit(int id) => '/courses/$id/edit';
 
+  /// The gradebook of a course (DESIGN §23.9), opened on [classroomId] and
+  /// scrolled to [column] (`a{assignment id}` or `i{item id}`) when given.
+  static String gradebook(int courseId, {int? classroomId, String? column}) {
+    final query = {'classroom': ?classroomId?.toString(), 'column': ?column};
+    return Uri(
+      path: '/courses/$courseId/gradebook',
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
+  }
+
+  static String gradebookSettings(int courseId) =>
+      '/courses/$courseId/gradebook/settings';
+
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
   static String assignmentEdit(int id) => '/assignments/$id/edit';
@@ -128,6 +155,26 @@ abstract final class AppRoutes {
       '/assignments/$assignmentId/answer-key';
   static String rubric(int assignmentId, int questionId) =>
       '/assignments/$assignmentId/questions/$questionId/rubric';
+
+  /// Exams (DESIGN §22): settings, sections and questions, the key grid
+  /// and the shuffled versions.
+  static const examNew = '/exams/new';
+  static String examNewFor(int? classroomId) =>
+      classroomId == null ? examNew : '$examNew?classroom=$classroomId';
+  static String exam(int id) => '/exams/$id';
+  static String examEdit(int id) => '/exams/$id/edit';
+  static String examAnswerKey(int id) => '/exams/$id/answer-key';
+  static String examVersions(int id) => '/exams/$id/versions';
+  static String examPrint(int id) => '/exams/$id/print';
+  static String examScan(int id) => '/exams/$id/scan';
+  static String examResults(int id) => '/exams/$id/results';
+  static String examKeySheetScan(int id) => '/exams/$id/key-sheet-scan';
+  static String examReadReview(int id) => '/exams/$id/read-review';
+  static String examCopyQuestions(int id) => '/exams/$id/copy-questions';
+  static String examQuestion(int examId, int questionId) =>
+      '/exams/$examId/questions/$questionId';
+  static String examQuestionNew(int examId, int sectionId) =>
+      '/exams/$examId/sections/$sectionId/questions/new';
 
   static const scan = '/scan';
 
@@ -184,6 +231,10 @@ abstract final class AppRoutes {
 
   /// Student: their own charts of one course (§20.4, §20.9).
   static String myCourseCharts(int courseId) => '/student/courses/$courseId';
+
+  /// Student: their own published grade of one course (§23.7).
+  static String myCourseGrade(int courseId) =>
+      '/student/courses/$courseId/grade';
 
   /// One student's skills and weaknesses, seen by the teacher.
   static String studentMastery(int classroomId, int studentId) =>
@@ -365,6 +416,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/student/courses/:id',
         builder: (context, state) =>
             MyCourseChartsScreen(courseId: _id(state, 'id')),
+        routes: [
+          GoRoute(
+            path: 'grade',
+            builder: (context, state) =>
+                StudentGradeScreen(courseId: _id(state, 'id')),
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.home,
@@ -465,6 +523,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             CourseDetailScreen(courseId: _id(state, 'id')),
         routes: [
+          GoRoute(
+            path: 'gradebook',
+            builder: (context, state) => GradebookScreen(
+              courseId: _id(state, 'id'),
+              initialClassroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+              focusColumn: state.uri.queryParameters['column'],
+            ),
+            routes: [
+              GoRoute(
+                path: 'settings',
+                builder: (context, state) =>
+                    GradebookSettingsScreen(courseId: _id(state, 'id')),
+              ),
+            ],
+          ),
           GoRoute(
             path: 'charts',
             builder: (context, state) => CourseChartsScreen(
@@ -596,6 +671,80 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+      // Before '/exams/:id', which would take "new" as an id.
+      GoRoute(
+        path: AppRoutes.examNew,
+        builder: (context, state) => ExamFormScreen(
+          initialClassroomId: int.tryParse(
+            state.uri.queryParameters['classroom'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/exams/:id',
+        builder: (context, state) => ExamScreen(examId: _id(state, 'id')),
+        routes: [
+          GoRoute(
+            path: 'edit',
+            builder: (context, state) =>
+                ExamEditScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'answer-key',
+            builder: (context, state) =>
+                ExamAnswerKeyScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'versions',
+            builder: (context, state) =>
+                ExamVersionsScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'print',
+            builder: (context, state) =>
+                ExamPrintScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'scan',
+            builder: (context, state) =>
+                ExamScanScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'results',
+            builder: (context, state) =>
+                ExamResultsScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'key-sheet-scan',
+            builder: (context, state) =>
+                ExamKeySheetScanScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'read-review',
+            builder: (context, state) =>
+                ExamImportReviewScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'copy-questions',
+            builder: (context, state) =>
+                ExamCopyQuestionsScreen(examId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'questions/:qid',
+            builder: (context, state) => ExamQuestionScreen(
+              examId: _id(state, 'id'),
+              questionId: _id(state, 'qid'),
+            ),
+          ),
+          GoRoute(
+            path: 'sections/:sid/questions/new',
+            builder: (context, state) => ExamQuestionScreen(
+              examId: _id(state, 'id'),
+              sectionId: _id(state, 'sid'),
+            ),
           ),
         ],
       ),

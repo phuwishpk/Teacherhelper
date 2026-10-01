@@ -42,6 +42,10 @@ void main() {
       expect(line.daily.map((d) => d.value), [1.0, 0.723]);
       expect(line.daily.last.date, DateTime.utc(2026, 9, 3));
       expect(line.points.last.source, 'practice');
+      expect(line.points.last.fromExam, isFalse);
+      // A published exam answer is an observation like homework (§22.13).
+      expect(p.series.last.daily.single.source, 'exam');
+      expect(p.series.last.daily.single.fromExam, isTrue);
       expect(
         line.points[1].observedAt,
         DateTime.utc(2026, 9, 2, 18),
@@ -531,6 +535,15 @@ void main() {
       expect(find.byKey(const ValueKey('progress_chart')), findsOneWidget);
       expect(find.text('72% · 3 ครั้ง'), findsOneWidget);
       expect(find.text('30% · 1 ครั้ง'), findsOneWidget);
+
+      // The tooltip of a day whose last answer came from an exam says so.
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      final items = chart.data.lineTouchData.touchTooltipData.getTooltipItems;
+      final bars = chart.data.lineBarsData;
+      final homework = items([LineBarSpot(bars[0], 0, bars[0].spots.first)]);
+      final exam = items([LineBarSpot(bars[1], 1, bars[1].spots.first)]);
+      expect(homework.single!.text, isNot(contains('ข้อสอบ')));
+      expect(exam.single!.text, endsWith(' · ข้อสอบ'));
     });
 
     testWidgets(

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Courses;
 
+use App\Domain\Gradebook\GradebookSettings;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\Course;
@@ -57,7 +58,9 @@ final class AssignmentCourses
      * Moves an assignment to $course (caller holds the assignment row lock).
      * The subject follows the course; a course of another subject is
      * refused once the assignment has questions (their indicators belong to
-     * the subject). A lesson plan of the previous course is dropped.
+     * the subject). A lesson plan of the previous course is dropped, and the
+     * gradebook category goes back to the new course's homework default
+     * (DESIGN §23.3).
      *
      * @throws ApiException 422 errors.course_id
      */
@@ -68,8 +71,9 @@ final class AssignmentCourses
 
             throw new ApiException($message, 'validation_failed', 422, ['course_id' => [$message]]);
         }
-        if ($assignment->course_id !== $course->id && $assignment->lesson_plan_id !== null) {
+        if ($assignment->course_id !== $course->id) {
             $assignment->lesson_plan_id = null;
+            $assignment->gradebook_category_id = GradebookSettings::homeworkDefaultId($course->id);
         }
         $assignment->course_id = $course->id;
         $assignment->subject_id = $course->subject_id;

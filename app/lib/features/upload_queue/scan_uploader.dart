@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
+import '../../core/db/app_database.dart';
 import 'queued_scan.dart';
 import 'scan_queue_repository.dart';
 
@@ -24,6 +25,13 @@ Duration backoffFor(int attempts) {
   final d = base * factor;
   return d > cap ? cap : d;
 }
+
+/// `POST /scans` for worksheet pages, `POST /exam-sheets` for exam answer
+/// sheets (DESIGN §22.9 step 4); both answer with the same 200/201/202 rules.
+String uploadPathFor(ScanKind kind) => switch (kind) {
+  ScanKind.worksheet => '/scans',
+  ScanKind.examSheet => '/exam-sheets',
+};
 
 enum UploadOutcome {
   done,
@@ -120,7 +128,7 @@ class ScanUploader {
 
     try {
       final res = await _dio.post<Object?>(
-        '/scans',
+        uploadPathFor(scan.kind),
         data: form,
         options: Options(
           // 4xx are handled below without throwing; 5xx still throw.

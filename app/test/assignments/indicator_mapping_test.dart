@@ -21,10 +21,11 @@ Map<String, dynamic> _question(
   int position, {
   List<Skill> skills = const [],
   List<(Skill, String)> suggestions = const [],
+  String type = 'short',
 }) => {
   'question_id': id,
   'position': position,
-  'type': 'short',
+  'type': type,
   'prompt_text': 'โจทย์ข้อ $position',
   'skill_ids': [for (final s in skills) s.id],
   'skills': [for (final s in skills) skillJson(s)],
@@ -44,6 +45,8 @@ Map<String, dynamic> _payload({
   List<Map<String, dynamic>>? questions,
   int? changed,
   String? guidance,
+  String? source,
+  Map<String, dynamic>? course,
 }) {
   final qs =
       questions ??
@@ -58,6 +61,8 @@ Map<String, dynamic> _payload({
     'lesson_plan': plan
         ? {'id': 30, 'title': 'การบวกเศษส่วน', 'unit_id': 20}
         : null,
+    'indicator_source': source ?? (plan ? 'lesson_plan' : null),
+    'course': course,
     'plan_indicators': [for (final s in planIndicators) skillJson(s)],
     'status': status,
     'requested_at': status == null ? null : '2026-09-30T01:00:00+00:00',
@@ -162,6 +167,18 @@ const _assignment = Assignment(
     ),
   ],
 );
+
+/// An exam of course ค15101 not linked to a lesson plan (§22.13).
+const _exam = Assignment(
+  id: 12,
+  classroomId: 7,
+  subjectId: 1,
+  title: 'สอบกลางภาค',
+  courseId: 4,
+  kind: Assignment.kindExam,
+);
+
+const _courseJson = {'id': 4, 'code': 'ค15101', 'name': 'คณิตศาสตร์ 5'};
 
 void main() {
   group('IndicatorMappingRepository', () {
@@ -292,8 +309,59 @@ void main() {
     });
   });
 
+  group('exam indicators from the course (§22.13)', () {
+    test('an exam without a plan picks from its course and can ask AI', () {
+      final data = IndicatorSuggestions.fromJson(
+        _payload(
+          plan: false,
+          source: 'course',
+          course: _courseJson,
+          questions: [
+            _question(501, 1, type: 'mcq'),
+            _question(502, 2, type: 'true_false'),
+            _question(503, 3, type: 'numeric'),
+          ],
+        ),
+      );
+      expect(data.lessonPlan, isNull);
+      expect(data.indicatorSource, IndicatorSource.course);
+      expect(data.fromCourse, isTrue);
+      expect(data.course?.label, 'ค15101 คณิตศาสตร์ 5');
+      expect(data.canSuggest, isTrue);
+      expect(data.questions.map((q) => q.typeLabel), [
+        'ปรนัย',
+        'ถูก/ผิด',
+        'เติมตัวเลข',
+      ]);
+      expect(data.questions[1].type, isNull);
+      // The state update of a request keeps the scope.
+      final next = data.withState(
+        SuggestState.fromJson(const {'status': 'queued'}),
+      );
+      expect(next.fromCourse, isTrue);
+      expect(next.course?.id, 4);
+    });
+
+    test('an older payload without indicator_source still reads the plan', () {
+      final json = _payload()..remove('indicator_source');
+      final data = IndicatorSuggestions.fromJson(json);
+      expect(data.indicatorSource, isNull);
+      expect(data.hasScope, isTrue);
+      expect(data.canSuggest, isTrue);
+      expect(
+        IndicatorSource.fromApi('lesson_plan'),
+        IndicatorSource.lessonPlan,
+      );
+      expect(const LinkedCourse(id: 1).label, '');
+    });
+  });
+
   group('IndicatorMappingScreen', () {
-    Future<void> pump(WidgetTester tester, _Mapping mapping) async {
+    Future<void> pump(
+      WidgetTester tester,
+      _Mapping mapping, {
+      Assignment assignment = _assignment,
+    }) async {
       tall(tester);
       await pumpScreen(
         tester,
@@ -304,12 +372,96 @@ void main() {
             const Duration(milliseconds: 10),
           ),
           assignmentsRepositoryProvider.overrideWithValue(
-            _Assignments(_assignment),
+            _Assignments(assignment),
           ),
           classroomsRepositoryProvider.overrideWithValue(FakeClassrooms()),
         ],
       );
     }
+
+    testWidgets('an exam without a plan asks AI from its course', (
+      tester,
+    ) async {
+      final mapping = _Mapping([
+        _payload(
+          plan: false,
+          source: 'course',
+          course: _courseJson,
+          dropped: 1,
+          status: 'done',
+          suggested: 1,
+          questions: [
+            _question(
+              501,
+              1,
+              type: 'true_false',
+              suggestions: [(fraction, 'เศษส่วน')],
+            ),
+          ],
+        ),
+      ]);
+      await pump(tester, mapping, assignment: _exam);
+      expect(find.text('รายวิชา: ค15101 คณิตศาสตร์ 5'), findsOneWidget);
+      expect(
+        find.textContaining('AI เลือกได้จากตัวชี้วัดทั้งรายวิชา'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('ตัดรหัสที่ไม่อยู่ในรายวิชาออก 1 รหัส'),
+        findsOneWidget,
+      );
+      expect(find.text('ถูก/ผิด'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('mapping_suggest')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('AI เลือกได้เฉพาะตัวชี้วัดของรายวิชานี้'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('guidance_send')));
+      await tester.pump();
+      expect(mapping.requests, 1);
+    });
+
+    testWidgets('an exam without a plan or course picks alone; an empty '
+        'course explains why AI cannot suggest', (tester) async {
+      await pump(
+        tester,
+        _Mapping([
+          _payload(plan: false, planIndicators: const [], questions: const []),
+        ]),
+        assignment: _exam,
+      );
+      expect(find.text('ยังไม่ผูกรายวิชาหรือแผนการสอน'), findsOneWidget);
+      expect(find.textContaining('หน้าตั้งค่าข้อสอบ'), findsOneWidget);
+      expect(find.text('ข้อสอบนี้ยังไม่มีข้อ'), findsOneWidget);
+      expect(find.byKey(const ValueKey('mapping_suggest')), findsNothing);
+      await unmountScreen(tester);
+
+      await pump(
+        tester,
+        _Mapping([
+          _payload(
+            plan: false,
+            source: 'course',
+            course: _courseJson,
+            planIndicators: const [],
+            questions: [_question(501, 1, type: 'mcq')],
+          ),
+        ]),
+        assignment: _exam,
+      );
+      expect(
+        find.textContaining('รายวิชานี้ยังไม่มีตัวชี้วัด'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('mapping_suggest')))
+            .onPressed,
+        isNull,
+      );
+    });
 
     testWidgets('accepts a suggestion and saves only the changed question', (
       tester,

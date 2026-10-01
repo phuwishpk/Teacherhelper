@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Exams\ExamGuard;
 use App\Domain\Worksheets\WorksheetPrintService;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -26,6 +27,7 @@ class WorksheetPrintController extends Controller
     {
         $assignment = AssignmentController::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('print', $assignment);
+        ExamGuard::homeworkOnly($assignment);
 
         $print = $this->prints->queue($assignment, $request->user());
 
@@ -53,9 +55,22 @@ class WorksheetPrintController extends Controller
 
         return Storage::disk('local')->download(
             $print->file_path,
-            'worksheets-'.$print->assignment_id.'-v'.$print->layout_version.'.pdf',
+            self::fileName($print),
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    /** worksheets-12-v3.pdf, exam-12-booklet-2.pdf, exam-12-answer-sheets-v1.pdf, exam-12-key-sheet-v1.pdf */
+    private static function fileName(WorksheetPrint $print): string
+    {
+        $id = $print->assignment_id;
+
+        return match ($print->kind) {
+            WorksheetPrint::KIND_EXAM_BOOKLET => "exam-{$id}-booklet-{$print->version_no}.pdf",
+            WorksheetPrint::KIND_ANSWER_SHEET => "exam-{$id}-answer-sheets-v{$print->layout_version}.pdf",
+            WorksheetPrint::KIND_KEY_SHEET => "exam-{$id}-key-sheet-v{$print->layout_version}.pdf",
+            default => "worksheets-{$id}-v{$print->layout_version}.pdf",
+        };
     }
 
     private static function find(Request $request, int $id): WorksheetPrint

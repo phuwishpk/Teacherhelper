@@ -7,6 +7,7 @@ use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Courses\IndicatorSuggestions;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
+use App\Domain\Exams\ExamKeyCheck;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
@@ -279,6 +280,10 @@ final class AnswerKeyService
     public function approve(User $teacher, Assignment $assignment, ?int $courseId = null): Assignment
     {
         $assignment = AssignmentLocked::run($assignment->id, function (Assignment $locked) use ($teacher, $courseId) {
+            if ($locked->isManualExam()) {
+                // The app never uses the key of an exam the teacher grades by hand (DESIGN §22.1).
+                throw new ApiException('ข้อสอบที่ครูตรวจเองไม่ต้องอนุมัติเฉลย', 'exam_manual_grading', 422);
+            }
             if ($locked->course_id === null) {
                 if ($courseId !== null) {
                     AssignmentCourses::assign($locked, AssignmentCourses::courseFor($teacher, $locked->classroom_id, $courseId));
@@ -291,11 +296,16 @@ final class AnswerKeyService
                     );
                 }
             }
-            KeyCompleteness::assertComplete($locked);
+            if ($locked->isExam()) {
+                ExamKeyCheck::assertKeyComplete($locked); // DESIGN §22.3 "เฉลยครบ"
+            } else {
+                KeyCompleteness::assertComplete($locked);
+            }
             $locked->key_approved_at = now();
             $locked->key_approved_by = $teacher->id;
             $locked->key_origin ??= Assignment::KEY_TEACHER;
-            if ($locked->isFreeform() && $locked->isDraft()) {
+            // Freeform assignments and app exams are `ready` exactly while the key is approved.
+            if (($locked->isFreeform() || $locked->isExam()) && $locked->isDraft()) {
                 $locked->status = Assignment::STATUS_READY;
             }
             $locked->save();
@@ -303,9 +313,13 @@ final class AnswerKeyService
             return $locked;
         });
 
-        ReleaseWaitingSubmissionsJob::dispatch($assignment->id);
-        Log::info('answer_key.approved', ['assignment_id' => $assignment->id, 'mode' => $assignment->mode]);
-        // Linked to a lesson plan with questions still without an indicator: suggest them now (§20.3).
+        Log::info('answer_key.approved', ['assignment_id' => $assignment->id, 'mode' => $assignment->mode, 'kind' => $assignment->kind]);
+        // Answer sheets of an exam are scored by code on upload, nothing waits (§22.11).
+        if (! $assignment->isExam()) {
+            ReleaseWaitingSubmissionsJob::dispatch($assignment->id);
+        }
+        // Indicators to pick from (a lesson plan, or an exam's course) and questions still
+        // without one: suggest them now (§20.3, §22.13).
         $this->indicatorSuggestions->autoOnApproval($assignment->loadMissing('classroom'));
 
         return $assignment;
