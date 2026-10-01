@@ -81,7 +81,8 @@ final class AnalysisBatches
 
         /** @var array<string, array{key: GeminiKey, owner: int|null, rows: list<array{0: StudentAnalysis, 1: AnalysisInput}>}> $groups */
         $groups = [];
-        foreach (Classroom::query()->orderBy('id')->cursor() as $classroom) {
+        // A closed classroom (DESIGN §24.6) keeps its last analyses; the round passes it by.
+        foreach (Classroom::query()->whereNull('closed_at')->orderBy('id')->cursor() as $classroom) {
             $key = null;
             foreach ($this->inputs->forClassroom($classroom) as $input) {
                 $row = $this->analyses->record($input);

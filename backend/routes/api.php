@@ -46,12 +46,15 @@ use App\Http\Controllers\Api\V1\ResponseController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\RubricController;
 use App\Http\Controllers\Api\V1\ScanController;
+use App\Http\Controllers\Api\V1\SchoolStudentController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
+use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentGradeController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
+use App\Http\Controllers\Api\V1\StudentMergeController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
@@ -97,8 +100,9 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('auth/logout', [TeacherAuthController::class, 'logout'])->name('api.auth.logout'); // deletes the current token only
 
-        // Every other route also requires status = active (`active` middleware).
-        Route::middleware('active')->group(function () {
+        // Every other route also requires status = active (`active` middleware), and a
+        // write on a closed classroom answers 409 classroom_closed (`classroom.open`, §24.6).
+        Route::middleware(['active', 'classroom.open'])->group(function () {
             Route::get('me', MeController::class)->name('api.me');
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
@@ -123,10 +127,23 @@ Route::prefix('v1')->group(function () {
                 Route::post('classrooms', [ClassroomController::class, 'store'])->name('api.classrooms.store');
                 Route::get('classrooms/{id}', [ClassroomController::class, 'show'])->name('api.classrooms.show');
                 Route::patch('classrooms/{id}', [ClassroomController::class, 'update'])->name('api.classrooms.update');
+                // "ห้องเก่า" (§24.6): close, reopen, and delete while empty.
+                Route::post('classrooms/{id}/close', [ClassroomController::class, 'close'])->name('api.classrooms.close');
+                Route::post('classrooms/{id}/reopen', [ClassroomController::class, 'reopen'])->name('api.classrooms.reopen');
+                Route::delete('classrooms/{id}', [ClassroomController::class, 'destroy'])->name('api.classrooms.destroy');
                 Route::post('classrooms/{id}/students', [ClassroomStudentController::class, 'store'])->name('api.classrooms.students.store');
+                Route::patch('classrooms/{id}/students/{student_id}', [ClassroomStudentController::class, 'update'])->name('api.classrooms.students.update');
+                Route::delete('classrooms/{id}/students/{student_id}', [ClassroomStudentController::class, 'destroy'])->name('api.classrooms.students.destroy');
                 Route::get('classrooms/{id}/roster', [ClassroomStudentController::class, 'index'])->name('api.classrooms.roster');
                 Route::post('classrooms/{id}/students/pending-pins', [ClassroomStudentController::class, 'pendingPins'])->name('api.classrooms.students.pending-pins');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
+
+                // One account per student across the school (§24.4, §24.5): search, edit, duplicates, merge.
+                Route::get('school-students', [SchoolStudentController::class, 'index'])->name('api.school-students.index');
+                Route::patch('students/{id}', [StudentController::class, 'update'])->name('api.students.update');
+                Route::get('students/duplicate-candidates', [StudentController::class, 'duplicateCandidates'])->name('api.students.duplicate-candidates');
+                Route::get('students/merge-preview', [StudentMergeController::class, 'preview'])->name('api.students.merge-preview');
+                Route::post('students/merge', [StudentMergeController::class, 'store'])->name('api.students.merge');
 
                 Route::post('students/{id}/login-card', [LoginCardController::class, 'storeForStudent'])->name('api.students.login-card');
                 Route::post('students/{id}/pin', [StudentPinController::class, 'store'])->name('api.students.pin');

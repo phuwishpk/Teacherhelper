@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Analysis\StudentAnalyses;
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Gemini\TeacherGuidance;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StudentAnalysisPayload;
@@ -70,6 +71,7 @@ class AnalysisController extends Controller
     public function run(Request $request, int $id): JsonResponse
     {
         [$student, $classroom] = $this->studentAndClassroom($request, $id, $request->all());
+        ClosedClassrooms::assertOpen($classroom); // §24.6
         $guidance = TeacherGuidance::fromInput($request->all());
         $row = $this->analyses->runNow($student, $classroom, $guidance, $request->user()->id);
 

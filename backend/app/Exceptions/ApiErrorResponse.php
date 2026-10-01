@@ -38,13 +38,15 @@ final class ApiErrorResponse
     /**
      * @param  array<string, array<int, string>>  $errors
      * @param  array<string, string>  $headers
+     * @param  array<string, mixed>  $extra  fields after {message, errors, code} (ApiException::$extra)
      */
-    public static function make(string $message, string $code, int $status, array $errors = [], array $headers = []): JsonResponse
+    public static function make(string $message, string $code, int $status, array $errors = [], array $headers = [], array $extra = []): JsonResponse
     {
         return response()->json([
             'message' => $message,
             'errors' => (object) $errors,
             'code' => $code,
+            ...$extra,
         ], $status, $headers);
     }
 

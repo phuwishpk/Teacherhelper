@@ -44,7 +44,7 @@ class GradebookItemController extends Controller
         ], self::messages());
         $classrooms = [];
         foreach ($data['classroom_ids'] as $i => $classroomId) {
-            $classrooms[] = GradebookAccess::classroom($request->user(), $course, $classroomId, "classroom_ids.{$i}");
+            $classrooms[] = GradebookAccess::openClassroom($request->user(), $course, $classroomId, "classroom_ids.{$i}");
         }
         $categoryId = self::categoryId($course, $data['category_id']);
 

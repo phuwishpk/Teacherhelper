@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Jobs\ImportCourseWorkJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\GoogleAccount;
 use Illuminate\Database\Eloquent\Collection;
@@ -112,6 +113,8 @@ final class ClassroomSync
     {
         return ClassroomGoogleLink::query()
             ->when($classroomId !== null, fn ($q) => $q->where('classroom_id', $classroomId))
+            // A closed classroom is read-only (DESIGN §24.6): the sync passes it by.
+            ->whereIn('classroom_id', Classroom::query()->select('id')->whereNull('closed_at'))
             ->whereIn('owner_user_id', GoogleAccount::query()->whereNull('last_error')->select('user_id'))
             ->orderBy('work_synced_at')
             ->orderBy('classroom_id')

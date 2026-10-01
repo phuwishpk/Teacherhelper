@@ -2,6 +2,7 @@
 
 namespace App\Domain\Gradebook;
 
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Exceptions\ApiException;
 use App\Models\Classroom;
 use App\Models\Course;
@@ -29,6 +30,19 @@ final class GradebookAccess
 
             throw new ApiException($message, 'validation_failed', 422, [$field => [$message]]);
         }
+
+        return $classroom;
+    }
+
+    /**
+     * classroom() for a write: a closed classroom (§24.6) is a 409.
+     *
+     * @throws ApiException 422 errors.<field>, 409 classroom_closed
+     */
+    public static function openClassroom(User $teacher, Course $course, mixed $classroomId, string $field = 'classroom_id'): Classroom
+    {
+        $classroom = self::classroom($teacher, $course, $classroomId, $field);
+        ClosedClassrooms::assertOpen($classroom);
 
         return $classroom;
     }

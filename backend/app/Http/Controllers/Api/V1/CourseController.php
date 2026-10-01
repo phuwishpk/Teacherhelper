@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\CourseEditor;
 use App\Domain\Courses\CourseInputs;
 use App\Http\Controllers\Controller;
@@ -53,6 +54,7 @@ class CourseController extends Controller
         $teacher = $request->user();
         $data = CourseInputs::validate($request->all(), CourseInputs::courseRules(false));
         $classroomIds = $request->has('classroom_ids') ? CourseInputs::classroomIds($teacher, $request->input('classroom_ids')) : [];
+        ClosedClassrooms::assertAllOpen($classroomIds); // §24.6
         $skillIds = $request->has('skill_ids') ? CourseInputs::skillIds($teacher, $request->input('skill_ids')) : [];
 
         $course = $this->editor->create($teacher, $data, $classroomIds, $skillIds);
@@ -99,6 +101,9 @@ class CourseController extends Controller
         $course = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $course);
         $ids = CourseInputs::classroomIds($request->user(), $request->input('classroom_ids'));
+        // Binding or unbinding a closed classroom is a write on it (§24.6).
+        $current = $course->classrooms()->pluck('classrooms.id')->map(fn ($id) => (int) $id)->all();
+        ClosedClassrooms::assertAllOpen([...array_diff($ids, $current), ...array_diff($current, $ids)]);
         $this->editor->setClassrooms($course, $ids);
 
         return self::detail($course);

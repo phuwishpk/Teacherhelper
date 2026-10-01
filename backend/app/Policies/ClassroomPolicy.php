@@ -48,6 +48,22 @@ class ClassroomPolicy
         return $this->owns($user, $classroom);
     }
 
+    /** Close ("ห้องเก่า"), reopen and delete the classroom (DESIGN §24.6): its homeroom teacher. */
+    public function close(User $user, Classroom $classroom): bool
+    {
+        return $this->owns($user, $classroom);
+    }
+
+    public function reopen(User $user, Classroom $classroom): bool
+    {
+        return $this->owns($user, $classroom);
+    }
+
+    public function delete(User $user, Classroom $classroom): bool
+    {
+        return $this->owns($user, $classroom);
+    }
+
     /** The student x skill mastery heatmap (§9.6, §14.3). */
     public function viewMastery(User $user, Classroom $classroom): bool
     {

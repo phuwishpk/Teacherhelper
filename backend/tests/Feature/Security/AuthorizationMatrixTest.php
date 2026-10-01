@@ -57,6 +57,19 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.roster' => ['GET', 'classrooms/{classroom}/roster', 404, 404],
         'api.classrooms.students.pending-pins' => ['POST', 'classrooms/{classroom}/students/pending-pins', 404, 404],
         'api.classrooms.login-cards' => ['POST', 'classrooms/{classroom}/login-cards', 404, 404],
+        // School-wide students (§24.4-§24.6): the homeroom teacher's classrooms only; any
+        // teacher of the school searches and validates (422 counts as reached).
+        'api.classrooms.close' => ['POST', 'classrooms/{classroom}/close', 404, 404],
+        'api.classrooms.reopen' => ['POST', 'classrooms/{classroom}/reopen', 404, 404],
+        'api.classrooms.destroy' => ['DELETE', 'classrooms/{classroom}', 404, 404],
+        'api.classrooms.students.update' => ['PATCH', 'classrooms/{classroom}/students/{student}', 404, 404],
+        'api.classrooms.students.destroy' => ['DELETE', 'classrooms/{classroom}/students/{student}', 404, 404],
+        'api.school-students.index' => ['GET', 'school-students', self::OK, self::OK],
+        // A colleague sees the student (school-wide search) but is not their homeroom teacher.
+        'api.students.update' => ['PATCH', 'students/{student}', '403 not_homeroom_teacher', 404],
+        'api.students.duplicate-candidates' => ['GET', 'students/duplicate-candidates', self::OK, self::OK],
+        'api.students.merge-preview' => ['GET', 'students/merge-preview', self::OK, self::OK],
+        'api.students.merge' => ['POST', 'students/merge', self::OK, self::OK],
         'api.students.login-card' => ['POST', 'students/{student}/login-card', 403, 404],
         'api.students.pin' => ['POST', 'students/{student}/pin', 403, 404],
         'api.login-card-prints.show' => ['GET', 'login-card-prints/{card_print}', 403, 404],
@@ -510,6 +523,12 @@ class AuthorizationMatrixTest extends TestCase
 
     private function expect(TestResponse $response, int|string $expected, string $actor, ?string $code = null): void
     {
+        // '403 not_homeroom_teacher': a status with its own code (DESIGN §24.8).
+        if (is_string($expected) && str_contains($expected, ' ')) {
+            [$status, $code] = explode(' ', $expected, 2);
+            $expected = (int) $status;
+        }
+
         $status = $response->getStatusCode();
         $body = (string) $response->getContent();
         $where = "{$actor}: {$response->baseRequest->getMethod()} {$response->baseRequest->getPathInfo()} -> {$status} ".mb_substr($body, 0, 300);

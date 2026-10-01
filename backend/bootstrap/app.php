@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureClassroomOpen;
 use App\Http\Middleware\EnsureGoogleConfigured;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -41,6 +42,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'active' => EnsureUserIsActive::class,
             'google.configured' => EnsureGoogleConfigured::class,
+            // DESIGN §24.6: writes on a closed classroom answer 409 classroom_closed.
+            'classroom.open' => EnsureClassroomOpen::class,
         ]);
 
         // There is no `login` route: the only web login is Filament's. API guests get
@@ -62,7 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // stable codes so nothing on api/* falls back to Laravel's default body.
         $exceptions->render(function (ApiException $e, Request $request) use ($wantsApiError) {
             return $wantsApiError($request)
-                ? ApiErrorResponse::make($e->getMessage(), $e->errorCode, $e->status, $e->errors)
+                ? ApiErrorResponse::make($e->getMessage(), $e->errorCode, $e->status, $e->errors, [], $e->extra)
                 : null;
         });
 

@@ -127,7 +127,7 @@ class GradebookController extends Controller
     public function specialGrade(Request $request, int $id): JsonResponse
     {
         $course = $this->course($request, $id, 'update');
-        $classroom = GradebookAccess::classroom($request->user(), $course, $request->input('classroom_id'));
+        $classroom = GradebookAccess::openClassroom($request->user(), $course, $request->input('classroom_id'));
         $data = $request->validate([
             'student_id' => ['required', 'integer', 'min:1'],
             'special' => ['present', 'nullable', Rule::in(GradebookSpecialGrade::SPECIALS)],
@@ -164,7 +164,7 @@ class GradebookController extends Controller
     public function publish(Request $request, int $id): JsonResponse
     {
         $course = $this->course($request, $id, 'update');
-        $classroom = GradebookAccess::classroom($request->user(), $course, $request->input('classroom_id'));
+        $classroom = GradebookAccess::openClassroom($request->user(), $course, $request->input('classroom_id'));
 
         return response()->json(['data' => GradebookPublisher::publish($course, $classroom, $request->user())], 201);
     }
@@ -173,7 +173,7 @@ class GradebookController extends Controller
     public function withdraw(Request $request, int $id): Response
     {
         $course = $this->course($request, $id, 'update');
-        $classroom = GradebookAccess::classroom($request->user(), $course, $request->query('classroom_id', $request->input('classroom_id')));
+        $classroom = GradebookAccess::openClassroom($request->user(), $course, $request->query('classroom_id', $request->input('classroom_id')));
         GradebookPublisher::withdraw($course, $classroom);
 
         return response()->noContent();

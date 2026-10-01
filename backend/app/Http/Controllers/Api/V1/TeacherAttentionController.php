@@ -23,7 +23,7 @@ class TeacherAttentionController extends Controller
      * GET /api/v1/teacher/attention -> {data: {keys_pending, grade_conflicts,
      * grade_failed, feedback_failed, regrade_pending, pins_pending,
      * needs_reconnect}}, over the teacher's own assignments that are not
-     * closed (pins_pending: over their classrooms):
+     * closed, in classrooms that are not closed (pins_pending: over those classrooms):
      *   keys_pending     freeform assignments whose answer key is not
      *                    approved (mirrors of Classroom website courseWork
      *                    included)
@@ -37,7 +37,11 @@ class TeacherAttentionController extends Controller
      */
     public function __invoke(Request $request): JsonResponse
     {
-        $assignments = AssignmentController::ownQuery($request)->where('status', '!=', Assignment::STATUS_CLOSED);
+        // A closed classroom (DESIGN §24.6) takes no write, so nothing of it waits for the teacher.
+        $openClassrooms = Classroom::query()->where('teacher_id', $request->user()->id)->whereNull('closed_at')->select('id');
+        $assignments = AssignmentController::ownQuery($request)
+            ->where('status', '!=', Assignment::STATUS_CLOSED)
+            ->whereIn('classroom_id', $openClassrooms);
         $ids = (clone $assignments)->select('id');
         $submissionIds = Submission::query()->whereIn('assignment_id', $ids)->select('id');
 
@@ -63,7 +67,7 @@ class TeacherAttentionController extends Controller
                 ->count(),
             'pins_pending' => ClassroomStudent::query()
                 ->whereNotNull('pin_pending_at')
-                ->whereIn('classroom_id', Classroom::query()->where('teacher_id', $request->user()->id)->select('id'))
+                ->whereIn('classroom_id', $openClassrooms)
                 ->count(),
             'needs_reconnect' => GoogleAccount::query()->find($request->user()->id)?->needsReconnect() ?? false,
         ]]);

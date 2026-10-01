@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Database\Factories\ClassroomFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §8.1 `classrooms`.
@@ -21,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $academic_year
  * @property string $class_code
  * @property bool $auto_share_analysis new analysis texts go to students without approval (§20.5)
+ * @property Carbon|null $closed_at closed = "ห้องเก่า", read-only (DESIGN §24.6)
+ * @property int|null $closed_by
  */
 class Classroom extends Model
 {
@@ -35,6 +39,8 @@ class Classroom extends Model
         'academic_year',
         'class_code',
         'auto_share_analysis',
+        'closed_at',
+        'closed_by',
     ];
 
     /**
@@ -46,7 +52,23 @@ class Classroom extends Model
             'grade_level' => 'integer',
             'academic_year' => 'integer',
             'auto_share_analysis' => 'boolean',
+            'closed_at' => 'datetime',
         ];
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->closed_at !== null;
+    }
+
+    /**
+     * Open classrooms only (DESIGN §24.6: closed ones are hidden from every picker).
+     *
+     * @param  Builder<Classroom>  $query
+     */
+    public function scopeOpen(Builder $query): void
+    {
+        $query->whereNull('classrooms.closed_at');
     }
 
     /** @return BelongsTo<School, $this> */

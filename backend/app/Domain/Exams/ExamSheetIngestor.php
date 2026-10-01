@@ -2,6 +2,7 @@
 
 namespace App\Domain\Exams;
 
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Scans\ScanFiles;
 use App\Domain\Scans\ScanIngestor;
 use App\Domain\Scans\SubmissionStatus;
@@ -80,6 +81,7 @@ final class ExamSheetIngestor
             throw new ApiException('ไม่พบข้อสอบของกระดาษคำตอบนี้ในระบบ', 'qr_invalid', 422);
         }
         Gate::forUser($user)->authorize('scan', $exam);
+        ClosedClassrooms::assertOpen($exam->classroom); // §24.6
         if ($exam->isManualExam()) {
             throw new ApiException('ข้อสอบนี้ครูตรวจเอง ไม่รับกระดาษคำตอบ', 'exam_manual_grading', 422);
         }

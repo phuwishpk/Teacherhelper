@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Exams\ExamImages;
 use App\Domain\Exams\ExamSettings;
@@ -69,6 +70,7 @@ class AssignmentController extends Controller
         Gate::authorize('create', Assignment::class);
         $teacher = $request->user();
         $classroom = Classroom::query()->findOrFail($request->validated('classroom_id'));
+        ClosedClassrooms::assertOpen($classroom); // §24.6
         // Every new assignment belongs to a course of its classroom (§20.1).
         $course = AssignmentCourses::courseFor($teacher, $classroom->id, $request->validated('course_id'));
         $plan = AssignmentCourses::planFor($course, $request->validated('lesson_plan_id'));
