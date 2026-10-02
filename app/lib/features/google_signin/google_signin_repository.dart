@@ -58,6 +58,10 @@ abstract class GoogleSignInRepository {
     required bool acceptNotice,
   });
 
+  /// `POST /me/google-identity/ticket {ticket}`: finishes a link started in
+  /// the browser with the signed-in user's own token (DESIGN §24.9.4).
+  Future<GoogleIdentity> linkWithWebTicket(String ticket);
+
   /// `DELETE /me/google-identity` (204 also when nothing was linked).
   Future<void> unlink();
 
@@ -158,6 +162,15 @@ class ApiGoogleSignInRepository implements GoogleSignInRepository {
     final res = await _dio.post<Object?>(
       '/me/google-identity',
       data: {'id_token': idToken, 'accept_notice': acceptNotice},
+    );
+    return GoogleIdentity.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<GoogleIdentity> linkWithWebTicket(String ticket) async {
+    final res = await _dio.post<Object?>(
+      '/me/google-identity/ticket',
+      data: {'ticket': ticket},
     );
     return GoogleIdentity.fromJson(unwrapJson(res.data));
   }

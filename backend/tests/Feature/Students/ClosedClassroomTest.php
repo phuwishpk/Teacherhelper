@@ -106,6 +106,7 @@ class ClosedClassroomTest extends TestCase
         'api.auth.google.link-with-pin' => null,
         'api.auth.google.link-with-qr' => null,
         'api.me.google-identity.store' => null,
+        'api.me.google-identity.ticket' => null,
         'api.me.google-identity.destroy' => null,
     ];
 

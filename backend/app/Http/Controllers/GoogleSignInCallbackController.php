@@ -9,7 +9,6 @@ use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Domain\Auth\Google\GoogleSignInWeb;
 use App\Exceptions\ApiException;
 use App\Models\User;
-use App\Models\UserGoogleIdentity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -25,8 +24,12 @@ use Illuminate\Http\Response;
  *   GOOGLE_SIGNIN_APP_URL/#/login/google?ticket=... (the fragment never
  *   reaches a server); the web app redeems it with POST /auth/google/ticket.
  *   Failures go to /#/login/google?error=<code>.
- * - link: links the account to the state's user and redirects to
- *   /#/google-link?status=linked or ?status=<error code>.
+ * - link: a 60-second single-use ticket for the state's user, redirected to
+ *   /#/google-link?ticket=...; the web app redeems it with that user's token
+ *   (POST /me/google-identity/ticket), which is what links the account.
+ *   Nothing is linked here: this route has no login, so whoever finishes
+ *   Google's chooser may not be the user who asked for the URL. Failures go
+ *   to /#/google-link?status=<error code>.
  *
  * The redirect target comes from .env only (no open redirect). An unknown,
  * expired or spent state is a Thai page with 400. Every response carries
@@ -40,7 +43,6 @@ class GoogleSignInCallbackController extends Controller
         GoogleSignInTickets $tickets,
         GoogleSignInWeb $web,
         GoogleIdTokenVerifier $verifier,
-        GoogleSignIn $signIn,
     ): Response|RedirectResponse {
         $state = $request->query('state');
         $data = $tickets->consumeState(is_string($state) ? $state : null);
@@ -92,9 +94,9 @@ class GoogleSignInCallbackController extends Controller
             if ($user->isStudent() && ! ($data['accept_notice'] ?? false)) {
                 return $this->back(true, 'notice_required');
             }
-            $signIn->link($user, $google, UserGoogleIdentity::VIA_SELF, $user);
+            GoogleSignIn::log('web_callback', 'link_ticket', $user->id);
 
-            return $this->redirect('/#/google-link?status=linked');
+            return $this->redirect('/#/google-link?ticket='.$tickets->issueWebLink($google, $user->id));
         } catch (ApiException $e) {
             GoogleSignIn::log('web_callback', $e->errorCode, $userId);
 

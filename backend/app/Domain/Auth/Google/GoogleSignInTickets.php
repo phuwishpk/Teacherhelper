@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\Cache;
  *   confirmation, so the client never sends the ID token twice;
  * - login ticket (48 hex, 60 seconds): the browser flow's hand-over from the
  *   callback to the web app (like the admin handoff, §7.4);
+ * - web link ticket (48 hex, 60 seconds): the browser flow's hand-over of a
+ *   `link`: the verified Google account and the user who asked. The web app
+ *   redeems it with that user's own token (POST /me/google-identity/ticket),
+ *   so a link only completes in a browser signed in as that user;
  * - state (32 random bytes base64url, 10 minutes): the browser flow's
  *   purpose, intent, nonce and user.
  *
@@ -34,6 +38,8 @@ final class GoogleSignInTickets
     private const LINK = 'google-signin:link:';
 
     private const LOGIN = 'google-signin:login:';
+
+    private const WEB_LINK = 'google-signin:web-link:';
 
     private const STATE = 'google-signin:state:';
 
@@ -82,6 +88,24 @@ final class GoogleSignInTickets
             'intent' => (string) ($data['intent'] ?? 'staff'),
             'school_id' => is_int($data['school_id'] ?? null) ? $data['school_id'] : null,
         ];
+    }
+
+    public function issueWebLink(VerifiedGoogleIdentity $identity, int $userId): string
+    {
+        return $this->issueTicket(self::WEB_LINK, ['identity' => $identity->toArray(), 'user_id' => $userId], self::LOGIN_TTL);
+    }
+
+    /**
+     * Spends a web link ticket.
+     *
+     * @return array{identity: VerifiedGoogleIdentity, user_id: int}|null
+     */
+    public function consumeWebLink(?string $ticket): ?array
+    {
+        $data = $this->consumeTicket(self::WEB_LINK, $ticket, self::LOGIN_TTL);
+        $identity = $data === null ? null : VerifiedGoogleIdentity::fromArray($data['identity'] ?? null);
+
+        return $identity === null || ! is_int($data['user_id'] ?? null) ? null : ['identity' => $identity, 'user_id' => $data['user_id']];
     }
 
     /**

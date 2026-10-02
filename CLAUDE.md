@@ -1,6 +1,6 @@
 # CLAUDE.md - EduVision (repo: phuwishpk/Teacherhelper)
 
-AI homework-grading platform for Thai schools: Flutter Android app + Laravel API on shared Plesk hosting + a small ML folder.
+AI homework-grading platform for Thai schools: Flutter app (Android, and the same code as a web app at /app/) + Laravel API on shared Plesk hosting + a small ML folder.
 Group course project. One developer (phuwishpk) writes all code with Claude Code; teammates edit docs/ and CSV files through the GitHub web UI.
 
 ## Read first
@@ -9,7 +9,7 @@ Group course project. One developer (phuwishpk) writes all code with Claude Code
 - Current work (since 2026-10-01): M0 and Phases 1–11 are built (Phase 8 = Google Classroom sync + whole-page grading, DESIGN §19; Phase 9 = courses, lesson plans, indicators, charts and AI analysis, DESIGN §20; Gemini token savings, DESIGN §21; Phase 10 = paper exams, DESIGN §22; Phase 11 = gradebook and Thai grading, DESIGN §23). Phase 12 is being built in the build order of DESIGN §24.17, one step at a time: school-wide student accounts (one account per school, enrol existing students, merge duplicates, closed "ห้องเก่า" classes), shared homerooms (subject teachers link their course to another teacher's class after approval; visibility per DESIGN §24.8) and Google sign-in for every role through a separate sign-in Google Cloud project (openid/email/profile only; the Classroom project of DESIGN §18 is unchanged), plus Classroom import that reuses existing students. New app packages allowed: file_picker, fl_chart. Cloudflare stays out of scope. Gemini keys: teachers enter their own in the app (DESIGN §10.1); a server key is optional.
 
 ## Layout
-- app/      Flutter, Android only. Follow DESIGN §6.1: lib/core/{api,auth,router,theme}, lib/features/<feature>/. Riverpod + go_router + dio + flutter_secure_storage. applicationId com.eduvision.app, minSdk 26.
+- app/      Flutter: Android, plus the web build served at /app/ next to the API (DESIGN §25, since 2026-10-02; everything that needs the camera pipeline or the local database stays Android-only and must show a Thai explanation on the web, never crash). Follow DESIGN §6.1: lib/core/{api,auth,router,theme}, lib/features/<feature>/. Riverpod + go_router + dio + flutter_secure_storage. applicationId com.eduvision.app, minSdk 26.
 - backend/  Laravel (composer.json php ^8.3) + Sanctum + Filament 4. Follow DESIGN §7.1: app/Http/Controllers/Api/V1, app/Domain/*, app/Jobs. Queue driver and cache driver = database. No Redis.
 - ml/       Python 3.12 managed by uv. Skeleton only in M0.
 - docs/     Design and technical docs (Thai). tools/ holds helper scripts (hosting-probe.php).
@@ -32,7 +32,8 @@ App (an AVD reaches the Mac at 10.0.2.2; a phone on the same Wi-Fi uses the Mac'
   cd app && flutter pub get
   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
   flutter test && flutter analyze
-  flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000   # quick UI preview in Chrome (web runner kept for this only; Android is the target)
+  flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000   # the web app in Chrome (DESIGN §25)
+  tools/build-web.sh                                                       # production web build + zip for backend/public/app (docs/HOSTING.md §4.9); never commit the build
   Local http:// only works because app/android/app/src/debug/ ships a network_security_config.xml that permits cleartext (debug build only; release stays https-only). Do not add it to src/main.
 ML:
   cd ml && uv sync

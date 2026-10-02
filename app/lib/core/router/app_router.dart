@@ -102,8 +102,8 @@ abstract final class AppRoutes {
   static const googleFirstLink = '/login/google/confirm';
   static const googleFirstLinkQr = '/login/google/confirm/qr';
 
-  /// Where the web flow returns after linking a Google account
-  /// (`?status=linked|<code>`); every signed-in role may open it.
+  /// Where the web flow returns after Google's chooser of a link
+  /// (`?ticket=…` or `?status=<code>`); every signed-in role may open it.
   static const googleLinkResult = '/google-link';
 
   /// Student: "บัญชีของฉัน" with the Google account (DESIGN §24.13).
@@ -519,7 +519,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.googleLinkResult,
         builder: (context, state) => GoogleLinkResultScreen(
-          status: state.uri.queryParameters['status'] ?? 'google_error',
+          status: state.uri.queryParameters['status'] ?? '',
+          ticket: state.uri.queryParameters['ticket'],
         ),
       ),
       GoRoute(

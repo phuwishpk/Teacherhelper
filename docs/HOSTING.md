@@ -263,7 +263,7 @@ CLASSROOM_SUGGEST_THRESHOLD=0.7       # นำเข้าคอร์ส: เ�
 GOOGLE_SIGNIN_CLIENT_IDS=             # client ID แบบ Web ของ project sign-in (ตัวแรก) ว่าง = ปิด ทุก route ตอบ 503 google_signin_not_configured
 GOOGLE_SIGNIN_CLIENT_SECRET=          # ใช้กับทางเว็บเท่านั้น (Flutter web) production ที่ใช้แต่แอป Android เว้นว่างได้
 GOOGLE_SIGNIN_REDIRECT_URI=           # ว่าง = APP_URL + /auth/google/callback ต้องตรงกับที่ลงทะเบียนใน §6.4 ข้อ 4
-GOOGLE_SIGNIN_APP_URL=                # ที่อยู่ของแอปเว็บที่ callback ส่งกลับ ว่าง = ปิดทางเว็บ (Android ยังใช้ได้)
+GOOGLE_SIGNIN_APP_URL=                # ที่อยู่ของเว็บแอปที่ callback ส่งกลับ: https://teacherhelper.phuwish.com/app (§4.9) ว่าง = ปิดทางเว็บ (Android ยังใช้ได้)
 GOOGLE_SIGNIN_MAX_AGE=600             # วินาทีที่รับ ID token หลัง Google ออกให้
 ```
 
@@ -367,6 +367,32 @@ curl -s "${H[@]}" -X POST $B/api/v1/auth/teacher/register -d '{"name":"ครู
 
 ผ่านครบ = server พร้อมให้แอปใช้ จด base URL `https://teacherhelper.phuwish.com` ให้ฝั่ง Flutter (`--dart-define=API_BASE_URL=...`, ดู `app/README.md`)
 
+### 4.9 เว็บแอป (`/app/`, DESIGN §25)
+
+เว็บแอปคือ build ของ `app/` ที่วางเป็นไฟล์ static ใน `backend/public/app/` ครูและนักเรียนเปิดที่ `https://teacherhelper.phuwish.com/app/` (หน้าแรก `/` พาไปเอง) ทำหลัง §4.1–§4.7 เสร็จและ health ผ่านแล้ว
+
+1. **build บน Mac** (ต้องมี Flutter; ใช้เวลาราว 1 นาที)
+   ```bash
+   tools/build-web.sh                                   # API = https://teacherhelper.phuwish.com
+   # ได้ ~/eduvision-deploy/eduvision-web.zip (ราว 15 MB) และโฟลเดอร์ ~/eduvision-deploy/app/
+   ```
+2. **อัปโหลด** Plesk > Files > ไปที่ `eduvision/backend/public/` > Upload `eduvision-web.zip` > เลือกไฟล์ > **Extract Files** (ติ๊กแทนที่ไฟล์เดิม) ต้องได้ `eduvision/backend/public/app/index.html` แล้วลบไฟล์ zip ทิ้ง
+   - File Manager ซ่อนไฟล์ที่ขึ้นต้นด้วยจุด ตรวจว่ามี `app/.htaccess` (header ความปลอดภัยของเว็บแอป) ถ้า extract แล้วไม่มี ให้อัปโหลดไฟล์นี้จาก `~/eduvision-deploy/app/.htaccess` เอง
+3. **ตรวจจาก Mac**
+   ```bash
+   curl -sI https://teacherhelper.phuwish.com/ | grep -i '^location'          # location: .../app/
+   curl -sI https://teacherhelper.phuwish.com/app/ | grep -iE '^(HTTP|content-security-policy|x-frame-options|cache-control)'
+   curl -s https://teacherhelper.phuwish.com/app/build-commit.txt             # commit ที่ build
+   ```
+   - ไม่มี `content-security-policy`: hosting ไม่มี `mod_headers` หรือไม่อ่าน `.htaccess` ในโฟลเดอร์ย่อย เว็บยังใช้ได้ แต่ให้บันทึกลง §12 และแจ้ง Hostatom
+   - `/app/` ได้ 500: `.htaccess` มีคำสั่งที่ hosting ไม่อนุญาต ลบ `app/.htaccess` ชั่วคราวแล้วบันทึกลง §12
+4. เปิด `https://teacherhelper.phuwish.com/` ใน Chrome: ต้องเห็นหน้าเข้าสู่ระบบ ลอง login ครูและนักเรียน (PIN)
+5. **Google sign-in บนเว็บ** (ไม่บังคับ): ตั้ง `.env` ตาม §6.4 ข้อ 6 โดย `GOOGLE_SIGNIN_APP_URL=https://teacherhelper.phuwish.com/app` (ไม่มี `/` ท้าย)
+
+- ⚠️ ต้องตรวจสอบ: หลังกด Deploy ของ Git รอบถัดไป โฟลเดอร์ `backend/public/app/` (ไม่อยู่ใน git) ยังอยู่หรือไม่ (ข้อเดียวกับ `.env`/`vendor` ใน §3) ถ้าถูกลบ ให้ extract zip ซ้ำทุกครั้งหลัง Deploy และบันทึกลง §12
+- สิ่งที่ทำบนเว็บไม่ได้ (สแกนด้วยกล้อง สแกนบัตร QR) อยู่ใน DESIGN §25.2 ครูใช้ **"อัปโหลดรูปเพื่อตรวจ"** แทน
+- เครื่องที่ใช้ร่วมกัน: บอกนักเรียนให้กดออกจากระบบทุกครั้ง (DESIGN §25.3)
+
 ---
 
 ## 5. Deploy ครั้งถัดไป (อัปเดตโค้ด)
@@ -380,6 +406,7 @@ CI (`.github/workflows/backend.yml`) รัน test บน PHP 8.3 + MariaDB, pi
 4. Run Now: `optimize:clear` → `optimize` → `filament:optimize` (ทุกครั้ง เพราะ route/config/view ถูก cache ไว้)
 5. `curl -s https://teacherhelper.phuwish.com/api/v1/health | jq .` และเปิด `/admin` หนึ่งหน้า
 6. ถ้าแอปเวอร์ชันใหม่ต้องการ API ใหม่ ให้ deploy server **ก่อน** แจก APK
+7. ถ้า commit นั้นแก้ `app/`: build และอัปโหลดเว็บแอปใหม่ (§4.9 ข้อ 1–3) **หลัง**ข้อ 1–5 เพื่อให้ API ใหม่พร้อมก่อนหน้าเว็บใหม่ และตรวจว่า Deploy ไม่ได้ลบ `backend/public/app/`
 
 ช่วงระหว่างข้อ 1–4 (ไม่กี่นาที) request อาจได้ 500 ถ้า migration ยังไม่รัน ทำนอกเวลาที่ครูใช้งาน ถ้าต้องการปิดชั่วคราว: Run Now `down --retry=60` ก่อนข้อ 1 และ `up` หลังข้อ 4 (API จะตอบ `503 service_unavailable` ระหว่างนั้น)
 
@@ -442,7 +469,7 @@ Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** �
 7. **build แอป** ด้วย `--dart-define=GOOGLE_SIGNIN_CLIENT_ID=<client ID แบบ Web จากข้อ 3>` (ค่าเดียวกับตัวแรกของ `GOOGLE_SIGNIN_CLIENT_IDS` ไม่ใช่ client ID แบบ Android) แอปที่ตั้งค่านี้เชื่อม Classroom ผ่านเบราว์เซอร์เสมอ (DESIGN §24.9.4) ในเครื่อง dev:
    ```bash
    flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000 --dart-define=GOOGLE_SIGNIN_CLIENT_ID=<web client id>
-   # ทางเว็บ (ดู UI เท่านั้น): พอร์ตต้องตรงกับ GOOGLE_SIGNIN_APP_URL ของ .env ในเครื่อง เช่น http://localhost:5173
+   # เว็บในเครื่อง dev: พอร์ตต้องตรงกับ GOOGLE_SIGNIN_APP_URL ของ .env ในเครื่อง เช่น http://localhost:5173 (production ใช้ tools/build-web.sh, §4.9)
    flutter run -d chrome --web-port=5173 --dart-define=API_BASE_URL=http://127.0.0.1:8000
    ```
 8. **ตั้งค่าของโรงเรียนใน `/admin`** (Filament → โรงเรียน → แก้ไข → ส่วน "เข้าสู่ระบบด้วย Google"): "โดเมนที่อนุญาต" (เช่น `school.ac.th` ว่าง = ทุกโดเมน) และสวิตช์ **"ให้นักเรียนเข้าสู่ระบบด้วย Google"** ซึ่ง**ปิดเป็นค่าตั้งต้น** เปิดเมื่อโรงเรียนมีความยินยอมของผู้ปกครองแล้วเท่านั้น (PDPA DESIGN §24.14) ปุ่ม "ลบการเชื่อม Google ของนักเรียนทั้งหมด" อยู่หัวหน้าเดียวกัน
@@ -593,3 +620,5 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | migration รอบบัญชีนักเรียน (§5 ข้อ 3) รันผ่านบน MariaDB ของ hosting | | |
 | Google sign-in: Android client ย้ายจาก project Classroom ได้หรือต้องลบก่อน (§6.4 ข้อ 5) | | |
 | Google sign-in: `sub` ของ ID token = `userId` ของ Classroom (§6.4 ข้อ 9) | | |
+| เว็บแอป: `/app/` ส่ง `Content-Security-Policy` จาก `app/.htaccess` หรือไม่ (§4.9 ข้อ 3) | | |
+| เว็บแอป: `backend/public/app/` ยังอยู่หลัง Deploy ของ Git รอบถัดไปหรือไม่ (§4.9) | | |
