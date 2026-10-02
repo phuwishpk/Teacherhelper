@@ -357,8 +357,9 @@ curl -s "${H[@]}" $B/api/v1/classrooms/abc; echo            # code not_found
 # 5. rate limit ของ login ครู (10 ครั้ง/นาที/IP) ครั้งที่ 11 ต้องได้ 429 + Retry-After
 for i in $(seq 1 11); do curl -s -o /dev/null -w '%{http_code} ' "${H[@]}" -X POST $B/api/v1/auth/teacher/login -d '{"email":"nobody@example.com","password":"wrong-password"}'; done; echo
 
-# 6. สมัครครูด้วยรหัสโรงเรียน (หลังรอ 1 นาทีให้ throttle หมด)
-curl -s "${H[@]}" -X POST $B/api/v1/auth/teacher/register -d '{"school_code":"<SEED_TEACHER_JOIN_CODE>","name":"ครูทดสอบ","email":"t1@example.com","password":"secret1234"}'
+# 6. สมัครครู ไม่ต้องใช้รหัสโรงเรียน (หลังรอ 1 นาทีให้ throttle หมด) ถ้ามีหลายโรงเรียนใส่ "school_id" จาก GET /api/v1/auth/schools
+curl -s "${H[@]}" $B/api/v1/auth/schools; echo              # {"data":[{"id":1,"name":"..."}]} ชื่ออย่างเดียว ไม่มีรหัส
+curl -s "${H[@]}" -X POST $B/api/v1/auth/teacher/register -d '{"name":"ครูทดสอบ","email":"t1@example.com","password":"secret1234"}'
 #   201 และบัญชีเป็น pending → อนุมัติใน /admin > Users แล้ว login จากแอปได้
 ```
 
@@ -476,8 +477,8 @@ Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** �
 
 ## 8. ตัวชี้วัดและข้อมูลตั้งต้น
 
-- **โรงเรียน**: `/admin` > Schools สร้างโรงเรียนและดู/สร้าง `teacher_join_code` ใหม่ (รหัสนี้คือด่านเดียวของการสมัครครู แจกเฉพาะครูของโรงเรียนนั้น) ตั้ง `allow_training_data` และ `crop_retention_until` ต่อโรงเรียนที่นี่ (DESIGN §7.5)
-- **ครู**: สมัครจากแอปด้วยรหัสโรงเรียน แล้ว admin อนุมัติใน `/admin` > Users (`pending` → `active`)
+- **โรงเรียน**: `/admin` > Schools สร้างโรงเรียน (`teacher_join_code` ระบบสุ่มให้ อยู่ในหัวข้อ "รหัสสมัครครูสำหรับแอปรุ่นเก่า (ไม่จำเป็น)" ที่ย่อไว้ ไม่ต้องแจกครู DESIGN §17 #70) ตั้ง `allow_training_data` และ `crop_retention_until` ต่อโรงเรียนที่นี่ (DESIGN §7.5)
+- **ครู**: สมัครจากแอปโดยเลือกโรงเรียน (มีโรงเรียนเดียวแอปแสดงชื่อให้) ไม่ต้องใช้รหัสโรงเรียน แล้ว admin อนุมัติใน `/admin` > ผู้ใช้และครู (`pending` → `active`) **การอนุมัตินี้เป็นด่านเดียว** ตรวจชื่อและอีเมลก่อนกด เมนูมีตัวเลขครูที่รออนุมัติ
 - **ตัวชี้วัด (Q-matrix, DESIGN §2.3)**: ไฟล์ CSV จาก `docs/curriculum/` (ทีมทำ) import ได้สองทาง
   - `/admin` > Skills > Import CSV (ไฟล์ ≤ 2 MB)
   - หรืออัปโหลด CSV ผ่าน Files แล้ว Run Now `eduvision:import-skills <path เต็ม>` (เพิ่ม `--school=<id>` สำหรับทักษะย่อยของโรงเรียนเดียว) import ซ้ำได้: upsert ตาม `skill_code`
