@@ -15,7 +15,9 @@ import 'google_signin_repository.dart';
 /// the server's callback sends the web preview back after Google's account
 /// chooser. The one-time ticket (60 seconds) is redeemed with
 /// `POST /auth/google/ticket`; the answer is that of `POST /auth/google`,
-/// so a 404 `google_not_linked` leads to the registration or the first
+/// so a new teacher may be signed in at once (#71), a 404 with
+/// `needs_school` asks for the school and goes back to Google with it, and
+/// another 404 `google_not_linked` leads to the registration or the first
 /// confirmation like on Android. A flow started by "สมัครด้วย Google" of
 /// the register page ([takeGoogleSignUpMark]) goes straight back to that
 /// page, filled in, instead of asking.
@@ -68,7 +70,21 @@ class _GoogleLoginReturnScreenState
       return; // The router takes the user home.
     } catch (e) {
       if (!mounted) return;
-      final registration = signUp ? GoogleNotLinked.of(e)?.registration : null;
+      final notLinked = GoogleNotLinked.of(e);
+      if (notLinked != null && notLinked.needsSchool) {
+        // A new teacher and several schools (#71): pick one, then Google's
+        // page again with the school carried to the next ticket.
+        message = await _restartWithSchool(notLinked, signUp: signUp);
+        if (message == null) return;
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _message = message;
+          });
+        }
+        return;
+      }
+      final registration = signUp ? notLinked?.registration : null;
       if (registration != null) {
         context.go(AppRoutes.register, extra: registration);
         return;
@@ -82,6 +98,24 @@ class _GoogleLoginReturnScreenState
         _busy = false;
         _message = message;
       });
+    }
+  }
+
+  /// Null when Google's page opened, else the Thai message to show.
+  Future<String?> _restartWithSchool(
+    GoogleNotLinked notLinked, {
+    required bool signUp,
+  }) async {
+    try {
+      final schoolId = await pickGoogleSignUpSchool(context, ref);
+      if (schoolId == null) return notLinked.message;
+      return await restartGoogleWebSignIn(
+        ref,
+        schoolId: schoolId,
+        signUp: signUp,
+      );
+    } catch (e) {
+      return googleSignInErrorMessage(e);
     }
   }
 

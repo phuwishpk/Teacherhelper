@@ -4,6 +4,7 @@ import 'package:eduvision/core/auth/session.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/core/auth/user.dart';
 import 'package:eduvision/core/router/app_router.dart';
+import 'package:eduvision/features/google_signin/google_signin_models.dart';
 import 'package:eduvision/features/google_signin/google_signin_providers.dart';
 import 'package:eduvision/features/google_signin/google_signin_repository.dart';
 import 'package:eduvision/features/google_signin/google_web_return_screens.dart';
@@ -38,13 +39,19 @@ List<GoRoute> get _stubs => [
 Future<ProviderContainer> _pumpTicket(
   WidgetTester tester,
   String ticket,
-  FakeGoogleSignInRepository repo,
-) async {
+  FakeGoogleSignInRepository repo, {
+  FakeMeAuth? auth,
+  List<Uri>? opened,
+}) async {
   final container = ProviderContainer(
     overrides: [
       tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
-      authRepositoryProvider.overrideWithValue(FakeMeAuth(teacherUser)),
+      authRepositoryProvider.overrideWithValue(auth ?? FakeMeAuth(teacherUser)),
       googleSignInRepositoryProvider.overrideWithValue(repo),
+      sameTabUrlOpenerProvider.overrideWithValue((url) async {
+        opened?.add(url);
+        return true;
+      }),
     ],
   );
   addTearDown(container.dispose);
@@ -147,6 +154,60 @@ void main() {
       final container = await _pumpTicket(tester, 'c' * 48, repo);
       expect(find.text('page ${AppRoutes.googleFirstLink}'), findsOneWidget);
       expect(container.read(googleLinkTicketProvider), 'b' * 48);
+    });
+  });
+
+  group('/login/google, a new teacher with several schools (#71)', () {
+    const schools = [
+      SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision'),
+      SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
+    ];
+
+    testWidgets('picks the school and goes back to Google with it', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository()
+        ..ticketError = staffNeedsSchool();
+      final opened = <Uri>[];
+      await _pumpTicket(
+        tester,
+        'c' * 48,
+        repo,
+        auth: FakeMeAuth(teacherUser, schoolList: schools),
+        opened: opened,
+      );
+      expect(
+        find.byKey(const ValueKey('google_school_picker')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('โรงเรียนบ้านหนองบัว'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(repo.webUrls.single.intent, GoogleIntent.staff);
+      expect(repo.webUrlSchools, [9]);
+      expect(opened, [FakeGoogleSignInRepository.googleUrl]);
+      expect(
+        find.byKey(const ValueKey('google_not_linked_dialog')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('closing the list shows the server\'s message', (tester) async {
+      final repo = FakeGoogleSignInRepository()
+        ..ticketError = staffNeedsSchool();
+      await _pumpTicket(
+        tester,
+        'c' * 48,
+        repo,
+        auth: FakeMeAuth(teacherUser, schoolList: schools),
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(repo.webUrls, isEmpty);
+      expect(tester.widget<Text>(_message).data, contains('เลือกโรงเรียน'));
     });
   });
 

@@ -56,6 +56,37 @@ void main() {
     expect(_body(only()), {'id_token': 'id.tok', 'intent': 'student'});
   });
 
+  test('sign-in and web-url send the picked school (#71)', () async {
+    answer(200, tokenBody);
+    await repo.signIn(
+      idToken: 'id.tok',
+      intent: GoogleIntent.staff,
+      schoolId: 7,
+    );
+    expect(_body(only()), {
+      'id_token': 'id.tok',
+      'intent': 'staff',
+      'school_id': 7,
+    });
+
+    answer(200, {
+      'data': {'url': 'https://accounts.google.com/o/oauth2/v2/auth?x=1'},
+    });
+    await repo.webUrl(link: false, intent: GoogleIntent.staff, schoolId: 7);
+    expect(_body(only()), {
+      'purpose': 'login',
+      'intent': 'staff',
+      'school_id': 7,
+    });
+  });
+
+  test('a 404 with needs_school is read', () {
+    final notLinked = GoogleNotLinked.of(staffNeedsSchool())!;
+    expect(notLinked.needsSchool, isTrue);
+    expect(notLinked.registration?.email, 'new@school.ac.th');
+    expect(GoogleNotLinked.of(staffNotLinked())!.needsSchool, isFalse);
+  });
+
   test('web-url for login sends the intent, for link the notice', () async {
     answer(200, {
       'data': {'url': 'https://accounts.google.com/o/oauth2/v2/auth?x=1'},

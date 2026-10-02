@@ -155,6 +155,115 @@ void main() {
     expect(_error, findsNothing);
   });
 
+  group('a new teacher (#71)', () {
+    const schools = [
+      SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision'),
+      SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
+    ];
+    final picker = find.byKey(const ValueKey('google_school_picker'));
+
+    testWidgets('is signed in at once, no registration dialog', (tester) async {
+      final h = await _pump(tester);
+      await _tapGoogle(tester);
+
+      expect(h.session, isA<SignedIn>());
+      expect((h.session as SignedIn).user.isTeacher, isTrue);
+      expect(h.repo.signInSchools, [null]);
+      expect(
+        find.byKey(const ValueKey('google_not_linked_dialog')),
+        findsNothing,
+      );
+      expect(find.text('สมัครใช้งาน (ครู)'), findsNothing);
+    });
+
+    testWidgets('picks the school first when there are several', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository()
+        ..signInErrors.addAll([staffNeedsSchool(), null]);
+      final h = await _pump(
+        tester,
+        repo: repo,
+        auth: FakeMeAuth(teacherUser, schoolList: schools),
+      );
+      await _tapGoogle(tester);
+      expect(picker, findsOneWidget);
+      expect(find.text('โรงเรียนบ้านหนองบัว'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('google_school_9')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(h.gateway.calls, 1, reason: 'the same ID token is sent again');
+      expect(h.repo.signIns, [
+        ('google-id-token', GoogleIntent.staff),
+        ('google-id-token', GoogleIntent.staff),
+      ]);
+      expect(h.repo.signInSchools, [null, 9]);
+      expect(h.session, isA<SignedIn>());
+      expect(_error, findsNothing);
+    });
+
+    testWidgets('a token that grew old while picking is asked again', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository()
+        ..signInErrors.addAll([
+          staffNeedsSchool(),
+          apiError(422, 'google_token_invalid'),
+          null,
+        ]);
+      final h = await _pump(
+        tester,
+        repo: repo,
+        auth: FakeMeAuth(teacherUser, schoolList: schools),
+      );
+      await _tapGoogle(tester);
+      await tester.tap(find.byKey(const ValueKey('google_school_7')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(h.gateway.calls, 2);
+      expect(h.repo.signIns.last.$1, 'google-id-token-2');
+      expect(h.repo.signInSchools, [null, 7, 7]);
+      expect(h.session, isA<SignedIn>());
+    });
+
+    testWidgets('one school is used without asking', (tester) async {
+      final repo = FakeGoogleSignInRepository()
+        ..signInErrors.addAll([staffNeedsSchool(), null]);
+      final h = await _pump(
+        tester,
+        repo: repo,
+        auth: FakeMeAuth(teacherUser, schoolList: [schools.first]),
+      );
+      await _tapGoogle(tester);
+      expect(picker, findsNothing);
+      expect(h.repo.signInSchools, [null, 7]);
+      expect(h.session, isA<SignedIn>());
+    });
+
+    testWidgets('closing the school list cancels quietly', (tester) async {
+      final repo = FakeGoogleSignInRepository()
+        ..signInErrors.add(staffNeedsSchool());
+      final h = await _pump(
+        tester,
+        repo: repo,
+        auth: FakeMeAuth(teacherUser, schoolList: schools),
+      );
+      await _tapGoogle(tester);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(picker, findsNothing);
+      expect(h.repo.signIns, hasLength(1));
+      expect(h.session, isNot(isA<SignedIn>()));
+      expect(_error, findsNothing);
+      expect(_button, findsOneWidget);
+    });
+  });
+
   testWidgets('the student tab sends the student intent', (tester) async {
     final h = await _pump(tester, tab: LoginTab.student);
     await _tapGoogle(tester);

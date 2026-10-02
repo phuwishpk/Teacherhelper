@@ -34,13 +34,14 @@ const _schools = [SchoolOption(id: 7, name: 'โรงเรียนสาธ�
 
 /// `/me` plus the school list and the registration of the register page.
 class _Auth extends FakeMeAuth {
-  _Auth() : super(teacherUser);
+  _Auth({this.list = _schools}) : super(teacherUser);
 
+  final List<SchoolOption> list;
   final tickets = <String?>[];
   final emails = <String>[];
 
   @override
-  Future<List<SchoolOption>> schools() async => _schools;
+  Future<List<SchoolOption>> schools() async => list;
 
   @override
   Future<void> register({
@@ -202,6 +203,37 @@ void main() {
       expect(find.widgetWithText(TextFormField, 'new@school.ac.th'), findsOne);
     });
 
+    testWidgets('a new teacher is signed in at once, no form (#71)', (
+      tester,
+    ) async {
+      final auth = _Auth(
+        list: const [
+          ..._schools,
+          SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
+        ],
+      );
+      final repo = FakeGoogleSignInRepository()
+        ..signInErrors.addAll([staffNeedsSchool(), null]);
+      final h = await _pump(tester, repo: repo, auth: auth);
+      // The dialog keeps the button's spinner running: pump, do not settle.
+      await tester.ensureVisible(_button);
+      await tester.tap(_button);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        find.byKey(const ValueKey('google_school_picker')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('google_school_9')));
+      await tester.pumpAndSettle();
+
+      expect(h.repo.signInSchools, [null, 9]);
+      expect(h.container.read(sessionProvider), isA<SignedIn>());
+      expect(auth.tickets, isEmpty, reason: 'no registration request');
+      expect(_banner, findsNothing);
+      expect(_error, findsNothing);
+    });
+
     testWidgets('an account linked already signs in', (tester) async {
       final h = await _pump(tester);
       await _tap(tester);
@@ -303,6 +335,8 @@ void main() {
       DateTime? mark,
       String? ticket = 'web-ticket',
       String? error,
+      FakeGoogleSignInRepository? repo,
+      _Auth? auth,
     }) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
@@ -311,11 +345,13 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           tokenStorageProvider.overrideWithValue(storage),
-          authRepositoryProvider.overrideWithValue(_Auth()),
+          authRepositoryProvider.overrideWithValue(auth ?? _Auth()),
           googleSignInModeProvider.overrideWithValue(GoogleSignInMode.web),
           googleSignInRepositoryProvider.overrideWithValue(
-            FakeGoogleSignInRepository()..ticketError = staffNotLinked(),
+            repo ??
+                (FakeGoogleSignInRepository()..ticketError = staffNotLinked()),
           ),
+          sameTabUrlOpenerProvider.overrideWithValue((_) async => true),
         ],
       );
       addTearDown(container.dispose);
@@ -359,6 +395,35 @@ void main() {
       expect(_banner, findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'new@school.ac.th'), findsOne);
       expect(storage.googleSignUpStartedAt, isNull);
+    });
+
+    testWidgets('a new teacher picks the school and the mark is kept', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository()
+        ..ticketError = staffNeedsSchool();
+      final storage = await pumpReturn(
+        tester,
+        mark: DateTime.now(),
+        repo: repo,
+        auth: _Auth(
+          list: const [
+            ..._schools,
+            SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
+          ],
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('google_school_7')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(repo.webUrlSchools, [7]);
+      expect(
+        storage.googleSignUpStartedAt,
+        isNotNull,
+        reason: 'a school that approves teachers itself comes back here',
+      );
+      expect(_dialog, findsNothing);
     });
 
     testWidgets('without the mark asks like the login page', (tester) async {

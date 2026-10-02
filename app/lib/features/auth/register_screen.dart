@@ -22,7 +22,9 @@ final registrationSchoolsProvider =
 /// admin approves the account before it can log in. Opened from a Google
 /// sign-in that found no account ([google], DESIGN §24.9.5), or after
 /// "สมัครด้วย Google" on this page, the name and e-mail start from the
-/// Google account and the account is linked as it is created.
+/// Google account and the account is linked as it is created. That form
+/// is only for a school that approves its teachers itself: elsewhere
+/// "สมัครด้วย Google" signs the new teacher in at once (#71).
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key, this.google});
 
