@@ -75,6 +75,11 @@ return [
     'classroom_sync' => [
         'max_coursework' => max(1, (int) env('CLASSROOM_SYNC_MAX_COURSEWORK', 20)),
         'budget_seconds' => max(1, (int) env('CLASSROOM_SYNC_BUDGET_SECONDS', 40)),
+        // Rosters (DESIGN §19.3): a linked classroom not synced for this many
+        // minutes gets a roster sync in the next round, at most max_rosters
+        // classrooms per round.
+        'roster_minutes' => max(1, (int) env('CLASSROOM_ROSTER_SYNC_MINUTES', 15)),
+        'max_rosters' => max(1, (int) env('CLASSROOM_SYNC_MAX_ROSTERS', 10)),
     ],
 
     // Classroom import (DESIGN §24.10): the preview suggests binding the

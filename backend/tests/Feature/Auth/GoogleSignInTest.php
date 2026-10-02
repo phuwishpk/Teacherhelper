@@ -324,6 +324,17 @@ class GoogleSignInTest extends TestCase
         $this->assertSame(0, UserGoogleIdentity::count());
     }
 
+    public function test_an_unmatched_student_is_told_a_classroom_roster_links_them_soon(): void
+    {
+        $this->allowStudents($this->school);
+        config(['eduvision.classroom_sync.roster_minutes' => 15]);
+
+        $this->signIn(['sub' => 'not-yet-synced', 'email' => 'new@school.ac.th'], 'student')
+            ->assertNotFound()
+            ->assertJsonPath('code', 'google_not_linked')
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, 'Google Classroom') && str_contains($m, 'รอประมาณ 20 นาที') && str_contains($m, 'PIN'));
+    }
+
     public function test_the_roster_link_respects_the_switch(): void
     {
         $student = $this->enrollStudent($this->classroom)['student'];
