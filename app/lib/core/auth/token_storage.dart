@@ -29,6 +29,13 @@ abstract class TokenStorage {
   Future<String?> readLoginTab();
   Future<void> writeLoginTab(String tab);
 
+  /// When the web preview left the register page for Google's account
+  /// chooser ("สมัครด้วย Google", DESIGN §24.9.5), so the return on
+  /// `/login/google` opens the register page instead of asking. Null clears
+  /// it. The return reads and clears it; survives [clear].
+  Future<DateTime?> readGoogleSignUpStartedAt();
+  Future<void> writeGoogleSignUpStartedAt(DateTime? at);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
@@ -41,6 +48,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _userKey = 'auth_user';
   static const _ownerKey = 'local_data_owner';
   static const _loginTabKey = 'login_tab';
+  static const _googleSignUpKey = 'google_signup_started_at';
   final FlutterSecureStorage _storage;
 
   @override
@@ -82,6 +90,18 @@ class SecureTokenStorage implements TokenStorage {
       _storage.write(key: _loginTabKey, value: tab);
 
   @override
+  Future<DateTime?> readGoogleSignUpStartedAt() async =>
+      DateTime.tryParse(await _storage.read(key: _googleSignUpKey) ?? '');
+
+  @override
+  Future<void> writeGoogleSignUpStartedAt(DateTime? at) => at == null
+      ? _storage.delete(key: _googleSignUpKey)
+      : _storage.write(
+          key: _googleSignUpKey,
+          value: at.toUtc().toIso8601String(),
+        );
+
+  @override
   Future<void> clear() async {
     await _storage.delete(key: _key);
     await _storage.delete(key: _userKey);
@@ -89,12 +109,26 @@ class SecureTokenStorage implements TokenStorage {
 }
 
 class InMemoryTokenStorage implements TokenStorage {
-  InMemoryTokenStorage({this.token, this.user, this.dataOwner, this.loginTab});
+  InMemoryTokenStorage({
+    this.token,
+    this.user,
+    this.dataOwner,
+    this.loginTab,
+    this.googleSignUpStartedAt,
+  });
 
   String? token;
   Map<String, dynamic>? user;
   int? dataOwner;
   String? loginTab;
+  DateTime? googleSignUpStartedAt;
+
+  @override
+  Future<DateTime?> readGoogleSignUpStartedAt() async => googleSignUpStartedAt;
+
+  @override
+  Future<void> writeGoogleSignUpStartedAt(DateTime? at) async =>
+      googleSignUpStartedAt = at;
 
   @override
   Future<String?> readLoginTab() async => loginTab;

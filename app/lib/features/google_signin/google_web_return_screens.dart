@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import 'google_signin_errors.dart';
 import 'google_signin_flow.dart';
+import 'google_signin_models.dart';
 import 'google_signin_providers.dart';
 import 'google_signin_repository.dart';
 
@@ -15,7 +16,9 @@ import 'google_signin_repository.dart';
 /// chooser. The one-time ticket (60 seconds) is redeemed with
 /// `POST /auth/google/ticket`; the answer is that of `POST /auth/google`,
 /// so a 404 `google_not_linked` leads to the registration or the first
-/// confirmation like on Android.
+/// confirmation like on Android. A flow started by "สมัครด้วย Google" of
+/// the register page ([takeGoogleSignUpMark]) goes straight back to that
+/// page, filled in, instead of asking.
 class GoogleLoginReturnScreen extends ConsumerStatefulWidget {
   const GoogleLoginReturnScreen({super.key, this.ticket, this.error});
 
@@ -46,12 +49,15 @@ class _GoogleLoginReturnScreenState
   @override
   void initState() {
     super.initState();
-    if (_ticket case final ticket?) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _redeem(ticket));
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Read (and cleared) on every return, so a mark never outlives it.
+      final signUp = await takeGoogleSignUpMark(ref);
+      if (!mounted) return;
+      if (_ticket case final ticket?) await _redeem(ticket, signUp: signUp);
+    });
   }
 
-  Future<void> _redeem(String ticket) async {
+  Future<void> _redeem(String ticket, {required bool signUp}) async {
     String? message;
     try {
       await ref
@@ -62,6 +68,11 @@ class _GoogleLoginReturnScreenState
       return; // The router takes the user home.
     } catch (e) {
       if (!mounted) return;
+      final registration = signUp ? GoogleNotLinked.of(e)?.registration : null;
+      if (registration != null) {
+        context.go(AppRoutes.register, extra: registration);
+        return;
+      }
       message =
           await handleGoogleSignInError(context, ref, e) ??
           'ทำต่อในหน้าถัดไป หรือกลับไปหน้าเข้าสู่ระบบ';

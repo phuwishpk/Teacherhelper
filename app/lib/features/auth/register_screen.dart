@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/router/app_router.dart';
 import '../google_signin/google_signin_errors.dart';
+import '../google_signin/google_signin_flow.dart';
 import '../google_signin/google_signin_models.dart';
 
 /// The schools of the sign-up form (GET /auth/schools). Not retried by
@@ -19,9 +20,9 @@ final registrationSchoolsProvider =
 /// "สมัครใช้งาน (ครู)" (DESIGN §9.1). No school code since 2 Oct 2569: with
 /// one school its name is shown, with several the teacher picks one, and an
 /// admin approves the account before it can log in. Opened from a Google
-/// sign-in that found no account ([google], DESIGN §24.9.5), the name and
-/// e-mail start from the Google account and the account is linked as it is
-/// created.
+/// sign-in that found no account ([google], DESIGN §24.9.5), or after
+/// "สมัครด้วย Google" on this page, the name and e-mail start from the
+/// Google account and the account is linked as it is created.
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key, this.google});
 
@@ -37,6 +38,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   late final _name = TextEditingController(text: widget.google?.name);
   late final _email = TextEditingController(text: widget.google?.email);
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
+
+  /// The Google account this registration links, from [RegisterScreen.google]
+  /// or "สมัครด้วย Google".
+  late GoogleRegistration? _google = widget.google;
   bool _busy = false;
   String? _error;
 
@@ -49,7 +55,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
+  }
+
+  /// "สมัครด้วย Google" found no account: fill the form like a prefill from
+  /// the login page (a typed name is kept), then ask for the password.
+  void _useGoogle(GoogleRegistration google) {
+    setState(() {
+      _google = google;
+      _linkTicket = google.linkTicket;
+      _error = null;
+      if (_name.text.trim().isEmpty && google.name.isNotEmpty) {
+        _name.text = google.name;
+      }
+      if (google.email.isNotEmpty) _email.text = google.email;
+    });
+    _passwordFocus.requestFocus();
   }
 
   Future<void> _submit() async {
@@ -194,6 +216,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Offered while no Google account is linked: before one
+                  // is chosen, and again after its ticket expired.
+                  if (_linkTicket == null)
+                    GoogleSignUpSection(onRegistration: _useGoogle),
                   if (_linkTicket != null) ...[
                     Card(
                       key: const ValueKey('register_google_banner'),
@@ -202,9 +228,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         leading: const Icon(Icons.account_circle_outlined),
                         title: const Text('สมัครพร้อมเชื่อมบัญชี Google'),
                         subtitle: Text(
-                          'บัญชี Google ${widget.google?.email ?? ''} จะเชื่อมกับบัญชีครูทันทีที่สมัคร '
+                          'บัญชี Google ${_google?.email ?? ''} จะเชื่อมกับบัญชีครูทันทีที่สมัคร '
                           'ยังต้องตั้งรหัสผ่านไว้เป็นทางสำรอง',
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'เมื่อผู้ดูแลโรงเรียนอนุมัติแล้ว เข้าสู่ระบบได้ทั้งด้วยบัญชี Google นี้และรหัสผ่าน',
+                      key: const ValueKey('register_google_helper'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -231,6 +265,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _password,
+                    focusNode: _passwordFocus,
                     obscureText: true,
                     decoration: const InputDecoration(
                       labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
