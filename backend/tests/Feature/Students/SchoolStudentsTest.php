@@ -3,6 +3,7 @@
 namespace Tests\Feature\Students;
 
 use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\SchoolStudents;
 use App\Jobs\RenderLoginCardsJob;
 use App\Models\Assignment;
 use App\Models\Classroom;
@@ -298,5 +299,26 @@ class SchoolStudentsTest extends TestCase
         UserGoogleIdentity::create(['user_id' => $c->id, 'google_sub' => 'g-1', 'email' => 'somchai@school.ac.th', 'linked_via' => 'self', 'linked_at' => now()]);
         $pairs = $this->asUser($this->teacher)->getJson('/api/v1/students/duplicate-candidates')->assertOk()->json('data');
         $this->assertTrue(collect($pairs)->firstWhere('a.id', $c->id)['a']['has_google']);
+    }
+
+    public function test_the_capped_pair_list_shows_the_newest_duplicates_first(): void
+    {
+        // More same-name pairs than the cap, all older than the new duplicate.
+        $old = [];
+        for ($i = 1; $i <= 16; $i++) { // 16 accounts -> 120 pairs > MAX_PAIRS
+            $old[] = $this->enrollStudent($this->room2, $i, 'ด.ช. ชื่อซ้ำ ทดสอบ')['student'];
+        }
+        $kept = $this->enrollStudent($this->room2, 30, 'ด.ญ. ใหม่ ล่าสุด')['student'];
+        $dup = $this->enrollStudent($this->room2, 31, 'ด.ญ. ใหม่ ล่าสุด')['student'];
+
+        $pairs = $this->asUser($this->teacher)->getJson('/api/v1/students/duplicate-candidates')->assertOk()->json('data');
+        $this->assertCount(SchoolStudents::MAX_PAIRS, $pairs);
+        $this->assertSame([$kept->id, $dup->id], [$pairs[0]['a']['id'], $pairs[0]['b']['id']]);
+        // Then by the newer account of each pair, descending.
+        $newer = array_map(fn ($p) => max($p['a']['id'], $p['b']['id']), $pairs);
+        $sorted = $newer;
+        rsort($sorted);
+        $this->assertSame($sorted, $newer);
+        $this->assertSame([$old[14]->id, $old[15]->id], [$pairs[1]['a']['id'], $pairs[1]['b']['id']]);
     }
 }

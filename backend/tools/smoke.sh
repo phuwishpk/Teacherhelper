@@ -94,6 +94,11 @@ export GEMINI_FAKE=true
 export GEMINI_API_KEY=
 export GOOGLE_OAUTH_CLIENT_ID=
 export GOOGLE_OAUTH_CLIENT_SECRET=
+# Google sign-in is off on the server started here even when .env configures
+# it (the "sign-in off" step expects 503); tools/smoke-google.php turns it on
+# in its own process with a faked JWKS.
+export GOOGLE_SIGNIN_CLIENT_IDS=
+export GOOGLE_SIGNIN_CLIENT_SECRET=
 export FIREBASE_CREDENTIALS=
 
 SERVER_PID=""
