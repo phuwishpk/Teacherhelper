@@ -6,16 +6,18 @@
 ## เอกสาร
 - [docs/DESIGN.md](docs/DESIGN.md) เอกสารออกแบบระบบ (สถาปัตยกรรม, schema, API, fuzzy, prompt)
 - [docs/KICKOFF.md](docs/KICKOFF.md) แผนขึ้นโปรเจกต์และกติกาของ repo
+- [docs/DEPLOY-CHECKLIST.md](docs/DEPLOY-CHECKLIST.md) ขั้นตอนขึ้นเว็บครั้งแรกแบบทำตามทีละข้อ และ [docs/HOSTING.md](docs/HOSTING.md) รายละเอียดการ deploy บน Plesk
+- [docs/STATUS.md](docs/STATUS.md) ความคืบหน้าล่าสุด
 - รายงานและสไลด์: <ลิงก์ Google Drive>
 
 ## โครงสร้าง
 | โฟลเดอร์ | เนื้อหา | เริ่มใช้งาน |
 |---|---|---|
-| `app/` | แอป Flutter (Android) | ดู `app/README.md` |
+| `app/` | แอป Flutter (Android และเว็บแอปที่ `/app/`) | ดู `app/README.md` |
 | `backend/` | Laravel API + Filament admin | ดู `backend/README.md` |
 | `ml/` | โค้ด Python สำหรับเทรน CNN (uv) | `cd ml && uv sync` |
 | `docs/` | เอกสารเทคนิคและ CSV ตัวชี้วัด | แก้ผ่านหน้าเว็บ GitHub ได้ |
-| `tools/` | สคริปต์ช่วยงาน เช่น hosting probe | |
+| `tools/` | สคริปต์ช่วยงาน เช่น hosting probe และ `build-web.sh` (build เว็บแอป) | |
 
 ## ทีมและรายวิชา
 - ผู้พัฒนา: phuwishpk (โค้ดทั้งหมด) และสมาชิกทีม: <ชื่อ> (เอกสาร, ตัวชี้วัด, fixture, usability test)
