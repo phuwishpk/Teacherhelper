@@ -25,7 +25,11 @@ class SchoolResourceTest extends TestCase
         $this->actingAs($this->makeAdmin());
     }
 
-    public function test_schools_are_listed_with_their_join_code(): void
+    /**
+     * Since 2 Oct 2569 teachers sign up without a code (an admin approves
+     * them), so the list no longer shows the legacy join code.
+     */
+    public function test_schools_are_listed_without_the_legacy_join_code(): void
     {
         $school = School::factory()->create(['name' => 'โรงเรียนทดสอบ', 'teacher_join_code' => 'JOIN2569']);
         $this->makeTeacher($school);
@@ -34,8 +38,20 @@ class SchoolResourceTest extends TestCase
 
         Livewire::test(ListSchools::class)
             ->assertCanSeeTableRecords([$school])
-            ->assertSee('JOIN2569')
+            ->assertDontSee('JOIN2569')
+            ->assertTableColumnDoesNotExist('teacher_join_code')
             ->assertTableColumnStateSet('teachers_count', 1, $school);
+    }
+
+    public function test_a_school_is_created_without_touching_the_legacy_join_code(): void
+    {
+        Livewire::test(CreateSchool::class)
+            ->fillForm(['name' => 'โรงเรียนไม่กรอกรหัส'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $code = School::query()->where('name', 'โรงเรียนไม่กรอกรหัส')->value('teacher_join_code');
+        $this->assertMatchesRegularExpression('/^[A-HJ-NP-Z2-9]{8}$/', (string) $code);
     }
 
     public function test_admin_creates_a_school_with_a_generated_join_code(): void

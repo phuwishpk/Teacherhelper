@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\Users\Pages\ManageUsers;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -36,6 +37,23 @@ class UserResourceTest extends TestCase
         Livewire::test(ManageUsers::class)
             ->assertCanSeeTableRecords([$teacher, $this->admin])
             ->assertSee('ครูรออนุมัติ');
+    }
+
+    public function test_the_menu_badge_counts_teachers_waiting_for_approval(): void
+    {
+        $this->assertNull(UserResource::getNavigationBadge());
+
+        $school = $this->makeSchool();
+        User::factory()->teacher($school)->pending()->count(2)->create();
+        User::factory()->teacher()->pending()->create(); // another school
+        User::factory()->teacher($school)->create(); // active
+
+        $this->assertSame('3', UserResource::getNavigationBadge());
+        $this->assertSame('warning', UserResource::getNavigationBadgeColor());
+
+        // An admin of a school counts that school only.
+        $this->actingAs(User::factory()->admin()->create(['school_id' => $school->id]));
+        $this->assertSame('2', UserResource::getNavigationBadge());
     }
 
     public function test_admin_approves_a_pending_teacher(): void

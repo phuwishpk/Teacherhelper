@@ -194,13 +194,22 @@ ok "$(j '.status')"
 # ---------------------------------------------------------------- teacher
 EMAIL="smoke-${RUN}@example.com"
 PASSWORD="smoke-pass-${RUN}"
-step "teacher register ($EMAIL)"
+step "the sign-up form's school list (names only, no join codes)"
+api GET /auth/schools
+expect 200
+check '(.data | length) >= 1 and all(.data[]; (keys == ["id", "name"]))'
+ok "$(j '.data | length') school(s)"
+
+# The app sends school_id; school_code is the path of older app builds and still
+# picks the demo school here (the dev database may hold several schools).
+step "teacher register ($EMAIL) with the legacy school_code"
 api POST /auth/teacher/register "$(jq -nc --arg c "$SCHOOL_CODE" --arg e "$EMAIL" --arg p "$PASSWORD" \
   '{school_code:$c, name:"ครูทดสอบ smoke", email:$e, password:$p}')"
 expect 201
 check '.user.status == "pending"'
 TEACHER_ID=$(j '.user.id')
-ok "teacher #$TEACHER_ID pending"
+SCHOOL_ID=$(j '.user.school.id')
+ok "teacher #$TEACHER_ID pending in school #$SCHOOL_ID"
 
 step "login before approval is refused"
 api POST /auth/teacher/login "$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
@@ -1287,9 +1296,10 @@ ok "#$DUP_ID merged into #${STUDENTS[2]} (number 20 kept); merging again -> 422;
 EMAIL2="smoke2-${RUN}@example.com"
 step "a second teacher (subject teacher) asks to teach the first classroom"
 TOKEN=""
-api POST /auth/teacher/register "$(jq -nc --arg c "$SCHOOL_CODE" --arg e "$EMAIL2" --arg p "$PASSWORD" \
-  '{school_code:$c, name:"ครูวิชา smoke", email:$e, password:$p}')"
+api POST /auth/teacher/register "$(jq -nc --argjson s "$SCHOOL_ID" --arg e "$EMAIL2" --arg p "$PASSWORD" \
+  '{school_id:$s, name:"ครูวิชา smoke", email:$e, password:$p}')"
 expect 201
+check ".user.status == \"pending\" and .user.school.id == $SCHOOL_ID"
 TEACHER2_ID=$(j '.user.id')
 tinker "\$a = App\\Models\\User::where('role','admin')->value('id'); App\\Models\\User::findOrFail(${TEACHER2_ID})->forceFill(['status' => 'active', 'approved_by' => \$a])->save(); echo 'approved';" | tail -1
 api POST /auth/teacher/login "$(jq -nc --arg e "$EMAIL2" --arg p "$PASSWORD" '{email:$e, password:$p, device_name:"smoke2"}')"

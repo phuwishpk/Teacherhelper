@@ -46,7 +46,7 @@ class AuthorizationMatrixTest extends TestCase
 
     /** Public routes, exercised by TeacherAuthTest and StudentAuthTest instead. */
     private const PUBLIC = [
-        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.student.qr', 'api.auth.student.pin',
+        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.schools', 'api.auth.student.qr', 'api.auth.student.pin',
         // Google sign-in (§24.9), exercised by GoogleSignInTest.
         'api.auth.google.config', 'api.auth.google', 'api.auth.google.web-url', 'api.auth.google.ticket',
         'api.auth.google.link-with-pin', 'api.auth.google.link-with-qr',

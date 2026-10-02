@@ -169,6 +169,34 @@ class UserResource extends Resource
             ]);
     }
 
+    /**
+     * The menu badge: teachers waiting for approval. Since 2 Oct 2569 the
+     * admin's approval is the only gate of teacher sign-up (no school code),
+     * so the waiting count is shown where the admin looks first. An admin of
+     * a school counts that school's teachers; a system admin all.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $admin = auth()->user();
+        $count = User::query()
+            ->where('role', User::ROLE_TEACHER)
+            ->where('status', User::STATUS_PENDING)
+            ->when($admin instanceof User && $admin->school_id !== null, fn (Builder $q) => $q->where('school_id', $admin->school_id))
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'ครูรออนุมัติ';
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with('school');

@@ -43,7 +43,7 @@ php artisan test                                   # ใช้ SQLite in-memory 
 
 prompt ของ Gemini อยู่ที่ `resources/prompts/{purpose}.{type}.v{n}.md` ระบบใช้เวอร์ชันสูงสุดและบันทึกลง `ai_calls.prompt_version` (แก้ prompt = เพิ่มไฟล์เวอร์ชันใหม่ ไม่แก้ไฟล์เดิม) ตอนนี้ `extract.show_work.v2` (ระบุกฎ error carried forward: บรรทัดที่คิดต่อจากบรรทัดผิดก่อนหน้าได้ถูกต้องนับว่า valid เฉพาะบรรทัดแรกที่ผิดเป็น invalid) และ `explanation.general.v2` (น้ำเสียงกลางแบบเดียว ไม่ใช้ ครับ/ค่ะ/คะ) ที่เหลือ v1 เคสเทียบของ show_work อยู่ใน `tests/Unit/Grading/ShowWorkCalibrationTest.php`
 
-รหัสโรงเรียนสำหรับสมัครครูอ่านจาก `SEED_TEACHER_JOIN_CODE` ใน `.env` (ค่าเริ่มต้นในเครื่อง `DEMO2569`) **บน hosting ต้องตั้งเป็นรหัสสุ่ม 8 ตัว** เพราะ repo เป็น public และใน M0 รหัสนี้เป็นด่านเดียวที่กันคนแปลกหน้าสมัครเป็นครู
+ครูสมัครโดย**ไม่ต้องใช้รหัสโรงเรียน**แล้ว (2 ต.ค. 2569, DESIGN §17 #70): แอปเรียก `GET /auth/schools` แล้วส่ง `school_id` (มีโรงเรียนเดียวไม่ต้องส่ง) บัญชีใหม่เป็น `pending` จนกว่า admin อนุมัติ ซึ่งเป็นด่านเดียว `teacher_join_code` ของโรงเรียนที่ seed (`SEED_TEACHER_JOIN_CODE` ใน `.env` ค่าเริ่มต้นในเครื่อง `DEMO2569`) ยังใช้ได้กับแอปรุ่นเก่าที่ส่ง `school_code` บน hosting ยังควรตั้งเป็นรหัสสุ่ม 8 ตัวเพราะ repo เป็น public
 
 ## API (M0)
 
@@ -52,7 +52,8 @@ base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุ
 | Method | Path | Body / Header | ตอบ |
 |---|---|---|---|
 | GET | `/health` | | `200 {status: ok\|degraded, db: ok\|error, queue_last_run_at}` (503 เมื่อต่อ DB ไม่ได้) |
-| POST | `/auth/teacher/register` | `{school_code, name, email, password}` | `201 {user}` รหัสผิด → `422 code: school_code_invalid` |
+| GET | `/auth/schools` | | `200 {data: [{id, name}]}` รายชื่อโรงเรียนของฟอร์มสมัคร (ไม่มีรหัส) |
+| POST | `/auth/teacher/register` | `{school_id?, name, email, password}` | `201 {user}` (`pending`) ไม่ส่ง `school_id` ใช้โรงเรียนเดียวของระบบ ถ้ามีหลายโรงเรียน → `422 code: school_required` (`school_code` ของแอปรุ่นเก่ายังรับ รหัสผิด → `422 code: school_code_invalid`) |
 | POST | `/auth/teacher/login` | `{email, password, device_name?}` | `200 {token, user}` ผิด → `422 code: invalid_credentials` บัญชีไม่ active → `403 code: account_not_active` |
 | GET | `/me` | `Authorization: Bearer <token>` | `200 {data: user}` |
 | POST | `/auth/logout` | `Authorization: Bearer <token>` | `204` ยกเลิกเฉพาะ token ที่ใช้เรียก |
@@ -66,7 +67,7 @@ base path `/api/v1` ส่ง/รับ JSON แบบ `snake_case` error ทุ
 ```bash
 H=(-H 'Content-Type: application/json' -H 'Accept: application/json')
 curl -s "${H[@]}" -X POST localhost:8000/api/v1/auth/teacher/register \
-  -d '{"school_code":"DEMO2569","name":"ครูทดสอบ","email":"t1@example.com","password":"secret1234"}'
+  -d '{"name":"ครูทดสอบ","email":"t1@example.com","password":"secret1234"}'   # โรงเรียนเดียวในเครื่อง ไม่ต้องส่ง school_id
 TOKEN=$(curl -s "${H[@]}" -X POST localhost:8000/api/v1/auth/teacher/login \
   -d '{"email":"t1@example.com","password":"secret1234","device_name":"curl"}' | jq -r .token)
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' localhost:8000/api/v1/me

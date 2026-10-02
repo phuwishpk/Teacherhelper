@@ -84,15 +84,21 @@ class InputHardeningTest extends TestCase
         $this->assertNotSame('000000', $row['pin']);
     }
 
-    public function test_registration_ignores_role_status_and_school(): void
+    /**
+     * school_id picks the school (since 2 Oct 2569 teachers choose it and an
+     * admin's approval is the gate), but role, status and id are never taken
+     * from the body: the account is always a pending teacher.
+     */
+    public function test_registration_ignores_role_and_status(): void
     {
-        $school = $this->teacher->school;
+        $school = $this->teacherB->school;
         $user = $this->postJson('/api/v1/auth/teacher/register', [
-            'school_code' => $school->teacher_join_code, 'name' => 'ครูใหม่', 'email' => 'new@example.com', 'password' => 'secret1234',
-            'role' => 'admin', 'status' => 'active', 'school_id' => $this->teacherB->school_id, 'id' => 1,
+            'school_id' => $school->id, 'name' => 'ครูใหม่', 'email' => 'new@example.com', 'password' => 'secret1234',
+            'role' => 'admin', 'status' => 'active', 'approved_by' => $this->teacher->id, 'id' => 1,
         ])->assertCreated()->json('user');
 
         $this->assertSame(['teacher', 'pending', $school->id], [$user['role'], $user['status'], $user['school']['id']]);
+        $this->assertNull(User::query()->where('email', 'new@example.com')->value('approved_by'));
         $this->assertSame(['teacher', 'pending'], User::query()->where('email', 'new@example.com')->get(['role', 'status'])->map(fn ($u) => [$u->role, $u->status])->first());
     }
 

@@ -289,6 +289,31 @@ class GoogleSignInTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'link_ticket_invalid');
     }
 
+    public function test_a_link_ticket_registration_needs_no_school_code_and_follows_the_school_choice(): void
+    {
+        // One school and neither school_id nor school_code: that school.
+        $ticket = $this->signIn(['sub' => 'only-sub', 'email' => 'new.teacher@school.ac.th'])->assertNotFound()->json('link_ticket');
+        $body = $this->registration(['google_link_ticket' => $ticket]);
+        unset($body['school_id']);
+        $this->postJson('/api/v1/auth/teacher/register', $body)
+            ->assertCreated()
+            ->assertJsonPath('user.status', 'pending')
+            ->assertJsonPath('user.school.id', $this->school->id);
+        $this->assertSame('only-sub', User::query()->where('email', 'somchai@example.com')->firstOrFail()->googleIdentity()->value('google_sub'));
+
+        // Two schools: the chosen one's domain list is what is checked, and without a choice nothing is spent.
+        $other = $this->makeSchool(['name' => 'โรงเรียนอื่น', 'google_signin_domains' => ['other.ac.th']]);
+        $ticket = $this->signIn(['sub' => 'two-sub', 'email' => 'kru@school.ac.th'])->assertNotFound()->json('link_ticket');
+        $body = $this->registration(['email' => 'two@example.com', 'google_link_ticket' => $ticket]);
+        unset($body['school_id']);
+        $this->postJson('/api/v1/auth/teacher/register', $body)
+            ->assertStatus(422)->assertJsonPath('code', 'school_required');
+        $this->postJson('/api/v1/auth/teacher/register', [...$body, 'school_id' => $other->id])
+            ->assertForbidden()->assertJsonPath('code', 'google_domain_not_allowed');
+        $this->postJson('/api/v1/auth/teacher/register', [...$body, 'school_id' => $this->school->id])
+            ->assertCreated()->assertJsonPath('user.school.id', $this->school->id);
+    }
+
     // ---- first sign-in of students ----
 
     public function test_a_student_is_linked_from_the_classroom_roster_when_sub_and_email_both_match(): void
@@ -693,7 +718,7 @@ class GoogleSignInTest extends TestCase
     private function registration(array $overrides = []): array
     {
         return [
-            'school_code' => 'JOIN2569',
+            'school_id' => $this->school->id,
             'name' => 'ครูสมชาย',
             'email' => 'somchai@example.com',
             'password' => 'password123',
