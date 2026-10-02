@@ -153,22 +153,38 @@ void main() {
     });
     final auth = ApiAuthRepository(fakeDio(adapter));
     await auth.register(
-      schoolCode: 'SCH',
+      schoolId: 3,
       name: 'ครู',
       email: 'k@s.th',
       password: 'secret-pass',
       googleLinkTicket: 'd' * 48,
     );
     expect(_body(only())['google_link_ticket'], 'd' * 48);
+    expect(_body(only())['school_id'], 3);
 
     adapter.requests.clear();
-    await auth.register(
-      schoolCode: 'SCH',
-      name: 'ครู',
-      email: 'k@s.th',
-      password: 'secret-pass',
+    await auth.register(name: 'ครู', email: 'k@s.th', password: 'secret-pass');
+    expect(
+      _body(only()),
+      {'name': 'ครู', 'email': 'k@s.th', 'password': 'secret-pass'},
+      reason: 'no school_id (the server picks its only school), no code',
     );
-    expect(_body(only()).containsKey('google_link_ticket'), isFalse);
+  });
+
+  test('the sign-up school list is read from GET /auth/schools', () async {
+    answer(200, {
+      'data': [
+        {'id': 1, 'name': 'โรงเรียนหนึ่ง'},
+        {'id': 2, 'name': 'โรงเรียนสอง'},
+      ],
+    });
+    final schools = await ApiAuthRepository(fakeDio(adapter)).schools();
+    expect(only().path, '/auth/schools');
+    expect(only().method, 'GET');
+    expect(
+      [for (final s in schools) '${s.id}:${s.name}'],
+      ['1:โรงเรียนหนึ่ง', '2:โรงเรียนสอง'],
+    );
   });
 
   group('google_not_linked', () {

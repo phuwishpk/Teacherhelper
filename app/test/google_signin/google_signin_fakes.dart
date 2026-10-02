@@ -228,8 +228,11 @@ class FakeMeAuth implements AuthRepository {
   Future<String> loginStudentQr(String qrToken) => throw UnimplementedError();
 
   @override
+  Future<List<SchoolOption>> schools() => throw UnimplementedError();
+
+  @override
   Future<void> register({
-    required String schoolCode,
+    int? schoolId,
     required String name,
     required String email,
     required String password,
