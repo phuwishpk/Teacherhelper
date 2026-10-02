@@ -4,12 +4,14 @@ namespace App\Domain\Google;
 
 use App\Exceptions\ApiException;
 use App\Jobs\ImportCourseWorkJob;
+use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\GoogleAccount;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -29,7 +31,9 @@ use Illuminate\Support\Facades\Log;
  *    (GoogleSubmissionSync: new hand-ins, late policy, Classroom's grades
  *    and grade conflicts, auto roster sync for unknown submitters), the
  *    assignment synced longest ago first, at most
- *    CLASSROOM_SYNC_MAX_COURSEWORK per round.
+ *    CLASSROOM_SYNC_MAX_COURSEWORK per round;
+ * 3. the cron round only: a SyncClassroomRosterJob for each classroom whose
+ *    roster was not synced for CLASSROOM_ROSTER_SYNC_MINUTES (queueRosterSyncs).
  *
  * The round stops starting new work after CLASSROOM_SYNC_BUDGET_SECONDS
  * (40 s, inside the 50-second worker pass); what is left goes first next
@@ -44,12 +48,12 @@ final class ClassroomSync
     ) {}
 
     /**
-     * @return array{courses: int, imports: int, assignments: int, failed: int}
+     * @return array{courses: int, imports: int, assignments: int, failed: int, rosters: int}
      */
     public function run(?int $classroomId = null): array
     {
         $deadline = microtime(true) + max(1, (int) config('eduvision.classroom_sync.budget_seconds'));
-        $stats = ['courses' => 0, 'imports' => 0, 'assignments' => 0, 'failed' => 0];
+        $stats = ['courses' => 0, 'imports' => 0, 'assignments' => 0, 'failed' => 0, 'rosters' => 0];
 
         $links = $this->links($classroomId);
         foreach ($links as $link) {
@@ -103,9 +107,52 @@ final class ClassroomSync
             }
         }
 
+        if ($classroomId === null) {
+            $stats['rosters'] = $this->queueRosterSyncs($links);
+        }
+
         Log::info('google.sync_round', ['classroom_id' => $classroomId] + $stats);
 
         return $stats;
+    }
+
+    /**
+     * Rosters follow Classroom without the teacher (DESIGN §19.3): a classroom
+     * whose courses were not synced for CLASSROOM_ROSTER_SYNC_MINUTES gets a
+     * SyncClassroomRosterJob, so a student who joins the homeroom course is
+     * added and matched on their own, and their first Google sign-in needs no
+     * PIN (§24.9.3). Oldest first, at most CLASSROOM_SYNC_MAX_ROSTERS per
+     * round. A classroom is tried at most once per interval even when its
+     * sync fails, so a course that cannot be read does not hold the slots.
+     *
+     * @param  Collection<int, ClassroomGoogleLink>  $links  the round's links (open classrooms, working accounts)
+     * @return int jobs queued
+     */
+    private function queueRosterSyncs(Collection $links): int
+    {
+        $minutes = max(1, (int) config('eduvision.classroom_sync.roster_minutes'));
+        $limit = max(1, (int) config('eduvision.classroom_sync.max_rosters'));
+        $dueBefore = now()->subMinutes($minutes)->getTimestamp();
+
+        $oldest = $links->groupBy('classroom_id')
+            ->map(fn (Collection $rows) => (int) $rows->min(fn (ClassroomGoogleLink $link) => $link->roster_synced_at?->getTimestamp() ?? 0))
+            ->filter(fn (int $syncedAt) => $syncedAt <= $dueBefore)
+            ->sort();
+
+        $queued = 0;
+        foreach ($oldest->keys() as $classroomId) {
+            if ($queued >= $limit) {
+                break;
+            }
+            if (! Cache::add("classroom-roster-sync:due:{$classroomId}", now()->toIso8601String(), $minutes * 60)) {
+                continue;
+            }
+            if (SyncClassroomRosterJob::dispatchOncePerRound((int) $classroomId)) {
+                $queued++;
+            }
+        }
+
+        return $queued;
     }
 
     /**

@@ -16,9 +16,11 @@ use Illuminate\Validation\ValidationException;
  * The roster sync of a linked classroom in the background (DESIGN §19.2,
  * §19.10, §24.10): every course linked to it (one per teacher), each with
  * the Google account of the teacher who linked it, or only $linkId (a course
- * just linked by approving an import request). Dispatched when a submission
- * sync meets a Google user that is not matched yet, at most once per
- * classroom per sync round (5 minutes).
+ * just linked by approving an import request). Dispatched by the cron round
+ * for a classroom whose roster is due (ClassroomSync, every
+ * CLASSROOM_ROSTER_SYNC_MINUTES) and when a submission sync meets a Google
+ * user that is not matched yet, at most once per classroom per sync round
+ * (5 minutes).
  *
  * The rosters are read once: a course whose roster cannot be read is
  * skipped, and nobody is marked left in that round (GoogleRosterSync).

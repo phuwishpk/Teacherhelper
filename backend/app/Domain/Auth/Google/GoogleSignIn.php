@@ -5,6 +5,7 @@ namespace App\Domain\Auth\Google;
 use App\Domain\Students\StudentAuthenticator;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
+use App\Jobs\ClassroomSyncJob;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
@@ -316,9 +317,17 @@ final class GoogleSignIn
         self::log('login', 'google_not_linked', null, 'unknown_student');
 
         throw GoogleSignInErrors::notLinked(
-            'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน ยืนยันตัวตนครั้งแรกด้วยรหัสห้อง เลขที่ และ PIN หรือสแกนบัตร QR',
+            'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส '
+            .'รอประมาณ '.self::rosterWaitMinutes().' นาทีแล้วกดเข้าสู่ระบบด้วย Google อีกครั้ง ระบบจะเชื่อมให้เอง '
+            .'หรือยืนยันตัวตนครั้งแรกด้วยรหัสห้อง เลขที่ และ PIN หรือสแกนบัตร QR',
             ['link_ticket' => $this->tickets->issueLink($google)],
         );
+    }
+
+    /** The longest wait before the cron roster sync (§19.3) matches a new member of a linked course. */
+    public static function rosterWaitMinutes(): int
+    {
+        return max(1, (int) config('eduvision.classroom_sync.roster_minutes')) + (int) ceil(ClassroomSyncJob::INTERVAL_SECONDS / 60);
     }
 
     private function rosterStudent(VerifiedGoogleIdentity $google): ?User
