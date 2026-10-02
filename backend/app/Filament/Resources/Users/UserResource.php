@@ -21,6 +21,12 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * DESIGN §7.5: approve or disable teacher accounts. Students are listed for
  * reference only (they are created by teachers through the API).
+ *
+ * An admin of a school (school_id set) sees, edits, approves and disables
+ * only the accounts of that school, and every account it creates or edits
+ * stays in that school (so it cannot make a system admin); a system admin
+ * sees all (DESIGN §24.2, #70). Approval is the only gate of teacher
+ * sign-up since 2 Oct 2569, so this matters: a teacher may pick any school.
  */
 class UserResource extends Resource
 {
@@ -76,11 +82,17 @@ class UserResource extends Resource
                     ->required(fn (callable $get) => $get('role') !== User::ROLE_STUDENT),
                 Select::make('school_id')
                     ->label('โรงเรียน')
-                    ->relationship('school', 'name')
+                    ->relationship('school', 'name', fn (Builder $query) => $query->when(
+                        self::adminSchoolId() !== null,
+                        fn (Builder $q) => $q->whereKey(self::adminSchoolId()),
+                    ))
                     ->searchable()
                     ->preload()
-                    ->required(fn (callable $get) => $get('role') !== User::ROLE_ADMIN)
-                    ->helperText('ผู้ดูแลระดับระบบไม่ต้องเลือกโรงเรียน'),
+                    ->default(fn () => self::adminSchoolId())
+                    ->required(fn (callable $get) => self::adminSchoolId() !== null || $get('role') !== User::ROLE_ADMIN)
+                    ->helperText(fn () => self::adminSchoolId() === null
+                        ? 'ผู้ดูแลระดับระบบไม่ต้องเลือกโรงเรียน'
+                        : 'ผู้ดูแลโรงเรียนจัดการได้เฉพาะบัญชีของโรงเรียนตัวเอง'),
                 Select::make('status')
                     ->label('สถานะ')
                     ->options(self::STATUS_LABELS)
@@ -122,7 +134,8 @@ class UserResource extends Resource
                         User::STATUS_PENDING => 'warning',
                         default => 'danger',
                     }),
-                TextColumn::make('school.name')->label('โรงเรียน')->placeholder('ระดับระบบ')->sortable(),
+                TextColumn::make('school.name')->label('โรงเรียน')->placeholder('ระดับระบบ')->sortable()
+                    ->visible(fn () => self::adminSchoolId() === null),
                 TextColumn::make('created_at')
                     ->label('สมัครเมื่อ')
                     ->dateTime('d/m/Y H:i', 'Asia/Bangkok')
@@ -132,7 +145,8 @@ class UserResource extends Resource
             ->filters([
                 SelectFilter::make('role')->label('บทบาท')->options(self::ROLE_LABELS),
                 SelectFilter::make('status')->label('สถานะ')->options(self::STATUS_LABELS),
-                SelectFilter::make('school_id')->label('โรงเรียน')->relationship('school', 'name'),
+                SelectFilter::make('school_id')->label('โรงเรียน')->relationship('school', 'name')
+                    ->visible(fn () => self::adminSchoolId() === null),
             ])
             ->recordActions([
                 Action::make('approve')
@@ -165,7 +179,8 @@ class UserResource extends Resource
 
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
                     }),
-                EditAction::make(),
+                EditAction::make()
+                    ->mutateDataUsing(fn (array $data) => self::keepInAdminSchool($data)),
             ]);
     }
 
@@ -177,11 +192,11 @@ class UserResource extends Resource
      */
     public static function getNavigationBadge(): ?string
     {
-        $admin = auth()->user();
+        $schoolId = self::adminSchoolId();
         $count = User::query()
             ->where('role', User::ROLE_TEACHER)
             ->where('status', User::STATUS_PENDING)
-            ->when($admin instanceof User && $admin->school_id !== null, fn (Builder $q) => $q->where('school_id', $admin->school_id))
+            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId))
             ->count();
 
         return $count > 0 ? (string) $count : null;
@@ -197,9 +212,39 @@ class UserResource extends Resource
         return 'ครูรออนุมัติ';
     }
 
+    /** An admin of a school lists only that school's accounts (DESIGN §24.2). */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('school');
+        $schoolId = self::adminSchoolId();
+
+        return parent::getEloquentQuery()
+            ->with('school')
+            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
+    }
+
+    /** The school of the signed-in admin; null for a system admin. */
+    public static function adminSchoolId(): ?int
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user->school_id : null;
+    }
+
+    /**
+     * Saved data of a create or edit by an admin of a school: always in that
+     * school, whatever the request sent (the select only offers it anyway).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function keepInAdminSchool(array $data): array
+    {
+        $schoolId = self::adminSchoolId();
+        if ($schoolId !== null) {
+            $data['school_id'] = $schoolId;
+        }
+
+        return $data;
     }
 
     public static function getPages(): array
