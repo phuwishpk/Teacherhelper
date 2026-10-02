@@ -6,6 +6,7 @@ use App\Domain\Auth\Google\GoogleIdTokenVerifier;
 use App\Domain\Auth\Google\GoogleSignIn;
 use App\Domain\Auth\Google\GoogleSignInConfig;
 use App\Domain\Auth\Google\GoogleSignInErrors;
+use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
@@ -54,6 +55,37 @@ class GoogleIdentityController extends Controller
         }
 
         $this->signIn->link($user, $verifier->verify($data['id_token']), UserGoogleIdentity::VIA_SELF, $user);
+
+        return response()->json(['data' => self::payload($user)]);
+    }
+
+    /**
+     * POST /me/google-identity/ticket {ticket} -> {data}: finishes a link
+     * started in the browser (DESIGN §24.9.4). The callback only hands over a
+     * ticket; the account is linked here, with the token of the user the
+     * ticket was made for. A ticket of another user is spent and refused
+     * (422 google_ticket_invalid), so a Google URL passed to somebody else
+     * links nothing. The notice was accepted when the URL was made.
+     */
+    public function storeFromTicket(Request $request, GoogleSignInTickets $tickets): JsonResponse
+    {
+        $data = $request->validate(
+            ['ticket' => ['required', 'string', 'max:128']],
+            ['ticket.required' => 'ไม่ได้รับลิงก์เชื่อมบัญชี Google'],
+        );
+        /** @var User $user */
+        $user = $request->user()->loadMissing('school');
+        $link = $tickets->consumeWebLink($data['ticket']);
+        if ($link === null || $link['user_id'] !== $user->id) {
+            GoogleSignIn::log('web_link', $link === null ? 'ticket_invalid' : 'ticket_other_user', $user->id);
+
+            throw GoogleSignInErrors::webLinkTicketInvalid();
+        }
+        if (! GoogleSignIn::canLink($user)) {
+            throw GoogleSignInErrors::studentDisabled();
+        }
+
+        $this->signIn->link($user, $link['identity'], UserGoogleIdentity::VIA_SELF, $user);
 
         return response()->json(['data' => self::payload($user)]);
     }

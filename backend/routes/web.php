@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Web\WebApp;
 use App\Http\Controllers\AdminHandoffLinkController;
 use App\Http\Controllers\GoogleOAuthCallbackController;
 use App\Http\Controllers\GoogleSignInCallbackController;
@@ -9,8 +10,9 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
+// The web app (DESIGN §25) is the front page once it is uploaded to public/app.
 Route::get('/', function () {
-    return view('welcome');
+    return WebApp::installed() ? redirect('/'.WebApp::PATH.'/') : view('welcome');
 });
 
 // Google's redirect after the consent page of the browser connect flow

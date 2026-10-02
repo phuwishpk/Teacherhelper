@@ -36,6 +36,7 @@
 22. [ข้อสอบและกระดาษคำตอบ (Phase 10)](#22-ข้อสอบและกระดาษคำตอบ-phase-10)
 23. [สมุดคะแนนและการตัดเกรด (Phase 11)](#23-สมุดคะแนนและการตัดเกรด-phase-11)
 24. [บัญชีนักเรียนระดับโรงเรียน ห้องประจำชั้นร่วม และการเข้าสู่ระบบด้วย Google](#24-บัญชีนักเรียนระดับโรงเรียน-ห้องประจำชั้นร่วม-และการเข้าสู่ระบบด้วย-google)
+25. [เว็บแอป (ใช้จริงบนเบราว์เซอร์)](#25-เว็บแอป-ใช้จริงบนเบราว์เซอร์)
 
 ---
 
@@ -70,8 +71,8 @@
 | Role | ช่องทาง | ทำอะไรได้ |
 |---|---|---|
 | **Admin** (ระดับโรงเรียน / ระดับระบบ) | Web admin (Filament) เข้าจากหน้า login เดียวของแอปหรือ `/admin/login` (§7.4) | จัดการโรงเรียน, อนุมัติบัญชีครู (ด่านเดียวของการสมัครครู ไม่ใช้รหัสโรงเรียนแล้ว แก้ 2 ต.ค. 2569 #70), import ตัวชี้วัด, จัดการเวอร์ชันโมเดล, ตั้งค่าความยินยอมและนโยบายเก็บภาพ, ตั้งโดเมน Google, สวิตช์ Google ของนักเรียน และสวิตช์อนุมัติครูที่สมัครด้วย Google อัตโนมัติ (#71), กำหนดครูประจำวิชาให้ห้อง, รวมบัญชีนักเรียน, ปิดหรือลบห้อง (§24) |
-| **ครู** (ครูประจำชั้น = เจ้าของห้อง, ครูประจำวิชา = ผูกรายวิชากับห้องของครูอื่น §24.2) | แอป Android (ใช้บนแท็บเล็ตได้) | จัดการห้องและนักเรียน (เฉพาะครูประจำชั้น), รับนักเรียนที่มีบัญชีอยู่แล้วเข้าห้อง, รวมบัญชีที่ซ้ำ, ปิดห้องเป็นห้องเก่า, ขอผูกรายวิชากับห้องของครูอื่น, รายวิชาและแผนการสอน (§20), สร้างการบ้านและเฉลย, พิมพ์ใบงาน, สแกนหรืออัปโหลดรูป, ตรวจทานและเผยแพร่, ตอบคำขอตรวจใหม่, อนุมัติคลังแบบฝึกและการวิเคราะห์รายคน, ดู dashboard และกราฟ, สร้างข้อสอบ พิมพ์เล่มและกระดาษคำตอบ แล้วสแกนตรวจด้วยมือถือ (§22), สมุดคะแนนและตัดเกรด (§23) |
-| **นักเรียน** (หนึ่งบัญชีต่อโรงเรียน ใช้ได้ทุกห้อง §24.4) | แอป Android | เห็นทุกห้องในหน้าเดียวจัดกลุ่มตามรายวิชา (§24.11), ส่งงานด้วยกล้องหรือไฟล์ (§19.6), ดูผลที่เผยแพร่แล้ว, อ่านคำอธิบาย, ขอให้ครูตรวจใหม่, ทำแบบฝึกซ่อม, ดูทักษะ กราฟ และการวิเคราะห์ของตัวเอง, ดูผลสอบและเกรดที่ครูประกาศแล้ว (§22.12, §23.7) |
+| **ครู** (ครูประจำชั้น = เจ้าของห้อง, ครูประจำวิชา = ผูกรายวิชากับห้องของครูอื่น §24.2) | แอป Android (ใช้บนแท็บเล็ตได้) หรือเว็บแอปบนเบราว์เซอร์ (§25 ไม่มีการสแกนด้วยกล้อง) | จัดการห้องและนักเรียน (เฉพาะครูประจำชั้น), รับนักเรียนที่มีบัญชีอยู่แล้วเข้าห้อง, รวมบัญชีที่ซ้ำ, ปิดห้องเป็นห้องเก่า, ขอผูกรายวิชากับห้องของครูอื่น, รายวิชาและแผนการสอน (§20), สร้างการบ้านและเฉลย, พิมพ์ใบงาน, สแกนหรืออัปโหลดรูป, ตรวจทานและเผยแพร่, ตอบคำขอตรวจใหม่, อนุมัติคลังแบบฝึกและการวิเคราะห์รายคน, ดู dashboard และกราฟ, สร้างข้อสอบ พิมพ์เล่มและกระดาษคำตอบ แล้วสแกนตรวจด้วยมือถือ (§22), สมุดคะแนนและตัดเกรด (§23) |
+| **นักเรียน** (หนึ่งบัญชีต่อโรงเรียน ใช้ได้ทุกห้อง §24.4) | แอป Android หรือเว็บแอปบนเบราว์เซอร์ (§25) | เห็นทุกห้องในหน้าเดียวจัดกลุ่มตามรายวิชา (§24.11), ส่งงานด้วยกล้องหรือไฟล์ (§19.6), ดูผลที่เผยแพร่แล้ว, อ่านคำอธิบาย, ขอให้ครูตรวจใหม่, ทำแบบฝึกซ่อม, ดูทักษะ กราฟ และการวิเคราะห์ของตัวเอง, ดูผลสอบและเกรดที่ครูประกาศแล้ว (§22.12, §23.7) |
 
 ทุก role ใช้**หน้า login เดียว**ในแอป (§7.4) และเข้าสู่ระบบด้วย Google ได้เมื่อเชื่อมบัญชีแล้ว (§24.9) แต่แอปมือถือ**ไม่มีโหมด admin**: admin ที่ login ในแอปเห็นแค่หน้า "ผู้ดูแลระบบ" ที่มีปุ่มเปิดหน้าเว็บผู้ดูแลระบบ งาน admin ทั้งหมดอยู่ใน Filament
 
@@ -1651,6 +1652,8 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
   - deploy ผ่าน Plesk Git
   - ทั้งหมดนี้รอยืนยันตอนทำจริง
 - **iOS** เขียน Swift ตาม interface ของ Pigeon ใน §6.2
+- **ออกจากระบบอัตโนมัติบนเว็บเมื่อไม่ใช้งาน** และโหมดเครื่องที่ใช้ร่วมกัน (§25.3): ตอนนี้ token บนเว็บอยู่จนกว่าจะกดออกจากระบบ
+- **font ภาษาไทยที่มากับแอป** แทนการโหลดจาก `fonts.gstatic.com` บนเว็บ (§25.3)
 - **ส่งคะแนนข้อสอบไป Google Classroom** (§22.1) ข้อสอบไม่โพสต์ลง Classroom โดยค่าตั้งต้น และยังไม่มีปุ่มโพสต์หรือส่งคะแนน (ตัดสินใจ 30 ก.ย. 2569)
 
 ### 16.3 Google Classroom
@@ -1799,6 +1802,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | # | เรื่อง | ตัดสินใจ | เหตุผลหลัก |
 |---|---|---|---|
 | 71 | ครูที่เข้าด้วย Google ครั้งแรก | บัญชี Google ที่ยังไม่เชื่อมกับใคร และอีเมลไม่ตรงกับครูหรือ admin คนใด กด "เข้าสู่ระบบด้วย Google" (แท็บครู) หรือ "สมัครด้วย Google" แล้ว**ได้บัญชีครู `active` และ token ทันที** ไม่มีฟอร์มสมัคร ไม่ต้องรออนุมัติ (§24.9.3 ข้อ 3) ชื่อและอีเมลมาจาก Google (`email_verified` บังคับอยู่แล้ว) ไม่มีรหัสผ่าน (`password` NULL) `approved_by` NULL การเชื่อมเป็น `linked_via = google_signup` (ใช้แทนเครื่องหมาย "อนุมัติโดย Google" จึงไม่เพิ่มคอลัมน์ใน `users`) โรงเรียน: `school_id` ที่แอปส่ง หรือโรงเรียนเดียวของระบบ ถ้ามีหลายโรงเรียนและไม่ได้ส่ง ตอบ 404 `google_not_linked` พร้อม `needs_school: true` แล้วแอปให้เลือกจาก `GET /auth/schools` และส่งใหม่ ต่อโรงเรียนมีสวิตช์ `schools.teacher_google_auto_approve` (ค่าตั้งต้น**เปิด**ตามที่ผู้ใช้ขอ) ปิดแล้วกลับไปใช้การสมัครแบบ `pending` ของ #70 โดเมนที่อนุญาตของโรงเรียนตรวจก่อนสร้างบัญชี กติกาเดิมคงอยู่: ครูที่อีเมลตรงยังเชื่อมกับบัญชีเดิม admin ไม่ถูกสร้างหรือเชื่อมอัตโนมัติ (#61) นักเรียนไม่ถูกสร้าง (#60) ครูที่ไม่มีรหัสผ่านยกเลิกการเชื่อม Google เองไม่ได้ (409 `google_unlink_needs_password`) จนกว่า admin จะตั้งรหัสผ่านให้ใน Filament เพราะจะเข้าระบบไม่ได้อีก (ยังไม่มี endpoint ตั้งรหัสผ่านเองในแอป) | ผู้ใช้เลือกเอง ครูไม่ต้องกรอกฟอร์มและรอ **ความเสี่ยงที่ยอมรับ**: ใครก็ได้ที่มีบัญชี Google ในโดเมนที่โรงเรียนอนุญาต (ถ้าไม่ตั้งโดเมน = บัญชี Google ใดก็ได้) กลายเป็นครูของโรงเรียนทันทีและเห็นสิ่งที่ครูทุกคนเห็น (รายชื่อนักเรียนที่ค้นด้วยรหัสนักเรียน §24.4 ฯลฯ) **สิ่งที่ลดความเสี่ยง**: สวิตช์รายโรงเรียน (ปิดได้ใน Filament), รายการโดเมนของโรงเรียน (ควรตั้งเมื่อเปิดสวิตช์ ข้อความช่วยใน Filament บอกไว้), admin ระงับบัญชีได้ในเมนู "ผู้ใช้และครู" (ระงับแล้ว Google ตอบ 403 `account_not_active`) และ log `google_signin` event `signup` เก็บ `user_id` ของทุกบัญชีที่สร้าง ข้อสังเกต: ครูที่ยกเลิกการเชื่อม Google แล้วกด Google ด้วยบัญชีเดิมอีกครั้งจะได้บัญชีครูใหม่อีกบัญชี (อีเมลส่วนตัวไม่ตรงกับบัญชีเดิม) |
+| 72 | เว็บแอปใช้จริง (2 ต.ค. 2569) | ผู้ใช้ตัดสินใจให้ขึ้นเว็บก่อนแอป Android: build ของ Flutter web วางที่ `/app/` บนโดเมนเดียวกับ API (`backend/public/app` อัปโหลดเอง ไม่อยู่ใน git) ครูและนักเรียนใช้ทุกอย่างที่ไม่ต้องใช้กล้องหรือ pipeline บนมือถือ | ยังไม่มี APK ที่เซ็นแล้วและโรงเรียนเปิดจากคอมพิวเตอร์ได้ทันที ไม่มี service ใหม่บน shared hosting (ไฟล์ static) รายละเอียดและสิ่งที่เปลี่ยนเพราะการตัดสินใจนี้อยู่ใน §25 |
 
 ---
 
@@ -4155,11 +4159,11 @@ ALTER TABLE classroom_google_links
 
 - **Android (ทางหลัก)**: `google_sign_in` 7 `initialize(serverClientId: GOOGLE_SIGNIN_CLIENT_ID)` → `authenticate()` (ไม่ขอ scope เพิ่ม) → `account.authentication.idToken` → `POST /auth/google` แล้ว `signOut()` ของ plugin เพื่อให้ครั้งหน้าเลือกบัญชีใหม่ได้ (เครื่องประจำห้องใช้หลายคน)
   - plugin `initialize` ได้**ครั้งเดียวต่อการเปิดแอป** และ `serverClientId` ของ sign-in กับของ Classroom มาจากคนละ project: เมื่อตั้ง `GOOGLE_SIGNIN_CLIENT_ID` แอป initialize ด้วยค่านี้ และ**การเชื่อม Classroom ใช้ทางเบราว์เซอร์ (§18.5 ทางที่ 2) เสมอ** ไม่สน `GOOGLE_SERVER_CLIENT_ID` ส่วน token `drive.readonly` บนเครื่อง (§18.5) ไม่มีที่เรียกใช้แล้วตั้งแต่ Phase 8 จึงไม่กระทบ
-- **เว็บ (ใช้ดู UI เท่านั้น)**: ทาง redirect ผ่าน server เพราะ `authenticate()` ใช้บนเว็บไม่ได้และปุ่ม GIS ต้องเพิ่ม `google_sign_in_web` เป็น dependency ตรง
+- **เว็บ (ใช้จริงตั้งแต่ 2 ต.ค. 2569, §25)**: ทาง redirect ผ่าน server เพราะ `authenticate()` ใช้บนเว็บไม่ได้และปุ่ม GIS ต้องเพิ่ม `google_sign_in_web` เป็น dependency ตรง
   1. แอปเรียก `POST /auth/google/web-url {purpose: login|link, intent?, school_id?}` (`link` ต้องมี token ของผู้ใช้) server สร้าง `state` และ `nonce` สุ่ม 32 byte เก็บ SHA-256 ของ `state` ใน cache อายุ 10 นาทีใช้ครั้งเดียว (ผูก `purpose`, `intent`, `nonce`, `user_id` เมื่อเป็น `link` และ `school_id` เมื่อเป็น `login` ซึ่งส่งต่อไปใน ticket ของข้อ 4 สำหรับครูใหม่ที่เลือกโรงเรียนหลัง `needs_school` #71) แล้วคืน URL หน้าเลือกบัญชีของ Google (`scope=openid email profile`, `prompt=select_account`, ไม่มี `access_type=offline`)
   2. แอปเปิด URL ในแท็บเดียวกัน (`url_launcher` `webOnlyWindowName: '_self'`)
   3. `GET /auth/google/callback` (web route ไม่ต้อง login) ตรวจและใช้ `state` แลก code ด้วย `GOOGLE_SIGNIN_CLIENT_SECRET` เอา `id_token` ไปตรวจตาม §24.9.2 (รวม nonce) ทิ้ง access token
-  4. `login`: สร้าง ticket ใช้ครั้งเดียว (48 hex, SHA-256 ใน cache, 60 วินาที แบบ admin handoff) แล้ว redirect ไป `GOOGLE_SIGNIN_APP_URL` + `/#/login/google?ticket=…` แอปเรียก `POST /auth/google/ticket {ticket, school_id?}` ได้คำตอบแบบเดียวกับ `POST /auth/google` (`school_id` ใน body ใช้แทนค่าที่มากับ ticket) `link`: เชื่อมให้ผู้ใช้ใน state แล้ว redirect ไป `/#/google-link?status=linked` หรือ `?status=<error code>`
+  4. `login`: สร้าง ticket ใช้ครั้งเดียว (48 hex, SHA-256 ใน cache, 60 วินาที แบบ admin handoff) แล้ว redirect ไป `GOOGLE_SIGNIN_APP_URL` + `/#/login/google?ticket=…` แอปเรียก `POST /auth/google/ticket {ticket, school_id?}` ได้คำตอบแบบเดียวกับ `POST /auth/google` (`school_id` ใน body ใช้แทนค่าที่มากับ ticket) `link` (แก้ 2 ต.ค. 2569): callback **ไม่เชื่อมเอง** สร้าง ticket ใช้ครั้งเดียว (48 hex, SHA-256 ใน cache, 60 วินาที) ที่เก็บบัญชี Google ที่ตรวจแล้วกับ `user_id` ของ state แล้ว redirect ไป `/#/google-link?ticket=…` เว็บแอปเรียก `POST /me/google-identity/ticket {ticket}` **ด้วย token ของผู้ใช้ที่ login อยู่** server เชื่อมเมื่อ ticket เป็นของผู้ใช้คนนั้นเท่านั้น (ไม่ใช่ ได้ 422 `google_ticket_invalid` และ ticket ถูกใช้ทิ้ง) ความผิดพลาดก่อนถึงขั้นนี้ redirect ไป `/#/google-link?status=<error code>` **ทำไม:** callback เป็น route ที่ไม่มี login คนที่ทำหน้าเลือกบัญชีของ Google จนจบอาจไม่ใช่คนที่ขอ URL เดิม A ส่ง URL ให้ B แล้วบัญชี Google ของ B ถูกเชื่อมกับบัญชีของ A ได้ ซึ่งยอมรับได้ตอนเว็บใช้ดู UI เท่านั้น แต่ไม่ได้เมื่อเว็บใช้จริง ตอนนี้ B ไม่ได้ login เป็น A จึงแลก ticket ไม่ได้ และไม่มีอะไรถูกเชื่อม
   - ticket อยู่ใน fragment จึงไม่ถูกส่งไปที่ server ใด ปลายทาง redirect มาจาก `.env` เท่านั้น (ไม่มี open redirect) ทุก response ของ callback ส่ง `Referrer-Policy: no-referrer` และ `Cache-Control: no-store` ถ้าผู้ไม่หวังดีส่งลิงก์ Google ให้เหยื่อ ticket จะไปอยู่ที่เบราว์เซอร์ของเหยื่อเอง ไม่ใช่ของผู้ส่ง
   - dev: รัน Chrome ด้วยพอร์ตคงที่ (`flutter run -d chrome --web-port=<พอร์ต>`) ให้ตรงกับ `GOOGLE_SIGNIN_APP_URL`
 - `GET /auth/google/config` (สาธารณะ) ตอบ `{data: {enabled, web_flow, notice_version}}` แอปแสดงปุ่ม Google เมื่อ `enabled` และ (Android ที่มี `GOOGLE_SIGNIN_CLIENT_ID` หรือเว็บที่ `web_flow`)
@@ -4242,6 +4246,7 @@ ALTER TABLE classroom_google_links
 | POST | `/auth/teacher/register` | สาธารณะ | เดิม + `google_link_ticket?` |
 | GET | `/me/google-identity` | ทุก role (รวม admin) | `{data: {linked, email, name, picture_url, linked_via, linked_at, can_link, notice_version}}` `can_link` = false เมื่อปิดสำหรับนักเรียนของโรงเรียน |
 | POST | `/me/google-identity` | ทุก role | `{id_token, accept_notice}` 409 `google_already_linked` / `google_identity_exists` 403 `google_domain_not_allowed` / `student_google_disabled` |
+| POST | `/me/google-identity/ticket` | ทุก role | `{ticket}` จบการเชื่อมที่เริ่มทางเว็บ (§24.9.4 ข้อ 4) ตอบเหมือน `GET /me/google-identity` ticket ไม่มี หมดอายุ ใช้แล้ว หรือเป็นของผู้ใช้อื่น 422 `google_ticket_invalid` นอกนั้น error เดียวกับ `POST /me/google-identity` |
 | DELETE | `/me/google-identity` | ทุก role | 204 ครูหรือ admin ที่ไม่มีรหัสผ่าน 409 `google_unlink_needs_password` (#71) |
 | DELETE | `/students/{id}/google-identity` | ผู้แก้ข้อมูลนักเรียน | 204 |
 | **D. Classroom (build 4)** | | | |
@@ -4380,7 +4385,7 @@ route ของครูที่มีอยู่แล้วทั้งห�
 - **สมัครครูด้วย ticket**: ส่ง `google_link_ticket` เมื่อ sign-in ปิดได้ 503 `google_signin_not_configured` (ไม่ส่งสมัครได้ตามเดิม) ตรวจ ticket (422 `link_ticket_invalid` ที่ `errors.google_link_ticket`) โดเมนของโรงเรียนที่เลือก (ลำดับเดียวกับ §9.1 ไม่มีโรงเรียนที่เลือกได้ 422 `school_required` โดยยังไม่ใช้ ticket) และ `sub` ที่ถูกเชื่อมแล้ว (409) **ก่อน**สร้างบัญชี แล้วสร้างบัญชีกับการเชื่อม (`linked_by` = บัญชีใหม่) และใช้ ticket ใน transaction เดียวกัน
 - **`/me/google-identity`**: `POST` ตอบ `200 {data}` รูปเดียวกับ `GET` เชื่อมบัญชีเดิมซ้ำเป็น no-op `DELETE` ตอบ 204 เสมอ (ไม่มีการเชื่อมก็ 204 ยกเว้น 409 `google_unlink_needs_password` ของครูหรือ admin ที่ไม่มีรหัสผ่าน ตั้งแต่ #71) `POST` ใช้ limiter `google-signin` ด้วย นักเรียนของโรงเรียนที่ปิดสวิตช์ได้ 403 `student_google_disabled` ก่อนตรวจ token
 - **ทางเว็บ**: `web-url` รับ `accept_notice?` เพิ่ม (นักเรียน `purpose = link` ต้องส่ง) และตรวจสวิตช์ก่อนสร้าง URL ใช้ token จาก header `Authorization` ของ request (route สาธารณะ อ่าน guard `sanctum` เอง) ไม่มี token หรือ token ไม่ตรง role ได้ 401 callback ที่ทาง `login` ล้มเหลว redirect ไป `/#/login/google?error=<code>` (`cancelled` เมื่อผู้ใช้กดยกเลิก, `google_error`, `google_token_invalid`, `google_unavailable` ฯลฯ) ทาง `link` ใช้ `/#/google-link?status=<code>` เดียวกับ §24.9.4 (`cancelled` ด้วย) ตั้ง sign-in แต่ไม่ได้ตั้งทางเว็บ callback ได้หน้า HTML 503 หน้า HTML ใช้ view แยก `google/signin-result` (ไม่ใช่หน้าผลของ Classroom)
-- **ข้อจำกัดของทางเว็บ `purpose = link`**: `state` ผูกกับผู้ใช้ที่ขอ URL แต่ไม่ผูกกับเบราว์เซอร์ที่ทำจนจบ (ไม่มี cookie หรือ session เพราะ `web-url` เป็น API คนละ origin กับแอปเว็บ) ผู้ใช้ A จึงส่ง URL ของ Google ให้ B ได้ ถ้า B เลือกบัญชี Google ของตัวเองภายใน 10 นาที บัญชีนั้นจะเชื่อมกับบัญชี EduVision ของ A และเมื่อ B กด Google ภายหลังจะเข้าบัญชีของ A ยอมรับไว้เพราะ A ไม่ได้อะไรจากบัญชีของ B, B ต้องผ่านหน้าเลือกบัญชีของ Google เอง, ผลเห็นได้ทันที (เข้าไปเจอบัญชีคนอื่น) และยกเลิกได้ใน "บัญชีของฉัน"/ตั้งค่าหรือโดยครูประจำชั้น/admin และทางนี้ใช้ดู UI บนเว็บเท่านั้น (Android เชื่อมด้วย ID token ที่ได้บนเครื่องของผู้ใช้เอง) ถ้าทางเว็บจะใช้จริง ให้เปลี่ยน callback ของ `link` ให้ออก ticket ใน fragment แล้วให้แอปแลกด้วย token ของผู้ใช้คนเดียวกับใน state
+- **ข้อจำกัดเดิมของทางเว็บ `purpose = link` (แก้แล้ว 2 ต.ค. 2569 ตามประโยคสุดท้ายของข้อนี้ ดู §24.9.4 ข้อ 4 และ §25.3)**: `state` ผูกกับผู้ใช้ที่ขอ URL แต่ไม่ผูกกับเบราว์เซอร์ที่ทำจนจบ (ไม่มี cookie หรือ session เพราะ `web-url` เป็น API คนละ origin กับแอปเว็บ) ผู้ใช้ A จึงส่ง URL ของ Google ให้ B ได้ ถ้า B เลือกบัญชี Google ของตัวเองภายใน 10 นาที บัญชีนั้นจะเชื่อมกับบัญชี EduVision ของ A และเมื่อ B กด Google ภายหลังจะเข้าบัญชีของ A ยอมรับไว้เพราะ A ไม่ได้อะไรจากบัญชีของ B, B ต้องผ่านหน้าเลือกบัญชีของ Google เอง, ผลเห็นได้ทันที (เข้าไปเจอบัญชีคนอื่น) และยกเลิกได้ใน "บัญชีของฉัน"/ตั้งค่าหรือโดยครูประจำชั้น/admin และทางนี้ใช้ดู UI บนเว็บเท่านั้น (Android เชื่อมด้วย ID token ที่ได้บนเครื่องของผู้ใช้เอง) ถ้าทางเว็บจะใช้จริง ให้เปลี่ยน callback ของ `link` ให้ออก ticket ใน fragment แล้วให้แอปแลกด้วย token ของผู้ใช้คนเดียวกับใน state
 - **ทุกทางที่เข้าสู่ระบบได้** อัปเดต `email`, `name`, `picture_url`, `last_login_at` ของการเชื่อม token ใช้อายุและ ability เดียวกับทางเดิม (`device_name?` ของ body เป็นชื่อ token)
 - **บันทึก log** บรรทัด `google_signin` มีเฉพาะ `event` (login, link, unlink, check, register, web_callback, unlink_school_students), `result`, `user_id`, `via`, `actor_id` (และ `school_id`, `count` ของการลบทั้งโรงเรียน) การตรวจ token ที่ไม่ผ่านเขียน `google_signin.verify` พร้อมเหตุผลภายใน (`header`, `unknown_kid`, `aud`, `age`, `nonce` ฯลฯ) ไม่มี email, token, code, state หรือ ticket ใน log
 - **ที่อื่นที่เปลี่ยน**: `has_google` ของการค้นทั้งโรงเรียนและคู่ที่น่าจะซ้ำมาจาก `user_google_identities` (แทน roster ของ Classroom ตามที่ §24.18 บอกไว้) `google_emails` ในหน้าเทียบการรวมมีอีเมลของการเชื่อม sign-in ก่อนแล้วตามด้วยของ roster `GET /classrooms/{id}/roster` เพิ่ม `google_linked` (null สำหรับครูประจำวิชา) รวมบัญชี: ทั้งคู่เชื่อม Google แล้วได้ 409 `merge_conflict` ที่ `errors.google` ไม่อย่างนั้นการเชื่อมของ D (และ `linked_by`) ย้ายไป K ดังนั้นหลังรวม Google ของ D เข้าบัญชี K (ข้อความ "Google ได้ 403" ใน §24.18 ใช้ไม่ได้ เพราะการเชื่อมไม่เคยค้างอยู่ที่ D)
@@ -4478,3 +4483,47 @@ route ของครูที่มีอยู่แล้วทั้งห�
   - หน้าของการบ้านและข้อสอบในห้องเก่ายังแสดงปุ่มเขียน (พิมพ์ สแกน ตรวจทาน เผยแพร่) เฉพาะหน้าห้องที่อ่านอย่างเดียว (§24.19) server ตอบ 409 `classroom_closed` พร้อมข้อความไทย
   - `link-existing` ของครูประจำชั้นที่มีคอร์ส Google อื่นผูกกับห้องเดียวกันอยู่แล้ว (และยังไม่มีงานที่โพสต์) แทนที่คอร์สเดิม เพราะหนึ่งคอร์สต่อครูต่อห้อง (§24.10) แอปยังไม่เตือนก่อน และการผูกรายวิชาของครูประจำชั้นใน `link-existing` บันทึกก่อนผูกคอร์ส ถ้าผูกคอร์สไม่สำเร็จรายวิชายังผูกอยู่ (ไม่มีผลเสีย ครูผูกคอร์สใหม่ได้)
   - `results_count` และเกรดของ `GET /student/overview` นับเฉพาะห้องที่นักเรียนยังอยู่ ส่วน `/student/results` และ `/student/grades` แสดงของห้องที่ออกไปแล้วด้วย (เอาออกจากห้องได้เฉพาะเมื่อไม่มีงานหรือคะแนน §24.4 จึงแทบไม่เกิด)
+
+---
+
+## 25. เว็บแอป (ใช้จริงบนเบราว์เซอร์)
+
+ตัดสินใจ 2 ต.ค. 2569 (ผู้ใช้ยืนยัน บันทึกเป็น #72 ใน §17): **ขึ้นเว็บก่อนแอป Android** หัวข้อนี้แก้ทุกที่ที่เขียนว่าเว็บ "ใช้ดู UI เท่านั้น" (§7.4, §19, §24.9.4) แอป Android ยังเป็นทางเดียวสำหรับงานที่ต้องใช้กล้อง และโค้ดชุดเดียวกัน (`app/`) build ได้ทั้งสองแบบ
+
+### 25.1 ที่อยู่และการวางไฟล์
+
+- เว็บแอป = `flutter build web --release` ของ `app/` วางเป็น**ไฟล์ static** ที่ `https://<โดเมนของ API>/app/` คือโฟลเดอร์ `backend/public/app/` บน server ไม่มี process ใหม่ ไม่มี subdomain หรือ SSL เพิ่ม และอยู่ origin เดียวกับ API จึงไม่ต้องตั้ง CORS
+- สร้างด้วย `tools/build-web.sh [API_BASE_URL]` (ค่าตั้งต้น `https://teacherhelper.phuwish.com`): `--base-href /app/`, `--no-web-resources-cdn` (CanvasKit มาจาก server เราเอง) และ `--dart-define=API_BASE_URL` ได้โฟลเดอร์ `app/` กับ `eduvision-web.zip` ให้อัปโหลดผ่าน File Manager ของ Plesk แล้ว extract ใน `backend/public/` (ขั้นตอนใน HOSTING §4.9)
+- **ไม่ commit ผล build** (`backend/public/app/` อยู่ใน `.gitignore`): repo เป็น public และผล build ขึ้นกับ `API_BASE_URL` อัปโหลดใหม่ทุกครั้งที่โค้ดของ `app/` เปลี่ยน ไฟล์ `build-commit.txt` ในโฟลเดอร์บอก commit ที่ build
+- `App\Domain\Web\WebApp::installed()` = มี `public/app/index.html` เมื่อมี: `GET /` redirect ไป `/app/` (ไม่มีแสดงหน้า welcome เดิม) และหน้า `GET /r/{submission_id}` (§19.7) มีปุ่ม **"เปิดบนเว็บ"** ไป `/app/#/student/results/{id}` เพิ่มจากปุ่มเปิดแอป Android
+- แอปใช้ hash routing (`/app/#/login`) จึงไม่ต้องมี rewrite rule ของ server `.htaccess` ของ Laravel ไม่แตะไฟล์ที่มีอยู่จริง
+
+### 25.2 ทำอะไรได้บนเว็บ
+
+| ทำได้ | ทำไม่ได้ (ต้องใช้แอป Android) |
+|---|---|
+| ครู: ห้องและนักเรียน, รายวิชาและแผน, การบ้านและเฉลย, พิมพ์ใบงาน/บัตร QR/กระดาษคำตอบ (ดาวน์โหลด PDF), **อัปโหลดรูปหรือ PDF เพื่อตรวจ** (`/hand-ins/upload` ทางรูปทั้งหน้า §19.6), ตรวจทาน เผยแพร่ สมุดคะแนน ตัดเกรด กราฟ, เชื่อมและซิงก์ Google Classroom | สแกนใบงานและกระดาษคำตอบด้วยกล้อง (marker/QR/crop §6.2, §22), คิวอัปโหลดออฟไลน์และฐานข้อมูลในเครื่อง (drift), อ่านตัวเลขด้วย CNN, render ภาพประกอบข้อสอบจาก PDF (§22) |
+| นักเรียน: เข้าด้วยรหัสห้อง + เลขที่ + PIN หรือ Google, ส่งงานด้วยไฟล์, ดูผล คำอธิบาย เกรด กราฟ แบบฝึก, ขอตรวจใหม่ | สแกนบัตร QR เพื่อเข้าสู่ระบบ, ถ่ายรูปงานด้วยกล้องในแอป (เลือกไฟล์รูปแทน) |
+| admin: หน้า login เดียวแล้วเปิด Filament (§7.4) | – |
+
+หน้าที่ทำไม่ได้แสดงข้อความภาษาไทยและทางไปต่อ (เช่นหน้าสแกนมีปุ่ม "อัปโหลดรูปเพื่อตรวจ") ไม่ล้ม (test `scan_screen_web_test.dart`)
+
+### 25.3 ความปลอดภัย
+
+- **token ของผู้ใช้อยู่ใน `localStorage`** ของเบราว์เซอร์ (`flutter_secure_storage` บนเว็บเข้ารหัสด้วย WebCrypto แต่กุญแจอยู่ข้างกัน) script ใดที่รันในหน้าเดียวกันอ่านได้ จึงกันด้วย CSP: build script เขียน `.htaccess` ลงในโฟลเดอร์ของเว็บแอป (web server เสิร์ฟไฟล์ static เอง middleware `SecurityHeaders` ของ Laravel ไม่เห็น) ตั้ง `Content-Security-Policy` (`default-src 'self'`; `script-src 'self' 'wasm-unsafe-eval'` สำหรับ CanvasKit; `connect-src 'self' https://fonts.gstatic.com`; `font-src` เดียวกัน; `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Permissions-Policy` และ HSTS และ `Cache-Control: no-cache` ให้ไฟล์ทางเข้า (อัปโหลดใหม่แล้วเห็นทันทีที่ reload)
+  - script ของ Google (`accounts.google.com/gsi/client`) ที่ plugin `google_sign_in` พยายามโหลดถูก CSP **บล็อกโดยตั้งใจ**: เว็บเข้าสู่ระบบด้วย Google ผ่าน redirect ของ server (§24.9.4) ไม่ใช้ script นี้ จึงไม่ให้ script ภายนอกรันในหน้าที่ถือ token
+  - font Roboto และ Noto Sans Thai มาจาก `fonts.gstatic.com` (Flutter โหลดเอง) เป็นที่เดียวนอก server ที่หน้าเว็บติดต่อ
+- **เครื่องที่ใช้ร่วมกัน**: token ของนักเรียนอายุ 180 วันและของครู 30 วัน (§7.4) อยู่ในเบราว์เซอร์จนกว่าจะกดออกจากระบบ ครูต้องบอกนักเรียนให้ออกจากระบบทุกครั้งบนคอมพิวเตอร์ของโรงเรียน ⚠️ ยังไม่มีการออกจากระบบอัตโนมัติเมื่อไม่ใช้งาน (เลื่อนไว้ §16.1)
+- **เชื่อมบัญชี Google ทางเว็บ**: แก้ตาม §24.9.4 ข้อ 4 (ticket ที่แลกด้วย token ของผู้ใช้เอง)
+- rate limit, policy และ error envelope เป็นของ API เดิมทั้งหมด เว็บไม่มีสิทธิ์อะไรที่แอปไม่มี
+
+### 25.4 การตั้งค่าที่เกี่ยวกับเว็บ
+
+- `.env` ของ server: `GOOGLE_SIGNIN_CLIENT_SECRET`, `GOOGLE_SIGNIN_REDIRECT_URI=https://<โดเมน>/auth/google/callback` และ `GOOGLE_SIGNIN_APP_URL=https://<โดเมน>/app` (ไม่มี `/` ท้าย) ขาดตัวใดปุ่ม Google บนเว็บไม่แสดง ทางอื่นใช้ได้ปกติ การเชื่อม Classroom ใช้ `GOOGLE_OAUTH_REDIRECT_URI` เดิม (§18.5 ทางที่ 2)
+- build ของเว็บไม่ใช้ `GOOGLE_SIGNIN_CLIENT_ID` หรือ `GOOGLE_SERVER_CLIENT_ID` (ของ Android เท่านั้น)
+
+### 25.5 การทดสอบ
+
+- backend: `tests/Feature/Web/WebAppTest.php` (หน้าแรกและลิงก์ผลชี้ไปเว็บแอปเฉพาะเมื่อมีไฟล์), `GoogleSignInTest` (ticket ของการเชื่อม: คนอื่นแลกไม่ได้, ใช้ครั้งเดียว, 60 วินาที, สวิตช์นักเรียนตรวจซ้ำตอนแลก)
+- app: `google_web_return_test.dart` (แลก ticket, ticket ของบัญชีอื่น, error จาก callback)
+- ลองจริง 2 ต.ค. 2569: build ด้วย `tools/build-web.sh` เสิร์ฟที่ `/app/` พร้อม header ชุดเดียวกับ `.htaccess` หน้า Laravel จริง (SQLite) ใน Chrome: หน้าแรก redirect ไป `/app/`, ครู login แล้วเปิดหน้าหลัก สแกน อัปโหลดรูปเพื่อตรวจ ห้องเรียน ตั้งค่า รายวิชา สร้างการบ้าน คิวอัปโหลด, นักเรียน login ด้วย PIN ไม่มี exception และ CSP บล็อกเฉพาะ script ของ Google ตามที่ตั้งใจ ⚠️ ยังไม่ได้ลองบน Apache ของ hosting จริง (`.htaccess` ต้องมี `mod_headers`; ถ้าไม่มี header จะไม่ถูกตั้งแต่หน้าเว็บยังใช้ได้) บันทึกผลใน HOSTING §12

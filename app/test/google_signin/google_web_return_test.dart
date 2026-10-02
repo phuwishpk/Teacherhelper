@@ -250,6 +250,56 @@ void main() {
       expect(find.text('page ${AppRoutes.studentAccount}'), findsOneWidget);
     });
 
+    testWidgets('a ticket is redeemed with the signed-in user\'s token', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository();
+      await _pump(
+        tester,
+        const GoogleLinkResultScreen(ticket: 'web-link-ticket'),
+        repo: repo,
+        signedIn: true,
+      );
+      expect(repo.webLinkTickets, ['web-link-ticket']);
+      expect(find.text('เชื่อมบัญชี Google แล้ว'), findsWidgets);
+    });
+
+    testWidgets('a ticket made for another account links nothing', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository()
+        ..webLinkError = apiError(422, 'google_ticket_invalid');
+      await _pump(
+        tester,
+        const GoogleLinkResultScreen(ticket: 'somebody-elses-ticket'),
+        repo: repo,
+        signedIn: true,
+      );
+      expect(find.text('เชื่อมบัญชี Google ไม่สำเร็จ'), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('google_link_result_message')),
+            )
+            .data,
+        contains('เปิดจากบัญชีอื่น'),
+      );
+    });
+
+    testWidgets('an error code from the callback wins over a ticket', (
+      tester,
+    ) async {
+      final repo = FakeGoogleSignInRepository();
+      await _pump(
+        tester,
+        const GoogleLinkResultScreen(status: 'cancelled', ticket: 'unused'),
+        repo: repo,
+        signedIn: true,
+      );
+      expect(repo.webLinkTickets, isEmpty);
+      expect(find.text('เชื่อมบัญชี Google ไม่สำเร็จ'), findsOneWidget);
+    });
+
     testWidgets('an admin returns to the admin page', (tester) async {
       await _pump(
         tester,

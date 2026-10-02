@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
@@ -149,13 +150,18 @@ class _GoogleLoginReturnScreenState
   }
 }
 
-/// `/google-link?status=linked|<code>` (DESIGN §24.9.4): where the web
-/// preview comes back after linking a Google account through the browser.
-/// Signed-in users of every role may open it.
+/// `/google-link?ticket=…` or `?status=<code>` (DESIGN §24.9.4): where the
+/// web app comes back after Google's account chooser of a link. The server's
+/// callback links nothing; the one-time ticket (60 seconds) is redeemed here
+/// with the signed-in user's token (`POST /me/google-identity/ticket`), so a
+/// Google URL opened by somebody else cannot link their account to this
+/// user. Signed-in users of every role may open it.
 class GoogleLinkResultScreen extends ConsumerStatefulWidget {
-  const GoogleLinkResultScreen({super.key, required this.status});
+  const GoogleLinkResultScreen({super.key, this.status = '', this.ticket});
 
+  /// An error code from the callback (`linked` in tests of the result view).
   final String status;
+  final String? ticket;
 
   @override
   ConsumerState<GoogleLinkResultScreen> createState() =>
@@ -164,14 +170,48 @@ class GoogleLinkResultScreen extends ConsumerStatefulWidget {
 
 class _GoogleLinkResultScreenState
     extends ConsumerState<GoogleLinkResultScreen> {
-  bool get _linked => widget.status == 'linked';
+  static const _ticketInvalid =
+      'ลิงก์เชื่อมบัญชี Google หมดอายุ ถูกใช้ไปแล้ว หรือเปิดจากบัญชีอื่น '
+      'กดเชื่อมบัญชี Google ใหม่อีกครั้ง';
+
+  late final String? _ticket = switch (widget.ticket) {
+    final String t when t.isNotEmpty && widget.status.isEmpty => t,
+    _ => null,
+  };
+  late bool _busy = _ticket != null;
+  late String _status = widget.status.isEmpty && _ticket == null
+      ? 'google_error'
+      : widget.status;
+
+  bool get _linked => _status == 'linked';
 
   @override
   void initState() {
     super.initState();
-    // The card shows the new state when the user goes back to it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.invalidate(googleIdentityProvider);
+      if (!mounted) return;
+      if (_ticket case final ticket?) {
+        _redeem(ticket);
+      } else {
+        // The card shows the new state when the user goes back to it.
+        ref.invalidate(googleIdentityProvider);
+      }
+    });
+  }
+
+  Future<void> _redeem(String ticket) async {
+    String status;
+    try {
+      await ref.read(googleSignInRepositoryProvider).linkWithWebTicket(ticket);
+      status = 'linked';
+    } catch (e) {
+      status = apiErrorCode(e) ?? 'google_error';
+    }
+    if (!mounted) return;
+    ref.invalidate(googleIdentityProvider);
+    setState(() {
+      _busy = false;
+      _status = status;
     });
   }
 
@@ -195,34 +235,40 @@ class _GoogleLinkResultScreenState
     return Scaffold(
       appBar: AppBar(title: const Text('เชื่อมบัญชี Google')),
       body: FormColumn(
-        children: [
-          Icon(
-            _linked ? Icons.check_circle_outline : Icons.error_outline,
-            size: 48,
-            color: _linked
-                ? theme.colorScheme.primary
-                : theme.colorScheme.error,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _linked
-                ? 'เชื่อมบัญชี Google แล้ว'
-                : 'เชื่อมบัญชี Google ไม่สำเร็จ',
-            style: theme.textTheme.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _linked
-                ? 'ครั้งต่อไปกด "เข้าสู่ระบบด้วย Google" ในหน้าเข้าสู่ระบบได้'
-                : googleReturnCodeMessage(widget.status),
-            key: const ValueKey('google_link_result_message'),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          FilledButton(onPressed: _back, child: const Text('กลับ')),
-        ],
+        children: _busy
+            ? const [
+                Center(child: CircularProgressIndicator()),
+                SizedBox(height: 16),
+                Text('กำลังเชื่อมบัญชี Google…', textAlign: TextAlign.center),
+              ]
+            : _result(theme),
       ),
     );
   }
+
+  List<Widget> _result(ThemeData theme) => [
+    Icon(
+      _linked ? Icons.check_circle_outline : Icons.error_outline,
+      size: 48,
+      color: _linked ? theme.colorScheme.primary : theme.colorScheme.error,
+    ),
+    const SizedBox(height: 16),
+    Text(
+      _linked ? 'เชื่อมบัญชี Google แล้ว' : 'เชื่อมบัญชี Google ไม่สำเร็จ',
+      style: theme.textTheme.titleLarge,
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 8),
+    Text(
+      _linked
+          ? 'ครั้งต่อไปกด "เข้าสู่ระบบด้วย Google" ในหน้าเข้าสู่ระบบได้'
+          : _status == 'google_ticket_invalid'
+          ? _ticketInvalid
+          : googleReturnCodeMessage(_status),
+      key: const ValueKey('google_link_result_message'),
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 24),
+    FilledButton(onPressed: _back, child: const Text('กลับ')),
+  ];
 }

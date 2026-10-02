@@ -25,6 +25,9 @@ CLAUDE.local.md
 # Phase 5: add `!app/assets/models/*.tflite` when the on-device model is committed
 *.tflite
 
+# ---- the web app uploaded next to the API (tools/build-web.sh, DESIGN §25) ----
+backend/public/app/
+
 # ---- Flutter (app/) ----
 app/.dart_tool/
 app/.flutter-plugins-dependencies

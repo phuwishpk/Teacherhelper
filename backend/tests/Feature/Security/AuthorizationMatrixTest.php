@@ -380,6 +380,7 @@ class AuthorizationMatrixTest extends TestCase
         // The own Google sign-in account of every role, admins included (§24.9.5).
         'api.me.google-identity.show' => ['GET', 'me/google-identity'],
         'api.me.google-identity.store' => ['POST', 'me/google-identity'],
+        'api.me.google-identity.ticket' => ['POST', 'me/google-identity/ticket'],
         'api.me.google-identity.destroy' => ['DELETE', 'me/google-identity'],
     ];
 

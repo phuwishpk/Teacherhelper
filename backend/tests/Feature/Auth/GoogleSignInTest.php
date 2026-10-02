@@ -801,23 +801,46 @@ class GoogleSignInTest extends TestCase
         $this->get('/auth/google/callback?'.http_build_query(['state' => $query['state'], 'code' => '4/0AbCdEf-code']))->assertStatus(400);
     }
 
-    public function test_the_browser_flow_links_the_account_of_the_user_who_asked(): void
+    public function test_the_browser_flow_links_only_with_the_token_of_the_user_who_asked(): void
     {
         $this->configureSignIn(web: true);
+        $claims = ['sub' => 'web-sub', 'email' => 'web@gmail.com'];
+        $redeem = fn (?User $as, string $ticket) => ($as === null ? $this->asGuest() : $this->forgetGuardsAnd()->withToken($this->tokenFor($as)))
+            ->postJson('/api/v1/me/google-identity/ticket', ['ticket' => $ticket]);
 
         $this->asGuest()->postJson('/api/v1/auth/google/web-url', ['purpose' => 'link'])->assertUnauthorized();
-        $query = $this->webUrl(['purpose' => 'link'], $this->teacher);
-        $this->fakeTokenEndpoint($this->idToken(['sub' => 'web-sub', 'email' => 'web@gmail.com', 'nonce' => $query['nonce']]));
-        $this->get('/auth/google/callback?'.http_build_query(['state' => $query['state'], 'code' => '4/0AbCdEf-code']))
-            ->assertRedirect('https://app.example.test/#/google-link?status=linked');
+
+        // The callback has no login, so it links nothing: it hands the web app a ticket.
+        $ticket = $this->webLinkTicket($this->teacher, $claims);
+        $this->assertSame(0, UserGoogleIdentity::count());
+
+        // Whoever the Google URL was passed to is not signed in as the user who asked:
+        // their token is refused, and the ticket is spent for everybody.
+        $colleague = $this->makeTeacher($this->school);
+        $redeem(null, $ticket)->assertUnauthorized();
+        $redeem($colleague, $ticket)->assertStatus(422)->assertJsonPath('code', 'google_ticket_invalid');
+        $redeem($this->teacher, $ticket)->assertStatus(422)->assertJsonPath('code', 'google_ticket_invalid');
+        $this->assertSame(0, UserGoogleIdentity::count());
+
+        // The user who asked, in their own signed-in browser.
+        $ticket = $this->webLinkTicket($this->teacher, $claims);
+        $redeem($this->teacher, $ticket)->assertOk()
+            ->assertJsonPath('data.linked', true)
+            ->assertJsonPath('data.linked_via', 'self')
+            ->assertJsonPath('data.email', 'web@gmail.com');
         $this->assertSame('web-sub', $this->teacher->googleIdentity()->first()->google_sub);
+        $redeem($this->teacher, $ticket)->assertStatus(422)->assertJsonPath('code', 'google_ticket_invalid');
 
         // The same Google account for somebody else fails with its code.
-        $colleague = $this->makeTeacher($this->school);
-        $query = $this->webUrl(['purpose' => 'link'], $colleague);
-        $this->fakeTokenEndpoint($this->idToken(['sub' => 'web-sub', 'email' => 'web@gmail.com', 'nonce' => $query['nonce']]));
-        $this->get('/auth/google/callback?'.http_build_query(['state' => $query['state'], 'code' => '4/0AbCdEf-code']))
-            ->assertRedirect('https://app.example.test/#/google-link?status=google_already_linked');
+        $redeem($colleague, $this->webLinkTicket($colleague, $claims))
+            ->assertStatus(409)->assertJsonPath('code', 'google_already_linked');
+
+        // A ticket lives for 60 seconds.
+        $other = $this->makeTeacher($this->school);
+        $ticket = $this->webLinkTicket($other, ['sub' => 'other-sub', 'email' => 'other@gmail.com']);
+        $this->travel(61)->seconds();
+        $redeem($other, $ticket)->assertStatus(422)->assertJsonPath('code', 'google_ticket_invalid');
+        $this->assertSame(1, UserGoogleIdentity::count());
     }
 
     public function test_a_student_web_link_needs_the_switch_and_the_notice(): void
@@ -832,7 +855,14 @@ class GoogleSignInTest extends TestCase
         $this->forgetGuards();
         $this->withToken($this->tokenFor($student))->postJson('/api/v1/auth/google/web-url', ['purpose' => 'link'])
             ->assertStatus(422)->assertJsonPath('code', 'notice_required');
-        $this->webUrl(['purpose' => 'link', 'accept_notice' => true], $student);
+        $ticket = $this->webLinkTicket($student, ['sub' => 'student-web-sub', 'email' => 'nong@school.ac.th'], ['purpose' => 'link', 'accept_notice' => true]);
+
+        // The switch is checked again when the ticket is redeemed.
+        $this->school->forceFill(['student_google_signin' => false])->save();
+        $this->forgetGuards();
+        $this->withToken($this->tokenFor($student))->postJson('/api/v1/me/google-identity/ticket', ['ticket' => $ticket])
+            ->assertForbidden()->assertJsonPath('code', 'student_google_disabled');
+        $this->assertSame(0, UserGoogleIdentity::count());
     }
 
     // ---- limits and privacy ----
@@ -941,6 +971,29 @@ class GoogleSignInTest extends TestCase
         $this->assertMatchesRegularExpression('~#/login/google\?ticket=[a-f0-9]{48}$~', $location);
 
         return substr($location, strrpos($location, '=') + 1);
+    }
+
+    /** The ticket the callback hands the web app after a `link` through Google's chooser. */
+    private function webLinkTicket(User $user, array $claims, array $body = ['purpose' => 'link']): string
+    {
+        $query = $this->webUrl($body, $user);
+        $this->fakeTokenEndpoint($this->idToken($claims + ['nonce' => $query['nonce']]));
+        $location = (string) $this->get('/auth/google/callback?'.http_build_query(['state' => $query['state'], 'code' => '4/0AbCdEf-code']))
+            ->assertRedirect()
+            ->headers->get('Location');
+        $prefix = 'https://app.example.test/#/google-link?ticket=';
+        $this->assertStringStartsWith($prefix, $location);
+        $ticket = substr($location, strlen($prefix));
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{48}$/', $ticket);
+
+        return $ticket;
+    }
+
+    private function forgetGuardsAnd(): static
+    {
+        $this->forgetGuards();
+
+        return $this;
     }
 
     /** What Google's token endpoint answers next (the faked code exchange of the browser flow). */

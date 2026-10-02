@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Web\WebApp;
 use Illuminate\Http\Response;
 
 /**
@@ -13,6 +14,9 @@ use Illuminate\Http\Response;
  *
  * Intent link: intent://r/{id}#Intent;scheme=eduvision;package=com.eduvision.app;end
  * (the app handles eduvision://r/{id} and opens /student/results/{id}).
+ *
+ * When the web app is installed (DESIGN §25) the page also links to the same
+ * result there (/app/#/student/results/{id}); it asks for the login first.
  */
 class ResultLinkController extends Controller
 {
@@ -23,7 +27,10 @@ class ResultLinkController extends Controller
         $id = (int) $submissionId;
 
         return response()
-            ->view('results.open-in-app', ['intentUrl' => self::intentUrl($id)])
+            ->view('results.open-in-app', [
+                'intentUrl' => self::intentUrl($id),
+                'webUrl' => WebApp::installed() ? WebApp::url('/student/results/'.$id) : null,
+            ])
             ->withHeaders([
                 'Cache-Control' => 'no-store, private',
                 'X-Robots-Tag' => 'noindex, nofollow',

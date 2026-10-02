@@ -120,6 +120,17 @@ final class GoogleSignInErrors
         );
     }
 
+    /** The web link ticket is unknown, expired, spent or was made for another user. */
+    public static function webLinkTicketInvalid(): ApiException
+    {
+        return new ApiException(
+            'ลิงก์เชื่อมบัญชี Google หมดอายุ ถูกใช้ไปแล้ว หรือเปิดจากบัญชีอื่น กดเชื่อมบัญชี Google ใหม่จากหน้าตั้งค่าหรือหน้าบัญชีของฉัน',
+            'google_ticket_invalid',
+            422,
+            ['ticket' => ['ลิงก์เชื่อมบัญชี Google ใช้ไม่ได้แล้ว']],
+        );
+    }
+
     public static function ticketInvalid(): ApiException
     {
         return new ApiException(

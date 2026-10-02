@@ -104,6 +104,8 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
   final pinLinks = <Map<String, Object>>[];
   final qrLinks = <(String, String)>[];
   final links = <(String, bool)>[];
+  final webLinkTickets = <String>[];
+  Object? webLinkError;
   final unlinkedStudents = <int>[];
 
   static final googleUrl = Uri.parse(
@@ -194,6 +196,18 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
   }) async {
     links.add((idToken, acceptNotice));
     if (linkError != null) throw linkError!;
+    return current = const GoogleIdentity(
+      linked: true,
+      email: 'kru@school.ac.th',
+      name: 'ครู Google',
+      linkedVia: 'self',
+    );
+  }
+
+  @override
+  Future<GoogleIdentity> linkWithWebTicket(String ticket) async {
+    webLinkTickets.add(ticket);
+    if (webLinkError != null) throw webLinkError!;
     return current = const GoogleIdentity(
       linked: true,
       email: 'kru@school.ac.th',

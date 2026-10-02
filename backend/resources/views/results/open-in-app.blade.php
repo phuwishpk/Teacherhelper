@@ -39,6 +39,10 @@
     <p>ผลการตรวจงานพร้อมคำอธิบายรายข้ออยู่ในแอป EduVision กดปุ่มด้านล่างบนมือถือ Android ที่ติดตั้งแอปไว้</p>
     <a class="button" href="{{ $intentUrl }}">เปิดในแอป EduVision</a>
     <p class="muted">ถ้ากดแล้วไม่เปิด ให้เปิดแอป EduVision เอง เข้าสู่ระบบด้วยบัญชีนักเรียน แล้วไปที่ "ผลการตรวจ"</p>
+    @if ($webUrl !== null)
+        <p>ไม่มีแอป หรือใช้คอมพิวเตอร์อยู่ เปิดผลบนเว็บได้</p>
+        <a class="button" href="{{ $webUrl }}">เปิดบนเว็บ</a>
+    @endif
     <footer class="muted">EduVision</footer>
 </main>
 </body>

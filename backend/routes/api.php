@@ -136,6 +136,7 @@ Route::prefix('v1')->group(function () {
             Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {
                 Route::get('me/google-identity', [GoogleIdentityController::class, 'show'])->name('api.me.google-identity.show');
                 Route::post('me/google-identity', [GoogleIdentityController::class, 'store'])->middleware('throttle:google-signin')->name('api.me.google-identity.store');
+                Route::post('me/google-identity/ticket', [GoogleIdentityController::class, 'storeFromTicket'])->middleware('throttle:google-signin')->name('api.me.google-identity.ticket');
                 Route::delete('me/google-identity', [GoogleIdentityController::class, 'destroy'])->name('api.me.google-identity.destroy');
             });
 
