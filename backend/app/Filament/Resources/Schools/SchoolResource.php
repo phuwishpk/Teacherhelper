@@ -26,7 +26,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * DESIGN §7.5: schools, the consent/retention settings of §8.1 and the
- * Google sign-in settings of §24.9.2 (allowed domains, the students' switch).
+ * Google sign-in settings of §24.9.2 (allowed domains, the students' switch,
+ * the automatic approval of teachers who sign up with Google, #71).
  * An admin of a school sees and edits only that school (§24.2); a system
  * admin all.
  *
@@ -112,6 +113,10 @@ class SchoolResource extends Resource
                             ->label('ให้นักเรียนเข้าสู่ระบบด้วย Google')
                             ->helperText('นักเรียนเป็นผู้เยาว์: เปิดเมื่อโรงเรียนได้รับความยินยอมจากผู้ปกครองที่ครอบคลุมการใช้บัญชี Google เพื่อเข้าสู่ระบบแล้วเท่านั้น ระบบเก็บเฉพาะรหัสบัญชี ชื่อ อีเมล และ URL รูปโปรไฟล์ ปิดสวิตช์แล้วการเชื่อมเดิมยังอยู่แต่ใช้เข้าสู่ระบบไม่ได้ ถ้าต้องการลบให้กด "ลบการเชื่อม Google ของนักเรียนทั้งหมด" ด้านบน')
                             ->default(false),
+                        Toggle::make('teacher_google_auto_approve')
+                            ->label('อนุมัติครูที่สมัครด้วย Google อัตโนมัติ')
+                            ->helperText('เปิดอยู่: ใครก็ตามที่เข้าสู่ระบบด้วยบัญชี Google ที่ยังไม่มีในระบบ (และอยู่ในโดเมนที่อนุญาตด้านบน) จะได้บัญชีครูของโรงเรียนนี้ทันทีโดยไม่ต้องรออนุมัติ จึงควรระบุโดเมนของโรงเรียนไว้ด้วย ถ้าพบบัญชีที่ไม่ใช่ครู ระงับได้ในเมนู "ผู้ใช้และครู" ปิดสวิตช์: ครูใหม่ที่ใช้ Google ต้องกรอกฟอร์มสมัครแล้วรอผู้ดูแลระบบอนุมัติเหมือนการสมัครด้วยรหัสผ่าน')
+                            ->default(true),
                     ]),
             ]);
     }

@@ -58,10 +58,21 @@ class GoogleIdentityController extends Controller
         return response()->json(['data' => self::payload($user)]);
     }
 
-    /** DELETE /me/google-identity -> 204 (also when nothing was linked). */
+    /**
+     * DELETE /me/google-identity -> 204 (also when nothing was linked).
+     * 409 google_unlink_needs_password for a teacher or admin without a
+     * password (an account made by Google sign-up, #71): unlinking would
+     * leave no way to sign in, so an admin sets a password first.
+     */
     public function destroy(Request $request): Response
     {
-        $this->signIn->unlink($request->user(), $request->user(), 'self');
+        $user = $request->user();
+        if (! $user->isStudent() && $user->password === null && $user->googleIdentity()->exists()) {
+            GoogleSignIn::log('unlink', 'google_unlink_needs_password', $user->id);
+
+            throw GoogleSignInErrors::unlinkNeedsPassword();
+        }
+        $this->signIn->unlink($user, $user, 'self');
 
         return response()->noContent();
     }

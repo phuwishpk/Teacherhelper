@@ -65,22 +65,27 @@ final class GoogleSignInTickets
         return $data === null ? null : VerifiedGoogleIdentity::fromArray($data['identity'] ?? null);
     }
 
-    public function issueLogin(VerifiedGoogleIdentity $identity, string $intent): string
+    /** $schoolId: the school an unknown teacher picked before the browser flow (#71). */
+    public function issueLogin(VerifiedGoogleIdentity $identity, string $intent, ?int $schoolId = null): string
     {
-        return $this->issueTicket(self::LOGIN, ['identity' => $identity->toArray(), 'intent' => $intent], self::LOGIN_TTL);
+        return $this->issueTicket(self::LOGIN, ['identity' => $identity->toArray(), 'intent' => $intent, 'school_id' => $schoolId], self::LOGIN_TTL);
     }
 
-    /** @return array{identity: VerifiedGoogleIdentity, intent: string}|null */
+    /** @return array{identity: VerifiedGoogleIdentity, intent: string, school_id: int|null}|null */
     public function consumeLogin(?string $ticket): ?array
     {
         $data = $this->consumeTicket(self::LOGIN, $ticket, self::LOGIN_TTL);
         $identity = $data === null ? null : VerifiedGoogleIdentity::fromArray($data['identity'] ?? null);
 
-        return $identity === null ? null : ['identity' => $identity, 'intent' => (string) ($data['intent'] ?? 'staff')];
+        return $identity === null ? null : [
+            'identity' => $identity,
+            'intent' => (string) ($data['intent'] ?? 'staff'),
+            'school_id' => is_int($data['school_id'] ?? null) ? $data['school_id'] : null,
+        ];
     }
 
     /**
-     * @param  array{purpose: string, intent: string, nonce: string, user_id: int|null, accept_notice: bool}  $data
+     * @param  array{purpose: string, intent: string, nonce: string, user_id: int|null, accept_notice: bool, school_id?: int|null}  $data
      */
     public function issueState(array $data): string
     {
@@ -90,7 +95,7 @@ final class GoogleSignInTickets
         return $state;
     }
 
-    /** @return array{purpose: string, intent: string, nonce: string, user_id: int|null, accept_notice: bool}|null */
+    /** @return array{purpose: string, intent: string, nonce: string, user_id: int|null, accept_notice: bool, school_id?: int|null}|null */
     public function consumeState(?string $state): ?array
     {
         if ($state === null || preg_match('/^[A-Za-z0-9_-]{43,128}$/', $state) !== 1) {

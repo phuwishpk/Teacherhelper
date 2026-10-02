@@ -90,6 +90,16 @@ final class GoogleSignInErrors
         );
     }
 
+    /** A teacher made by Google sign-up (#71) has no password to fall back on. */
+    public static function unlinkNeedsPassword(): ApiException
+    {
+        return new ApiException(
+            'บัญชีนี้ยังไม่มีรหัสผ่าน ถ้ายกเลิกการเชื่อม Google จะเข้าสู่ระบบไม่ได้ ขอให้ผู้ดูแลโรงเรียนตั้งรหัสผ่านให้ก่อน',
+            'google_unlink_needs_password',
+            409,
+        );
+    }
+
     public static function noticeRequired(): ApiException
     {
         return new ApiException(
