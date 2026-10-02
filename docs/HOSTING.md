@@ -216,6 +216,8 @@ DOCUMENT_MAX_PAGES=30                 # หน้าต่อการอ่า�
 DOCUMENT_RETENTION_DAYS=30            # วันที่เก็บไฟล์ของครู (ผลอ่านยังอยู่หลังลบไฟล์)
 CLASSROOM_SYNC_MAX_COURSEWORK=20      # การบ้านที่ซิงก์งานส่งได้ต่อรอบ cron
 CLASSROOM_SYNC_BUDGET_SECONDS=40      # รอบซิงก์หยุดเริ่มงานใหม่หลังเวลานี้ (worker รอบละ 50 วินาที)
+CLASSROOM_ROSTER_SYNC_MINUTES=15      # ซิงก์รายชื่อห้องที่ผูก Classroom เองทุกกี่นาที (นักเรียนใหม่เข้า Google ได้โดยไม่ต้องใช้ PIN)
+CLASSROOM_SYNC_MAX_ROSTERS=10         # ห้องที่ซิงก์รายชื่อได้ต่อรอบ cron
 GEMINI_PRICE_INPUT_PER_M=0.50         # USD ต่อล้าน token ขาเข้า ใช้แสดงราคาก่อนอ่านเอกสาร ตรวจราคาปัจจุบันของ Google ก่อน
 GEMINI_PRICE_OUTPUT_PER_M=3.00        # USD ต่อล้าน token ขาออก (ว่างทั้งคู่ = แสดงเป็น token อย่างเดียว)
 USD_THB_RATE=33
@@ -296,7 +298,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | งาน | เมื่อไร | ทำอะไร | อ้างอิง |
 |---|---|---|---|
 | heartbeat | ทุกนาที | เขียน `queue_last_run_at` ที่ `/health` แสดง | DESIGN §7.2 |
-| ซิงก์ Google Classroom (`ClassroomSyncJob`) | ทุก **5 นาที** (`Cache::add('classroom-sync:lock', 300 วินาที)` บน cache database) เฉพาะเมื่อมี `GOOGLE_OAUTH_CLIENT_ID` | ดึงงานใหม่ที่ครูสร้างในเว็บ Classroom (ร่างเฉลยด้วย AI รอครูอนุมัติ), งานที่นักเรียนส่ง (ดาวน์โหลดไฟล์จาก Drive บน server), คะแนนที่ครูแก้ใน Classroom (คะแนนไม่ตรงกัน) ข้ามครูที่ต้องเชื่อม Google ใหม่ จำกัดต่อรอบด้วย `CLASSROOM_SYNC_MAX_COURSEWORK` และ `CLASSROOM_SYNC_BUDGET_SECONDS` ปุ่ม "ซิงก์ตอนนี้" ในแอปเข้าคิวรอบของห้องนั้นทันที | DESIGN §19.3, §19.10 |
+| ซิงก์ Google Classroom (`ClassroomSyncJob`) | ทุก **5 นาที** (`Cache::add('classroom-sync:lock', 300 วินาที)` บน cache database) เฉพาะเมื่อมี `GOOGLE_OAUTH_CLIENT_ID` | ดึงงานใหม่ที่ครูสร้างในเว็บ Classroom (ร่างเฉลยด้วย AI รอครูอนุมัติ), งานที่นักเรียนส่ง (ดาวน์โหลดไฟล์จาก Drive บน server), คะแนนที่ครูแก้ใน Classroom (คะแนนไม่ตรงกัน), รายชื่อของห้องที่ไม่ได้ซิงก์มานานกว่า `CLASSROOM_ROSTER_SYNC_MINUTES` (นักเรียนใหม่ในคอร์สถูกเพิ่มและจับคู่เอง) ข้ามครูที่ต้องเชื่อม Google ใหม่ จำกัดต่อรอบด้วย `CLASSROOM_SYNC_MAX_COURSEWORK` และ `CLASSROOM_SYNC_BUDGET_SECONDS` ปุ่ม "ซิงก์ตอนนี้" ในแอปเข้าคิวรอบของห้องนั้นทันที | DESIGN §19.3, §19.10 |
 | วิเคราะห์รายคนรอบกลางคืน (`BuildAnalysisBatchesJob`) | ครั้งแรกของวันหลัง **01:00 เวลาไทย** (`Cache::add('analysis-nightly:<วันที่>', 36 ชั่วโมง)`) | คำนวณจุดแข็ง/จุดที่ควรฝึกจาก mastery แล้วส่งเฉพาะนักเรียนที่ข้อมูลเปลี่ยนให้ Gemini Batch API (ราคาครึ่งหนึ่ง) batch ละ key หนึ่งตัว ห้องที่ไม่มี key ใดเลยถูกข้าม | DESIGN §20.8 |
 | ถามผล batch (`PollAnalysisBatchJob`) | ทุกนาที สำหรับ batch ที่ส่งแล้วและถามครั้งล่าสุดเกิน 1 นาที | เก็บผลที่เสร็จลง `student_analyses` (ครูอนุมัติก่อนนักเรียนเห็น) batch ที่ค้างเกิน 10 นาทีระหว่างสร้าง/เก็บผลถูกตั้งเป็นล้มเหลว และ batch ที่ไม่เสร็จใน 72 ชั่วโมงหมดอายุ แถวของนักเรียนจึงไปรอบคืนถัดไป | DESIGN §20.8 |
 

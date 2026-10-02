@@ -168,7 +168,9 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
       children: [
         Text(
           'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน '
-          'ยืนยันว่าเป็นคุณครั้งเดียวด้วยบัตร QR หรือรหัสห้อง เลขที่ และ PIN '
+          'ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส ไม่ต้องกรอกอะไร '
+          'รอประมาณ 20 นาทีแล้วกด "เข้าสู่ระบบด้วย Google" อีกครั้ง '
+          'หรือยืนยันว่าเป็นคุณครั้งเดียวด้วยบัตร QR หรือรหัสห้อง เลขที่ และ PIN '
           'ครั้งต่อไปกด "เข้าสู่ระบบด้วย Google" ได้เลย',
           style: theme.textTheme.bodyLarge,
         ),

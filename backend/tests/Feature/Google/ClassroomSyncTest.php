@@ -73,6 +73,9 @@ class ClassroomSyncTest extends TestCase
 
     private bool $grantDead = false;
 
+    /** @var list<array<string, mixed>> courses.students.list of the course */
+    private array $roster = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -90,6 +93,7 @@ class ClassroomSyncTest extends TestCase
         foreach ([1, 2] as $n) {
             $this->students[$n] = $this->enrollStudent($this->classroom, $n, "นักเรียนคนที่ {$n}")['student'];
             ClassroomStudent::query()->where('student_id', $this->students[$n]->id)->update(['google_user_id' => "g-{$n}"]);
+            $this->roster[] = self::courseStudent("g-{$n}", "นักเรียนคนที่ {$n}");
         }
         $this->link($this->classroom, $this->teacher, self::COURSE_ID);
 
@@ -104,6 +108,9 @@ class ClassroomSyncTest extends TestCase
             },
             'classroom.googleapis.com/v1/courses/'.self::COURSE_ID.'/courseWork*' => fn () => Http::response(['courseWork' => $this->courseWork]),
             'classroom.googleapis.com/v1/courses/*/courseWork*' => Http::response(['courseWork' => []]),
+            // The cron round syncs rosters too: both students are in the course.
+            'classroom.googleapis.com/v1/courses/'.self::COURSE_ID.'/students*' => fn () => Http::response(['students' => $this->roster]),
+            'classroom.googleapis.com/v1/courses/*/students*' => Http::response(['students' => []]),
             'www.googleapis.com/drive/v3/files/*' => function (Request $request) {
                 $id = rawurldecode((string) preg_replace('#^.*/files/([^?]+).*$#', '$1', $request->url()));
                 $file = $this->drive[$id] ?? null;
@@ -472,6 +479,64 @@ class ClassroomSyncTest extends TestCase
 
         Queue::assertPushed(SyncClassroomRosterJob::class, fn ($job) => $job->classroomId === $this->classroom->id);
         $this->assertSame(ClassroomSubmissionImport::STATE_NEW, ClassroomSubmissionImport::query()->where('google_submission_id', 'sub-9')->value('state'));
+    }
+
+    public function test_the_cron_round_adds_a_student_who_joined_the_course_without_the_teacher(): void
+    {
+        $this->roster[] = self::courseStudent('g-3', 'นักเรียนคนใหม่', 'new.student@school.ac.th');
+
+        $this->round();
+
+        // Matched with both the Classroom userId and the e-mail: their first Google
+        // sign-in links on its own, without a PIN (DESIGN §24.9.3).
+        $row = ClassroomStudent::query()->where('classroom_id', $this->classroom->id)->where('google_user_id', 'g-3')->first();
+        $this->assertNotNull($row);
+        $this->assertSame('new.student@school.ac.th', $row->google_email);
+        $this->assertSame(3, (int) $row->student_number);
+        $this->assertNotNull($row->pin_pending_at, 'nobody saw a PIN: the teacher issues it later');
+        $this->assertSame('นักเรียนคนใหม่', User::query()->find($row->student_id)->name);
+        $this->assertNotNull(ClassroomGoogleLink::query()->where('classroom_id', $this->classroom->id)->value('roster_synced_at'));
+
+        // The two who were there stay matched; nobody is marked left.
+        $this->assertSame(0, ClassroomStudent::query()->where('classroom_id', $this->classroom->id)->whereNotNull('left_course_at')->count());
+    }
+
+    public function test_rosters_sync_when_due_oldest_first_and_at_most_the_limit_per_round(): void
+    {
+        Queue::fake([SyncClassroomRosterJob::class]);
+        config(['eduvision.classroom_sync.max_rosters' => 1, 'eduvision.classroom_sync.roster_minutes' => 15]);
+        $recent = $this->makeClassroom($this->teacher, ['name' => 'ม.1/2']);
+        $this->link($recent, $this->teacher, 'course-recent')->forceFill(['roster_synced_at' => now()->subMinutes(5)])->save();
+        $stale = $this->makeClassroom($this->teacher, ['name' => 'ม.1/3']);
+        $this->link($stale, $this->teacher, 'course-stale')->forceFill(['roster_synced_at' => now()->subHour()])->save();
+        $closed = $this->makeClassroom($this->teacher, ['name' => 'ม.1/4']);
+        $this->link($closed, $this->teacher, 'course-closed');
+        $closed->forceFill(['closed_at' => now()])->save();
+        $reconnect = $this->makeTeacher();
+        $this->connectGoogle($reconnect, ['last_error' => GoogleAccount::ERROR_INVALID_GRANT]);
+        $this->link($this->makeClassroom($reconnect), $reconnect, 'course-of-other');
+
+        $pushedFor = fn () => Queue::pushed(SyncClassroomRosterJob::class)->map(fn (SyncClassroomRosterJob $job) => $job->classroomId)->all();
+
+        // Never synced comes first; one per round.
+        $this->round();
+        $this->assertSame([$this->classroom->id], $pushedFor());
+
+        $this->round();
+        $this->assertSame([$this->classroom->id, $stale->id], $pushedFor());
+
+        // Both were tried within the interval (even if their sync failed); the recent one is not due.
+        $this->round();
+        $this->assertSame([$this->classroom->id, $stale->id], $pushedFor());
+
+        // "ซิงก์ตอนนี้" of one classroom syncs work only.
+        app(ClassroomSync::class)->run($recent->id);
+        $this->assertCount(2, $pushedFor());
+
+        $this->travel(16)->minutes();
+        $this->round();
+        $this->assertSame([$this->classroom->id, $stale->id, $this->classroom->id], $pushedFor());
+        $this->assertNotContains($closed->id, $pushedFor(), 'a closed classroom is read-only');
     }
 
     public function test_sync_now_queues_a_round_of_the_classroom(): void
