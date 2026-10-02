@@ -9,16 +9,19 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Auth\GoogleSignInFixtures;
 use Tests\TestCase;
 
 /**
  * DESIGN §7.4 beyond the happy paths in TeacherAuthTest / StudentAuthTest:
  * token lifetime and revocation, the PIN lockout being a property of the
  * account (not of the caller's address), the per-IP teacher throttle, one
- * bucket per throttled route, and credentials never stored in clear.
+ * bucket per throttled route, credentials never stored in clear, and the
+ * Google sign-up of #71 taking nothing from the client but the ID token.
  */
 class AuthHardeningTest extends TestCase
 {
+    use GoogleSignInFixtures;
     use RefreshDatabase;
 
     private User $teacher;
@@ -128,10 +131,10 @@ class AuthHardeningTest extends TestCase
     public function test_registration_is_throttled_like_login(): void
     {
         for ($i = 0; $i < 10; $i++) {
-            $this->postJson('/api/v1/auth/teacher/register', ['school_code' => 'WRONG000', 'name' => 'x', 'email' => "t{$i}@example.com", 'password' => 'secret1234'])
+            $this->postJson('/api/v1/auth/teacher/register', ['school_id' => 999999, 'name' => 'x', 'email' => "t{$i}@example.com", 'password' => 'secret1234'])
                 ->assertStatus(422);
         }
-        $this->postJson('/api/v1/auth/teacher/register', ['school_code' => 'WRONG000', 'name' => 'x', 'email' => 't99@example.com', 'password' => 'secret1234'])
+        $this->postJson('/api/v1/auth/teacher/register', ['school_id' => 999999, 'name' => 'x', 'email' => 't99@example.com', 'password' => 'secret1234'])
             ->assertStatus(429);
     }
 
@@ -140,7 +143,7 @@ class AuthHardeningTest extends TestCase
         for ($i = 0; $i < 10; $i++) {
             $this->postJson('/api/v1/auth/teacher/login', ['email' => 'teacher@example.com', 'password' => 'wrong-password'])->assertStatus(422);
         }
-        $this->postJson('/api/v1/auth/teacher/register', ['school_code' => 'WRONG000', 'name' => 'x', 'email' => 'new@example.com', 'password' => 'secret1234'])
+        $this->postJson('/api/v1/auth/teacher/register', ['name' => 'x', 'email' => 'new@example.com', 'password' => 'secret1234'])
             ->assertStatus(429)
             ->assertJsonPath('code', 'too_many_requests');
     }
@@ -170,7 +173,7 @@ class AuthHardeningTest extends TestCase
         }
 
         $this->assertSame(
-            ['admin-handoff', 'ai-key', 'analysis-now', 'answer-key', 'appeal', 'course-extract', 'documents', 'exam-images', 'exam-import', 'explanation', 'google', 'google-signin', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'regrade', 'student-auth', 'student-submission', 'teacher-auth'],
+            ['admin-handoff', 'ai-key', 'analysis-now', 'answer-key', 'appeal', 'course-extract', 'documents', 'exam-images', 'exam-import', 'explanation', 'google', 'google-signin', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'regrade', 'school-list', 'student-auth', 'student-submission', 'teacher-auth'],
             collect($throttled)->keys()->sort()->values()->all(),
         );
     }
@@ -243,5 +246,25 @@ class AuthHardeningTest extends TestCase
         $this->withToken($token)->postJson('/api/v1/auth/logout')->assertNoContent();
         $this->forgetGuards();
         $this->withToken($token)->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
+    public function test_google_sign_up_takes_role_status_and_profile_only_from_the_verified_token(): void
+    {
+        $this->configureSignIn();
+        $this->fakeCerts();
+        $body = [
+            'id_token' => $this->idToken(['sub' => 'hardening-sub', 'email' => 'new.kru@example.com', 'name' => 'ครูใหม่']),
+            'intent' => 'staff',
+            'role' => 'admin', 'status' => 'active', 'name' => 'Mallory', 'email' => 'mallory@example.com',
+            'password' => 'chosen-by-client', 'approved_by' => $this->teacher->id,
+        ];
+
+        $id = $this->postJson('/api/v1/auth/google', $body)->assertOk()->assertJsonPath('user.role', 'teacher')->json('user.id');
+
+        $user = User::query()->findOrFail($id);
+        $this->assertSame(['teacher', 'active', 'ครูใหม่', 'new.kru@example.com', null, null], [$user->role, $user->status, $user->name, $user->email, $user->password, $user->approved_by]);
+        $this->assertNull(User::query()->where('email', 'mallory@example.com')->first());
+        $this->postJson('/api/v1/auth/teacher/login', ['email' => 'new.kru@example.com', 'password' => 'chosen-by-client'])
+            ->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
     }
 }

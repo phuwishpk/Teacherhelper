@@ -13,7 +13,9 @@ class ManageUsers extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('เพิ่มผู้ใช้'),
+            CreateAction::make()
+                ->label('เพิ่มผู้ใช้')
+                ->mutateDataUsing(fn (array $data) => UserResource::keepInAdminSchool($data)),
         ];
     }
 }

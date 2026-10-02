@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string $email
  * @property string|null $name
  * @property string|null $picture_url
- * @property string $linked_via teacher_email|registration|self|pin_confirm|classroom_roster
+ * @property string $linked_via teacher_email|registration|self|pin_confirm|classroom_roster|google_signup
  * @property int|null $linked_by
  * @property string|null $notice_version
  * @property Carbon $linked_at
@@ -35,6 +35,9 @@ class UserGoogleIdentity extends Model
     public const VIA_PIN_CONFIRM = 'pin_confirm';
 
     public const VIA_CLASSROOM_ROSTER = 'classroom_roster';
+
+    /** The teacher account was created by the Google sign-in itself (DESIGN §24.9.3, #71). */
+    public const VIA_GOOGLE_SIGNUP = 'google_signup';
 
     protected $fillable = [
         'user_id',

@@ -28,14 +28,13 @@ class TeacherAuthTest extends TestCase
     private function registration(array $overrides = []): array
     {
         return array_merge([
-            'school_code' => self::JOIN_CODE,
             'name' => 'ครูทดสอบ',
             'email' => 't1@example.com',
             'password' => 'secret1234',
         ], $overrides);
     }
 
-    public function test_register_with_valid_school_code_creates_a_pending_teacher(): void
+    public function test_register_without_a_code_joins_the_only_school_as_a_pending_teacher(): void
     {
         $response = $this->postJson('/api/v1/auth/teacher/register', $this->registration())
             ->assertCreated()
@@ -114,6 +113,78 @@ class TeacherAuthTest extends TestCase
         $this->approve($overrides['email'] ?? 't1@example.com');
     }
 
+    public function test_register_with_several_schools_and_no_school_id_asks_for_a_school(): void
+    {
+        School::factory()->create(['name' => 'โรงเรียนที่สอง']);
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration())
+            ->assertStatus(422)
+            ->assertJsonStructure(['message', 'errors' => ['school_id'], 'code'])
+            ->assertJsonPath('code', 'school_required')
+            ->assertJsonPath('errors.school_id.0', 'กรุณาเลือกโรงเรียน');
+
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_register_with_no_school_at_all_asks_for_a_school(): void
+    {
+        School::query()->delete();
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration())
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'school_required');
+    }
+
+    public function test_register_with_school_id_joins_that_school(): void
+    {
+        $second = School::factory()->create(['name' => 'โรงเรียนที่สอง']);
+
+        $id = $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_id' => $second->id]))
+            ->assertCreated()
+            ->assertJsonPath('user.status', 'pending')
+            ->assertJsonPath('user.school.id', $second->id)
+            ->assertJsonPath('user.school.name', 'โรงเรียนที่สอง')
+            ->json('user.id');
+
+        $this->assertDatabaseHas('users', ['id' => $id, 'school_id' => $second->id, 'status' => 'pending']);
+    }
+
+    public function test_school_id_wins_over_a_school_code(): void
+    {
+        $second = School::factory()->create(['name' => 'โรงเรียนที่สอง']);
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_id' => $second->id, 'school_code' => self::JOIN_CODE]))
+            ->assertCreated()
+            ->assertJsonPath('user.school.id', $second->id);
+    }
+
+    public function test_register_with_an_unknown_school_id_is_a_validation_error(): void
+    {
+        foreach ([999999, 'abc'] as $bad) {
+            $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_id' => $bad]))
+                ->assertStatus(422)
+                ->assertJsonPath('code', 'validation_failed')
+                ->assertJsonPath('errors.school_id.0', 'ไม่พบโรงเรียนที่เลือก');
+        }
+
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_older_app_builds_still_register_with_the_school_code(): void
+    {
+        $second = School::factory()->create(['name' => 'โรงเรียนที่สอง']);
+        $seeded = School::query()->where('teacher_join_code', self::JOIN_CODE)->firstOrFail();
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_code' => self::JOIN_CODE]))
+            ->assertCreated()
+            ->assertJsonPath('user.status', 'pending')
+            ->assertJsonPath('user.school.id', $seeded->id);
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_code' => $second->teacher_join_code, 'email' => 't2@example.com']))
+            ->assertCreated()
+            ->assertJsonPath('user.school.id', $second->id);
+    }
+
     public function test_register_with_wrong_school_code_is_rejected_with_a_code(): void
     {
         $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_code' => 'WRONG123']))
@@ -121,13 +192,47 @@ class TeacherAuthTest extends TestCase
             ->assertJsonStructure(['message', 'errors', 'code'])
             ->assertJsonPath('code', 'school_code_invalid');
 
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_code' => 'SHORT']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['school_code']);
+
         $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_the_school_list_shows_names_only(): void
+    {
+        $second = School::factory()->create(['name' => 'ก โรงเรียนแรกตามตัวอักษร']);
+        $seeded = School::query()->where('teacher_join_code', self::JOIN_CODE)->firstOrFail();
+
+        $response = $this->getJson('/api/v1/auth/schools')
+            ->assertOk()
+            ->assertExactJson(['data' => [
+                ['id' => $second->id, 'name' => 'ก โรงเรียนแรกตามตัวอักษร'],
+                ['id' => $seeded->id, 'name' => 'โรงเรียนสาธิต EduVision'],
+            ]]);
+
+        $this->assertStringNotContainsString(self::JOIN_CODE, $response->getContent());
+        $this->assertStringNotContainsString($second->teacher_join_code, $response->getContent());
+    }
+
+    public function test_the_school_list_is_throttled_per_address_apart_from_login(): void
+    {
+        for ($i = 0; $i < 30; $i++) {
+            $this->getJson('/api/v1/auth/schools')->assertOk();
+        }
+        $this->getJson('/api/v1/auth/schools')
+            ->assertStatus(429)
+            ->assertJsonPath('code', 'too_many_requests');
+
+        // Its own bucket: the login of the same address is untouched.
+        $this->postJson('/api/v1/auth/teacher/login', ['email' => 'x@example.com', 'password' => 'bad-password'])
+            ->assertStatus(422);
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->getJson('/api/v1/auth/schools')->assertOk();
     }
 
     public function test_register_validates_the_body(): void
     {
         $this->postJson('/api/v1/auth/teacher/register', [
-            'school_code' => self::JOIN_CODE,
             'name' => '',
             'email' => 'not-an-email',
             'password' => 'short',

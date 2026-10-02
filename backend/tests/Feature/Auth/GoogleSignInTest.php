@@ -18,7 +18,8 @@ use Tests\TestCase;
 
 /**
  * DESIGN §24.9 / §24.16 build 3: sign-in with a Google ID token for every
- * role, the automatic links (teacher e-mail, Classroom roster), the link
+ * role, the sign-up of an unknown teacher (#71), the automatic links
+ * (teacher e-mail, Classroom roster), the link
  * ticket (teacher registration, student PIN/QR confirmation), linking and
  * unlinking, the school's domains and student switch, and 503 when off.
  * Tokens are signed with test keys; Google is faked.
@@ -242,8 +243,9 @@ class GoogleSignInTest extends TestCase
         $this->assertNull($admin->googleIdentity()->first());
     }
 
-    public function test_an_unknown_account_gets_a_link_ticket_and_the_registration_prefill(): void
+    public function test_with_the_switch_off_an_unknown_account_gets_a_link_ticket_and_the_registration_prefill(): void
     {
+        $this->autoApprove(false);
         $response = $this->signIn(['email' => 'new.teacher@school.ac.th', 'name' => 'ครูใหม่'])->assertNotFound()
             ->assertJsonPath('code', 'google_not_linked')
             ->assertJsonPath('registration', ['name' => 'ครูใหม่', 'email' => 'new.teacher@school.ac.th']);
@@ -255,6 +257,7 @@ class GoogleSignInTest extends TestCase
 
     public function test_a_teacher_registers_with_the_link_ticket(): void
     {
+        $this->autoApprove(false);
         $ticket = $this->signIn(['sub' => 'new-sub', 'email' => 'new.teacher@school.ac.th'])->assertNotFound()->json('link_ticket');
 
         $this->postJson('/api/v1/auth/teacher/register', $this->registration(['google_link_ticket' => $ticket]))
@@ -278,6 +281,7 @@ class GoogleSignInTest extends TestCase
 
     public function test_registration_checks_the_domain_of_the_school_and_keeps_the_ticket(): void
     {
+        $this->autoApprove(false);
         $this->school->forceFill(['google_signin_domains' => ['school.ac.th']])->save();
         $ticket = $this->signIn(['sub' => 'gmail-sub', 'email' => 'someone@gmail.com'])->assertNotFound()->json('link_ticket');
 
@@ -287,6 +291,192 @@ class GoogleSignInTest extends TestCase
 
         $this->postJson('/api/v1/auth/teacher/register', $this->registration(['google_link_ticket' => str_repeat('0', 48)]))
             ->assertStatus(422)->assertJsonPath('code', 'link_ticket_invalid');
+    }
+
+    public function test_a_link_ticket_registration_needs_no_school_code_and_follows_the_school_choice(): void
+    {
+        $this->autoApprove(false);
+        // One school and neither school_id nor school_code: that school.
+        $ticket = $this->signIn(['sub' => 'only-sub', 'email' => 'new.teacher@school.ac.th'])->assertNotFound()->json('link_ticket');
+        $body = $this->registration(['google_link_ticket' => $ticket]);
+        unset($body['school_id']);
+        $this->postJson('/api/v1/auth/teacher/register', $body)
+            ->assertCreated()
+            ->assertJsonPath('user.status', 'pending')
+            ->assertJsonPath('user.school.id', $this->school->id);
+        $this->assertSame('only-sub', User::query()->where('email', 'somchai@example.com')->firstOrFail()->googleIdentity()->value('google_sub'));
+
+        // Two schools: the chosen one's domain list is what is checked, and without a choice nothing is spent.
+        $other = $this->makeSchool(['name' => 'โรงเรียนอื่น', 'google_signin_domains' => ['other.ac.th'], 'teacher_google_auto_approve' => false]);
+        $ticket = $this->signIn(['sub' => 'two-sub', 'email' => 'kru@school.ac.th'])->assertNotFound()->json('link_ticket');
+        $body = $this->registration(['email' => 'two@example.com', 'google_link_ticket' => $ticket]);
+        unset($body['school_id']);
+        $this->postJson('/api/v1/auth/teacher/register', $body)
+            ->assertStatus(422)->assertJsonPath('code', 'school_required');
+        $this->postJson('/api/v1/auth/teacher/register', [...$body, 'school_id' => $other->id])
+            ->assertForbidden()->assertJsonPath('code', 'google_domain_not_allowed');
+        $this->postJson('/api/v1/auth/teacher/register', [...$body, 'school_id' => $this->school->id])
+            ->assertCreated()->assertJsonPath('user.school.id', $this->school->id);
+    }
+
+    // ---- sign-up with Google (#71) ----
+
+    public function test_an_unknown_staff_account_becomes_an_active_teacher_at_once(): void
+    {
+        $users = User::count();
+        $response = $this->signIn(['sub' => 'new-sub', 'email' => 'New.Teacher@school.ac.th', 'name' => 'ครูใหม่ ใจดี'], 'staff', ['device_name' => 'pixel'])
+            ->assertOk()
+            ->assertJsonPath('user.role', 'teacher')
+            ->assertJsonPath('user.status', 'active')
+            ->assertJsonPath('user.school.id', $this->school->id);
+        $this->assertSame(['token', 'user'], array_keys($response->json()));
+
+        $this->assertSame($users + 1, User::count());
+        $user = User::query()->findOrFail($response->json('user.id'));
+        $this->assertSame('new.teacher@school.ac.th', $user->email);
+        $this->assertSame('ครูใหม่ ใจดี', $user->name);
+        $this->assertNull($user->password);
+        $this->assertNull($user->approved_by);
+        $identity = $user->googleIdentity()->first();
+        $this->assertSame('google_signup', $identity->linked_via);
+        $this->assertSame('new-sub', $identity->google_sub);
+        $this->assertNull($identity->linked_by);
+        $this->assertSame('gsi-1', $identity->notice_version);
+        $token = PersonalAccessToken::findToken($response->json('token'));
+        $this->assertSame(['teacher'], $token->abilities);
+        $this->assertSame('pixel', $token->name);
+        $this->forgetGuards();
+        $this->withToken($response->json('token'))->getJson('/api/v1/classrooms')->assertOk();
+
+        // The next sign-in finds the same account; no password login without a password.
+        $this->assertSame($user->id, $this->signIn(['sub' => 'new-sub', 'email' => 'new.teacher@school.ac.th'])->assertOk()->json('user.id'));
+        $this->assertSame($users + 1, User::count());
+        $this->forgetGuards();
+        $this->withoutToken()->postJson('/api/v1/auth/teacher/login', ['email' => 'new.teacher@school.ac.th', 'password' => ''])->assertStatus(422);
+        $this->withoutToken()->postJson('/api/v1/auth/teacher/login', ['email' => 'new.teacher@school.ac.th', 'password' => 'password123'])
+            ->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
+
+        // Without a password the Google link is the only way in: no unlinking until an admin sets one.
+        $this->asUser($user)->deleteJson('/api/v1/me/google-identity')->assertStatus(409)->assertJsonPath('code', 'google_unlink_needs_password');
+        $this->assertNotNull($user->googleIdentity()->first());
+        $user->forceFill(['password' => 'set-by-admin-1'])->save();
+        $this->asUser($user->refresh())->deleteJson('/api/v1/me/google-identity')->assertNoContent();
+        $this->linkGoogle($user, 'new-sub', 'new.teacher@school.ac.th', 'google_signup');
+
+        // An admin can still disable it.
+        $user->forceFill(['status' => 'disabled'])->save();
+        $this->signIn(['sub' => 'new-sub', 'email' => 'new.teacher@school.ac.th'])->assertForbidden()->assertJsonPath('code', 'account_not_active');
+    }
+
+    public function test_the_sign_up_name_falls_back_to_the_email(): void
+    {
+        $this->signIn(['sub' => 'no-name', 'email' => 'kru.daeng@school.ac.th', 'name' => null])->assertOk()->assertJsonPath('user.name', 'kru.daeng');
+    }
+
+    public function test_sign_up_keeps_the_teacher_and_admin_rules(): void
+    {
+        $this->makeAdmin(['email' => 'admin@school.ac.th']);
+        $users = User::count();
+
+        // A teacher's e-mail is still linked to that teacher; an admin's never; neither creates anybody.
+        $this->assertSame($this->teacher->id, $this->signIn()->assertOk()->json('user.id'));
+        $this->assertSame('teacher_email', $this->teacher->googleIdentity()->value('linked_via'));
+        $this->signIn(['sub' => 'admin-sub', 'email' => 'admin@school.ac.th'])->assertNotFound()->assertJsonPath('code', 'google_not_linked');
+        $this->assertSame($users, User::count());
+    }
+
+    public function test_sign_up_checks_the_school_domains_first(): void
+    {
+        $this->school->forceFill(['google_signin_domains' => ['school.ac.th']])->save();
+        $users = User::count();
+
+        $this->signIn(['sub' => 'gmail-sub', 'email' => 'someone@gmail.com'])->assertForbidden()->assertJsonPath('code', 'google_domain_not_allowed');
+        $this->assertSame($users, User::count());
+        $this->assertSame(0, UserGoogleIdentity::count());
+
+        $this->signIn(['sub' => 'school-sub', 'email' => 'someone@school.ac.th'])->assertOk();
+    }
+
+    public function test_an_email_another_user_has_falls_back_to_the_registration(): void
+    {
+        $student = $this->enrollStudent($this->classroom)['student'];
+        $student->forceFill(['email' => 'nong@school.ac.th'])->save();
+        $users = User::count();
+
+        $this->signIn(['sub' => 'nong-sub', 'email' => 'nong@school.ac.th'])->assertNotFound()
+            ->assertJsonPath('code', 'google_not_linked')
+            ->assertJsonPath('registration.email', 'nong@school.ac.th')
+            ->assertJsonMissingPath('needs_school');
+        $this->assertSame($users, User::count());
+    }
+
+    public function test_with_several_schools_the_app_picks_one_first(): void
+    {
+        $other = $this->makeSchool(['name' => 'โรงเรียนอื่น']);
+        $users = User::count();
+
+        $response = $this->signIn(['sub' => 'pick-sub', 'email' => 'pick@school.ac.th', 'name' => 'ครูเลือก'])->assertNotFound()
+            ->assertJsonPath('code', 'google_not_linked')
+            ->assertJsonPath('needs_school', true)
+            ->assertJsonPath('registration', ['name' => 'ครูเลือก', 'email' => 'pick@school.ac.th']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{48}$/', $response->json('link_ticket'));
+        $this->assertSame($users, User::count());
+
+        $this->signIn(['sub' => 'pick-sub', 'email' => 'pick@school.ac.th'], 'staff', ['school_id' => 999999])
+            ->assertStatus(422)->assertJsonPath('errors.school_id.0', 'ไม่พบโรงเรียนที่เลือก');
+        $this->signIn(['sub' => 'pick-sub', 'email' => 'pick@school.ac.th'], 'staff', ['school_id' => $other->id])
+            ->assertOk()->assertJsonPath('user.school.id', $other->id)->assertJsonPath('user.status', 'active');
+
+        // A school with the switch off: the pending registration, no picker.
+        $this->autoApprove(false, $other);
+        $this->signIn(['sub' => 'off-sub', 'email' => 'off@school.ac.th'], 'staff', ['school_id' => $other->id])->assertNotFound()
+            ->assertJsonPath('code', 'google_not_linked')->assertJsonMissingPath('needs_school')->assertJsonPath('registration.email', 'off@school.ac.th');
+
+        // No school would create the account: no picker either.
+        $this->autoApprove(false);
+        $this->signIn(['sub' => 'off-sub', 'email' => 'off@school.ac.th'])->assertNotFound()->assertJsonMissingPath('needs_school');
+        // Only a school whose domains allow the account counts.
+        $this->autoApprove(true);
+        $this->school->forceFill(['google_signin_domains' => ['school.ac.th']])->save();
+        $this->signIn(['sub' => 'gmail-sub', 'email' => 'kru@gmail.com'])->assertNotFound()->assertJsonMissingPath('needs_school');
+        $this->signIn(['sub' => 'two-sub', 'email' => 'two@school.ac.th'])->assertNotFound()->assertJsonPath('needs_school', true);
+    }
+
+    public function test_an_unknown_student_is_never_created(): void
+    {
+        $users = User::count();
+
+        $this->signIn(['sub' => 'nong-sub', 'email' => 'nong@school.ac.th'], 'student')->assertNotFound()
+            ->assertJsonPath('code', 'google_not_linked')->assertJsonMissingPath('registration')->assertJsonMissingPath('needs_school');
+        $this->assertSame($users, User::count());
+    }
+
+    public function test_the_browser_flow_signs_up_with_the_school_carried_in_the_state(): void
+    {
+        $this->configureSignIn(web: true);
+        $other = $this->makeSchool(['name' => 'โรงเรียนอื่น']);
+
+        // No school chosen: needs_school (the ticket is spent).
+        $query = $this->webUrl(['purpose' => 'login', 'intent' => 'staff']);
+        $this->fakeTokenEndpoint($this->idToken(['sub' => 'web-new', 'email' => 'web.new@school.ac.th', 'nonce' => $query['nonce']]));
+        $ticket = $this->callbackTicket($query);
+        $this->postJson('/api/v1/auth/google/ticket', ['ticket' => $ticket])->assertNotFound()->assertJsonPath('needs_school', true);
+
+        // Again with the school: created there.
+        $this->postJson('/api/v1/auth/google/web-url', ['purpose' => 'login', 'school_id' => 999999])->assertStatus(422);
+        $query = $this->webUrl(['purpose' => 'login', 'intent' => 'staff', 'school_id' => $other->id]);
+        $this->fakeTokenEndpoint($this->idToken(['sub' => 'web-new', 'email' => 'web.new@school.ac.th', 'nonce' => $query['nonce']]));
+        $ticket = $this->callbackTicket($query);
+        $this->postJson('/api/v1/auth/google/ticket', ['ticket' => $ticket, 'device_name' => 'web'])->assertOk()
+            ->assertJsonPath('user.school.id', $other->id)
+            ->assertJsonPath('user.status', 'active');
+        $this->assertSame('google_signup', User::query()->where('email', 'web.new@school.ac.th')->firstOrFail()->googleIdentity()->value('linked_via'));
+
+        // school_id with the ticket itself works too.
+        $query = $this->webUrl(['purpose' => 'login', 'intent' => 'staff']);
+        $this->fakeTokenEndpoint($this->idToken(['sub' => 'web-two', 'email' => 'web.two@school.ac.th', 'nonce' => $query['nonce']]));
+        $this->postJson('/api/v1/auth/google/ticket', ['ticket' => $this->callbackTicket($query), 'school_id' => $this->school->id])->assertOk()
+            ->assertJsonPath('user.school.id', $this->school->id);
     }
 
     // ---- first sign-in of students ----
@@ -451,7 +641,11 @@ class GoogleSignInTest extends TestCase
         $this->asUser($this->teacher)->deleteJson('/api/v1/me/google-identity')->assertNoContent();
         $this->assertNull($this->teacher->googleIdentity()->first());
         $this->asUser($this->teacher)->deleteJson('/api/v1/me/google-identity')->assertNoContent();
+        $this->autoApprove(false);
         $this->signIn(['sub' => 'my-sub', 'email' => 'personal@gmail.com'])->assertNotFound();
+        // With the switch on (#71) the unlinked account would become a new teacher, not this one.
+        $this->autoApprove(true);
+        $this->assertNotSame($this->teacher->id, $this->signIn(['sub' => 'my-sub', 'email' => 'personal@gmail.com'])->assertOk()->json('user.id'));
     }
 
     public function test_an_admin_links_through_the_api(): void
@@ -566,6 +760,7 @@ class GoogleSignInTest extends TestCase
     public function test_the_login_ticket_lives_sixty_seconds_and_answers_like_post_auth_google(): void
     {
         $this->configureSignIn(web: true);
+        $this->autoApprove(false);
 
         $query = $this->webUrl(['purpose' => 'login', 'intent' => 'staff']);
         $this->fakeTokenEndpoint($this->idToken(['sub' => 'nobody', 'email' => 'nobody@school.ac.th', 'nonce' => $query['nonce']]));
@@ -663,6 +858,8 @@ class GoogleSignInTest extends TestCase
         $tokens[] = $t = $this->idToken(['sub' => 'unknown', 'email' => 'nong@school.ac.th']);
         $ticket = $this->postJson('/api/v1/auth/google', ['id_token' => $t, 'intent' => 'student'])->assertNotFound()->json('link_ticket');
         $this->postJson('/api/v1/auth/google/link-with-qr', ['link_ticket' => $ticket, 'qr_token' => $enrolled['qr_token'], 'accept_notice' => true])->assertOk();
+        $tokens[] = $t = $this->idToken(['sub' => 'signup-sub', 'email' => 'new.kru@school.ac.th']);
+        $newId = $this->postJson('/api/v1/auth/google', ['id_token' => $t, 'intent' => 'staff'])->assertOk()->json('user.id');
         $query = $this->webUrl(['purpose' => 'login']);
         $tokens[] = $t = $this->idToken(['nonce' => $query['nonce']]);
         $this->fakeTokenEndpoint($t);
@@ -674,6 +871,8 @@ class GoogleSignInTest extends TestCase
             $this->assertStringNotContainsString($secret, $log);
         }
         $this->assertStringNotContainsString('school.ac.th', $log);
+        $signup = collect($this->signinLog)->firstWhere('context.event', 'signup');
+        $this->assertSame(['event' => 'signup', 'result' => 'ok', 'user_id' => $newId, 'via' => 'google_signup'], $signup['context']);
     }
 
     // ---- helpers ----
@@ -695,6 +894,11 @@ class GoogleSignInTest extends TestCase
             ->json('link_ticket');
     }
 
+    private function autoApprove(bool $on, ?School $school = null): void
+    {
+        ($school ?? $this->school)->forceFill(['teacher_google_auto_approve' => $on])->save();
+    }
+
     private function rosterGoogle(User $student, string $sub, string $email): void
     {
         DB::table('classroom_students')->where('student_id', $student->id)->update(['google_user_id' => $sub, 'google_email' => $email]);
@@ -704,7 +908,7 @@ class GoogleSignInTest extends TestCase
     private function registration(array $overrides = []): array
     {
         return [
-            'school_code' => 'JOIN2569',
+            'school_id' => $this->school->id,
             'name' => 'ครูสมชาย',
             'email' => 'somchai@example.com',
             'password' => 'password123',
@@ -728,6 +932,15 @@ class GoogleSignInTest extends TestCase
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
         return $query;
+    }
+
+    /** @param  array<string, string>  $query  the query of the URL from web-url; returns the login ticket of the callback */
+    private function callbackTicket(array $query): string
+    {
+        $location = (string) $this->get('/auth/google/callback?'.http_build_query(['state' => $query['state'], 'code' => '4/0AbCdEf-code']))->headers->get('Location');
+        $this->assertMatchesRegularExpression('~#/login/google\?ticket=[a-f0-9]{48}$~', $location);
+
+        return substr($location, strrpos($location, '=') + 1);
     }
 
     /** What Google's token endpoint answers next (the faked code exchange of the browser flow). */

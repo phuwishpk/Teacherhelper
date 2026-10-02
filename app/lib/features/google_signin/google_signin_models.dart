@@ -61,8 +61,8 @@ class GoogleIdentity {
   final String? name;
   final String? pictureUrl;
 
-  /// `teacher_email`, `classroom_roster`, `pin_confirm`, `registration` or
-  /// `self` (DESIGN §24.3).
+  /// `teacher_email`, `classroom_roster`, `pin_confirm`, `registration`,
+  /// `self` or `google_signup` (DESIGN §24.3, #71).
   final String? linkedVia;
   final DateTime? linkedAt;
 
@@ -100,8 +100,10 @@ class GoogleRegistration {
 
 /// 404 `google_not_linked`: the Google account belongs to nobody yet.
 ///
-/// - [registration] set (staff tab, unknown e-mail): offer the teacher
-///   registration or the password login.
+/// - [needsSchool] (staff tab, several schools, #71): pick the school and
+///   sign in again with its id; the account is then created at once.
+/// - [registration] set (staff tab, unknown e-mail, the school approves
+///   teachers itself): offer the teacher registration or the password login.
 /// - only [linkTicket] (student tab): the first confirmation with PIN or QR.
 /// - neither (an admin's or an already linked teacher's e-mail): only the
 ///   server's [message].
@@ -110,11 +112,13 @@ class GoogleNotLinked {
     required this.message,
     this.linkTicket,
     this.registration,
+    this.needsSchool = false,
   });
 
   final String message;
   final String? linkTicket;
   final GoogleRegistration? registration;
+  final bool needsSchool;
 
   bool get canConfirmAsStudent => linkTicket != null && registration == null;
 
@@ -140,6 +144,7 @@ class GoogleNotLinked {
               email: (reg['email'] as String?) ?? '',
             )
           : null,
+      needsSchool: body['needs_school'] == true,
     );
   }
 }

@@ -96,6 +96,10 @@ Route::prefix('v1')->group(function () {
             Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
             Route::post('teacher/login', [TeacherAuthController::class, 'login'])->name('api.auth.teacher.login');
         });
+        // The schools of the sign-up form (names only, DESIGN §9.1).
+        Route::get('schools', [TeacherAuthController::class, 'schools'])
+            ->middleware('throttle:school-list')
+            ->name('api.auth.schools');
         Route::middleware('throttle:student-auth')->group(function () {
             Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
             Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');

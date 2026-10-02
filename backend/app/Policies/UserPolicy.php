@@ -19,9 +19,14 @@ class UserPolicy
         return $this->isAdmin($user);
     }
 
+    /**
+     * An admin of a school (school_id set) sees and edits only the accounts
+     * of that school (DESIGN §24.2, #70); a system admin (school_id null)
+     * all of them, system admins included.
+     */
     public function view(User $user, User $target): bool
     {
-        return $this->isAdmin($user);
+        return $this->isAdmin($user) && self::sameSchool($user, $target);
     }
 
     public function create(User $user): bool
@@ -31,7 +36,7 @@ class UserPolicy
 
     public function update(User $user, User $target): bool
     {
-        return $this->isAdmin($user);
+        return $this->view($user, $target);
     }
 
     /** Accounts are disabled, never deleted (FKs from classrooms and scores). */
@@ -43,13 +48,13 @@ class UserPolicy
     /** Filament "approve": a pending or disabled teacher becomes active. */
     public function approve(User $user, User $target): bool
     {
-        return $this->isAdmin($user) && $target->isTeacher() && ! $target->isActive();
+        return $this->view($user, $target) && $target->isTeacher() && ! $target->isActive();
     }
 
     /** Filament "disable": an active teacher loses access (tokens revoked). */
     public function disable(User $user, User $target): bool
     {
-        return $this->isAdmin($user) && $target->isTeacher() && $target->isActive();
+        return $this->view($user, $target) && $target->isTeacher() && $target->isActive();
     }
 
     /**
@@ -137,6 +142,12 @@ class UserPolicy
             ->when($openOnly, fn ($q) => $q->whereNull('closed_at'))
             ->whereHas('students', fn ($q) => $q->whereKey($student->id))
             ->exists();
+    }
+
+    /** A system admin reaches every account; an admin of a school only that school's. */
+    private static function sameSchool(User $admin, User $target): bool
+    {
+        return $admin->school_id === null || $admin->school_id === $target->school_id;
     }
 
     private function isAdmin(User $user): bool

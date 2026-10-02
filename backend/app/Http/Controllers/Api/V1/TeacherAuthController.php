@@ -32,9 +32,11 @@ class TeacherAuthController extends Controller
     /**
      * POST /api/v1/auth/teacher/register -> 201 {user}
      *
-     * school_code must match schools.teacher_join_code. The account is created
-     * `pending` (DESIGN §9.1) and can log in only after an admin approves it in
-     * Filament (UserResource "approve"), which sets status=active + approved_by.
+     * The school comes from resolveSchool() (school_id, the legacy school_code,
+     * or the only school). The account is created `pending` (DESIGN §9.1) and
+     * can log in only after an admin approves it in Filament (UserResource
+     * "approve"), which sets status=active + approved_by. Since 2 Oct 2569 that
+     * approval is the only gate: no school code is needed to sign up.
      *
      * google_link_ticket (DESIGN §24.9.5): the Google account of a 404
      * google_not_linked is linked as the account is created (`registration`),
@@ -45,15 +47,7 @@ class TeacherAuthController extends Controller
     {
         $data = $request->validated();
 
-        $school = School::query()->where('teacher_join_code', $data['school_code'])->first();
-        if ($school === null) {
-            throw new ApiException(
-                'รหัสโรงเรียนไม่ถูกต้อง',
-                'school_code_invalid',
-                422,
-                ['school_code' => ['รหัสโรงเรียนไม่ถูกต้อง']],
-            );
-        }
+        $school = self::resolveSchool($data);
 
         $ticket = $data['google_link_ticket'] ?? null;
         $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket, $school);
@@ -80,6 +74,64 @@ class TeacherAuthController extends Controller
         return response()->json([
             'user' => new UserResource($user->setRelation('school', $school)),
         ], 201);
+    }
+
+    /**
+     * GET /api/v1/auth/schools -> 200 {data: [{id, name}]}
+     *
+     * Public: the app's sign-up form shows a "โรงเรียน" dropdown when there is
+     * more than one school. Names only; the join codes never leave the panel.
+     */
+    public function schools(): JsonResponse
+    {
+        $schools = School::query()->orderBy('name')->orderBy('id')->get(['id', 'name']);
+
+        return response()->json([
+            'data' => $schools->map(fn (School $school) => ['id' => $school->id, 'name' => $school->name])->values(),
+        ]);
+    }
+
+    /**
+     * The school a new teacher joins: school_id when given (validated to
+     * exist), else school_code from an older app build (422
+     * school_code_invalid when it matches nothing), else the only school.
+     * With no or several schools and neither field: 422 school_required.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ApiException
+     */
+    private static function resolveSchool(array $data): School
+    {
+        if (isset($data['school_id'])) {
+            return School::query()->findOrFail((int) $data['school_id']);
+        }
+
+        if (isset($data['school_code']) && $data['school_code'] !== '') {
+            $school = School::query()->where('teacher_join_code', $data['school_code'])->first();
+            if ($school === null) {
+                throw new ApiException(
+                    'รหัสโรงเรียนไม่ถูกต้อง',
+                    'school_code_invalid',
+                    422,
+                    ['school_code' => ['รหัสโรงเรียนไม่ถูกต้อง']],
+                );
+            }
+
+            return $school;
+        }
+
+        $only = School::query()->limit(2)->get();
+        if ($only->count() === 1) {
+            return $only->first();
+        }
+
+        throw new ApiException(
+            'กรุณาเลือกโรงเรียน',
+            'school_required',
+            422,
+            ['school_id' => ['กรุณาเลือกโรงเรียน']],
+        );
     }
 
     /**

@@ -92,6 +92,11 @@ class FakeApiServer {
   int logouts = 0;
   int _nextId = 100;
 
+  /// Google sign-in on (DESIGN §24.9): `GET /auth/google/config` says so
+  /// and `POST /auth/google` with the staff intent signs up a new teacher
+  /// at once (#71), answering the teacher's token.
+  bool googleSignIn = false;
+
   late final FakeHttpAdapter adapter = FakeHttpAdapter(handle);
 
   Map<String, dynamic> get teacherJson => {
@@ -174,6 +179,30 @@ class FakeApiServer {
           errors: {
             'email': ['อีเมลหรือรหัสผ่านไม่ถูกต้อง'],
           },
+        ),
+      );
+    }
+    if (method == 'GET' && path == '/auth/google/config') {
+      return (
+        200,
+        {
+          'data': {
+            'enabled': googleSignIn,
+            'web_flow': false,
+            'notice_version': 'gsi-1',
+          },
+        },
+      );
+    }
+    if (method == 'POST' && path == '/auth/google' && googleSignIn) {
+      if (body['intent'] == 'staff') {
+        return (200, {'token': teacherToken, 'user': teacherJson});
+      }
+      return (
+        404,
+        _error(
+          'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน',
+          code: 'google_not_linked',
         ),
       );
     }

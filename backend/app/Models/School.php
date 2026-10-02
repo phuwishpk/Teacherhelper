@@ -18,11 +18,17 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $crop_retention_until
  * @property list<string>|null $google_signin_domains e-mail domains allowed to sign in with Google; null or [] = any (DESIGN §24.9.2)
  * @property bool $student_google_signin the PDPA switch: may this school's students use Google sign-in
+ * @property bool $teacher_google_auto_approve an unknown Google account becomes an active teacher at once (DESIGN §24.9.3, #71)
  */
 class School extends Model
 {
     /** @use HasFactory<SchoolFactory> */
     use HasFactory;
+
+    /** @var array<string, mixed> the database default, also on a model not read back yet */
+    protected $attributes = [
+        'teacher_google_auto_approve' => true,
+    ];
 
     protected $fillable = [
         'name',
@@ -31,6 +37,7 @@ class School extends Model
         'crop_retention_until',
         'google_signin_domains',
         'student_google_signin',
+        'teacher_google_auto_approve',
     ];
 
     /**
@@ -43,6 +50,7 @@ class School extends Model
             'crop_retention_until' => 'date',
             'google_signin_domains' => 'array',
             'student_google_signin' => 'boolean',
+            'teacher_google_auto_approve' => 'boolean',
         ];
     }
 

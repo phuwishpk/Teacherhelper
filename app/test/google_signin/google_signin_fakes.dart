@@ -42,6 +42,19 @@ DioException staffNotLinked() => apiError(
   },
 );
 
+/// 404 google_not_linked of a new teacher when there are several schools
+/// and none was picked yet (#71).
+DioException staffNeedsSchool() => apiError(
+  404,
+  'google_not_linked',
+  message: 'เลือกโรงเรียนของคุณ แล้วเข้าสู่ระบบด้วย Google อีกครั้ง',
+  extra: {
+    'link_ticket': 'c' * 48,
+    'registration': {'name': 'ครูใหม่ ใจดี', 'email': 'new@school.ac.th'},
+    'needs_school': true,
+  },
+);
+
 /// 404 google_not_linked of the student tab.
 DioException studentNotLinked() => apiError(
   404,
@@ -69,6 +82,10 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
   final String token;
 
   Object? signInError;
+
+  /// Errors of the next sign-ins, one per call (null = success), before
+  /// [signInError] applies.
+  final signInErrors = <Object?>[];
   Object? ticketError;
   Object? pinError;
   Object? qrError;
@@ -77,7 +94,13 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
 
   final calls = <String>[];
   final signIns = <(String, GoogleIntent)>[];
+
+  /// The `school_id` of each sign-in, in the order of [signIns].
+  final signInSchools = <int?>[];
   final webUrls = <({bool link, GoogleIntent? intent, bool acceptNotice})>[];
+
+  /// The `school_id` of each web-url, in the order of [webUrls].
+  final webUrlSchools = <int?>[];
   final pinLinks = <Map<String, Object>>[];
   final qrLinks = <(String, String)>[];
   final links = <(String, bool)>[];
@@ -98,8 +121,15 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
   Future<String> signIn({
     required String idToken,
     required GoogleIntent intent,
+    int? schoolId,
   }) async {
     signIns.add((idToken, intent));
+    signInSchools.add(schoolId);
+    if (signInErrors.isNotEmpty) {
+      final error = signInErrors.removeAt(0);
+      if (error != null) throw error;
+      return token;
+    }
     if (signInError != null) throw signInError!;
     return token;
   }
@@ -109,8 +139,10 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
     required bool link,
     GoogleIntent? intent,
     bool acceptNotice = false,
+    int? schoolId,
   }) async {
     webUrls.add((link: link, intent: intent, acceptNotice: acceptNotice));
+    webUrlSchools.add(schoolId);
     return googleUrl;
   }
 
@@ -196,16 +228,19 @@ class FakeGoogleSignInGateway implements GoogleSignInGateway {
   Future<String> idToken() async {
     calls++;
     if (error != null) throw error!;
-    return token;
+    return calls == 1 ? token : '$token-$calls';
   }
 }
 
 /// `/me` after any sign-in; stores who signed in.
 class FakeMeAuth implements AuthRepository {
-  FakeMeAuth(this.user);
+  FakeMeAuth(this.user, {this.schoolList});
 
   User user;
   int logouts = 0;
+
+  /// What `GET /auth/schools` answers; null = not expected in this test.
+  List<SchoolOption>? schoolList;
 
   @override
   Future<User> me() async => user;
@@ -228,8 +263,12 @@ class FakeMeAuth implements AuthRepository {
   Future<String> loginStudentQr(String qrToken) => throw UnimplementedError();
 
   @override
+  Future<List<SchoolOption>> schools() async =>
+      schoolList ?? (throw UnimplementedError());
+
+  @override
   Future<void> register({
-    required String schoolCode,
+    int? schoolId,
     required String name,
     required String email,
     required String password,

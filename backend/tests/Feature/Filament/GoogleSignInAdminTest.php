@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 /**
  * DESIGN §24.9.2, §24.13: the school's Google sign-in settings (allowed
- * domains, the students' switch), removing every student's link at once,
+ * domains, the students' switch, the automatic teacher approval of #71), removing every student's link at once,
  * and unlinking one student, all in Filament.
  */
 class GoogleSignInAdminTest extends TestCase
@@ -65,6 +65,24 @@ class GoogleSignInAdminTest extends TestCase
             ->assertHasNoFormErrors();
         $this->assertNull($this->school->refresh()->google_signin_domains);
         $this->assertTrue($this->school->allowsGoogleDomain('gmail.com'));
+    }
+
+    public function test_admin_turns_the_automatic_teacher_approval_off_and_on(): void
+    {
+        $this->assertTrue($this->school->refresh()->teacher_google_auto_approve, 'on by default (#71)');
+
+        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
+            ->assertFormFieldExists('teacher_google_auto_approve')
+            ->fillForm(['teacher_google_auto_approve' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->assertFalse($this->school->refresh()->teacher_google_auto_approve);
+
+        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
+            ->fillForm(['teacher_google_auto_approve' => true])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->assertTrue($this->school->refresh()->teacher_google_auto_approve);
     }
 
     public function test_an_admin_of_a_school_sees_and_edits_only_that_school(): void

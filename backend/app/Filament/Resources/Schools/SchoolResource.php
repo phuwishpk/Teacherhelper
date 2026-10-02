@@ -25,10 +25,17 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * DESIGN §7.5: schools, their teacher_join_code (what teachers type at
- * sign-up), the consent/retention settings of §8.1 and the Google sign-in
- * settings of §24.9.2 (allowed domains, the students' switch). An admin of
- * a school sees and edits only that school (§24.2); a system admin all.
+ * DESIGN §7.5: schools, the consent/retention settings of §8.1 and the
+ * Google sign-in settings of §24.9.2 (allowed domains, the students' switch,
+ * the automatic approval of teachers who sign up with Google, #71).
+ * An admin of a school sees and edits only that school (§24.2); a system
+ * admin all.
+ *
+ * teacher_join_code no longer gates teacher sign-up (2 Oct 2569: teachers
+ * pick the school and an admin approves them). The column stays because
+ * older app builds still send it, so the form keeps it filled with a random
+ * default inside a collapsed "older app builds" section, and the table no
+ * longer shows it, so nobody hands it out as a required step.
  */
 class SchoolResource extends Resource
 {
@@ -54,29 +61,6 @@ class SchoolResource extends Resource
                     ->label('ชื่อโรงเรียน')
                     ->required()
                     ->maxLength(255),
-                TextInput::make('teacher_join_code')
-                    ->label('รหัสสมัครสำหรับครู (teacher_join_code)')
-                    ->helperText('ครูกรอกรหัสนี้ตอนสมัครในแอป 8 ตัว ใช้ได้เฉพาะ A–Z และ 0–9 (ระบบแปลงเป็นตัวพิมพ์ใหญ่ให้)')
-                    ->default(fn () => School::randomJoinCode())
-                    ->required()
-                    // Uppercase before validation: MariaDB's default collation makes
-                    // the UNIQUE index case-insensitive, so "abcd2345" next to an
-                    // existing "ABCD2345" must fail here with the Thai message, not
-                    // on the index with a 500. The stored value is uppercased too.
-                    ->mutateStateForValidationUsing(fn (?string $state) => self::normalizeJoinCode($state))
-                    ->length(8)
-                    ->rule('regex:/^[A-Z0-9]{8}$/')
-                    ->validationMessages(['regex' => 'ใช้ได้เฉพาะ A–Z และ 0–9 จำนวน 8 ตัว'])
-                    ->unique(ignoreRecord: true)
-                    ->live(onBlur: true)
-                    ->afterStateUpdated(fn (Set $set, ?string $state) => $set('teacher_join_code', self::normalizeJoinCode($state)))
-                    ->dehydrateStateUsing(fn (?string $state) => self::normalizeJoinCode($state))
-                    ->suffixAction(
-                        Action::make('regenerate')
-                            ->label('สุ่มใหม่')
-                            ->icon(Heroicon::OutlinedArrowPath)
-                            ->action(fn (Set $set) => $set('teacher_join_code', School::randomJoinCode())),
-                    ),
                 Toggle::make('allow_training_data')
                     ->label('ยินยอมให้ใช้ลายมือที่ครูตรวจแล้วไปเทรนโมเดล (allow_training_data)')
                     ->default(false),
@@ -85,6 +69,35 @@ class SchoolResource extends Resource
                     ->helperText('ว่าง = ยังไม่กำหนด ภาพ crop จะถูกลบหลังวันนี้ (DESIGN §7.3)')
                     ->native(false)
                     ->displayFormat('d/m/Y'),
+                Section::make('รหัสสมัครครูสำหรับแอปรุ่นเก่า (ไม่จำเป็น)')
+                    ->description('ครูไม่ต้องใช้รหัสนี้แล้ว: ครูเลือกโรงเรียนตอนสมัครในแอป แล้วรอผู้ดูแลระบบอนุมัติในเมนู "ผู้ใช้และครู" รหัสนี้มีไว้ให้แอปรุ่นเก่าที่ยังถามรหัสเท่านั้น ไม่ต้องแจกให้ครู')
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        TextInput::make('teacher_join_code')
+                            ->label('รหัสสมัครครู (teacher_join_code)')
+                            ->helperText('8 ตัว ใช้ได้เฉพาะ A–Z และ 0–9 (ระบบแปลงเป็นตัวพิมพ์ใหญ่ให้) ระบบสุ่มให้แล้ว ไม่ต้องแก้')
+                            ->default(fn () => School::randomJoinCode())
+                            ->required()
+                            // Uppercase before validation: MariaDB's default collation makes
+                            // the UNIQUE index case-insensitive, so "abcd2345" next to an
+                            // existing "ABCD2345" must fail here with the Thai message, not
+                            // on the index with a 500. The stored value is uppercased too.
+                            ->mutateStateForValidationUsing(fn (?string $state) => self::normalizeJoinCode($state))
+                            ->length(8)
+                            ->rule('regex:/^[A-Z0-9]{8}$/')
+                            ->validationMessages(['regex' => 'ใช้ได้เฉพาะ A–Z และ 0–9 จำนวน 8 ตัว'])
+                            ->unique(ignoreRecord: true)
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn (Set $set, ?string $state) => $set('teacher_join_code', self::normalizeJoinCode($state)))
+                            ->dehydrateStateUsing(fn (?string $state) => self::normalizeJoinCode($state))
+                            ->suffixAction(
+                                Action::make('regenerate')
+                                    ->label('สุ่มใหม่')
+                                    ->icon(Heroicon::OutlinedArrowPath)
+                                    ->action(fn (Set $set) => $set('teacher_join_code', School::randomJoinCode())),
+                            ),
+                    ]),
                 Section::make('เข้าสู่ระบบด้วย Google')
                     ->description('ครู นักเรียน และผู้ดูแลระบบเข้าสู่ระบบด้วยบัญชี Google ที่เชื่อมไว้ได้ (รหัสผ่าน PIN และบัตร QR ใช้ได้เหมือนเดิม)')
                     ->schema([
@@ -100,6 +113,10 @@ class SchoolResource extends Resource
                             ->label('ให้นักเรียนเข้าสู่ระบบด้วย Google')
                             ->helperText('นักเรียนเป็นผู้เยาว์: เปิดเมื่อโรงเรียนได้รับความยินยอมจากผู้ปกครองที่ครอบคลุมการใช้บัญชี Google เพื่อเข้าสู่ระบบแล้วเท่านั้น ระบบเก็บเฉพาะรหัสบัญชี ชื่อ อีเมล และ URL รูปโปรไฟล์ ปิดสวิตช์แล้วการเชื่อมเดิมยังอยู่แต่ใช้เข้าสู่ระบบไม่ได้ ถ้าต้องการลบให้กด "ลบการเชื่อม Google ของนักเรียนทั้งหมด" ด้านบน')
                             ->default(false),
+                        Toggle::make('teacher_google_auto_approve')
+                            ->label('อนุมัติครูที่สมัครด้วย Google อัตโนมัติ')
+                            ->helperText('เปิดอยู่: ใครก็ตามที่เข้าสู่ระบบด้วยบัญชี Google ที่ยังไม่มีในระบบ (และอยู่ในโดเมนที่อนุญาตด้านบน) จะได้บัญชีครูของโรงเรียนนี้ทันทีโดยไม่ต้องรออนุมัติ จึงควรระบุโดเมนของโรงเรียนไว้ด้วย ถ้าพบบัญชีที่ไม่ใช่ครู ระงับได้ในเมนู "ผู้ใช้และครู" ปิดสวิตช์: ครูใหม่ที่ใช้ Google ต้องกรอกฟอร์มสมัครแล้วรอผู้ดูแลระบบอนุมัติเหมือนการสมัครด้วยรหัสผ่าน')
+                            ->default(true),
                     ]),
             ]);
     }
@@ -109,11 +126,6 @@ class SchoolResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('ชื่อโรงเรียน')->searchable()->sortable(),
-                TextColumn::make('teacher_join_code')
-                    ->label('รหัสสมัครครู')
-                    ->copyable()
-                    ->copyMessage('คัดลอกแล้ว')
-                    ->fontFamily('mono'),
                 TextColumn::make('teachers_count')
                     ->label('ครู')
                     ->counts('teachers')

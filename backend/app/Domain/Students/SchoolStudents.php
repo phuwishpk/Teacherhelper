@@ -67,7 +67,8 @@ final class SchoolStudents
      * Pairs of active accounts of the school that look like one child
      * (DESIGN §24.4): the same Google Classroom account, the same Google
      * email (any case), or the same full name after normalising (passes 1-2
-     * of RosterMatcher). Only a suggestion: nothing is merged.
+     * of RosterMatcher). Only a suggestion: nothing is merged. At most
+     * MAX_PAIRS, the pairs with the most recently created account first.
      *
      * @param  list<int>|null  $involving  only pairs with at least one of these students (null: all)
      * @return list<array{a: array<string, mixed>, b: array<string, mixed>, reasons: list<string>}>
@@ -118,8 +119,11 @@ final class SchoolStudents
                 }
             }
         }
-        ksort($pairs, SORT_NATURAL);
-        $pairs = array_slice(array_values($pairs), 0, self::MAX_PAIRS);
+        // Newest first (by the newer account, then the other): the cap must
+        // never hide a duplicate just created by mistake behind old pairs
+        // nobody merged (e.g. two different children with one name).
+        usort($pairs, fn (array $x, array $y) => [$y[1], $y[0]] <=> [$x[1], $x[0]]);
+        $pairs = array_slice($pairs, 0, self::MAX_PAIRS);
 
         $ids = [];
         foreach ($pairs as $pair) {

@@ -77,4 +77,21 @@ void main() {
     vault['local_data_owner'] = 'abc';
     expect(await storage.readDataOwner(), isNull);
   });
+
+  test('the Google sign-up mark is a UTC time; null deletes it', () async {
+    final storage = SecureTokenStorage();
+    final at = DateTime.utc(2026, 10, 2, 3, 4, 5);
+    await storage.writeGoogleSignUpStartedAt(at.toLocal());
+    expect(vault['google_signup_started_at'], '2026-10-02T03:04:05.000Z');
+    expect(await storage.readGoogleSignUpStartedAt(), at);
+
+    await storage.clear();
+    expect(await storage.readGoogleSignUpStartedAt(), at);
+
+    await storage.writeGoogleSignUpStartedAt(null);
+    expect(vault.containsKey('google_signup_started_at'), isFalse);
+    expect(await storage.readGoogleSignUpStartedAt(), isNull);
+    vault['google_signup_started_at'] = 'junk';
+    expect(await storage.readGoogleSignUpStartedAt(), isNull);
+  });
 }

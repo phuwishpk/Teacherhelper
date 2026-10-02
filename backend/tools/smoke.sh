@@ -47,10 +47,11 @@
 # roster, the homeroom teacher reads but cannot edit their work -> Google
 # sign-in off on the server (503) -> with ID tokens signed by
 # tools/smoke-google.php (faked JWKS): a teacher linked by e-mail, an
-# unknown account gets a link ticket, a student confirms with the PIN once
-# and then signs in with Google, a Classroom student is linked from the
-# roster, unlink by the homeroom teacher and the student (the school's
-# switch is restored afterwards) -> the subject teacher imports their own
+# unknown teacher becomes an active teacher at once (#71) and, with the
+# school's auto-approval off, gets a link ticket instead, a student confirms
+# with the PIN once and then signs in with Google, a Classroom student is
+# linked from the roster, unlink by the homeroom teacher and the student
+# (the school's switches are restored afterwards) -> the subject teacher imports their own
 # Google course: the existing classroom is suggested (100%), link-existing
 # makes a request, approval links the course, no new student accounts ->
 # the student's combined view over an open and a closed classroom.
@@ -94,6 +95,11 @@ export GEMINI_FAKE=true
 export GEMINI_API_KEY=
 export GOOGLE_OAUTH_CLIENT_ID=
 export GOOGLE_OAUTH_CLIENT_SECRET=
+# Google sign-in is off on the server started here even when .env configures
+# it (the "sign-in off" step expects 503); tools/smoke-google.php turns it on
+# in its own process with a faked JWKS.
+export GOOGLE_SIGNIN_CLIENT_IDS=
+export GOOGLE_SIGNIN_CLIENT_SECRET=
 export FIREBASE_CREDENTIALS=
 
 SERVER_PID=""
@@ -194,13 +200,22 @@ ok "$(j '.status')"
 # ---------------------------------------------------------------- teacher
 EMAIL="smoke-${RUN}@example.com"
 PASSWORD="smoke-pass-${RUN}"
-step "teacher register ($EMAIL)"
+step "the sign-up form's school list (names only, no join codes)"
+api GET /auth/schools
+expect 200
+check '(.data | length) >= 1 and all(.data[]; (keys == ["id", "name"]))'
+ok "$(j '.data | length') school(s)"
+
+# The app sends school_id; school_code is the path of older app builds and still
+# picks the demo school here (the dev database may hold several schools).
+step "teacher register ($EMAIL) with the legacy school_code"
 api POST /auth/teacher/register "$(jq -nc --arg c "$SCHOOL_CODE" --arg e "$EMAIL" --arg p "$PASSWORD" \
   '{school_code:$c, name:"ครูทดสอบ smoke", email:$e, password:$p}')"
 expect 201
 check '.user.status == "pending"'
 TEACHER_ID=$(j '.user.id')
-ok "teacher #$TEACHER_ID pending"
+SCHOOL_ID=$(j '.user.school.id')
+ok "teacher #$TEACHER_ID pending in school #$SCHOOL_ID"
 
 step "login before approval is refused"
 api POST /auth/teacher/login "$(jq -nc --arg e "$EMAIL" --arg p "$PASSWORD" '{email:$e, password:$p}')"
@@ -1082,6 +1097,13 @@ gapi() { # METHOD PATH [JSON] -> STATUS, BODY (Google faked, uses $TOKEN)
     php tools/smoke-google.php "$GSTATE" request "$1" "$2" "${3:-}" 2>>"$WORK/google.log") \
     || fail "smoke-google.php request failed: $(tail -20 "$WORK/google.log")"
   BODY=$(cat "$WORK/body")
+  if [ "$STATUS" = "429" ] && [ "${API_RETRY:-1}" = "1" ]; then
+    # The Google sign-in steps send more than the per-address `google-signin`
+    # limit (10/minute, DESIGN §24.9): wait the minute out once, like api().
+    printf '   (429, waiting 61s for the rate limit)\n'
+    sleep 61
+    API_RETRY=0 gapi "$@"
+  fi
 }
 gwork() {
   perl -e 'alarm 180; exec @ARGV' php tools/smoke-google.php "$GSTATE" work >>"$WORK/worker.log" 2>&1 \
@@ -1287,9 +1309,10 @@ ok "#$DUP_ID merged into #${STUDENTS[2]} (number 20 kept); merging again -> 422;
 EMAIL2="smoke2-${RUN}@example.com"
 step "a second teacher (subject teacher) asks to teach the first classroom"
 TOKEN=""
-api POST /auth/teacher/register "$(jq -nc --arg c "$SCHOOL_CODE" --arg e "$EMAIL2" --arg p "$PASSWORD" \
-  '{school_code:$c, name:"ครูวิชา smoke", email:$e, password:$p}')"
+api POST /auth/teacher/register "$(jq -nc --argjson s "$SCHOOL_ID" --arg e "$EMAIL2" --arg p "$PASSWORD" \
+  '{school_id:$s, name:"ครูวิชา smoke", email:$e, password:$p}')"
 expect 201
+check ".user.status == \"pending\" and .user.school.id == $SCHOOL_ID"
 TEACHER2_ID=$(j '.user.id')
 tinker "\$a = App\\Models\\User::where('role','admin')->value('id'); App\\Models\\User::findOrFail(${TEACHER2_ID})->forceFill(['status' => 'active', 'approved_by' => \$a])->save(); echo 'approved';" | tail -1
 api POST /auth/teacher/login "$(jq -nc --arg e "$EMAIL2" --arg p "$PASSWORD" '{email:$e, password:$p, device_name:"smoke2"}')"
@@ -1382,7 +1405,7 @@ gtoken() { # CLAIMS_JSON -> a signed Google ID token
     || fail "smoke-google.php idtoken failed: $(tail -20 "$WORK/google.log")"
 }
 SCHOOL_ID=$(tinker "echo App\\Models\\User::findOrFail(${TEACHER_ID})->school_id;" | tail -1)
-SCHOOL_SIGNIN=$(tinker "echo json_encode(App\\Models\\School::findOrFail(${SCHOOL_ID})->only(['student_google_signin', 'google_signin_domains']));" | tail -1)
+SCHOOL_SIGNIN=$(tinker "echo json_encode(App\\Models\\School::findOrFail(${SCHOOL_ID})->only(['student_google_signin', 'google_signin_domains', 'teacher_google_auto_approve']));" | tail -1)
 restore_school() {
   [ -n "${SCHOOL_SIGNIN:-}" ] || return 0
   local saved=$SCHOOL_SIGNIN
@@ -1390,9 +1413,9 @@ restore_school() {
   tinker "\$v = json_decode('${saved}', true); App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(\$v)->save(); echo 'restored';" | tail -1
 }
 
-step "Google sign-in (faked ID tokens): a teacher is linked by e-mail, an unknown account gets a link ticket"
+step "Google sign-in (faked ID tokens): a teacher is linked by e-mail, an unknown teacher is signed up at once (#71) or gets a link ticket"
 # Students of the school may use Google, every domain (restored afterwards, also on failure).
-tinker "App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(['student_google_signin' => true, 'google_signin_domains' => null])->save(); echo 'school: student Google sign-in on';" | tail -1
+tinker "App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(['student_google_signin' => true, 'google_signin_domains' => null, 'teacher_google_auto_approve' => true])->save(); echo 'school: student Google sign-in on, teacher auto-approval on';" | tail -1
 TOKEN=""
 gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-t1-$RUN" --arg e "$EMAIL" '{sub:$s, email:$e, name:"ครูทดสอบ smoke"}')")" '{id_token:$t, intent:"staff", device_name:"smoke-google"}')"
 expect 200
@@ -1405,13 +1428,33 @@ gapi GET /me/google-identity
 expect 200
 check '.data.linked == true and .data.linked_via == "teacher_email" and .data.notice_version == "gsi-1"'
 TOKEN=""
-gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-x-$RUN" --arg e "nobody-$RUN@example.com" '{sub:$s, email:$e, name:"ไม่มีบัญชี"}')")" '{id_token:$t, intent:"staff"}')"
+# Unknown teacher, school auto-approval on: an active teacher of the chosen school at once (school_id
+# keeps the step independent of how many schools the dev database has; without it and with several
+# schools the answer is 404 needs_school).
+NEWT_ID_TOKEN=$(gtoken "$(jq -nc --arg s "smoke-n-$RUN" --arg e "newkru-$RUN@example.com" '{sub:$s, email:$e, name:"ครูใหม่ smoke"}')")
+gapi POST /auth/google "$(jq -nc --arg t "$NEWT_ID_TOKEN" --argjson sc "$SCHOOL_ID" '{id_token:$t, intent:"staff", school_id:$sc}')"
+expect 200
+check ".user.role == \"teacher\" and .user.status == \"active\" and .user.school.id == $SCHOOL_ID"
+NEWT_ID=$(j '.user.id')
+TOKEN=$(j '.token')
+api GET /classrooms
+expect 200
+gapi GET /me/google-identity
+expect 200
+check '.data.linked == true and .data.linked_via == "google_signup"'
+TOKEN=""
+gapi POST /auth/google "$(jq -nc --arg t "$NEWT_ID_TOKEN" '{id_token:$t, intent:"staff"}')"
+expect 200
+check ".user.id == $NEWT_ID"
+# Auto-approval off: the pending registration as before (#70).
+tinker "App\\Models\\School::findOrFail(${SCHOOL_ID})->forceFill(['teacher_google_auto_approve' => false])->save(); echo 'school: teacher auto-approval off';" | tail -1
+gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-x-$RUN" --arg e "nobody-$RUN@example.com" '{sub:$s, email:$e, name:"ไม่มีบัญชี"}')")" --argjson sc "$SCHOOL_ID" '{id_token:$t, intent:"staff", school_id:$sc}')"
 expect 404
-check '.code == "google_not_linked" and (.link_ticket | length) == 48 and .registration.email != null'
+check '.code == "google_not_linked" and (.link_ticket | length) == 48 and .registration.email != null and (.needs_school // false) == false'
 gapi POST /auth/google "$(jq -nc --arg t "$(gtoken "$(jq -nc --arg s "smoke-t1-$RUN" --arg e "$EMAIL" '{sub:$s, email:$e, aud:"someone-else.apps.googleusercontent.com"}')")" '{id_token:$t, intent:"staff"}')"
 expect 422
 check '.code == "google_token_invalid"'
-ok "teacher signed in with Google (token works on the server); unknown -> 404 + link_ticket; wrong aud -> 422"
+ok "teacher signed in with Google (token works on the server); unknown -> active teacher #$NEWT_ID (google_signup), with auto-approval off -> 404 + link_ticket; wrong aud -> 422"
 
 step "Google sign-in: a student confirms with the PIN once, then signs in with Google; Classroom roster auto-link"
 S1_ID_TOKEN=$(gtoken "$(jq -nc --arg s "smoke-s1-$RUN" --arg e "s1-$RUN@example.com" '{sub:$s, email:$e, name:"หนึ่ง ทดสอบ"}')")

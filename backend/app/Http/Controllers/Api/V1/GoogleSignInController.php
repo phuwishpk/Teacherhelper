@@ -26,6 +26,9 @@ use Laravel\Sanctum\NewAccessToken;
  */
 class GoogleSignInController extends Controller
 {
+    /** The school an unknown teacher picked (`needs_school`, #71). */
+    private const SCHOOL_RULES = ['sometimes', 'nullable', 'integer', 'exists:schools,id'];
+
     public function __construct(
         private readonly GoogleIdTokenVerifier $verifier,
         private readonly GoogleSignIn $signIn,
@@ -43,8 +46,9 @@ class GoogleSignInController extends Controller
     }
 
     /**
-     * POST /auth/google {id_token, intent: staff|student, device_name?} ->
-     * {token, user} | 404 google_not_linked {link_ticket?, registration?}.
+     * POST /auth/google {id_token, intent: staff|student, device_name?, school_id?} ->
+     * {token, user} | 404 google_not_linked {link_ticket?, registration?, needs_school?}.
+     * school_id: the school an unknown teacher picked after `needs_school` (#71).
      */
     public function signIn(Request $request): JsonResponse
     {
@@ -52,16 +56,17 @@ class GoogleSignInController extends Controller
             'id_token' => ['required', 'string', 'max:8192'],
             'intent' => ['required', 'string', 'in:staff,student'],
             'device_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'school_id' => self::SCHOOL_RULES,
         ], self::messages());
 
         $google = $this->verifier->verify($data['id_token']);
 
-        return self::tokenResponse($this->signIn->signIn($google, $data['intent'], $data['device_name'] ?? null));
+        return self::tokenResponse($this->signIn->signIn($google, $data['intent'], $data['device_name'] ?? null, self::schoolId($data)));
     }
 
     /**
-     * POST /auth/google/web-url {purpose: login|link, intent?, accept_notice?}
-     * -> {data: {url}}. `link` needs the user's bearer token (401 without);
+     * POST /auth/google/web-url {purpose: login|link, intent?, accept_notice?, school_id?}
+     * -> {data: {url}}. school_id (login only) rides in the state to the ticket. `link` needs the user's bearer token (401 without);
      * a student must accept the notice first (422 notice_required).
      */
     public function webUrl(Request $request, GoogleSignInWeb $web): JsonResponse
@@ -70,6 +75,7 @@ class GoogleSignInController extends Controller
             'purpose' => ['required', 'string', 'in:login,link'],
             'intent' => ['sometimes', 'nullable', 'string', 'in:staff,student'],
             'accept_notice' => ['sometimes', 'boolean'],
+            'school_id' => self::SCHOOL_RULES,
         ], self::messages());
         if (! GoogleSignInConfig::webFlowEnabled()) {
             throw GoogleSignInErrors::webNotConfigured();
@@ -100,17 +106,22 @@ class GoogleSignInController extends Controller
             'nonce' => $nonce,
             'user_id' => $userId,
             'accept_notice' => (bool) ($data['accept_notice'] ?? false),
+            'school_id' => $data['purpose'] === 'login' ? self::schoolId($data) : null,
         ]);
 
         return response()->json(['data' => ['url' => $web->authorizationUrl($state, $nonce)]]);
     }
 
-    /** POST /auth/google/ticket {ticket, device_name?} -> the answer of POST /auth/google. */
+    /**
+     * POST /auth/google/ticket {ticket, device_name?, school_id?} -> the answer
+     * of POST /auth/google; school_id overrides the one carried from web-url.
+     */
     public function ticket(Request $request): JsonResponse
     {
         $data = $request->validate([
             'ticket' => ['required', 'string', 'max:64'],
             'device_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'school_id' => self::SCHOOL_RULES,
         ], self::messages());
 
         $login = $this->tickets->consumeLogin($data['ticket']);
@@ -118,7 +129,7 @@ class GoogleSignInController extends Controller
             throw GoogleSignInErrors::ticketInvalid();
         }
 
-        return self::tokenResponse($this->signIn->signIn($login['identity'], $login['intent'], $data['device_name'] ?? null));
+        return self::tokenResponse($this->signIn->signIn($login['identity'], $login['intent'], $data['device_name'] ?? null, self::schoolId($data) ?? $login['school_id']));
     }
 
     /**
@@ -178,6 +189,12 @@ class GoogleSignInController extends Controller
         return $google;
     }
 
+    /** @param  array<string, mixed>  $data */
+    private static function schoolId(array $data): ?int
+    {
+        return isset($data['school_id']) ? (int) $data['school_id'] : null;
+    }
+
     /** @param  array{token: NewAccessToken, user: User}  $result */
     private static function tokenResponse(array $result): JsonResponse
     {
@@ -204,6 +221,8 @@ class GoogleSignInController extends Controller
             'pin.required' => 'กรุณากรอก PIN',
             'pin.digits' => 'PIN ต้องเป็นตัวเลข 6 หลัก',
             'qr_token.required' => 'กรุณาสแกนบัตร QR',
+            'school_id.integer' => 'ไม่พบโรงเรียนที่เลือก',
+            'school_id.exists' => 'ไม่พบโรงเรียนที่เลือก',
         ];
     }
 }
