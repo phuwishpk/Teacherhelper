@@ -12,7 +12,7 @@ void main() {
   Widget shell({int index = 0, Widget? headerActions}) => MaterialApp(
     theme: AppTheme.light(),
     home: AdaptiveShell(
-      title: 'EduVision',
+      title: 'Krucheck',
       accountName: 'ครูสมศรี',
       accountCaption: 'โรงเรียนสาธิต',
       destinations: const [
@@ -82,7 +82,7 @@ void main() {
 
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
-    expect(find.widgetWithText(AppBar, 'EduVision'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Krucheck'), findsOneWidget);
     expect(find.byKey(const ValueKey('nav_badge_1')), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.text('ครูสมศรี'), findsNothing);
@@ -104,7 +104,7 @@ void main() {
     expect(rail.extended, isFalse);
     expect(rail.destinations, hasLength(3));
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.widgetWithText(AppBar, 'EduVision'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Krucheck'), findsOneWidget);
     expect(tester.element(find.text('เนื้อหา')).pageGutter, 24);
 
     await tester.tap(find.byTooltip('สแกนใบงาน'));
@@ -131,7 +131,7 @@ void main() {
     final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
     expect((rail.extended, rail.selectedIndex), (true, 1));
     expect(find.byType(BrandMark), findsOneWidget);
-    expect(find.text('EduVision'), findsOneWidget);
+    expect(find.text('Krucheck'), findsOneWidget);
     expect(find.text('ครูสมศรี'), findsOneWidget);
     expect(find.text('โรงเรียนสาธิต'), findsOneWidget);
     // The tab's name heads the page; the same word is in the sidebar.
@@ -171,7 +171,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('EduVision'), findsOneWidget);
+      expect(find.text('Krucheck'), findsOneWidget);
       expect(find.text('เข้าสู่ระบบ'), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'width $width');
       // Never wider than the window, never wider than the form's cap.

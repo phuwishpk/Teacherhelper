@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EduVision end-to-end smoke test (local machine only).
+# Krucheck end-to-end smoke test (local machine only).
 #
 # Drives the whole teacher/student loop over HTTP with curl against a local
 # server that uses the FAKE Gemini client and no Google credentials:

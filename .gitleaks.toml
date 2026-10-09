@@ -8,7 +8,7 @@
 # pre-commit hook blocks the same pattern, but it lives only in .git/hooks, so
 # a fresh clone or an edit in the GitHub web UI relies on this scan.
 
-title = "EduVision gitleaks config"
+title = "Krucheck gitleaks config"
 
 [extend]
 useDefault = true

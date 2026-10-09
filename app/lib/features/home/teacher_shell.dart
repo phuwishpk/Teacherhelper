@@ -119,7 +119,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
           };
 
     return AdaptiveShell(
-      title: 'EduVision',
+      title: 'Krucheck',
       accountName: user?.name,
       accountCaption: user?.schoolName,
       destinations: [

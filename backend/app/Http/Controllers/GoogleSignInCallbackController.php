@@ -55,7 +55,7 @@ class GoogleSignInCallbackController extends Controller
         if ($data === null) {
             GoogleSignIn::log('web_callback', 'state_invalid');
 
-            return $this->page(400, 'ลิงก์เข้าสู่ระบบด้วย Google ใช้ไม่ได้แล้ว', 'ลิงก์นี้ถูกใช้ไปแล้วหรือเปิดไว้นานเกิน 10 นาที กลับไปที่ EduVision แล้วกดปุ่ม Google อีกครั้ง');
+            return $this->page(400, 'ลิงก์เข้าสู่ระบบด้วย Google ใช้ไม่ได้แล้ว', 'ลิงก์นี้ถูกใช้ไปแล้วหรือเปิดไว้นานเกิน 10 นาที กลับไปที่ Krucheck แล้วกดปุ่ม Google อีกครั้ง');
         }
 
         $isLink = $data['purpose'] === 'link';

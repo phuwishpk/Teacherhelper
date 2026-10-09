@@ -1,7 +1,7 @@
 <?php
 
 /*
- * EduVision: synthetic golden fixtures for the Gemini calibration harness
+ * Krucheck: synthetic golden fixtures for the Gemini calibration harness
  * (DESIGN §21.10, artisan eduvision:calibrate-gemini).
  *
  * Draws answer crops, whole pages and a typed answer key with PHP GD and

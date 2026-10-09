@@ -150,7 +150,7 @@ class _ExamKeySheetScanScreenState
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'การสแกนกระดาษเฉลยต้องใช้แอป EduVision บนโทรศัพท์ Android '
+              'การสแกนกระดาษเฉลยต้องใช้แอป Krucheck บนโทรศัพท์ Android '
               'บนเว็บกรอกเฉลยในตารางแทน',
               textAlign: TextAlign.center,
             ),

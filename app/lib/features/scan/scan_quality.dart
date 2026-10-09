@@ -87,7 +87,7 @@ final class NotAWorksheet extends ScanIssue {
   @override
   String get message => isLoginCard
       ? 'นี่คือบัตรเข้าสู่ระบบของนักเรียน ไม่ใช่ใบงาน'
-      : 'QR นี้ไม่ใช่ใบงานของ EduVision';
+      : 'QR นี้ไม่ใช่ใบงานของ Krucheck';
 }
 
 /// `student_id = 0`: the anonymous spare worksheet, accepted only through

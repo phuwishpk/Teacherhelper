@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>{{ $title }} · EduVision</title>
+<title>{{ $title }} · Krucheck</title>
 <style>
     :root { --bg: #f4f6fb; --card: #ffffff; --text: #1d2433; --muted: #5b6475; --line: #e3e7ef; --bad: #b3261e; --bad-bg: #fbe4e2; }
     @media (prefers-color-scheme: dark) {
@@ -38,7 +38,7 @@
     </div>
     <h1>{{ $title }}</h1>
     <p>{{ $message }}</p>
-    <footer>EduVision · เข้าสู่ระบบด้วย Google</footer>
+    <footer>Krucheck · เข้าสู่ระบบด้วย Google</footer>
 </main>
 </body>
 </html>

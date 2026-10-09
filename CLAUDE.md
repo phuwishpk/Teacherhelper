@@ -1,4 +1,4 @@
-# CLAUDE.md - EduVision (repo: phuwishpk/Teacherhelper)
+# CLAUDE.md - Krucheck (repo: phuwishpk/Teacherhelper)
 
 AI homework-grading platform for Thai schools: Flutter app (Android, and the same code as a web app at /app/) + Laravel API on shared Plesk hosting + a small ML folder.
 Group course project. One developer (phuwishpk) writes all code with Claude Code; teammates edit docs/ and CSV files through the GitHub web UI.
@@ -16,6 +16,7 @@ Group course project. One developer (phuwishpk) writes all code with Claude Code
 - docs/     Design and technical docs (Thai). tools/ holds helper scripts (hosting-probe.php, build-web.sh, selfhost/ for the self-hosted server).
 
 ## Conventions
+- The product is called **Krucheck** (renamed from EduVision on 2026-10-10, DESIGN §28). Write "Krucheck" in everything a person reads. The technical identifiers keep the old name and must not be renamed, because installed apps, printed sheets and the production Scheduled Tasks depend on them: applicationId `com.eduvision.app`, the `eduvision://` link scheme, the `eduvision:*` artisan commands, `config/eduvision.php`, the Dart package `eduvision`, database, container and folder names, and the `EV1`/`EVX1`/`EVC1` QR prefixes.
 - Code identifiers, commit messages and code comments: English. UI strings, docs, issues: Thai.
 - App UI (DESIGN §27): screens take colours, text styles and shapes from `AppTheme` through `Theme.of(context)` and lay out by the three window sizes of `core/theme/breakpoints.dart` (phone, tablet, desktop). No colour constants, fonts or corner radii set in a screen. After changing a screen, look at it at 390, 820 and 1440 px wide.
 - Commits follow Conventional Commits with scope app|backend|ml|docs|tools|repo, e.g. `feat(backend): add teacher login endpoint`. The scope may be omitted for `docs:` commits that touch only docs/. Reference issues with `Refs #12` or `Closes #12`.

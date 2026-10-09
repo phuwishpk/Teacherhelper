@@ -7,7 +7,7 @@ use Illuminate\Http\Response;
 
 /**
  * GET /r/{submission_id} (DESIGN §19.7, §19.9): the link in a private
- * Classroom announcement. A Thai page "เปิดผลในแอป EduVision" whose button
+ * Classroom announcement. A Thai page "เปิดผลในแอป Krucheck" whose button
  * is an Android intent link into the app; the app opens the result after
  * the student signs in, so the page reads nothing from the database and
  * shows no student data. No login, session or cookie.

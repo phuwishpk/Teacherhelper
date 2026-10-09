@@ -1,4 +1,4 @@
-# ml/ — เครื่องมือ ML และโค้ดอ้างอิงของ EduVision
+# ml/ — เครื่องมือ ML และโค้ดอ้างอิงของ Krucheck
 
 จัดการด้วย [uv](https://docs.astral.sh/uv/) และ Python 3.12 (TensorFlow ยังไม่รองรับ 3.13+)
 

@@ -131,7 +131,7 @@ class GoogleOAuthBrowserFlowTest extends TestCase
         $res->assertSee('เชื่อม Google Classroom สำเร็จ')
             ->assertSee('kru.somsri@school.example')
             ->assertSee('ครูสมศรี ใจดี')
-            ->assertSee('กลับไปที่แอป EduVision')
+            ->assertSee('กลับไปที่แอป Krucheck')
             ->assertDontSee($state, false);
 
         Http::assertSent(fn (Request $r) => $r->url() === GoogleOAuth::TOKEN_URL

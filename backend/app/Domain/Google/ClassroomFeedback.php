@@ -210,7 +210,7 @@ final class ClassroomFeedback
         }
 
         $lines[] = '';
-        $lines[] = 'ดูผลละเอียดในแอป EduVision: '.self::resultUrl($submission->id);
+        $lines[] = 'ดูผลละเอียดในแอป Krucheck: '.self::resultUrl($submission->id);
 
         return implode("\n", $lines);
     }

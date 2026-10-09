@@ -159,7 +159,7 @@ void main() {
 
   group('/login/google, a new teacher with several schools (#71)', () {
     const schools = [
-      SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision'),
+      SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck'),
       SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
     ];
 

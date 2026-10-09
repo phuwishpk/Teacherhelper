@@ -1,4 +1,4 @@
-# EduVision on the self-hosted Docker server (docs/SELFHOST.md).
+# Krucheck on the self-hosted Docker server (docs/SELFHOST.md).
 # Run it through tools/selfhost/compose.sh: paths below are relative to the
 # deployment folder (the parent of this clone), which holds app.env, .env and
 # web/app. The app listens on 127.0.0.1:8085 only; whatever makes the site

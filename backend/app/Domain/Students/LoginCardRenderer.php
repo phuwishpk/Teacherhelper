@@ -35,7 +35,7 @@ class LoginCardRenderer
             'margin_bottom' => 10,
             'tempDir' => self::tempDir(),
         ]);
-        $mpdf->SetTitle('บัตรเข้าสู่ระบบ EduVision');
+        $mpdf->SetTitle('บัตรเข้าสู่ระบบ Krucheck');
         $mpdf->autoScriptToLang = true;
         $mpdf->autoLangToFont = true;
 
@@ -112,7 +112,7 @@ class LoginCardRenderer
         return '<table class="inner"><tr>'
             .'<td style="width: 58%;">'
             .'<div class="school">'.$e($schoolName).'</div>'
-            .'<div class="title">บัตรเข้าสู่ระบบ EduVision</div>'
+            .'<div class="title">บัตรเข้าสู่ระบบ Krucheck</div>'
             .'<div class="name">เลขที่ '.$e((string) $card['student_number']).' '.$e($card['name']).'</div>'
             .'<div class="meta">ห้อง '.$e($card['classroom_name']).'</div>'
             .'<div class="meta">รหัสห้อง <span class="code">'.$e($card['class_code']).'</span></div>'

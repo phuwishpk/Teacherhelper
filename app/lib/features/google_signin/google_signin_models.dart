@@ -134,7 +134,7 @@ class GoogleNotLinked {
     return GoogleNotLinked(
       message: switch (body['message']) {
         String m when m.isNotEmpty => m,
-        _ => 'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชี EduVision',
+        _ => 'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชี Krucheck',
       },
       linkTicket: ticket,
       registration: ticket != null && reg is Map

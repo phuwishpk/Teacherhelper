@@ -479,7 +479,7 @@ class ExamSheetScanner {
     if (error == null && qr == null) {
       error = WorksheetQr.tryParse(detection.qrPayload) != null
           ? 'นี่คือใบงานของการบ้าน ไม่ใช่กระดาษคำตอบข้อสอบ สแกนจากเมนู "สแกน"'
-          : 'QR นี้ไม่ใช่กระดาษคำตอบข้อสอบของ EduVision';
+          : 'QR นี้ไม่ใช่กระดาษคำตอบข้อสอบของ Krucheck';
     }
     if (error == null && !acceptBlur && detection.blurScore < _minBlurScore) {
       return (

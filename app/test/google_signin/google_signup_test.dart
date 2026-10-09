@@ -30,7 +30,7 @@ final _password = find.widgetWithText(
   'รหัสผ่าน (อย่างน้อย 8 ตัว)',
 );
 
-const _schools = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision')];
+const _schools = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck')];
 
 /// `/me` plus the school list and the registration of the register page.
 class _Auth extends FakeMeAuth {

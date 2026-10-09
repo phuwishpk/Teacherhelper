@@ -32,7 +32,7 @@ class WebAppTest extends TestCase
     private function install(): void
     {
         File::makeDirectory($this->public.'/app');
-        File::put($this->public.'/app/index.html', '<!DOCTYPE html><title>EduVision</title>');
+        File::put($this->public.'/app/index.html', '<!DOCTYPE html><title>Krucheck</title>');
     }
 
     public function test_without_the_upload_nothing_points_at_the_web_app(): void

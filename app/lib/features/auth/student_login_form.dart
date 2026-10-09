@@ -111,7 +111,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
       builder: (context) => AlertDialog(
         title: const Text('สแกนบัตร QR ได้ในแอป Android'),
         content: const Text(
-          'การสแกนบัตรต้องใช้กล้องของแอป EduVision บน Android '
+          'การสแกนบัตรต้องใช้กล้องของแอป Krucheck บน Android '
           'บนเว็บให้กรอกรหัสห้อง เลขที่ และ PIN ด้านล่างแทน',
         ),
         actions: [

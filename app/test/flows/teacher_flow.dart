@@ -98,7 +98,7 @@ class TeacherFlowApp {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const EduVisionApp(),
+        child: const KrucheckApp(),
       ),
     );
     await tester.pumpAndSettle();

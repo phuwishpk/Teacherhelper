@@ -288,7 +288,7 @@ trait SecurityWorld
             'user_id' => $this->teacherA->id, 'google_sub' => 'sub-a', 'email' => 'teacher-a@school.example',
             'encrypted_refresh_token' => 'refresh-token-not-real', 'scopes' => implode(' ', GoogleScopes::REQUIRED), 'connected_at' => now(),
         ]);
-        ClassroomGoogleLink::create(['classroom_id' => $this->classroomA->id, 'course_id' => 'course-a', 'course_name' => 'EduVision ทดสอบ', 'owner_user_id' => $this->teacherA->id, 'linked_at' => now()]);
+        ClassroomGoogleLink::create(['classroom_id' => $this->classroomA->id, 'course_id' => 'course-a', 'course_name' => 'Krucheck ทดสอบ', 'owner_user_id' => $this->teacherA->id, 'linked_at' => now()]);
         AssignmentGoogleLink::create(['assignment_id' => $this->assignmentA->id, 'course_work_id' => 'cw-a', 'alternate_link' => 'https://classroom.google.com/c/a', 'drive_file_id' => null, 'posted_by' => $this->teacherA->id, 'posted_at' => now()]);
         $this->importA = ClassroomSubmissionImport::create([
             'assignment_id' => $this->assignmentA->id, 'google_submission_id' => 'sub-1', 'google_user_id' => 'guser-1',

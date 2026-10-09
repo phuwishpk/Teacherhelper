@@ -71,7 +71,7 @@ class ExamSheetPdfRenderer
 
         $mpdf = $this->mpdfFactory->create();
         $mpdf->SetTitle($exam->title);
-        $mpdf->SetCreator('EduVision');
+        $mpdf->SetCreator('Krucheck');
         $mpdf->SetAutoPageBreak(false);
 
         foreach ($students as $student) {
@@ -315,7 +315,7 @@ class ExamSheetPdfRenderer
         $mpdf->SetXY(WorksheetGeometry::CONTENT_LEFT + 12, WorksheetGeometry::FOOTER_Y);
         $mpdf->WriteCell(
             WorksheetGeometry::contentWidth() - 24, 4,
-            'EduVision · '.($keySheet ? 'กระดาษเฉลย' : ($shared ? 'กระดาษคำตอบ (ฝนเลขประจำตัว)' : 'กระดาษคำตอบ')).' เวอร์ชัน '.$version.' · อย่าพับหรือขีดเขียนบนมุมและ QR',
+            'Krucheck · '.($keySheet ? 'กระดาษเฉลย' : ($shared ? 'กระดาษคำตอบ (ฝนเลขประจำตัว)' : 'กระดาษคำตอบ')).' เวอร์ชัน '.$version.' · อย่าพับหรือขีดเขียนบนมุมและ QR',
             0, 0, 'C',
         );
         $mpdf->SetTextColor(0, 0, 0);

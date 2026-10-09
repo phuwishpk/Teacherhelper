@@ -1,4 +1,4 @@
-"""EduVision fuzzy-logic reference implementation (DESIGN section 11).
+"""Krucheck fuzzy-logic reference implementation (DESIGN section 11).
 
 Python twin of the PHP ``FuzzyEngine`` used for unit-test parity, membership
 and surface plots for the AI-course report, and tuning experiments in Phase 4.

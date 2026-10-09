@@ -12,7 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>{{ $title }} · EduVision</title>
+<title>{{ $title }} · Krucheck</title>
 <style>
     :root {
         --bg: #f4f6fb; --card: #ffffff; --text: #1d2433; --muted: #5b6475; --line: #e3e7ef;
@@ -70,9 +70,9 @@
         <div class="account">
             บัญชี Google <strong>{{ $email }}</strong>
             @if ($teacher)
-                เชื่อมกับบัญชีครู <strong>{{ $teacher }}</strong> ใน EduVision แล้ว
+                เชื่อมกับบัญชีครู <strong>{{ $teacher }}</strong> ใน Krucheck แล้ว
             @else
-                เชื่อมกับ EduVision แล้ว
+                เชื่อมกับ Krucheck แล้ว
             @endif
         </div>
     @endif
@@ -89,10 +89,10 @@
     @endif
 
     @if ($kind === 'success')
-        <p class="muted">ถ้าชื่อครูด้านบนไม่ใช่คุณ อย่าใช้ต่อ: ยกเลิกสิทธิ์ที่ myaccount.google.com → ความปลอดภัย → การเชื่อมต่อกับแอปและบริการของบุคคลที่สาม → EduVision</p>
+        <p class="muted">ถ้าชื่อครูด้านบนไม่ใช่คุณ อย่าใช้ต่อ: ยกเลิกสิทธิ์ที่ myaccount.google.com → ความปลอดภัย → การเชื่อมต่อกับแอปและบริการของบุคคลที่สาม → Krucheck</p>
     @endif
 
-    <footer class="muted">EduVision · Google Classroom</footer>
+    <footer class="muted">Krucheck · Google Classroom</footer>
 </main>
 </body>
 </html>

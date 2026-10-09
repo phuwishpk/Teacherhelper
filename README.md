@@ -1,7 +1,7 @@
-# EduVision
+# Krucheck
 
 แพลตฟอร์ม AI ตรวจการบ้านลายมือและติดตามผู้เรียน สำหรับครูและนักเรียนระดับประถม-มัธยม
-(repo ชื่อ Teacherhelper ส่วนชื่อแอปคือ EduVision)
+(repo ชื่อ Teacherhelper ส่วนชื่อแอปคือ Krucheck เดิมชื่อ EduVision ชื่อทางเทคนิคเช่น `com.eduvision.app` และคำสั่ง `eduvision:*` ยังเป็นชื่อเดิม ดู DESIGN §28)
 
 ## เอกสาร
 - [docs/DESIGN.md](docs/DESIGN.md) เอกสารออกแบบระบบ (สถาปัตยกรรม, schema, API, fuzzy, prompt)

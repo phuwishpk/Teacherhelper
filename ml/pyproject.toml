@@ -1,7 +1,7 @@
 [project]
 name = "eduvision-ml"
 version = "0.1.0"
-description = "EduVision ML: ArUco marker generator, fuzzy-logic reference implementation (DESIGN §11) and, from Phase 5, CRNN digit-reader training"
+description = "Krucheck ML: ArUco marker generator, fuzzy-logic reference implementation (DESIGN §11) and, from Phase 5, CRNN digit-reader training"
 readme = "README.md"
 authors = [{ name = "phuwishpk" }]
 requires-python = ">=3.12,<3.13"

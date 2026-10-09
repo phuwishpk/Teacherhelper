@@ -65,7 +65,7 @@ class FcmCheckCommand extends Command
 
             return self::FAILURE;
         }
-        $message = new PushMessage('check', 'ทดสอบการแจ้งเตือนจาก EduVision');
+        $message = new PushMessage('check', 'ทดสอบการแจ้งเตือนจาก Krucheck');
         $failed = 0;
         foreach ($devices as $device) {
             $result = $client->send($device->fcm_token, $message);
