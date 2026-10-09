@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/widgets/auth_layout.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
@@ -92,52 +93,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('EduVision')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'เข้าสู่ระบบ',
-                    style: Theme.of(context).textTheme.headlineSmall,
+        child: AuthLayout(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'เข้าสู่ระบบ',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              SegmentedButton<LoginTab>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: LoginTab.teacher,
+                    label: Text('ครู / ผู้ดูแลระบบ'),
                   ),
-                  const SizedBox(height: 16),
-                  SegmentedButton<LoginTab>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(
-                        value: LoginTab.teacher,
-                        label: Text('ครู / ผู้ดูแลระบบ'),
-                      ),
-                      ButtonSegment(
-                        value: LoginTab.student,
-                        label: Text('นักเรียน'),
-                      ),
-                    ],
-                    selected: {_tab},
-                    onSelectionChanged: (s) => _select(s.single),
-                  ),
-                  const SizedBox(height: 24),
-                  switch (_tab) {
-                    LoginTab.teacher => const _TeacherLoginForm(),
-                    LoginTab.student => StudentLoginForm(
-                      qrScanSupported: widget.qrScanSupported,
-                    ),
-                  },
-                  // "เข้าสู่ระบบด้วย Google" on both tabs (DESIGN §24.13).
-                  GoogleSignInSection(
-                    intent: _tab == LoginTab.student
-                        ? GoogleIntent.student
-                        : GoogleIntent.staff,
+                  ButtonSegment(
+                    value: LoginTab.student,
+                    label: Text('นักเรียน'),
                   ),
                 ],
+                selected: {_tab},
+                onSelectionChanged: (s) => _select(s.single),
               ),
-            ),
+              const SizedBox(height: 24),
+              switch (_tab) {
+                LoginTab.teacher => const _TeacherLoginForm(),
+                LoginTab.student => StudentLoginForm(
+                  qrScanSupported: widget.qrScanSupported,
+                ),
+              },
+              // "เข้าสู่ระบบด้วย Google" on both tabs (DESIGN §24.13).
+              GoogleSignInSection(
+                intent: _tab == LoginTab.student
+                    ? GoogleIntent.student
+                    : GoogleIntent.staff,
+              ),
+            ],
           ),
         ),
       ),

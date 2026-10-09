@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/breakpoints.dart';
+import '../../core/widgets/adaptive_shell.dart';
 import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
 import '../auth/sign_out_action.dart';
@@ -14,10 +16,10 @@ import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 import 'teacher_attention.dart';
 
-/// Teacher-side navigation shell: a bottom NavigationBar on phones and a
-/// NavigationRail from tablet width up (the review queue is meant for
-/// tablets, DESIGN §13). Five destinations: หน้าหลัก, ห้องเรียน, การบ้าน,
-/// ตรวจทาน and ตัดเกรด (§23.9).
+/// Teacher-side navigation shell ([AdaptiveShell], DESIGN §27.3): a bottom
+/// NavigationBar on phones, a NavigationRail from tablet width up (the
+/// review queue is meant for tablets, DESIGN §13) and a sidebar on a desktop.
+/// Five destinations: หน้าหลัก, ห้องเรียน, การบ้าน, ตรวจทาน and ตัดเกรด (§23.9).
 class TeacherShell extends ConsumerStatefulWidget {
   const TeacherShell({super.key});
 
@@ -45,9 +47,6 @@ const _destinations = [
 /// course, also opened by the dashboard's shortcut.
 const teacherGradesIndex = 4;
 
-/// Material 3 "expanded" breakpoint: rail instead of bottom bar.
-const _railBreakpoint = 840.0;
-
 class _TeacherShellState extends ConsumerState<TeacherShell> {
   int _index = 0;
 
@@ -70,19 +69,15 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
+    // From tablet width the scan button lives in the rail or the sidebar.
+    final wide = context.windowSize != WindowSize.compact;
+    // On a desktop the tab's actions are buttons next to its title.
+    final expanded = context.windowSize == WindowSize.expanded;
     final queueOpen = ref.watch(uploadQueueOpenCountProvider);
     // Course requests waiting for the homeroom teacher (DESIGN §24.7): a
     // badge on "ห้องเรียน", where "คำขอผูกรายวิชา" is.
     final requests =
         ref.watch(teacherAttentionProvider).value?.courseRequestsPending ?? 0;
-    Widget icon(int i, IconData data) => i == 1 && requests > 0
-        ? Badge.count(
-            key: ValueKey('nav_badge_$i'),
-            count: requests,
-            child: Icon(data),
-          )
-        : Icon(data);
 
     final pages = <Widget>[
       DashboardPage(user: user, onNavigate: _select),
@@ -91,97 +86,77 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
       const ReviewHomePage(),
       if (_gradesOpened) const GradesHomePage() else const SizedBox.shrink(),
     ];
-    final body = IndexedStack(index: _index, children: pages);
 
-    final scanButton = wide
-        ? FloatingActionButton(
-            heroTag: 'scan_fab',
-            tooltip: 'สแกนใบงาน',
-            onPressed: () => context.push(AppRoutes.scan),
-            child: const Icon(Icons.document_scanner_outlined),
-          )
-        : FloatingActionButton.extended(
-            heroTag: 'scan_fab',
-            onPressed: () => context.push(AppRoutes.scan),
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: const Text('สแกนใบงาน'),
-          );
+    void openScan() => context.push(AppRoutes.scan);
 
-    // The tabs are bodies only and this Scaffold owns their FAB, so the root
-    // ScaffoldMessenger has exactly one Scaffold here to show a SnackBar on
-    // (the FAB moves up for it instead of being covered).
-    final tabFab = switch (_index) {
-      0 => wide ? null : scanButton,
-      1 => const ClassroomsFab(),
-      2 => const AssignmentsFab(),
-      _ => null,
-    };
+    // The tabs are bodies only and the shell's Scaffold owns their FAB, so
+    // the root ScaffoldMessenger has exactly one Scaffold here to show a
+    // SnackBar on (the FAB moves up for it instead of being covered).
+    final tabFab = expanded
+        ? null
+        : switch (_index) {
+            0 =>
+              wide
+                  ? null
+                  : FloatingActionButton.extended(
+                      heroTag: 'scan_fab',
+                      onPressed: openScan,
+                      icon: const Icon(Icons.document_scanner_outlined),
+                      label: const Text('สแกนใบงาน'),
+                    ),
+            1 => const ClassroomsFab(),
+            2 => const AssignmentsFab(),
+            _ => null,
+          };
+    final headerActions = !expanded
+        ? null
+        : switch (_index) {
+            1 => const ClassroomsFab(inline: true),
+            2 => const AssignmentsFab(inline: true),
+            _ => null,
+          };
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('EduVision'),
-        actions: [
-          IconButton(
-            tooltip: 'คิวอัปโหลด',
-            icon: Badge.count(
-              count: queueOpen,
-              isLabelVisible: queueOpen > 0,
-              child: const Icon(Icons.cloud_upload_outlined),
-            ),
-            onPressed: () => context.push(AppRoutes.uploadQueue),
+    return AdaptiveShell(
+      title: 'EduVision',
+      accountName: user?.name,
+      accountCaption: user?.schoolName,
+      destinations: [
+        for (final (i, d) in _destinations.indexed)
+          ShellDestination(
+            d.label,
+            d.icon,
+            d.selectedIcon,
+            badge: i == 1 ? requests : 0,
           ),
-          IconButton(
-            tooltip: 'ตั้งค่า',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push(AppRoutes.settings),
-          ),
-          IconButton(
-            tooltip: 'ออกจากระบบ',
-            icon: const Icon(Icons.logout),
-            onPressed: () => confirmSignOut(context, ref),
-          ),
-        ],
+      ],
+      selectedIndex: _index,
+      onSelected: _select,
+      primaryAction: ShellAction(
+        tooltip: 'สแกนใบงาน',
+        icon: Icons.document_scanner_outlined,
+        onPressed: openScan,
       ),
-      body: wide
-          ? Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _index,
-                  onDestinationSelected: _select,
-                  labelType: NavigationRailLabelType.all,
-                  leading: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: scanButton,
-                  ),
-                  destinations: [
-                    for (final (i, d) in _destinations.indexed)
-                      NavigationRailDestination(
-                        icon: icon(i, d.icon),
-                        selectedIcon: icon(i, d.selectedIcon),
-                        label: Text(d.label),
-                      ),
-                  ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: body),
-              ],
-            )
-          : body,
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: _select,
-              destinations: [
-                for (final (i, d) in _destinations.indexed)
-                  NavigationDestination(
-                    icon: icon(i, d.icon),
-                    selectedIcon: icon(i, d.selectedIcon),
-                    label: d.label,
-                  ),
-              ],
-            ),
+      actions: [
+        ShellAction(
+          tooltip: 'คิวอัปโหลด',
+          icon: Icons.cloud_upload_outlined,
+          badge: queueOpen,
+          onPressed: () => context.push(AppRoutes.uploadQueue),
+        ),
+        ShellAction(
+          tooltip: 'ตั้งค่า',
+          icon: Icons.settings_outlined,
+          onPressed: () => context.push(AppRoutes.settings),
+        ),
+        ShellAction(
+          tooltip: 'ออกจากระบบ',
+          icon: Icons.logout,
+          onPressed: () => confirmSignOut(context, ref),
+        ),
+      ],
+      body: IndexedStack(index: _index, children: pages),
       floatingActionButton: tabFab,
+      headerActions: headerActions,
     );
   }
 }

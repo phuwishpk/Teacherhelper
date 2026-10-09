@@ -108,10 +108,33 @@ class _AssignmentsPageState extends ConsumerState<AssignmentsPage> {
 /// "สร้างการบ้าน" and "สร้างข้อสอบ" (DESIGN §22) buttons the shell shows
 /// while this tab is selected.
 class AssignmentsFab extends StatelessWidget {
-  const AssignmentsFab({super.key});
+  const AssignmentsFab({super.key, this.inline = false});
+
+  /// Buttons in a row for the page header of the desktop layout, instead
+  /// of floating action buttons (DESIGN §27.3).
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
+    if (inline) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('exam_new_fab'),
+            onPressed: () => context.push(AppRoutes.examNew),
+            icon: const Icon(Icons.quiz_outlined, size: 20),
+            label: const Text('สร้างข้อสอบ'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: () => context.push(AppRoutes.assignmentNew),
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('สร้างการบ้าน'),
+          ),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,

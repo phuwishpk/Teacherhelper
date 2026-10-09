@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+import '../theme/breakpoints.dart';
+
 /// Centers page content and caps its width so forms and lists stay readable
-/// on a tablet (DESIGN §6.1: layout for tablet width).
+/// on a tablet and a desktop (DESIGN §6.1, §27.2). Without [padding] the
+/// space around the content follows the window: 16, 24 or 32 px.
 class ContentColumn extends StatelessWidget {
   const ContentColumn({
     super.key,
     required this.child,
-    this.maxWidth = 760,
-    this.padding = const EdgeInsets.all(16),
+    this.maxWidth = 840,
+    this.padding,
   });
 
   final Widget child;
   final double maxWidth;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +24,17 @@ class ContentColumn extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Padding(padding: padding, child: child),
+        child: Padding(
+          padding: padding ?? EdgeInsets.all(context.pageGutter),
+          child: child,
+        ),
       ),
     );
   }
 }
 
-/// A scrollable form column with the same width cap.
+/// A scrollable form column with the same width cap. From tablet width
+/// the form sits on a card (DESIGN §27.4); on a phone it fills the page.
 class FormColumn extends StatelessWidget {
   const FormColumn({super.key, required this.children, this.maxWidth = 560});
 
@@ -35,15 +43,36 @@ class FormColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = context.windowSize == WindowSize.compact;
+    final scheme = Theme.of(context).colorScheme;
+    final form = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.pageGutter,
+        vertical: 24,
+      ),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: children,
+          constraints: BoxConstraints(
+            maxWidth: compact ? maxWidth : maxWidth + 64,
           ),
+          child: compact
+              ? form
+              : Material(
+                  color: scheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                    side: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: form,
+                  ),
+                ),
         ),
       ),
     );

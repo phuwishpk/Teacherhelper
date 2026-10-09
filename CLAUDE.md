@@ -17,6 +17,7 @@ Group course project. One developer (phuwishpk) writes all code with Claude Code
 
 ## Conventions
 - Code identifiers, commit messages and code comments: English. UI strings, docs, issues: Thai.
+- App UI (DESIGN §27): screens take colours, text styles and shapes from `AppTheme` through `Theme.of(context)` and lay out by the three window sizes of `core/theme/breakpoints.dart` (phone, tablet, desktop). No colour constants, fonts or corner radii set in a screen. After changing a screen, look at it at 390, 820 and 1440 px wide.
 - Commits follow Conventional Commits with scope app|backend|ml|docs|tools|repo, e.g. `feat(backend): add teacher login endpoint`. The scope may be omitted for `docs:` commits that touch only docs/. Reference issues with `Refs #12` or `Closes #12`.
 - M0: commit directly to main. From Phase 1: short-lived branch `<type>/<area>-<topic>` + PR, squash-merged by the developer. Never force-push or rewrite main (a ruleset blocks it). Never use `git commit --no-verify` (the local pre-commit hook is the Gemini-key guard).
 - API: base path /api/v1, snake_case JSON, errors `{message, errors, code}` (DESIGN §9). Store timestamps in UTC, display Asia/Bangkok.
