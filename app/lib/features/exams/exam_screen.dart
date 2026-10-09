@@ -443,6 +443,11 @@ class _SummaryCard extends StatelessWidget {
                       : '${a.versionCount} ชุด (ก–${examVersionLabel(a.versionCount)})',
                   color: scheme.tertiary,
                 ),
+                if (a.usesCodeSheets && !detail.isManual)
+                  StatusChip(
+                    label: 'ฝนเลขประจำตัว ${a.studentCodeDigits ?? '-'} หลัก',
+                    color: scheme.tertiary,
+                  ),
                 if (a.showKeyToStudents)
                   StatusChip(label: 'นักเรียนดูเฉลยได้', color: scheme.outline),
               ],

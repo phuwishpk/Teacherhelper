@@ -18,12 +18,18 @@ const examId = 301;
 String sheetQr({int student = 11, int page = 1, int layout = 1}) =>
     'EVX1.$examId.$student.$page.$layout.Q2M7K3PA';
 
+/// The QR of the shared answer sheet of exam 301 (DESIGN §22.19).
+String sharedQr({int page = 1, int layout = 1}) =>
+    'EVC1.$examId.0.$page.$layout.Q2M7K3PA';
+
 /// One layout page with three 4-option rows (s1–s3), a 2-column digit
-/// block (s4) and, with [versions] > 1, the version bubbles.
+/// block (s4) and, with [versions] > 1, the version bubbles. [codeDigits]
+/// > 0 adds the student-ID grid (the digit block of sheet number 0).
 Map<String, dynamic> layoutPage({
   int page = 1,
   int pageCount = 1,
   int versions = 2,
+  int codeDigits = 0,
 }) {
   List<Map<String, dynamic>> bubbles(int n) => [
     for (var i = 1; i <= n; i++)
@@ -44,6 +50,23 @@ Map<String, dynamic> layoutPage({
           'region_id': 'version',
           'kind': 'version_bubbles',
           'bubbles': bubbles(versions),
+        },
+      if (codeDigits > 0)
+        {
+          'region_id': 'student_code',
+          'kind': 'digit_block',
+          'sheet_no': 0,
+          'sign': null,
+          'columns': [
+            for (var c = 1; c <= codeDigits; c++)
+              {
+                'col': c,
+                'bubbles': [
+                  for (var d = 0; d <= 9; d++)
+                    {'value': '$d', 'cx': 0.05 * c, 'cy': 0.2, 'r': 0.011},
+                ],
+              },
+          ],
         },
       for (var s = first + 1; s <= first + 3; s++)
         {
@@ -98,11 +121,14 @@ Map<String, dynamic> _key(int no, List<Object> accepted, {int page = 1}) {
 }
 
 /// The scan kit of exam 301: three students, [versions] versions (ก: 3 1 2
-/// "12", ข: 1 2 3 "12"), [pageCount] pages of [layoutPage].
+/// "12", ข: 1 2 3 "12"), [pageCount] pages of [layoutPage]. [codeDigits] > 0
+/// makes it an exam with the shared sheet (§22.19): students 1 and 2 have
+/// the IDs 10001 and 10002, student 3 has none.
 Map<String, dynamic> kitJson({
   int versions = 2,
   int pageCount = 1,
   int? layoutVersion = 1,
+  int codeDigits = 0,
 }) {
   final keys = <Map<String, dynamic>>[];
   for (var v = 1; v <= versions; v++) {
@@ -120,32 +146,63 @@ Map<String, dynamic> kitJson({
     'layout_version': layoutVersion,
     'page_count': layoutVersion == null ? 0 : pageCount,
     'version_count': versions,
+    'sheet_identity': codeDigits > 0 ? 'code' : 'qr',
+    'student_code_digits': codeDigits > 0 ? codeDigits : null,
     'versions': keys,
     'layouts': layoutVersion == null
         ? []
         : [
             for (var p = 1; p <= pageCount; p++)
-              layoutPage(page: p, pageCount: pageCount, versions: versions),
+              layoutPage(
+                page: p,
+                pageCount: pageCount,
+                versions: versions,
+                codeDigits: codeDigits,
+              ),
           ],
     'roster': [
-      {'student_id': 11, 'student_number': 1, 'name': 'ด.ญ. หนึ่ง'},
-      {'student_id': 12, 'student_number': 2, 'name': 'ด.ช. สอง'},
-      {'student_id': 13, 'student_number': 3, 'name': 'ด.ญ. สาม'},
+      {
+        'student_id': 11,
+        'student_number': 1,
+        'name': 'ด.ญ. หนึ่ง',
+        'student_code': codeDigits > 0 ? '10001' : null,
+      },
+      {
+        'student_id': 12,
+        'student_number': 2,
+        'name': 'ด.ช. สอง',
+        'student_code': codeDigits > 0 ? '10002' : null,
+      },
+      {
+        'student_id': 13,
+        'student_number': 3,
+        'name': 'ด.ญ. สาม',
+        'student_code': null,
+      },
     ],
   };
 }
 
-ExamScanKit sampleKit({int versions = 2, int pageCount = 1}) =>
-    ExamScanKit.fromJson(kitJson(versions: versions, pageCount: pageCount));
+ExamScanKit sampleKit({
+  int versions = 2,
+  int pageCount = 1,
+  int codeDigits = 0,
+}) => ExamScanKit.fromJson(
+  kitJson(versions: versions, pageCount: pageCount, codeDigits: codeDigits),
+);
 
 /// Readings as `readAnswerSheet` returns them: [marks] sheet_no -> option
 /// (int) or the digits of the block (String); [version] marks a version bubble.
+/// [code] is what is filled in the student-ID grid of [codeDigits] columns
+/// ("_" = an empty column); null on a sheet without the grid.
 Map<String, dynamic> readingJson(
   String warped, {
   Map<int, Object> marks = const {},
   int? version,
   int page = 1,
   int versions = 2,
+  String? code,
+  int codeDigits = 5,
 }) {
   final first = (page - 1) * 4;
   return {
@@ -160,6 +217,17 @@ Map<String, dynamic> readingJson(
         '$s': {for (var o = 1; o <= 4; o++) '$o': marks[s] == o ? 0.9 : 0.0},
     },
     'digits': {
+      if (code != null)
+        '0': {
+          'sign': null,
+          'columns': [
+            for (var c = 0; c < codeDigits; c++)
+              {
+                for (var d = 0; d <= 9; d++)
+                  '$d': c < code.length && code[c] == '$d' ? 0.9 : 0.0,
+              },
+          ],
+        },
       '${first + 4}': {
         'sign': null,
         'columns': [
@@ -252,6 +320,15 @@ FrameDetection goodFrame({int student = 11, int page = 1}) => FrameDetection(
   qrPayload: sheetQr(student: student, page: page),
   blurScore: 150,
 );
+
+/// A sharp frame of the shared sheet, and a frame without a sheet.
+FrameDetection sharedFrame({int page = 1}) => FrameDetection(
+  markersFound: 4,
+  qrPayload: sharedQr(page: page),
+  blurScore: 150,
+);
+
+FrameDetection emptyFrame() => FrameDetection(markersFound: 0, blurScore: 0);
 
 class FakeFrameCamera implements FrameScanCamera {
   FakeFrameCamera({this.initError});
@@ -421,6 +498,13 @@ class FakeExamSheetScanner extends Fake implements ExamSheetScanner {
   final keyVersions = <int?>[];
   final pageOneAsked = <int?>[];
 
+  /// Shared sheets the screen assigned to a student, or discarded.
+  final assigned = <({PendingExamSheet pending, ExamKitStudent student})>[];
+  final discarded = <PendingExamSheet>[];
+
+  /// What `scan` was told about pages already in (student 11, page 1).
+  final alreadyAsked = <bool?>[];
+
   @override
   bool get isSupported => fakePipeline.isSupported;
 
@@ -432,12 +516,34 @@ class FakeExamSheetScanner extends Fake implements ExamSheetScanner {
     String imagePath,
     ExamScanKit kit, {
     required int? Function(int studentId) pageOneVersion,
+    bool Function(int studentId, int page)? alreadyScanned,
     bool acceptBlur = false,
   }) async {
     scanned.add(imagePath);
     pageOneAsked.add(pageOneVersion(11));
+    alreadyAsked.add(alreadyScanned?.call(11, 1));
     return outcomes.removeAt(0)(imagePath, acceptBlur);
   }
+
+  @override
+  Future<ExamSheetQueued> assign(
+    PendingExamSheet pending,
+    ExamScanKit kit,
+    ExamKitStudent student, {
+    required int? Function(int studentId) pageOneVersion,
+  }) async {
+    assigned.add((pending: pending, student: student));
+    return queued(
+      student: student.studentId,
+      page: pending.qr.page,
+      at: pending.capturedAt,
+      identifiedBy: ExamSheetQueued.identifiedByTeacher,
+    );
+  }
+
+  @override
+  Future<void> discard(PendingExamSheet pending) async =>
+      discarded.add(pending);
 
   @override
   Future<KeySheetOutcome> readKeySheet(
@@ -463,10 +569,12 @@ ExamSheetQueued queued({
   int? version = 2,
   int pageCount = 1,
   DateTime? at,
+  String identifiedBy = ExamSheetQueued.identifiedByQr,
 }) {
   final kit = sampleKit(pageCount: pageCount);
   return ExamSheetQueued(
     clientScanId: 'id-$student-$page',
+    identifiedBy: identifiedBy,
     qr: ExamQr.tryParse(sheetQr(student: student, page: page))!,
     student: kit.student(student),
     pageCount: pageCount,
@@ -494,6 +602,17 @@ ExamSheetQueued queued({
     scannedAt: at ?? DateTime.now(),
   );
 }
+
+/// A shared sheet (§22.19) read but not assigned to a student yet.
+PendingExamSheet pendingSheet({int page = 1, String code = '', DateTime? at}) =>
+    PendingExamSheet(
+      qr: ExamQr.tryParse(sharedQr(page: page))!,
+      detection: detectionFor(sharedQr(page: page)),
+      reading: AnswerSheetReading.fromJson(
+        readingJson('/cache/scan_pipeline/x/page.webp', code: code, page: page),
+      ),
+      capturedAt: at ?? DateTime.utc(2026, 10, 15, 3),
+    );
 
 /// Lets fake async work (futures started from callbacks) finish.
 Future<void> settle(WidgetTester tester) async {

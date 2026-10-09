@@ -81,6 +81,12 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
     widget.existing?.gradingMethod,
   );
   late int _versions = widget.existing?.versionCount ?? 1;
+  late bool _codeSheets = widget.existing?.usesCodeSheets ?? false;
+  late int _codeDigits =
+      widget.existing?.studentCodeDigits ?? kExamDefaultCodeDigits;
+
+  /// The teacher chose the number of digits: no suggestion replaces it.
+  late bool _digitsChosen = widget.existing?.studentCodeDigits != null;
   late bool _showKey = widget.existing?.showKeyToStudents ?? false;
   late int? _categoryId = widget.existing?.gradebookCategoryId;
   late bool _excluded = widget.existing?.excludedFromGrade ?? false;
@@ -99,6 +105,26 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
     _duration.dispose();
     _fullMarks.dispose();
     super.dispose();
+  }
+
+  /// Switches between a sheet per student and the shared sheet with the
+  /// student-ID grid (§22.19). The first time, the number of digits follows
+  /// the longest ID of the classroom's students.
+  Future<void> _setCodeSheets(bool on) async {
+    setState(() => _codeSheets = on);
+    final classroomId = _classroomId;
+    if (!on || _digitsChosen || classroomId == null) return;
+    try {
+      final roster = await ref.read(rosterProvider(classroomId).future);
+      if (!mounted || _digitsChosen) return;
+      setState(
+        () => _codeDigits = suggestStudentCodeDigits(
+          roster.map((s) => s.studentCode),
+        ),
+      );
+    } catch (_) {
+      // Offline: the default stays; the teacher can change it.
+    }
   }
 
   Future<void> _pickDate() async {
@@ -128,6 +154,9 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
     durationMinutes: int.tryParse(_duration.text.trim()),
     gradingMethod: _method,
     versionCount: _versions,
+    // Kept as it is for an exam graded by hand (it has no answer sheet).
+    codeSheets: _codeSheets,
+    studentCodeDigits: _codeSheets ? _codeDigits : null,
     showKeyToStudents: _showKey,
     manualFullMarks: _method == ExamGradingMethod.manual
         ? double.tryParse(_fullMarks.text.trim())
@@ -361,6 +390,65 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
                         'ชุดอื่นสลับข้อภายในตอนและสลับตัวเลือก',
               style: theme.textTheme.bodySmall,
             ),
+            if (_method == ExamGradingMethod.app) ...[
+              const SizedBox(height: 16),
+              Text(
+                'กระดาษคำตอบระบุตัวนักเรียนด้วย',
+                style: theme.textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<bool>(
+                key: const ValueKey('exam_sheet_identity'),
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: false, label: Text('QR รายคน')),
+                  ButtonSegment(value: true, label: Text('ฝนเลขประจำตัว')),
+                ],
+                selected: {_codeSheets},
+                onSelectionChanged: _versionsLocked
+                    ? null
+                    : (s) => _setCodeSheets(s.first),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _versionsLocked
+                    ? 'พิมพ์แล้ว เปลี่ยนวิธีระบุตัวต้องปลดล็อกโครงสร้างก่อน'
+                    : _codeSheets
+                    ? 'กระดาษใบเดียวใช้ทั้งห้อง ถ่ายเอกสารแจกได้ '
+                          'นักเรียนฝนเลขประจำตัวเอง ฝนได้หน้าละ 60 ข้อ'
+                    : 'พิมพ์กระดาษคำตอบของแต่ละคน มีชื่อและ QR ให้แล้ว '
+                          'ฝนได้หน้าละ 100 ข้อ',
+                style: theme.textTheme.bodySmall,
+              ),
+              if (_codeSheets) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  key: ValueKey('exam_code_digits_$_codeDigits'),
+                  initialValue: _codeDigits,
+                  decoration: const InputDecoration(
+                    labelText: 'จำนวนหลักของเลขประจำตัว',
+                    helperText:
+                        'เลขที่สั้นกว่านี้ให้ฝนชิดขวา '
+                        'นักเรียนที่ไม่มีเลข ครูเลือกชื่อเองตอนสแกน',
+                    helperMaxLines: 2,
+                  ),
+                  items: [
+                    for (
+                      var n = kExamMinCodeDigits;
+                      n <= kExamMaxCodeDigits;
+                      n++
+                    )
+                      DropdownMenuItem(value: n, child: Text('$n หลัก')),
+                  ],
+                  onChanged: _versionsLocked
+                      ? null
+                      : (v) => setState(() {
+                          _codeDigits = v ?? _codeDigits;
+                          _digitsChosen = true;
+                        }),
+                ),
+              ],
+            ],
             SwitchListTile(
               key: const ValueKey('exam_show_key'),
               contentPadding: EdgeInsets.zero,

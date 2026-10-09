@@ -222,11 +222,43 @@ class _ExamPrintScreenState extends ConsumerState<ExamPrintScreen> {
     );
   }
 
+  /// The shared answer sheet of an exam with the student-ID grid (DESIGN
+  /// §22.19): one file for the class, whatever its size; no students to
+  /// choose.
+  Widget _sharedSheetCard(
+    ExamDetail d,
+    Map<ExamPrintTarget, ExamPrintState> prints,
+  ) {
+    final blocker = ExamPrintReadiness.answerSheets(d);
+    final digits = d.exam.studentCodeDigits;
+    return _KindCard(
+      icon: Icons.assignment_outlined,
+      title: 'กระดาษคำตอบ (ฝนเลขประจำตัว)',
+      description:
+          'ใบเดียวใช้ทั้งห้อง ถ่ายเอกสารแจกได้ ไม่มีชื่อและ QR รายคน '
+          'นักเรียนเขียนชื่อและฝนเลขประจำตัว'
+          '${digits == null ? '' : ' $digits หลัก'}'
+          '${d.sheetPages > 0 ? ' · ${d.sheetPages} หน้า' : ''}',
+      blocker: blocker,
+      children: [
+        _PrintRow(
+          id: 'answer_sheet',
+          title: 'กระดาษคำตอบใบกลาง',
+          state: prints[(kind: ExamPrintKind.answerSheet, versionNo: null)],
+          enabled: blocker == null,
+          shareSubject: [d.exam.title, 'กระดาษคำตอบ'].join(' · '),
+          onPrint: () => _print(d, [ExamPrintRequest.answerSheets()]),
+        ),
+      ],
+    );
+  }
+
   Widget _answerSheetCard(
     ExamDetail d,
     Map<ExamPrintTarget, ExamPrintState> prints,
     AsyncValue<List<RosterStudent>> roster,
   ) {
+    if (d.exam.usesCodeSheets) return _sharedSheetCard(d, prints);
     final list = roster.value;
     final chosen = _students;
     final count = chosen?.length ?? list?.length;

@@ -47,11 +47,26 @@ final class ExamSheetQueued extends ExamSheetOutcome {
     required this.versionLabel,
     required this.score,
     required this.scannedAt,
+    this.identifiedBy = identifiedByQr,
   });
 
+  /// The student's own QR was on the sheet (§22.6).
+  static const identifiedByQr = 'qr';
+
+  /// The student ID filled in on a shared sheet named them (§22.19).
+  static const identifiedByCode = 'code';
+
+  /// The teacher picked the student of a shared sheet.
+  static const identifiedByTeacher = 'teacher';
+
   final String clientScanId;
+
+  /// For a shared sheet: its QR with the student it was filed under.
   final ExamQr qr;
   final ExamKitStudent? student;
+
+  /// [identifiedByQr], [identifiedByCode] or [identifiedByTeacher].
+  final String identifiedBy;
   final int pageCount;
   final ExamVersionDecision version;
   final String? versionLabel;
@@ -68,6 +83,68 @@ final class ExamSheetQueued extends ExamSheetOutcome {
       : qr.page > 1
       ? 'รอหน้า 1'
       : 'ให้ครูเลือกชุด';
+}
+
+/// A shared sheet (DESIGN §22.19) that was read but not queued yet: its
+/// student still has to be chosen. Holds what [ExamSheetScanner.assign]
+/// needs; the warped page file lives until `assign` or `discard`.
+class PendingExamSheet {
+  const PendingExamSheet({
+    required this.qr,
+    required this.detection,
+    required this.reading,
+    required this.capturedAt,
+  });
+
+  final ExamQr qr;
+  final PageDetection detection;
+  final AnswerSheetReading reading;
+  final DateTime capturedAt;
+}
+
+/// A shared sheet whose filled-in ID does not settle the student: the
+/// teacher picks one from the roster, or discards the photo. Nothing is
+/// queued without a student.
+final class ExamSheetNeedsStudent extends ExamSheetOutcome {
+  const ExamSheetNeedsStudent({
+    required this.pending,
+    required this.reason,
+    this.code,
+    this.suggested,
+  });
+
+  /// The ID names a student whose page is already scanned.
+  static const duplicate = 'duplicate';
+
+  /// The ID was read but no student (or more than one) has it.
+  static const unknown = 'unknown';
+
+  final PendingExamSheet pending;
+
+  /// `blank`, `invalid`, `unclear` (StudentCodeReader), [unknown] or
+  /// [duplicate].
+  final String reason;
+
+  /// The ID that was read, when one was.
+  final String? code;
+
+  /// The student the ID names (only with [duplicate]).
+  final ExamKitStudent? suggested;
+
+  /// What to tell the teacher above the list of students.
+  String get message => switch (reason) {
+    StudentCodeReader.blank =>
+      'ไม่ได้ฝนเลขประจำตัว เลือกนักเรียนของกระดาษใบนี้',
+    StudentCodeReader.invalid =>
+      'เลขประจำตัวฝนไม่ครบหรือฝนซ้ำหลัก เลือกนักเรียนของกระดาษใบนี้',
+    StudentCodeReader.unclear =>
+      'เลขประจำตัวฝนไม่ชัด เลือกนักเรียนของกระดาษใบนี้',
+    duplicate =>
+      'เลขประจำตัว $code เป็นของเลขที่ ${suggested?.studentNumber ?? '-'} '
+          '${suggested?.name ?? ''} ซึ่งสแกนหน้า ${pending.qr.page} แล้ว '
+          'เลือกคนเดิมเพื่อสแกนแทนใบเดิม หรือเลือกนักเรียนที่ถูกต้อง',
+    _ => 'ไม่พบเลขประจำตัว ${code ?? ''} ในห้องนี้ เลือกนักเรียนของกระดาษใบนี้',
+  };
 }
 
 /// Why the teacher's key sheet could not be read, or its proposal.
@@ -118,10 +195,16 @@ class ExamSheetScanner {
   /// Reads a student's answer sheet of [kit] and queues it. [pageOneVersion]
   /// gives the version of page 1 of a student when known (this session or
   /// the server), for page 2.
+  ///
+  /// A shared sheet (§22.19) is queued only when the ID filled in on it
+  /// names exactly one student of the roster whose page is not in yet
+  /// ([alreadyScanned]); otherwise the answer is [ExamSheetNeedsStudent]
+  /// and the caller finishes with [assign] or [discard].
   Future<ExamSheetOutcome> scan(
     String imagePath,
     ExamScanKit kit, {
     required int? Function(int studentId) pageOneVersion,
+    bool Function(int studentId, int page)? alreadyScanned,
     bool acceptBlur = false,
   }) async {
     final capturedAt = _clock();
@@ -146,7 +229,13 @@ class ExamSheetScanner {
           'กระดาษคำตอบนี้พิมพ์จาก layout เวอร์ชัน ${qr.layoutVersion} '
           'แต่ข้อมูลสแกนในเครื่องเป็นเวอร์ชัน ${kit.layoutVersion ?? '-'} '
           'กด "เตรียมสแกน" ใหม่ขณะออนไลน์ หรือพิมพ์กระดาษคำตอบใหม่';
-    } else if (kit.student(qr.studentId) == null) {
+    } else if (qr.shared != kit.codeSheets) {
+      problem = qr.shared
+          ? 'ข้อสอบนี้ใช้กระดาษคำตอบแบบ QR รายคน '
+                'กระดาษแบบฝนเลขประจำตัวใบนี้ใช้ไม่ได้'
+          : 'ข้อสอบนี้ใช้กระดาษคำตอบแบบฝนเลขประจำตัว '
+                'กระดาษแบบ QR รายคนใบนี้ใช้ไม่ได้';
+    } else if (!qr.shared && kit.student(qr.studentId) == null) {
       problem = 'ไม่พบนักเรียนของกระดาษคำตอบนี้ในรายชื่อห้อง';
     }
     final page = kit.layoutPage(qr.page);
@@ -170,6 +259,94 @@ class ExamSheetScanner {
       return ExamSheetRejected(e.message);
     }
 
+    // The photo is not needed any more; the warped page is what is uploaded.
+    await _files.discard([imagePath]);
+    final pending = PendingExamSheet(
+      qr: qr,
+      detection: detection,
+      reading: reading,
+      capturedAt: capturedAt,
+    );
+    if (!qr.shared) {
+      return _enqueue(
+        pending,
+        kit,
+        kit.student(qr.studentId)!,
+        ExamSheetQueued.identifiedByQr,
+        pageOneVersion,
+      );
+    }
+
+    final read = StudentCodeReader.read(
+      reading.digits[StudentCodeReader.sheetNo],
+    );
+    final code = read.code;
+    final student = code == null ? null : kit.studentByCode(code);
+    if (student == null) {
+      return ExamSheetNeedsStudent(
+        pending: pending,
+        reason: read.problem ?? ExamSheetNeedsStudent.unknown,
+        code: code,
+      );
+    }
+    if (alreadyScanned?.call(student.studentId, qr.page) ?? false) {
+      return ExamSheetNeedsStudent(
+        pending: pending,
+        reason: ExamSheetNeedsStudent.duplicate,
+        code: code,
+        suggested: student,
+      );
+    }
+    return _enqueue(
+      pending,
+      kit,
+      student,
+      ExamSheetQueued.identifiedByCode,
+      pageOneVersion,
+    );
+  }
+
+  /// Queues a shared sheet for the student the teacher picked. When the ID
+  /// on the sheet is that student's, the upload says so (`code`) and the
+  /// server checks it; otherwise it is the teacher's word (`teacher`).
+  Future<ExamSheetQueued> assign(
+    PendingExamSheet pending,
+    ExamScanKit kit,
+    ExamKitStudent student, {
+    required int? Function(int studentId) pageOneVersion,
+  }) {
+    final code = StudentCodeReader.read(
+      pending.reading.digits[StudentCodeReader.sheetNo],
+    ).code;
+    final byCode = code != null && code == student.studentCode;
+    return _enqueue(
+      pending,
+      kit,
+      student,
+      byCode
+          ? ExamSheetQueued.identifiedByCode
+          : ExamSheetQueued.identifiedByTeacher,
+      pageOneVersion,
+    );
+  }
+
+  /// Drops a shared sheet the teacher did not assign.
+  Future<void> discard(PendingExamSheet pending) =>
+      _files.discard([pending.reading.warpedPagePath]);
+
+  /// Decides the version, scores the page on the phone and puts it in
+  /// `scan_queue` for [student].
+  Future<ExamSheetQueued> _enqueue(
+    PendingExamSheet pending,
+    ExamScanKit kit,
+    ExamKitStudent student,
+    String identifiedBy,
+    int? Function(int studentId) pageOneVersion,
+  ) async {
+    final reading = pending.reading;
+    final qr = pending.qr.shared
+        ? pending.qr.forStudent(student.studentId)
+        : pending.qr;
     final version = ExamSheetScorer.version(
       kit.versionCount,
       qr.page,
@@ -186,9 +363,13 @@ class ExamSheetScanner {
     final id = _newId();
     final meta = <String, Object?>{
       'client_scan_id': id,
-      'qr': detection.qrPayload,
-      'scanned_at': capturedAt.toUtc().toIso8601String(),
-      'blur_score': detection.blurScore,
+      'qr': pending.detection.qrPayload,
+      'scanned_at': pending.capturedAt.toUtc().toIso8601String(),
+      'blur_score': pending.detection.blurScore,
+      if (qr.shared) ...{
+        'student_id': student.studentId,
+        'student_source': identifiedBy,
+      },
       ...reading.toApiJson(),
       'device_score': ?score?.score,
     };
@@ -199,20 +380,21 @@ class ExamSheetScanner {
       files: files,
       kind: ScanKind.examSheet,
     );
-    await _files.discard([imagePath, reading.warpedPagePath]);
+    await _files.discard([reading.warpedPagePath]);
     _onQueued();
 
     return ExamSheetQueued(
       clientScanId: id,
       qr: qr,
-      student: kit.student(qr.studentId),
+      student: student,
       pageCount: kit.pageCount,
       version: version,
       versionLabel: version.versionNo == null
           ? null
           : kit.versions[version.versionNo]?.label,
       score: score,
-      scannedAt: capturedAt,
+      scannedAt: pending.capturedAt,
+      identifiedBy: identifiedBy,
     );
   }
 
@@ -480,7 +662,12 @@ class ExamScanSession {
       }
       final qr = ExamQr.tryParse(scan.qrPayload);
       if (qr == null || qr.assignmentId != kit.assignmentId) continue;
-      out.putIfAbsent(qr.studentId, () => {}).add(qr.page);
+      // A shared sheet's QR names no student: the queued meta does (§22.19).
+      final studentId = qr.shared
+          ? (scan.meta['student_id'] as num?)?.toInt()
+          : qr.studentId;
+      if (studentId == null) continue;
+      out.putIfAbsent(studentId, () => {}).add(qr.page);
     }
     queued = out;
   }

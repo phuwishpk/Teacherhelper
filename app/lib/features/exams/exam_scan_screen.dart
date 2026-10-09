@@ -152,6 +152,10 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
   ExamQr? _replace;
   int _doneCount = -1;
 
+  /// Shared sheets (§22.19) all carry the same QR, so continuous mode
+  /// takes the next photo only after the sheet it just read left the frame.
+  bool _awaitClear = false;
+
   @override
   void initState() {
     super.initState();
@@ -194,6 +198,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
       _load = load;
       _session = kit != null && kit.printed ? ExamScanSession(kit) : null;
       _gate = FrameGate(examId: widget.examId);
+      _awaitClear = false;
     });
     if (_session == null) return;
     _applyQueue(ref.read(uploadQueueProvider).value);
@@ -309,6 +314,19 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
   Future<void> _onDetection(FrameDetection detection, DateTime now) async {
     final session = _session;
     if (session == null || _busy || !mounted) return;
+    if (session.kit.codeSheets) {
+      // The QR says nothing about the student: no duplicate rule by QR.
+      if (_awaitClear) {
+        if (detection.markersFound < 4) {
+          _gate.reset();
+          setState(() => _awaitClear = false);
+        }
+        return;
+      }
+      final shared = _gate.offer(detection);
+      if (ExamQr.tryParse(shared) != null) await _capture();
+      return;
+    }
     final payload = _gate.offer(detection);
     final qr = ExamQr.tryParse(payload);
     if (qr == null) return;
@@ -352,9 +370,12 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
         path,
         session.kit,
         pageOneVersion: session.pageOneVersion,
+        alreadyScanned: (studentId, page) =>
+            session.pagesOf(studentId).contains(page),
         acceptBlur: acceptBlur,
       );
       final feedback = ref.read(scanFeedbackProvider);
+      ExamSheetOutcome shown = outcome;
       switch (outcome) {
         case ExamSheetQueued():
           session.record(outcome);
@@ -362,8 +383,28 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
         case ExamSheetRejected():
           if (expectedQr != null) _cooldown[expectedQr] = widget.clock();
           unawaited(feedback.failure());
+        case ExamSheetNeedsStudent():
+          // The ID on a shared sheet did not settle the student (§22.19).
+          unawaited(feedback.failure());
+          final picked = mounted ? await _pickStudent(outcome, session) : null;
+          if (picked == null) {
+            await _scanner.discard(outcome.pending);
+            shown = const ExamSheetRejected(
+              'ยังไม่ได้เลือกนักเรียน จึงไม่ได้เก็บภาพนี้ สแกนใบนี้ใหม่ได้',
+            );
+          } else {
+            final queued = await _scanner.assign(
+              outcome.pending,
+              session.kit,
+              picked,
+              pageOneVersion: session.pageOneVersion,
+            );
+            session.record(queued);
+            unawaited(feedback.success());
+            shown = queued;
+          }
       }
-      if (mounted) setState(() => _card = outcome);
+      if (mounted) setState(() => _card = shown);
     } catch (e) {
       if (mounted) {
         setState(
@@ -374,16 +415,85 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _awaitClear = session.kit.codeSheets;
+        });
         await _syncStream();
       }
     }
+  }
+
+  /// The roster to choose the student of a shared sheet from; null when
+  /// the teacher closes it (the photo is dropped).
+  Future<ExamKitStudent?> _pickStudent(
+    ExamSheetNeedsStudent need,
+    ExamScanSession session,
+  ) {
+    final roster = [...session.kit.roster]
+      ..sort((a, b) => a.studentNumber.compareTo(b.studentNumber));
+    final page = need.pending.qr.page;
+    return showModalBottomSheet<ExamKitStudent>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: 0.75,
+          child: Column(
+            key: const ValueKey('exam_scan_pick_student'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  need.message,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final s in roster)
+                      ListTile(
+                        key: ValueKey('pick_student_${s.studentId}'),
+                        selected: need.suggested?.studentId == s.studentId,
+                        leading: CircleAvatar(
+                          child: Text('${s.studentNumber}'),
+                        ),
+                        title: Text(s.name),
+                        subtitle: Text(
+                          [
+                            s.studentCode ?? 'ไม่มีเลขประจำตัว',
+                            if (session.pagesOf(s.studentId).contains(page))
+                              'สแกนหน้า $page แล้ว (เลือกเพื่อสแกนแทน)',
+                          ].join(' · '),
+                        ),
+                        onTap: () => Navigator.of(context).pop(s),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: OutlinedButton(
+                  key: const ValueKey('exam_scan_pick_discard'),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('ไม่ใช่กระดาษของห้องนี้ ทิ้งภาพ'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _setContinuous(bool on) async {
     setState(() {
       _continuous = on;
       _replace = null;
+      _awaitClear = false;
     });
     await _syncStream();
   }
@@ -521,6 +631,16 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
                 ),
               ),
             ),
+            if (kit.codeSheets && kit.studentsWithoutUsableCode > 0)
+              Padding(
+                key: const ValueKey('exam_scan_no_code'),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                child: Text(
+                  'นักเรียน ${kit.studentsWithoutUsableCode} คนไม่มีเลขประจำตัว'
+                  'ที่ฝนได้ ต้องเลือกชื่อเองตอนสแกน',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
             if (load.offline)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
@@ -558,6 +678,8 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
                     ? Text(
                         _busy
                             ? 'กำลังอ่านกระดาษคำตอบ…'
+                            : _awaitClear
+                            ? 'ยกกระดาษใบนี้ออก แล้ววางใบถัดไป'
                             : 'วางกระดาษให้เห็นสัญลักษณ์ครบ 4 มุม แล้วถือให้นิ่ง',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall,
@@ -654,6 +776,8 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
     final card = _card;
     switch (card) {
       case null:
+      case ExamSheetNeedsStudent():
+        // Settled in _capture before a card is shown.
         return const SizedBox.shrink();
       case ExamSheetRejected(:final message, :final keptPhoto):
         return Card(
@@ -723,6 +847,9 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
                               session.kit.versionCount > 1)
                             'ชุด ${card.versionLabel}',
                           if (card.version.doubtful) 'วงชุดไม่ชัด',
+                          if (card.identifiedBy ==
+                              ExamSheetQueued.identifiedByTeacher)
+                            'ครูเลือกชื่อ',
                         ].join(' · '),
                       ),
                       if (card.reviewCount > 0)

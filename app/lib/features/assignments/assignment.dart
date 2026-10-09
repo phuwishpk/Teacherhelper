@@ -85,6 +85,8 @@ class Assignment {
     this.showKeyToStudents = false,
     this.manualFullMarks,
     this.structureLockedAt,
+    this.sheetIdentity = identityQr,
+    this.studentCodeDigits,
     this.gradebookCategoryId,
     this.excludedFromGrade = false,
     this.canManage = true,
@@ -92,6 +94,12 @@ class Assignment {
 
   static const kindHomework = 'homework';
   static const kindExam = 'exam';
+
+  /// Answer sheets printed per student with their QR (DESIGN §22.6).
+  static const identityQr = 'qr';
+
+  /// One shared answer sheet; the student fills in their ID (§22.19).
+  static const identityCode = 'code';
 
   final int id;
   final int classroomId;
@@ -188,6 +196,13 @@ class Assignment {
   /// Exams only: set by the first print; structural edits need an unlock.
   final DateTime? structureLockedAt;
 
+  /// Exams only: how an answer sheet names its student, [identityQr] or
+  /// [identityCode] (§22.19).
+  final String sheetIdentity;
+
+  /// Columns of the student-ID grid (4–13), with [identityCode] only.
+  final int? studentCodeDigits;
+
   /// The gradebook category (DESIGN §23.3); null = "ยังไม่ระบุหมวด".
   final int? gradebookCategoryId;
 
@@ -202,6 +217,9 @@ class Assignment {
   bool get isExam => kind == kindExam;
 
   bool get isManualExam => isExam && gradingMethod == 'manual';
+
+  /// The exam's answer sheet is the shared one with the student-ID grid.
+  bool get usesCodeSheets => isExam && sheetIdentity == identityCode;
 
   bool get isDraft => status == 'draft';
 
@@ -242,6 +260,8 @@ class Assignment {
     showKeyToStudents: showKeyToStudents,
     manualFullMarks: manualFullMarks,
     structureLockedAt: structureLockedAt,
+    sheetIdentity: sheetIdentity,
+    studentCodeDigits: studentCodeDigits,
     gradebookCategoryId: gradebookCategoryId,
     excludedFromGrade: excludedFromGrade,
     canManage: canManage,
@@ -312,6 +332,8 @@ class Assignment {
       showKeyToStudents: json['show_key_to_students'] == true,
       manualFullMarks: (json['manual_full_marks'] as num?)?.toDouble(),
       structureLockedAt: locked is String ? DateTime.tryParse(locked) : null,
+      sheetIdentity: json['sheet_identity'] as String? ?? identityQr,
+      studentCodeDigits: (json['student_code_digits'] as num?)?.toInt(),
       gradebookCategoryId: (json['gradebook_category_id'] as num?)?.toInt(),
       excludedFromGrade: json['excluded_from_grade'] == true,
       canManage: json['can_manage'] != false,

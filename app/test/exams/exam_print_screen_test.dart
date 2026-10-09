@@ -353,4 +353,25 @@ void main() {
     await tapVisible(tester, _key('exam_pdf_save_key_sheet'));
     expect(files.saved, ['exam-40-key-sheet-v3.pdf']);
   });
+
+  testWidgets('an exam with the student-ID grid prints one shared answer '
+      'sheet, also for an empty class', (tester) async {
+    final detail = _approved(lockedAt: '2026-10-01T02:00:00+00:00');
+    (detail['exam'] as Map)
+      ..['sheet_identity'] = 'code'
+      ..['student_code_digits'] = 8;
+    final (repo, files) = await _pump(tester, detail: detail, students: 0);
+
+    expect(find.text('กระดาษคำตอบ (ฝนเลขประจำตัว)'), findsOneWidget);
+    expect(find.textContaining('ฝนเลขประจำตัว 8 หลัก'), findsOneWidget);
+    expect(_key('exam_pick_students'), findsNothing);
+    expect(_key('exam_sheet_students'), findsNothing);
+    expect(_enabled(tester, 'exam_print_answer_sheet'), isTrue);
+
+    await tapVisible(tester, _key('exam_print_answer_sheet'));
+    expect(repo.args('requestPrint'), [
+      {'kind': 'answer_sheet'},
+    ]);
+    expect(files.fetched.single.$2, 'exam-40-answer-sheets-v3.pdf');
+  });
 }

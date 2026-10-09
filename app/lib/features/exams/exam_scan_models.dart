@@ -5,6 +5,11 @@ import 'exam_models.dart';
 
 /// Parsed answer-sheet QR `EVX1.{assignment}.{student}.{page}.{layout}.{sig}`
 /// (DESIGN §22.8). Student 0 is the teacher's key sheet.
+///
+/// The shared sheet of §22.19 is `EVC1.{assignment}.0.{page}.{layout}.{sig}`
+/// ([shared]): its QR names no student, the ID grid on the page does.
+/// [forStudent] gives the QR of such a page once its student is known, so
+/// the rest of the scan flow treats both kinds alike.
 class ExamQr {
   const ExamQr({
     required this.assignmentId,
@@ -12,9 +17,11 @@ class ExamQr {
     required this.page,
     required this.layoutVersion,
     required this.signature,
+    this.shared = false,
   });
 
   static const prefix = 'EVX1';
+  static const sharedPrefix = 'EVC1';
 
   final int assignmentId;
   final int studentId;
@@ -22,21 +29,90 @@ class ExamQr {
   final int layoutVersion;
   final String signature;
 
-  bool get isKeySheet => studentId == 0;
+  /// A shared sheet with the student-ID grid.
+  final bool shared;
+
+  bool get isKeySheet => !shared && studentId == 0;
+
+  /// A shared sheet whose student is not known yet.
+  bool get needsStudent => shared && studentId == 0;
+
+  ExamQr forStudent(int studentId) => ExamQr(
+    assignmentId: assignmentId,
+    studentId: studentId,
+    page: page,
+    layoutVersion: layoutVersion,
+    signature: signature,
+    shared: shared,
+  );
 
   static ExamQr? tryParse(String? payload) {
     if (payload == null) return null;
     final parts = payload.trim().split('.');
-    if (parts.length != 6 || parts[0] != prefix) return null;
+    if (parts.length != 6) return null;
+    final shared = parts[0] == sharedPrefix;
+    if (!shared && parts[0] != prefix) return null;
     final nums = parts.sublist(1, 5).map(int.tryParse).toList();
     if (nums.any((n) => n == null)) return null;
+    if (shared && nums[1] != 0) return null;
     return ExamQr(
       assignmentId: nums[0]!,
       studentId: nums[1]!,
       page: nums[2]!,
       layoutVersion: nums[3]!,
       signature: parts[5],
+      shared: shared,
     );
+  }
+}
+
+/// Reads the student ID filled in on a shared answer sheet (DESIGN §22.19)
+/// from the fill of its grid: the same rules as the server's
+/// `StudentCodeReader`; both run test/fixtures/exam_scoring/codes.json.
+///
+/// A column is a digit when exactly one bubble is filled. Columns left of
+/// the first digit may be empty; an empty column after it or two filled
+/// bubbles in a column are [invalid]; any faint mark is [unclear] (nothing
+/// is guessed); no mark at all is [blank]. Leading zeros are kept.
+abstract final class StudentCodeReader {
+  static const blank = 'blank';
+  static const invalid = 'invalid';
+  static const unclear = 'unclear';
+
+  /// Sheet number of the ID grid in the layout and in `digits`.
+  static const sheetNo = 0;
+
+  static ({String? code, String? problem}) read(DigitFill? block) {
+    var isUnclear = false;
+    var isInvalid = false;
+    final chars = <String>[];
+    for (final column in block?.columns ?? const <Map<String, double>>[]) {
+      final marked = <String>[];
+      for (final e in column.entries) {
+        if (e.value >= ExamSheetScorer.filledFrom) {
+          marked.add(e.key);
+        } else if (e.value >= ExamSheetScorer.ambiguousFrom) {
+          isUnclear = true;
+        }
+      }
+      if (marked.length > 1) isInvalid = true;
+      chars.add(marked.length == 1 ? marked.single : '');
+    }
+
+    final first = chars.indexWhere((c) => c.isNotEmpty);
+    final digits = first < 0 ? const <String>[] : chars.sublist(first);
+    if (digits.any((c) => c.isEmpty)) isInvalid = true;
+    final code = digits.join();
+    if (code.isNotEmpty && !RegExp(r'^\d+$').hasMatch(code)) isInvalid = true;
+
+    final problem = isInvalid
+        ? invalid
+        : isUnclear
+        ? unclear
+        : code.isEmpty
+        ? blank
+        : null;
+    return (code: problem == null ? code : null, problem: problem);
   }
 }
 
@@ -93,11 +169,15 @@ class ExamKitStudent {
     required this.studentId,
     required this.studentNumber,
     required this.name,
+    this.studentCode,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// The student's ID (เลขประจำตัว), null when they have none (§22.19).
+  final String? studentCode;
 }
 
 /// `GET /exams/{id}/scan-kit` (DESIGN §22.9 step 1): what the phone needs
@@ -114,6 +194,8 @@ class ExamScanKit {
     required this.layouts,
     required this.roster,
     required this.json,
+    this.codeSheets = false,
+    this.studentCodeDigits,
   });
 
   final int assignmentId;
@@ -132,6 +214,10 @@ class ExamScanKit {
 
   /// The kit as received, cached in drift.
   final Map<String, dynamic> json;
+
+  /// The exam uses the shared sheet with the student-ID grid (§22.19).
+  final bool codeSheets;
+  final int? studentCodeDigits;
 
   bool get printed => layoutVersion != null && layouts.isNotEmpty;
 
@@ -169,9 +255,12 @@ class ExamScanKit {
             studentId: (s['student_id'] as num).toInt(),
             studentNumber: (s['student_number'] as num?)?.toInt() ?? 0,
             name: s['name'] as String? ?? '',
+            studentCode: s['student_code'] as String?,
           ),
       ],
       json: json,
+      codeSheets: json['sheet_identity'] == 'code',
+      studentCodeDigits: (json['student_code_digits'] as num?)?.toInt(),
     );
   }
 
@@ -196,10 +285,36 @@ class ExamScanKit {
     return null;
   }
 
-  /// Sheet numbers printed on [page] (rows and digit blocks).
+  /// The only student whose ID is [code], or null (none, or several).
+  ExamKitStudent? studentByCode(String code) {
+    ExamKitStudent? found;
+    for (final s in roster) {
+      if (s.studentCode != code) continue;
+      if (found != null) return null;
+      found = s;
+    }
+    return found;
+  }
+
+  /// Students the ID grid can never name: no ID, an ID with letters, or
+  /// one longer than the grid. The teacher picks them by hand.
+  int get studentsWithoutUsableCode {
+    final digits = studentCodeDigits ?? 0;
+    return roster.where((s) {
+      final code = s.studentCode;
+      return code == null ||
+          !RegExp(r'^\d+$').hasMatch(code) ||
+          code.length > digits;
+    }).length;
+  }
+
+  /// Sheet numbers of the questions printed on [page] (rows and digit
+  /// blocks; not the student-ID grid, which is sheet number 0).
   Set<int> sheetNumbersOn(int page) => {
     for (final r in (layoutPage(page)?['regions'] as List? ?? const []))
-      if (r['sheet_no'] != null) (r['sheet_no'] as num).toInt(),
+      if (r['sheet_no'] != null &&
+          (r['sheet_no'] as num).toInt() != StudentCodeReader.sheetNo)
+        (r['sheet_no'] as num).toInt(),
   };
 }
 
