@@ -39,6 +39,44 @@ class ExamSheetCapacityTest extends TestCase
         $this->assertSame(['pages' => $pages, 'overflow' => $overflow], ExamSheetCapacity::of($rows, $numeric));
     }
 
+    /** @return array<string, array{int, int, int, bool}> */
+    public static function codeSheets(): array
+    {
+        return [
+            'empty' => [0, 0, 0, false],
+            'one page of rows' => [60, 0, 1, false],
+            'rows spill to page 2' => [61, 0, 2, false],
+            'two full pages' => [120, 0, 2, false],
+            'too many rows' => [121, 0, 3, true],
+            'one band under sixteen rows' => [16, 4, 1, false],
+            'one band and a row too many' => [17, 4, 2, false],
+            'a second band never fits under the grid' => [0, 5, 2, false],
+            'eight numeric' => [0, 8, 2, false],
+            'nine numeric' => [0, 9, 3, true],
+            'rows fill page 1, numeric on page 2' => [60, 4, 2, false],
+        ];
+    }
+
+    /** DESIGN §22.19: the student-ID grid takes the first 10 rows of every page. */
+    #[DataProvider('codeSheets')]
+    public function test_pages_of_a_sheet_with_the_student_id_grid(int $rows, int $numeric, int $pages, bool $overflow): void
+    {
+        $this->assertSame(
+            ['pages' => $pages, 'overflow' => $overflow],
+            ExamSheetCapacity::of($rows, $numeric, ExamSheetCapacity::CODE_ROWS),
+        );
+    }
+
+    public function test_the_student_id_grid_leaves_fifteen_rows_and_one_band(): void
+    {
+        $reserved = ExamSheetCapacity::CODE_ROWS;
+        $this->assertSame(15, ExamSheetCapacity::rowsPerColumn(0, $reserved));
+        $this->assertSame(60, ExamSheetCapacity::rowCapacity(0, $reserved));
+        $this->assertSame(16, ExamSheetCapacity::rowCapacity(1, $reserved));
+        $this->assertSame(1, ExamSheetCapacity::maxBands($reserved));
+        $this->assertSame(2, ExamSheetCapacity::maxBands());
+    }
+
     public function test_bands_follow_the_last_bubble_row(): void
     {
         // 60 rows need 25 rows a column, so no band fits under them on page 1.

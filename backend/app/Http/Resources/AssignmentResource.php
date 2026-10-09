@@ -69,6 +69,9 @@ class AssignmentResource extends JsonResource
             'manual_full_marks' => $this->manual_full_marks === null ? null : (float) $this->manual_full_marks,
             'shuffle_nonce' => $this->shuffle_nonce,
             'structure_locked_at' => $this->structure_locked_at?->toIso8601String(),
+            // How an answer sheet names its student (DESIGN §22.19).
+            'sheet_identity' => $this->sheet_identity,
+            'student_code_digits' => $this->student_code_digits,
             // Gradebook (DESIGN §23.3): NULL = "ยังไม่ระบุหมวด" (not counted).
             'gradebook_category_id' => $this->gradebook_category_id,
             'excluded_from_grade' => (bool) $this->excluded_from_grade,

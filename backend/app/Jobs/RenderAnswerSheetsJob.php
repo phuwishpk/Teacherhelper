@@ -34,7 +34,7 @@ class RenderAnswerSheetsJob implements ShouldQueue
     public int $timeout = 45;
 
     /**
-     * @param  list<int>  $studentIds  empty for a key sheet
+     * @param  list<int>  $studentIds  empty for a key sheet and for the shared sheet of §22.19
      */
     public function __construct(
         public readonly int $printId,
@@ -58,7 +58,12 @@ class RenderAnswerSheetsJob implements ShouldQueue
             $started = hrtime(true);
             $exam = Assignment::query()->with(['classroom', 'course', 'subject'])->findOrFail($print->assignment_id);
             $layout = $exam->layouts()->where('version', $print->layout_version)->firstOrFail();
-            $students = $print->kind === WorksheetPrint::KIND_KEY_SHEET ? [null] : $this->students($exam);
+            $students = match (true) {
+                $print->kind === WorksheetPrint::KIND_KEY_SHEET => [null],
+                // One shared sheet for the whole class (DESIGN §22.19).
+                $exam->usesCodeSheets() => [ExamSheetPdfRenderer::SHARED_SHEET],
+                default => $this->students($exam),
+            };
             if ($students === []) {
                 return; // everyone in this chunk left the classroom; the merge skips a missing part
             }

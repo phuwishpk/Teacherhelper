@@ -72,7 +72,7 @@ class ExamSheetScorerTest extends TestCase
         if (! is_dir($app)) {
             $this->markTestSkipped('app/ is not next to backend/ in this checkout');
         }
-        foreach (['rows.json', 'digits.json', 'canonical.json'] as $file) {
+        foreach (['rows.json', 'digits.json', 'canonical.json', 'codes.json'] as $file) {
             $this->assertFileEquals(self::DIR.'/'.$file, $app.'/'.$file, "app/test/fixtures/exam_scoring/{$file} differs from the backend copy");
         }
     }

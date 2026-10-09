@@ -78,6 +78,7 @@ class AssignmentController extends Controller
 
         $exam = $request->validated('kind') === Assignment::KIND_EXAM;
         $grading = $exam ? ($request->validated('grading_method') ?? Assignment::GRADING_APP) : null;
+        $codeSheets = $exam && $request->validated('sheet_identity') === Assignment::IDENTITY_CODE; // §22.19
         if ($exam && ($request->validated('mode') ?? Assignment::MODE_WORKSHEET) !== Assignment::MODE_WORKSHEET) {
             throw ValidationException::withMessages(['mode' => 'ข้อสอบไม่ใช้โหมด freeform']);
         }
@@ -104,6 +105,8 @@ class AssignmentController extends Controller
             'duration_minutes' => $exam ? $request->validated('duration_minutes') : null,
             'show_key_to_students' => $exam && (bool) ($request->validated('show_key_to_students') ?? false),
             'manual_full_marks' => $exam ? $request->validated('manual_full_marks') : null,
+            'sheet_identity' => $codeSheets ? Assignment::IDENTITY_CODE : Assignment::IDENTITY_QR,
+            'student_code_digits' => $codeSheets ? (int) $request->validated('student_code_digits') : null,
             'gradebook_category_id' => $categoryId,
             'excluded_from_grade' => (bool) ($request->validated('excluded_from_grade') ?? false),
         ]);

@@ -3,6 +3,7 @@
 namespace App\Domain\Exams;
 
 use App\Exceptions\ApiException;
+use App\Models\Assignment;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -15,6 +16,9 @@ use Illuminate\Validation\ValidationException;
  * - rows must name exactly the page's omr_row sheet numbers and digits
  *   exactly its digit_block sheet numbers, a block with as many columns as
  *   printed; otherwise 422 page_mismatch (read with another page's layout).
+ * - The student-ID grid of a shared sheet (§22.19) is the digit_block with
+ *   sheet number 0, so its fill is `digits["0"]` and is checked like the
+ *   others; studentCode() returns it.
  * - Every printed bubble gets a value: one the phone left out reads 0,
  *   values of bubbles that are not printed are dropped. The sign is null
  *   when the block has no sign bubble; version_fill is null on a page
@@ -34,6 +38,16 @@ final readonly class ExamSheetReading
     ) {}
 
     /**
+     * Fill of the student-ID grid, null on a sheet without one.
+     *
+     * @return array{sign: float|null, columns: list<array<string, float>>}|null
+     */
+    public function studentCode(): ?array
+    {
+        return $this->digits[(string) ExamSheetPlan::CODE_SHEET_NO] ?? null;
+    }
+
+    /**
      * Laravel rules for the reading fields under $prefix ("" or "meta.").
      *
      * @return array<string, mixed>
@@ -51,7 +65,8 @@ final readonly class ExamSheetReading
             "{$prefix}digits" => ['sometimes', 'nullable', 'array', 'max:16'],
             "{$prefix}digits.*" => ['array'],
             "{$prefix}digits.*.sign" => ['nullable', ...$fill],
-            "{$prefix}digits.*.columns" => ['required', 'list', 'max:7'],
+            // 7 columns for an answer, up to 13 for the student-ID grid (§22.19).
+            "{$prefix}digits.*.columns" => ['required', 'list', 'max:'.Assignment::MAX_CODE_DIGITS],
             "{$prefix}digits.*.columns.*" => ['array', 'max:11'],
             "{$prefix}digits.*.columns.*.*" => $fill,
         ];

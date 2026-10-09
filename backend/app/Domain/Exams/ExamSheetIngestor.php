@@ -46,13 +46,22 @@ use Throwable;
  * (422 page_mismatch) and the readings are that page's (422 page_mismatch);
  * the student is in the classroom (422 student_unknown); the page image.
  *
+ * A shared sheet (DESIGN §22.19, QR `EVC1`, exam with sheet_identity = code)
+ * carries no student: meta has student_id and student_source. `code` (the
+ * default) means the phone matched the filled-in student ID with the roster;
+ * the server reads the ID from digits["0"] again and it must be that
+ * student's student_code (422 student_code_mismatch). `teacher` means the
+ * teacher picked the student on the phone and is taken as it is. A QR of
+ * the other kind than the exam's sheet_identity is 422 qr_invalid.
+ *
  * Rescans follow §9.4 keyed by (exam, student, page): before publishing the
  * new page replaces the old one at once; after publishing it waits as
  * pending_confirm until POST /scans/{id}/confirm-replace (confirmReplace()).
  *
  * Answer: 201 (200 replay, 202 pending_confirm) {scan_id, submission_id,
- * state, page_no, page_count, version_no, score, max_score, doubts[],
- * needs_version}. score / max_score are this page's by the server's code;
+ * student_id, identified_by, state, page_no, page_count, version_no, score,
+ * max_score, doubts[], needs_version}. identified_by is qr, code or teacher
+ * (§22.19). score / max_score are this page's by the server's code;
  * null while the version is unknown. The phone's own score is kept in
  * exam_sheet_reads.device_score for comparison only.
  */
@@ -72,8 +81,9 @@ final class ExamSheetIngestor
         }
 
         $validated = self::validateMeta($meta);
-        $qr = self::verifyQr($validated['qr']);
-        if ($qr->isAnonymous()) {
+        $shared = false;
+        $qr = self::verifyAnyQr($validated['qr'], $shared);
+        if (! $shared && $qr->isAnonymous()) {
             throw new ApiException('นี่คือกระดาษเฉลยของครู สแกนในหน้า "สแกนกระดาษเฉลย" ของข้อสอบแทน', 'qr_invalid', 422);
         }
         $exam = Assignment::query()->with('classroom')->find($qr->assignmentId);
@@ -85,15 +95,30 @@ final class ExamSheetIngestor
         if ($exam->isManualExam()) {
             throw new ApiException('ข้อสอบนี้ครูตรวจเอง ไม่รับกระดาษคำตอบ', 'exam_manual_grading', 422);
         }
+        if ($shared !== $exam->usesCodeSheets()) {
+            throw new ApiException(
+                $shared
+                    ? 'ข้อสอบนี้ใช้กระดาษคำตอบแบบ QR รายคน กระดาษแบบฝนเลขประจำตัวใบนี้ใช้ไม่ได้ ต้องพิมพ์กระดาษคำตอบใหม่'
+                    : 'ข้อสอบนี้ใช้กระดาษคำตอบแบบฝนเลขประจำตัว กระดาษแบบ QR รายคนใบนี้ใช้ไม่ได้ ต้องพิมพ์กระดาษคำตอบใหม่',
+                'qr_invalid',
+                422,
+            );
+        }
         [$layout, $page] = self::currentPage($exam, $qr);
-        if (! ClassroomStudent::query()->where('classroom_id', $exam->classroom_id)->where('student_id', $qr->studentId)->exists()) {
+        $studentId = $shared ? self::sharedStudentId($validated) : $qr->studentId;
+        if (! ClassroomStudent::query()->where('classroom_id', $exam->classroom_id)->where('student_id', $studentId)->exists()) {
             throw new ApiException('ไม่พบนักเรียนของกระดาษคำตอบนี้ในห้องเรียน', 'student_unknown', 422);
         }
         $reading = ExamSheetReading::against($validated['version_fill'] ?? null, $validated['rows'], $validated['digits'] ?? null, $page);
+        $identity = ['identified_by' => ExamSheetRead::IDENTIFIED_BY_QR, 'student_code_read' => null];
+        if ($shared) {
+            $identity = self::sharedIdentity($studentId, $validated['student_source'] ?? null, $reading);
+            $qr = new WorksheetQr($qr->assignmentId, $studentId, $qr->page, $qr->layoutVersion);
+        }
         $file = self::validatedPage($request);
 
         try {
-            $scan = $this->store($user, $exam, $qr, $validated, $reading, $file);
+            $scan = $this->store($user, $exam, $qr, $validated, $reading, $file, $identity);
         } catch (UniqueConstraintViolationException $e) {
             $replay = $this->replay($user, (string) $validated['client_scan_id']);
             if ($replay === null) {
@@ -177,6 +202,8 @@ final class ExamSheetIngestor
         $body = [
             'scan_id' => $scan->id,
             'submission_id' => $scan->submission_id,
+            'student_id' => (int) Submission::query()->whereKey($scan->submission_id)->value('student_id'),
+            'identified_by' => $read instanceof ExamSheetRead ? $read->identified_by : ExamSheetRead::IDENTIFIED_BY_QR,
             'state' => $scan->state,
             'page_no' => $scan->page_no,
             'page_count' => $layout?->pageCount() ?? 0,
@@ -227,8 +254,9 @@ final class ExamSheetIngestor
 
     /**
      * @param  array<string, mixed>  $meta
+     * @param  array{identified_by: string, student_code_read: string|null}  $identity
      */
-    private function store(User $user, Assignment $exam, WorksheetQr $qr, array $meta, ExamSheetReading $reading, UploadedFile $file): Scan
+    private function store(User $user, Assignment $exam, WorksheetQr $qr, array $meta, ExamSheetReading $reading, UploadedFile $file, array $identity): Scan
     {
         $created = Submission::query()->createOrFirst([
             'assignment_id' => $exam->id,
@@ -238,7 +266,7 @@ final class ExamSheetIngestor
 
         $written = null;
         try {
-            return DB::transaction(function () use ($user, $exam, $qr, $meta, $reading, $file, $submissionId, &$written) {
+            return DB::transaction(function () use ($user, $exam, $qr, $meta, $reading, $file, $submissionId, $identity, &$written) {
                 $submission = Submission::query()->lockForUpdate()->findOrFail($submissionId);
                 $published = $submission->isPublished();
 
@@ -266,6 +294,7 @@ final class ExamSheetIngestor
                     'rows_fill' => $reading->rows,
                     'digits_fill' => $reading->digits === [] ? null : $reading->digits,
                     'device_score' => isset($meta['device_score']) ? round((float) $meta['device_score'], 2) : null,
+                    ...$identity,
                 ]);
 
                 if ($published) {
@@ -353,6 +382,67 @@ final class ExamSheetIngestor
         throw new ApiException("กระดาษคำตอบนี้มี {$layout->pageCount()} หน้า ไม่มีหน้า {$qr->page}", 'page_mismatch', 422);
     }
 
+    /**
+     * The student a shared sheet was scanned for (meta.student_id).
+     *
+     * @param  array<string, mixed>  $meta
+     *
+     * @throws ValidationException errors.student_id
+     */
+    private static function sharedStudentId(array $meta): int
+    {
+        $id = $meta['student_id'] ?? null;
+        if ($id === null) {
+            throw ValidationException::withMessages(['student_id' => ['ไม่มีนักเรียนของกระดาษคำตอบนี้ (student_id)']]);
+        }
+
+        return (int) $id;
+    }
+
+    /**
+     * Who named the student of a shared sheet, checked: when the phone says
+     * the filled-in ID did (`code`), the server reads the grid itself and it
+     * must be this student's ID.
+     *
+     * @return array{identified_by: string, student_code_read: string|null}
+     *
+     * @throws ApiException 422 student_code_mismatch
+     */
+    private static function sharedIdentity(int $studentId, ?string $source, ExamSheetReading $reading): array
+    {
+        $read = StudentCodeReader::read($reading->studentCode())['code'];
+        if ($source === ExamSheetRead::IDENTIFIED_BY_TEACHER) {
+            return ['identified_by' => ExamSheetRead::IDENTIFIED_BY_TEACHER, 'student_code_read' => $read];
+        }
+        $code = User::query()->whereKey($studentId)->value('student_code');
+        if ($read === null || $code === null || $read !== (string) $code) {
+            throw new ApiException(
+                'เลขประจำตัวที่ฝนบนกระดาษไม่ตรงกับนักเรียนคนนี้ ให้ครูเลือกชื่อนักเรียนของกระดาษใบนี้',
+                'student_code_mismatch',
+                422,
+            );
+        }
+
+        return ['identified_by' => ExamSheetRead::IDENTIFIED_BY_CODE, 'student_code_read' => $read];
+    }
+
+    /**
+     * An answer sheet printed for a student (`EVX1`) or the shared sheet of
+     * §22.19 (`EVC1`, $shared is set).
+     */
+    private static function verifyAnyQr(string $payload, bool &$shared): WorksheetQr
+    {
+        try {
+            $signer = app(QrSigner::class);
+        } catch (QrSigningKeyMissing) {
+            throw new ApiException(QrSigningKeyMissing::USER_MESSAGE, 'qr_key_missing', 503);
+        }
+        $qr = $signer->verifyCodeSheet(trim($payload));
+        $shared = $qr !== null;
+
+        return $qr ?? self::verifyQr($payload);
+    }
+
     public static function verifyQr(string $payload): WorksheetQr
     {
         try {
@@ -437,6 +527,9 @@ final class ExamSheetIngestor
             'scanned_at' => ['required', 'date', 'after:2020-01-01'],
             'blur_score' => ['required', 'numeric', 'min:0', 'max:1000000'],
             'device_score' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999'],
+            // Shared sheets only (§22.19); ignored for a sheet with the student's QR.
+            'student_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'student_source' => ['sometimes', 'nullable', 'string', 'in:'.ExamSheetRead::IDENTIFIED_BY_CODE.','.ExamSheetRead::IDENTIFIED_BY_TEACHER],
             ...ExamSheetReading::rules(),
         ];
         $messages = [
@@ -447,6 +540,9 @@ final class ExamSheetIngestor
             'scanned_at.date' => 'เวลาที่สแกนไม่ถูกต้อง',
             'scanned_at.after' => 'เวลาที่สแกนไม่ถูกต้อง',
             'blur_score.required' => 'ไม่มีค่าความคมชัดของภาพ (blur_score)',
+            'student_id.integer' => 'นักเรียนของกระดาษคำตอบ (student_id) ไม่ถูกต้อง',
+            'student_id.min' => 'นักเรียนของกระดาษคำตอบ (student_id) ไม่ถูกต้อง',
+            'student_source.in' => 'student_source ต้องเป็น code หรือ teacher',
             'string' => ':attribute ต้องเป็นข้อความ',
             'uuid' => ':attribute ต้องเป็น UUID',
             'date' => ':attribute ต้องเป็นวันเวลาที่ถูกต้อง',

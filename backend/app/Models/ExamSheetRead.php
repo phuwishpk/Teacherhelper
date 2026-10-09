@@ -26,6 +26,8 @@ use Illuminate\Support\Carbon;
  * @property array<string, array<string, float>> $rows_fill
  * @property array<string, array{sign: float|null, columns: list<array<string, float>>}>|null $digits_fill
  * @property float|null $device_score
+ * @property string $identified_by
+ * @property string|null $student_code_read
  * @property list<array{sheet_no: int|null, reason: string}>|null $doubts
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -39,6 +41,15 @@ class ExamSheetRead extends Model
     public const SOURCE_TEACHER = 'teacher';
 
     public const SOURCE_PAGE_ONE = 'page_one';
+
+    /** The student of the page came from the QR printed for them (DESIGN §22.6). */
+    public const IDENTIFIED_BY_QR = 'qr';
+
+    /** The student ID filled in on the sheet matched the roster (DESIGN §22.19). */
+    public const IDENTIFIED_BY_CODE = 'code';
+
+    /** The teacher picked the student on the phone (DESIGN §22.19). */
+    public const IDENTIFIED_BY_TEACHER = 'teacher';
 
     protected $primaryKey = 'scan_id';
 
@@ -54,6 +65,8 @@ class ExamSheetRead extends Model
         'digits_fill',
         'device_score',
         'doubts',
+        'identified_by',
+        'student_code_read',
     ];
 
     /**

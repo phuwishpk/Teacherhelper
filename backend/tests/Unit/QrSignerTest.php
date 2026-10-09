@@ -123,4 +123,22 @@ class QrSignerTest extends TestCase
         $this->assertNull($signer->verifyExamSheet(substr($exam, 0, -8).'AAAAAAAA'));
         $this->assertNull((new QrSigner('another-key'))->verifyExamSheet($exam));
     }
+
+    public function test_a_shared_answer_sheet_has_its_own_prefix_and_no_student(): void
+    {
+        $signer = new QrSigner(self::KEY);
+        $payload = $signer->signCodeSheet(301, 2, 4);
+
+        $this->assertStringStartsWith('EVC1.301.0.2.4.', $payload);
+        $qr = $signer->verifyCodeSheet($payload);
+        $this->assertNotNull($qr);
+        $this->assertSame([301, 0, 2, 4], [$qr->assignmentId, $qr->studentId, $qr->page, $qr->layoutVersion]);
+        // Neither a worksheet nor an answer sheet printed for a student, and the other way round.
+        $this->assertNull($signer->verify($payload));
+        $this->assertNull($signer->verifyExamSheet($payload));
+        $this->assertNull($signer->verifyCodeSheet($signer->signExamSheet(301, 0, 2, 4)));
+        // The signature of the key sheet with the same numbers does not carry over.
+        $keySheet = $signer->signExamSheet(301, 0, 2, 4);
+        $this->assertNull($signer->verifyCodeSheet('EVC1'.substr($keySheet, 4)));
+    }
 }

@@ -64,7 +64,7 @@ final class ExamPayload
             'booklet_incomplete_questions' => ExamKeyCheck::bookletProblems($exam, $questions),
             'versions_ready' => ExamVersions::ready($exam),
             'structure_locked_at' => $exam->structure_locked_at?->toIso8601String(),
-            'sheet' => ExamSheetCapacity::of($questions->count() - $numeric, $numeric),
+            'sheet' => ExamSheetCapacity::of($questions->count() - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
             'page_images' => ExamPageImage::query()->where('assignment_id', $exam->id)->orderBy('source_document_id')->orderBy('page_no')->get()
                 ->map(fn (ExamPageImage $p) => $p->toApi())->values()->all(),
             'figures_pending' => ExamFigures::pending($exam),

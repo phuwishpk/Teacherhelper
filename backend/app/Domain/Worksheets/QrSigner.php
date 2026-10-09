@@ -8,6 +8,7 @@ namespace App\Domain\Worksheets;
  *
  *   EV1.{assignment_id}.{student_id}.{page}.{layout_version}.{sig}
  *   EVX1.{assignment_id}.{student_id}.{page}.{layout_version}.{sig}
+ *   EVC1.{assignment_id}.0.{page}.{layout_version}.{sig}   (shared sheet, DESIGN §22.19)
  *
  * sig = the first 5 bytes of HMAC-SHA256(prefix, QR_SIGNING_KEY) in RFC 4648
  * base32 (8 characters, no padding), where prefix is everything before the
@@ -23,11 +24,14 @@ class QrSigner
 
     public const EXAM_PREFIX = 'EVX1';
 
+    /** The shared answer sheet with the student-ID grid: the student field is always 0 (DESIGN §22.19). */
+    public const CODE_SHEET_PREFIX = 'EVC1';
+
     private const SIG_BYTES = 5;
 
     private const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-    private const PATTERN = '/\A(EV1|EVX1)\.(0|[1-9]\d{0,18})\.(0|[1-9]\d{0,18})\.([1-9]\d{0,2})\.([1-9]\d{0,4})\.([A-Z2-7]{8})\z/';
+    private const PATTERN = '/\A(EV1|EVX1|EVC1)\.(0|[1-9]\d{0,18})\.(0|[1-9]\d{0,18})\.([1-9]\d{0,2})\.([1-9]\d{0,4})\.([A-Z2-7]{8})\z/';
 
     private readonly string $key;
 
@@ -61,6 +65,12 @@ class QrSigner
         return $this->signWith(self::EXAM_PREFIX, $assignmentId, $studentId, $page, $layoutVersion);
     }
 
+    /** The QR of the shared answer sheet of an exam with sheet_identity = code (DESIGN §22.19). */
+    public function signCodeSheet(int $assignmentId, int $page, int $layoutVersion): string
+    {
+        return $this->signWith(self::CODE_SHEET_PREFIX, $assignmentId, 0, $page, $layoutVersion);
+    }
+
     /**
      * Parses and verifies a scanned payload. Returns null for anything that is
      * not a well-formed, correctly signed worksheet QR.
@@ -74,6 +84,14 @@ class QrSigner
     public function verifyExamSheet(string $payload): ?WorksheetQr
     {
         return $this->verifyWith(self::EXAM_PREFIX, $payload);
+    }
+
+    /** Like verify() for a shared answer sheet (`EVC1`); its studentId is 0. */
+    public function verifyCodeSheet(string $payload): ?WorksheetQr
+    {
+        $qr = $this->verifyWith(self::CODE_SHEET_PREFIX, $payload);
+
+        return $qr !== null && $qr->studentId === 0 ? $qr : null;
     }
 
     private function signWith(string $type, int $assignmentId, int $studentId, int $page, int $layoutVersion): string

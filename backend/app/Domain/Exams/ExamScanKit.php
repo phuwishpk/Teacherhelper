@@ -13,9 +13,14 @@ use App\Models\User;
  * §22.9 step 1, GET /exams/{id}/scan-kit):
  *
  *   {assignment_id, title, layout_version, page_count, version_count,
+ *    sheet_identity, student_code_digits,
  *    kit_hash, versions: [{version_no, label, key: [{sheet_no, question_id,
  *    type, points, accepted_options | accepted_values}]}], layouts: [page],
- *    roster: [{student_id, student_number, name}]}
+ *    roster: [{student_id, student_number, name, student_code}]}
+ *
+ * sheet_identity `code` (§22.19): the sheets carry no student, the phone
+ * reads the student ID from the grid and finds it in the roster's
+ * student_code (null for a student without one).
  *
  * Keys are per version by the number on the sheet, mcq options as the
  * displayed positions of that version (ExamVersions::keyOf). layouts are the
@@ -60,6 +65,7 @@ final class ExamScanKit
             'student_id' => (int) $s->id,
             'student_number' => (int) $s->pivot->student_number,
             'name' => (string) $s->name,
+            'student_code' => $s->student_code,
         ])->values()->all();
 
         $kit = [
@@ -68,6 +74,8 @@ final class ExamScanKit
             'layout_version' => $layout?->version,
             'page_count' => $layout?->pageCount() ?? 0,
             'version_count' => (int) $exam->version_count,
+            'sheet_identity' => (string) $exam->sheet_identity,
+            'student_code_digits' => $exam->student_code_digits,
             'versions' => $versions,
             'layouts' => $layout === null ? [] : array_values($layout->pages),
             'roster' => $roster,

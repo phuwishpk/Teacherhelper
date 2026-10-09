@@ -47,6 +47,8 @@ class UpdateAssignmentRequest extends FormRequest
             'version_count' => ['sometimes', 'required', 'integer', 'min:1', 'max:'.ExamVersions::maxVersions()],
             'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
             'show_key_to_students' => ['sometimes', 'required', 'boolean'],
+            'sheet_identity' => ['sometimes', 'required', Rule::in(Assignment::SHEET_IDENTITIES)],
+            'student_code_digits' => ['sometimes', 'nullable', 'integer', 'min:'.Assignment::MIN_CODE_DIGITS, 'max:'.Assignment::MAX_CODE_DIGITS],
             'manual_full_marks' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
             'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'excluded_from_grade' => ['sometimes', 'required', 'boolean'],
