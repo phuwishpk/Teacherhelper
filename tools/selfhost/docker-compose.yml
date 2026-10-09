@@ -1,0 +1,73 @@
+# EduVision on the self-hosted Docker server (docs/SELFHOST.md).
+# Run it through tools/selfhost/compose.sh: paths below are relative to the
+# deployment folder (the parent of this clone), which holds app.env, .env and
+# web/app. The app listens on 127.0.0.1:8085 only; whatever makes the site
+# public (a tunnel or a reverse proxy) sits in front of it.
+name: eduvision
+
+services:
+  db:
+    image: mariadb:11.8
+    container_name: eduvision-db
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_DATABASE: eduvision
+      MARIADB_USER: eduvision
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set in .env of the deployment folder}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set in .env of the deployment folder}
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  app:
+    build:
+      context: ${EDUVISION_REPO:?run this through tools/selfhost/compose.sh}
+      dockerfile: tools/selfhost/Dockerfile
+    image: eduvision-app
+    container_name: eduvision-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8085:80"
+    volumes:
+      - ./app.env:/run/eduvision/app.env:ro
+      - storage:/var/www/html/storage
+      - ./web/app:/var/www/html/public/app:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # The cron of the Plesk host as a loop (worker.sh), same image as the app.
+  worker:
+    image: eduvision-app
+    container_name: eduvision-worker
+    restart: unless-stopped
+    depends_on:
+      - app
+    # An init process as PID 1, so a stop reaches the loop at once. A pass cut
+    # short is safe: the database queue hands its job out again (retry_after).
+    init: true
+    command: ["runuser", "-u", "www-data", "--", "eduvision-worker"]
+    volumes:
+      - ./app.env:/run/eduvision/app.env:ro
+      - storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+volumes:
+  db:
+  storage:
