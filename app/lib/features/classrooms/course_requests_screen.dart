@@ -34,6 +34,7 @@ class _CourseRequestsScreenState extends State<CourseRequestsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('คำขอผูกรายวิชา')),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'course_request_new',
         onPressed: () => context.push(AppRoutes.courseRequestNew()),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/breakpoints.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -430,7 +431,12 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
             if (c.classrooms.length > 1)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                padding: EdgeInsets.fromLTRB(
+                  context.pageGutter,
+                  12,
+                  context.pageGutter,
+                  0,
+                ),
                 child: Row(
                   children: [
                     for (final r in c.classrooms)
@@ -471,7 +477,12 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          padding: EdgeInsets.fromLTRB(
+            context.pageGutter,
+            12,
+            context.pageGutter,
+            8,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

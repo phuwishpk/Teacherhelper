@@ -808,33 +808,27 @@ class _ApproveBar extends StatelessWidget {
         !key.approved &&
         key.keyComplete &&
         key.questions.isNotEmpty;
-    return SafeArea(
-      child: Material(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  note,
-                  style: TextStyle(
-                    color: key.keyComplete || key.questions.isEmpty
-                        ? null
-                        : theme.colorScheme.error,
-                  ),
-                ),
+    return BottomActionBar(
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              note,
+              style: TextStyle(
+                color: key.keyComplete || key.questions.isEmpty
+                    ? null
+                    : theme.colorScheme.error,
               ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                key: const ValueKey('approve_key'),
-                onPressed: canApprove ? onApprove : null,
-                icon: const Icon(Icons.verified_outlined),
-                label: const Text('อนุมัติเฉลย'),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            key: const ValueKey('approve_key'),
+            onPressed: canApprove ? onApprove : null,
+            icon: const Icon(Icons.verified_outlined),
+            label: const Text('อนุมัติเฉลย'),
+          ),
+        ],
       ),
     );
   }

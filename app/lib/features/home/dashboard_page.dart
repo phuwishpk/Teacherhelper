@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/user.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/breakpoints.dart';
 import '../assignments/assignments_providers.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
@@ -48,11 +49,13 @@ class DashboardPage extends ConsumerWidget {
     final openAssignments = assignments.value
         ?.where((a) => !a.isDraft && a.status != 'closed')
         .length;
+    final gutter = context.pageGutter;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
+        constraints: const BoxConstraints(maxWidth: 840),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          // Room at the bottom for the phone's "สแกนใบงาน" button.
+          padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 96),
           children: [
             Card(
               child: ListTile(

@@ -208,44 +208,41 @@ class _ExamImportReviewScreenState
       appBar: AppBar(title: const Text('ตรวจข้อที่อ่านจากไฟล์')),
       bottomNavigationBar: drafts.isEmpty
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Row(
-                  children: [
-                    TextButton(
-                      key: const ValueKey('read_review_select_all'),
-                      onPressed: _busy
+          : BottomActionBar(
+              child: Row(
+                children: [
+                  TextButton(
+                    key: const ValueKey('read_review_select_all'),
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                            if (_selected.length == drafts.length) {
+                              _selected.clear();
+                            } else {
+                              _selected.addAll(drafts.map((q) => q.id));
+                            }
+                          }),
+                    child: Text(
+                      _selected.length == drafts.length
+                          ? 'ไม่เลือกเลย'
+                          : 'เลือกทั้งหมด',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      key: const ValueKey('read_review_approve_selected'),
+                      onPressed: _busy || _selected.isEmpty
                           ? null
-                          : () => setState(() {
-                              if (_selected.length == drafts.length) {
-                                _selected.clear();
-                              } else {
-                                _selected.addAll(drafts.map((q) => q.id));
-                              }
-                            }),
-                      child: Text(
-                        _selected.length == drafts.length
-                            ? 'ไม่เลือกเลย'
-                            : 'เลือกทั้งหมด',
+                          : () => _approve(_selected.toList()..sort()),
+                      icon: const Icon(Icons.done_all),
+                      label: Text(
+                        'อนุมัติที่เลือก (${_selected.length})',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: const ValueKey('read_review_approve_selected'),
-                        onPressed: _busy || _selected.isEmpty
-                            ? null
-                            : () => _approve(_selected.toList()..sort()),
-                        icon: const Icon(Icons.done_all),
-                        label: Text(
-                          'อนุมัติที่เลือก (${_selected.length})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
       body: AsyncView(

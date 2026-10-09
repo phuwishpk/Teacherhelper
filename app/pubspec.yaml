@@ -44,3 +44,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # The app's typeface (AppTheme.fontFamily): IBM Plex Sans Thai Looped, SIL
+  # Open Font License 1.1 (assets/fonts/IBMPlexSansThaiLooped-OFL.txt). Bundled
+  # so Thai text looks the same on Android and on the web, without fetching
+  # a font at run time.
+  assets:
+    - assets/fonts/IBMPlexSansThaiLooped-OFL.txt
+  fonts:
+    - family: IBM Plex Sans Thai Looped
+      fonts:
+        - asset: assets/fonts/IBMPlexSansThaiLooped-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexSansThaiLooped-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexSansThaiLooped-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexSansThaiLooped-Bold.ttf
+          weight: 700

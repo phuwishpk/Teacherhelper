@@ -206,10 +206,35 @@ class _ClosedClassroomsList extends ConsumerWidget {
 /// "นำเข้าจาก Google Classroom" above it when the server has Google
 /// Classroom set up (DESIGN §19.2).
 class ClassroomsFab extends ConsumerWidget {
-  const ClassroomsFab({super.key});
+  const ClassroomsFab({super.key, this.inline = false});
+
+  /// Buttons in a row for the page header of the desktop layout, instead
+  /// of floating action buttons (DESIGN §27.3).
+  final bool inline;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (inline) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (ref.watch(googleClassroomEnabledProvider)) ...[
+            OutlinedButton.icon(
+              key: const ValueKey('classroom_import_google'),
+              onPressed: () => context.push(AppRoutes.classroomImportGoogle),
+              icon: const Icon(Icons.cloud_download_outlined, size: 20),
+              label: const Text('นำเข้าจาก Google Classroom'),
+            ),
+            const SizedBox(width: 8),
+          ],
+          FilledButton.icon(
+            onPressed: () => context.push(AppRoutes.classroomNew),
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('สร้างห้องเรียน'),
+          ),
+        ],
+      );
+    }
     final create = FloatingActionButton.extended(
       heroTag: 'classroom_new',
       onPressed: () => context.push(AppRoutes.classroomNew),
@@ -224,6 +249,9 @@ class ClassroomsFab extends ConsumerWidget {
         FloatingActionButton.extended(
           key: const ValueKey('classroom_import_google'),
           heroTag: 'classroom_import_google',
+          // The second action is quieter than "สร้างห้องเรียน" below it.
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+          foregroundColor: Theme.of(context).colorScheme.primary,
           onPressed: () => context.push(AppRoutes.classroomImportGoogle),
           icon: const Icon(Icons.cloud_download_outlined),
           label: const Text('นำเข้าจาก Google Classroom'),

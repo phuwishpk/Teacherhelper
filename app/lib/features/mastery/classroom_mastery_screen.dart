@@ -171,12 +171,22 @@ class _ClassroomMasteryScreenState
                       else ...[
                         _WeakSkillsCard(mastery: m),
                         const SizedBox(height: 12),
-                        const MasteryLegend(),
-                        const SizedBox(height: 12),
-                        MasteryHeatmap(
-                          mastery: m,
-                          onStudent: (s) => context.push(
-                            AppRoutes.studentMastery(classroomId, s.id),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const MasteryLegend(),
+                                const SizedBox(height: 16),
+                                MasteryHeatmap(
+                                  mastery: m,
+                                  onStudent: (s) => context.push(
+                                    AppRoutes.studentMastery(classroomId, s.id),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

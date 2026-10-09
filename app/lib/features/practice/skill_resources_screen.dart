@@ -45,6 +45,7 @@ class SkillResourcesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(skill == null ? 'ลิงก์ทบทวน' : 'ลิงก์ทบทวน ${skill!.code}'),
       ),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'resource_add',
         onPressed: () => _add(context, ref),

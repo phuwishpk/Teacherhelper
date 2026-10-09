@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,12 +34,29 @@ Color scanStateColor(BuildContext context, ScanState state) {
 }
 
 /// Lists queued scans with their upload state and the actions a teacher can
-/// take on each (DESIGN §6.4, §9.4).
+/// take on each (DESIGN §6.4, §9.4). The queue lives in the on-device
+/// database, which the web app does not have (§25): there the page only
+/// explains that.
 class UploadQueueScreen extends ConsumerWidget {
-  const UploadQueueScreen({super.key});
+  const UploadQueueScreen({super.key, this.supported = !kIsWeb});
+
+  final bool supported;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!supported) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('คิวอัปโหลด')),
+        body: const EmptyView(
+          key: ValueKey('upload_queue_unsupported'),
+          icon: Icons.phone_android,
+          title: 'คิวอัปโหลดมีเฉพาะในแอป Android',
+          message:
+              'บนเว็บ รูปหรือ PDF ที่อัปโหลดจะส่งถึงเซิร์ฟเวอร์ทันที '
+              'จึงไม่มีงานค้างในเครื่อง',
+        ),
+      );
+    }
     final queue = ref.watch(uploadQueueProvider);
     final busy = ref.watch(uploadQueueActionsProvider);
     final actions = ref.read(uploadQueueActionsProvider.notifier);
@@ -54,6 +72,7 @@ class UploadQueueScreen extends ConsumerWidget {
           ),
         ],
       ),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: busy
             ? null

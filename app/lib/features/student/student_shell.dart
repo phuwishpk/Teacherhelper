@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/adaptive_shell.dart';
 import '../auth/sign_out_action.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
@@ -34,8 +35,6 @@ const _destinations = [
 /// The index of "แบบฝึก".
 const _practiceIndex = 3;
 
-const _railBreakpoint = 840.0;
-
 /// Student-side shell: "วิชาของฉัน" first, one card per course of every
 /// classroom with its grade (DESIGN §24.11, §24.13; every grade under
 /// "เกรดทั้งหมด", §23.9), then work to hand in (§19.6) and published results
@@ -56,7 +55,6 @@ class _StudentShellState extends ConsumerState<StudentShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
 
     final pages = <Widget>[
       const MySubjectsPage(),
@@ -65,60 +63,31 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       const PracticePage(),
       MasteryPage(onPractice: () => setState(() => _index = _practiceIndex)),
     ];
-    final body = IndexedStack(index: _index, children: pages);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(user == null ? 'EduVision' : 'สวัสดี ${user.name}'),
-        actions: [
-          IconButton(
-            key: const ValueKey('student_account_button'),
-            tooltip: 'บัญชีของฉัน',
-            icon: const Icon(Icons.account_circle_outlined),
-            onPressed: () => context.push(AppRoutes.studentAccount),
-          ),
-          IconButton(
-            tooltip: 'ออกจากระบบ',
-            icon: const Icon(Icons.logout),
-            onPressed: () => confirmSignOut(context, ref),
-          ),
-        ],
-      ),
-      body: wide
-          ? Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _index,
-                  onDestinationSelected: _select,
-                  labelType: NavigationRailLabelType.all,
-                  destinations: [
-                    for (final d in _destinations)
-                      NavigationRailDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: Text(d.label),
-                      ),
-                  ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: body),
-              ],
-            )
-          : body,
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: _select,
-              destinations: [
-                for (final d in _destinations)
-                  NavigationDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selectedIcon),
-                    label: d.label,
-                  ),
-              ],
-            ),
+    return AdaptiveShell(
+      title: user == null ? 'EduVision' : 'สวัสดี ${user.name}',
+      accountName: user?.name,
+      accountCaption: user?.schoolName,
+      destinations: [
+        for (final d in _destinations)
+          ShellDestination(d.label, d.icon, d.selectedIcon),
+      ],
+      selectedIndex: _index,
+      onSelected: _select,
+      actions: [
+        ShellAction(
+          key: const ValueKey('student_account_button'),
+          tooltip: 'บัญชีของฉัน',
+          icon: Icons.account_circle_outlined,
+          onPressed: () => context.push(AppRoutes.studentAccount),
+        ),
+        ShellAction(
+          tooltip: 'ออกจากระบบ',
+          icon: Icons.logout,
+          onPressed: () => confirmSignOut(context, ref),
+        ),
+      ],
+      body: IndexedStack(index: _index, children: pages),
     );
   }
 }
