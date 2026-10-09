@@ -114,7 +114,8 @@ abstract final class ExamPrintReadiness {
   }
 
   static const _overflow =
-      'ข้อมากเกินกระดาษคำตอบ 2 หน้า ลดจำนวนข้อหรือจำนวนหลักของตอนเติมตัวเลข';
+      'ข้อมากเกินกระดาษคำตอบ 2 หน้า ลดจำนวนข้อหรือจำนวนหลักของตอนเติมตัวเลข '
+      '(กระดาษแบบฝนเลขประจำตัวมีที่หน้าละ 60 ข้อ)';
 }
 
 enum ExamPrintPhase { requesting, rendering, downloading, ready, failed }

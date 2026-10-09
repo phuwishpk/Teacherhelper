@@ -1,6 +1,7 @@
 import 'package:eduvision/features/exams/exam_answer_key_screen.dart';
 import 'package:eduvision/features/exams/exam_key_sheet_scan_screen.dart';
 import 'package:eduvision/features/exams/exam_scan_camera.dart';
+import 'package:eduvision/features/exams/exam_scan_models.dart';
 import 'package:eduvision/features/exams/exam_scan_repository.dart';
 import 'package:eduvision/features/exams/exam_scan_screen.dart';
 import 'package:eduvision/features/exams/exam_sheet_scanner.dart';
@@ -126,6 +127,142 @@ void main() {
     expect(scanner.scanned, hasLength(2));
     expect(find.text('5/5'), findsOneWidget);
     await unmountScreen(tester);
+  });
+
+  group('shared sheets with the student-ID grid (DESIGN §22.19)', () {
+    setUp(() => repo.kit = kitJson(codeDigits: 5));
+
+    // While the list of students is open the preview keeps its spinner, so
+    // pumpAndSettle would never return: pump a fixed time instead.
+    Future<void> pumpOpen(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    testWidgets('the next photo waits until the sheet left the frame', (
+      tester,
+    ) async {
+      pipeline.frames.add(sharedFrame());
+      scanner.outcomes.add(
+        (path, _) => queued(
+          student: 12,
+          at: now,
+          identifiedBy: ExamSheetQueued.identifiedByCode,
+        ),
+      );
+      await pump(tester);
+
+      expect(
+        find.text(
+          'นักเรียน 1 คนไม่มีเลขประจำตัวที่ฝนได้ ต้องเลือกชื่อเองตอนสแกน',
+        ),
+        findsOneWidget,
+      );
+      await twoFrames(tester);
+      expect(scanner.scanned, hasLength(1));
+      expect(scanner.alreadyAsked.single, isFalse);
+      expect(find.text('เลขที่ 2 ด.ช. สอง'), findsOneWidget);
+      expect(find.text('ยกกระดาษใบนี้ออก แล้ววางใบถัดไป'), findsOneWidget);
+
+      // Every shared sheet has the same QR: the sheet still in view is not
+      // photographed again, however long it lies there.
+      now = now.add(const Duration(seconds: 30));
+      await twoFrames(tester);
+      await twoFrames(tester);
+      expect(scanner.scanned, hasLength(1));
+
+      // A frame without the sheet, then the next sheet.
+      pipeline.frames
+        ..clear()
+        ..add(emptyFrame());
+      camera.emit();
+      await settle(tester);
+      expect(find.text('ยกกระดาษใบนี้ออก แล้ววางใบถัดไป'), findsNothing);
+      pipeline.frames
+        ..clear()
+        ..add(sharedFrame());
+      scanner.outcomes.add(
+        (path, _) =>
+            queued(at: now, identifiedBy: ExamSheetQueued.identifiedByCode),
+      );
+      await twoFrames(tester);
+      expect(scanner.scanned, hasLength(2));
+      expect(find.text('เลขที่ 1 ด.ญ. หนึ่ง'), findsOneWidget);
+      expect(find.text('สแกนแล้ว 2/3 คน ยังขาด เลขที่ 3'), findsOneWidget);
+      await unmountScreen(tester);
+    });
+
+    testWidgets('an ID that cannot be read lets the teacher pick the '
+        'student', (tester) async {
+      pipeline.frames.add(sharedFrame());
+      scanner.outcomes.add(
+        (path, _) => ExamSheetNeedsStudent(
+          pending: pendingSheet(at: now),
+          reason: StudentCodeReader.blank,
+        ),
+      );
+      await pump(tester);
+      camera.emit();
+      await pumpOpen(tester);
+      camera.emit();
+      await pumpOpen(tester);
+
+      expect(find.byKey(const ValueKey('exam_scan_pick_student')), findsOne);
+      expect(
+        find.text('ไม่ได้ฝนเลขประจำตัว เลือกนักเรียนของกระดาษใบนี้'),
+        findsOneWidget,
+      );
+      expect(find.text('10001'), findsOneWidget);
+      expect(find.text('ไม่มีเลขประจำตัว'), findsOneWidget);
+      expect(feedback.bad, 1);
+      expect(camera.streaming, isFalse, reason: 'no photos while choosing');
+
+      await tester.tap(find.byKey(const ValueKey('pick_student_13')));
+      await settle(tester);
+
+      expect(scanner.assigned.single.student.studentId, 13);
+      expect(scanner.discarded, isEmpty);
+      expect(feedback.ok, 1);
+      expect(find.text('เลขที่ 3 ด.ญ. สาม'), findsOneWidget);
+      expect(find.text('หน้า 1/1 · ชุด ข · ครูเลือกชื่อ'), findsOneWidget);
+      expect(find.text('สแกนแล้ว 1/3 คน ยังขาด เลขที่ 1, 2'), findsOneWidget);
+      await unmountScreen(tester);
+    });
+
+    testWidgets('closing the list drops the photo', (tester) async {
+      await pump(tester);
+      await tester.tap(find.byKey(const ValueKey('exam_scan_continuous')));
+      await settle(tester);
+      scanner.outcomes.add(
+        (path, _) => ExamSheetNeedsStudent(
+          pending: pendingSheet(code: '99999', at: now),
+          reason: ExamSheetNeedsStudent.unknown,
+          code: '99999',
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('exam_scan_shutter')));
+      await pumpOpen(tester);
+      expect(
+        find.text(
+          'ไม่พบเลขประจำตัว 99999 ในห้องนี้ เลือกนักเรียนของกระดาษใบนี้',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('exam_scan_pick_discard')));
+      await settle(tester);
+
+      expect(scanner.discarded, hasLength(1));
+      expect(scanner.assigned, isEmpty);
+      expect(find.byKey(const ValueKey('exam_scan_rejected')), findsOneWidget);
+      expect(find.textContaining('ยังไม่ได้เลือกนักเรียน'), findsOneWidget);
+      expect(
+        find.text('สแกนแล้ว 0/3 คน ยังขาด เลขที่ 1, 2, 3'),
+        findsOneWidget,
+      );
+      await unmountScreen(tester);
+    });
   });
 
   testWidgets('a failed read vibrates twice and waits before trying again', (

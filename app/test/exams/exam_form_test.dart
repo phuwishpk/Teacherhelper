@@ -1,3 +1,4 @@
+import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/exams/exam_form_screen.dart';
 import 'package:eduvision/features/exams/exam_models.dart';
 import 'package:flutter/material.dart';
@@ -227,5 +228,78 @@ void main() {
     final body = repo.args('create').single as Map;
     expect(body['gradebook_category_id'], 11);
     expect(body.containsKey('excluded_from_grade'), isFalse);
+  });
+
+  testWidgets('the shared sheet with the student-ID grid takes its number '
+      'of digits from the class (DESIGN §22.19)', (tester) async {
+    final repo = await pumpExamScreen(
+      tester,
+      const ExamFormScreen(initialClassroomId: 7),
+      overrides: overrides(
+        _courses(),
+        classrooms: FakeClassrooms(
+          students: const [
+            RosterStudent(
+              studentId: 1,
+              studentNumber: 1,
+              name: 'หนึ่ง',
+              studentCode: '6601000001',
+            ),
+            RosterStudent(studentId: 2, studentNumber: 2, name: 'สอง'),
+          ],
+        ),
+      ),
+    );
+    await tester.enterText(find.byKey(const ValueKey('exam_title')), 'ย่อย');
+    await tester.tap(
+      find.widgetWithText(DropdownButtonFormField<int>, 'รายวิชา'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ค15101 คณิตศาสตร์ 5').last);
+    await tester.pumpAndSettle();
+    await _pickDate(tester);
+
+    expect(find.textContaining('ฝนได้หน้าละ 100 ข้อ'), findsOneWidget);
+    await tapVisible(tester, find.text('ฝนเลขประจำตัว'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('ฝนได้หน้าละ 60 ข้อ'), findsOneWidget);
+    expect(find.text('10 หลัก'), findsOneWidget);
+
+    await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
+    final body = repo.args('create').single as Map;
+    expect(body['sheet_identity'], 'code');
+    expect(body['student_code_digits'], 10);
+  });
+
+  testWidgets('the sheet identity is fixed once printed and hidden for an '
+      'exam graded by hand', (tester) async {
+    final detail = examJson(lockedAt: '2026-10-01T00:00:00Z');
+    (detail['exam'] as Map)
+      ..['sheet_identity'] = 'code'
+      ..['student_code_digits'] = 8;
+    final repo = await pumpExamScreen(
+      tester,
+      const ExamEditScreen(examId: 40),
+      repo: FakeExamsRepository(detail: detail),
+      overrides: overrides(_courses()),
+    );
+
+    final identity = tester.widget<SegmentedButton<bool>>(
+      find.byKey(const ValueKey('exam_sheet_identity')),
+    );
+    expect(identity.selected, {true});
+    expect(identity.onSelectionChanged, isNull);
+    expect(find.text('8 หลัก'), findsOneWidget);
+    expect(
+      find.textContaining('เปลี่ยนวิธีระบุตัวต้องปลดล็อก'),
+      findsOneWidget,
+    );
+
+    // Saving another setting does not send the identity again.
+    await tester.enterText(find.byKey(const ValueKey('exam_duration')), '45');
+    await tapVisible(tester, find.byKey(const ValueKey('exam_submit')));
+    expect(repo.args('updateSettings'), [
+      {'duration_minutes': 45},
+    ]);
   });
 }

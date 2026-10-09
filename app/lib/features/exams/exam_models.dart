@@ -52,6 +52,24 @@ const kExamMaxDigits = 5;
 const kExamMaxAcceptedValues = 10;
 const kExamMaxDurationMinutes = 600;
 
+/// Columns of the student-ID grid of a shared answer sheet (§22.19).
+const kExamMinCodeDigits = 4;
+const kExamMaxCodeDigits = 13;
+const kExamDefaultCodeDigits = 8;
+
+/// The number of ID columns to offer for a class: the longest student ID
+/// made of digits only, within 4–13; 8 when no student has one.
+int suggestStudentCodeDigits(Iterable<String?> codes) {
+  var longest = 0;
+  for (final code in codes) {
+    if (code != null && RegExp(r'^\d+$').hasMatch(code)) {
+      if (code.length > longest) longest = code.length;
+    }
+  }
+  if (longest == 0) return kExamDefaultCodeDigits;
+  return longest.clamp(kExamMinCodeDigits, kExamMaxCodeDigits);
+}
+
 String examOptionLabel(int position) =>
     position >= 1 && position <= kExamOptionLabels.length
     ? kExamOptionLabels[position - 1]
@@ -933,6 +951,8 @@ class ExamSettingsDraft {
     this.versionCount = 1,
     this.showKeyToStudents = false,
     this.manualFullMarks,
+    this.codeSheets = false,
+    this.studentCodeDigits,
     this.gradebookCategoryId,
     this.excludedFromGrade = false,
   });
@@ -947,6 +967,14 @@ class ExamSettingsDraft {
   final int versionCount;
   final bool showKeyToStudents;
   final double? manualFullMarks;
+
+  /// The shared answer sheet with the student-ID grid instead of a sheet
+  /// per student (§22.19), with [studentCodeDigits] columns (4–13).
+  final bool codeSheets;
+  final int? studentCodeDigits;
+
+  String get _sheetIdentity =>
+      codeSheets ? Assignment.identityCode : Assignment.identityQr;
 
   /// The gradebook category (DESIGN §23.3): required once the course's
   /// gradebook is set up.
@@ -970,13 +998,17 @@ class ExamSettingsDraft {
     'show_key_to_students': showKeyToStudents,
     if (gradingMethod == ExamGradingMethod.manual)
       'manual_full_marks': manualFullMarks,
+    if (codeSheets) ...{
+      'sheet_identity': _sheetIdentity,
+      'student_code_digits': studentCodeDigits,
+    },
     'gradebook_category_id': ?gradebookCategoryId,
     if (excludedFromGrade) 'excluded_from_grade': true,
   };
 
-  /// The PATCH body: only what differs from [current]. version_count is
-  /// structural (409 `exam_structure_locked` once printed), so it is sent
-  /// only when it changed.
+  /// The PATCH body: only what differs from [current]. version_count and
+  /// the sheet identity are structural (409 `exam_structure_locked` once
+  /// printed), so they are sent only when they changed.
   Map<String, Object?> toUpdateJson(Assignment current) {
     final method = gradingMethod.apiValue;
     return {
@@ -991,6 +1023,11 @@ class ExamSettingsDraft {
       if (showKeyToStudents != current.showKeyToStudents)
         'show_key_to_students': showKeyToStudents,
       if (versionCount != current.versionCount) 'version_count': versionCount,
+      if (_sheetIdentity != current.sheetIdentity ||
+          (codeSheets && studentCodeDigits != current.studentCodeDigits)) ...{
+        'sheet_identity': _sheetIdentity,
+        if (codeSheets) 'student_code_digits': studentCodeDigits,
+      },
       if (gradingMethod == ExamGradingMethod.manual &&
           manualFullMarks != current.manualFullMarks)
         'manual_full_marks': manualFullMarks,

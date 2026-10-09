@@ -398,6 +398,14 @@ class FakeCoursesRepository extends Fake implements CoursesRepository {
 }
 
 class FakeClassrooms extends Fake implements ClassroomsRepository {
+  FakeClassrooms({this.students = const []});
+
+  /// The roster of every classroom.
+  final List<RosterStudent> students;
+
+  @override
+  Future<List<RosterStudent>> roster(int id) async => students;
+
   @override
   Future<List<Classroom>> list() async => const [
     Classroom(
@@ -453,10 +461,13 @@ List<Override> overrides(
   FakeCoursesRepository courses, {
   FakeSkills? skills,
   FakeGradebookRepository? gradebook,
+  FakeClassrooms? classrooms,
 }) => [
   coursesRepositoryProvider.overrideWithValue(courses),
   assignmentsRepositoryProvider.overrideWithValue(skills ?? FakeSkills()),
-  classroomsRepositoryProvider.overrideWithValue(FakeClassrooms()),
+  classroomsRepositoryProvider.overrideWithValue(
+    classrooms ?? FakeClassrooms(),
+  ),
   gradebookRepositoryProvider.overrideWithValue(
     gradebook ?? FakeGradebookRepository(),
   ),
