@@ -7,6 +7,7 @@
 - [docs/DESIGN.md](docs/DESIGN.md) เอกสารออกแบบระบบ (สถาปัตยกรรม, schema, API, fuzzy, prompt)
 - [docs/KICKOFF.md](docs/KICKOFF.md) แผนขึ้นโปรเจกต์และกติกาของ repo
 - [docs/DEPLOY-CHECKLIST.md](docs/DEPLOY-CHECKLIST.md) ขั้นตอนขึ้นเว็บครั้งแรกแบบทำตามทีละข้อ และ [docs/HOSTING.md](docs/HOSTING.md) รายละเอียดการ deploy บน Plesk
+- [docs/SELFHOST.md](docs/SELFHOST.md) คู่มือ deploy เครื่อง self-hosted (ชุดทดสอบด้วย Docker แยกจาก Plesk)
 - [docs/STATUS.md](docs/STATUS.md) ความคืบหน้าล่าสุด
 - รายงานและสไลด์: <ลิงก์ Google Drive>
 

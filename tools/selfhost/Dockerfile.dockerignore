@@ -1,0 +1,17 @@
+# Only the backend source and this folder go into the image.
+*
+!backend
+!tools/selfhost
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/vendor
+backend/node_modules
+backend/tests
+backend/public/app
+backend/bootstrap/cache/*.php
+backend/storage/logs/*
+backend/storage/app/private/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
