@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -73,7 +74,8 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     final wide = context.windowSize != WindowSize.compact;
     // On a desktop the tab's actions are buttons next to its title.
     final expanded = context.windowSize == WindowSize.expanded;
-    final queueOpen = ref.watch(uploadQueueOpenCountProvider);
+    // The upload queue is on the phone only (DESIGN §25).
+    final queueOpen = kIsWeb ? 0 : ref.watch(uploadQueueOpenCountProvider);
     // Course requests waiting for the homeroom teacher (DESIGN §24.7): a
     // badge on "ห้องเรียน", where "คำขอผูกรายวิชา" is.
     final requests =
@@ -137,12 +139,13 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
         onPressed: openScan,
       ),
       actions: [
-        ShellAction(
-          tooltip: 'คิวอัปโหลด',
-          icon: Icons.cloud_upload_outlined,
-          badge: queueOpen,
-          onPressed: () => context.push(AppRoutes.uploadQueue),
-        ),
+        if (!kIsWeb)
+          ShellAction(
+            tooltip: 'คิวอัปโหลด',
+            icon: Icons.cloud_upload_outlined,
+            badge: queueOpen,
+            onPressed: () => context.push(AppRoutes.uploadQueue),
+          ),
         ShellAction(
           tooltip: 'ตั้งค่า',
           icon: Icons.settings_outlined,

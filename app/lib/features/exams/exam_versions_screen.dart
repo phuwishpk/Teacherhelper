@@ -119,9 +119,15 @@ class _ExamVersionsScreenState extends ConsumerState<ExamVersionsScreen> {
           title: const Text('ชุดข้อสอบ'),
           bottom: list.length < 2
               ? null
-              : TabBar(
-                  isScrollable: list.length > 4,
-                  tabs: [for (final v in list) Tab(text: 'ชุด ${v.label}')],
+              : PreferredSize(
+                  preferredSize: const Size.fromHeight(kTextTabBarHeight),
+                  child: ContentColumn(
+                    padding: EdgeInsets.zero,
+                    child: TabBar(
+                      isScrollable: list.length > 4,
+                      tabs: [for (final v in list) Tab(text: 'ชุด ${v.label}')],
+                    ),
+                  ),
                 ),
         ),
         body: ContentColumn(

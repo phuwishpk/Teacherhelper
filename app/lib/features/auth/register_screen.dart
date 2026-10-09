@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/auth_layout.dart';
 import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_flow.dart';
 import '../google_signin/google_signin_models.dart';
@@ -197,7 +198,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           SizedBox(width: 12),
-          Text('กำลังโหลดรายชื่อโรงเรียน…'),
+          Flexible(child: Text('กำลังโหลดรายชื่อโรงเรียน…')),
         ],
       ),
     };
@@ -207,95 +208,93 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget build(BuildContext context) {
     final schools = ref.watch(registrationSchoolsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('สมัครใช้งาน (ครู)')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Offered while no Google account is linked: before one
-                  // is chosen, and again after its ticket expired.
-                  if (_linkTicket == null)
-                    GoogleSignUpSection(onRegistration: _useGoogle),
-                  if (_linkTicket != null) ...[
-                    Card(
-                      key: const ValueKey('register_google_banner'),
-                      margin: EdgeInsets.zero,
-                      child: ListTile(
-                        leading: const Icon(Icons.account_circle_outlined),
-                        title: const Text('สมัครพร้อมเชื่อมบัญชี Google'),
-                        subtitle: Text(
-                          'บัญชี Google ${_google?.email ?? ''} จะเชื่อมกับบัญชีครูทันทีที่สมัคร '
-                          'ยังต้องตั้งรหัสผ่านไว้เป็นทางสำรอง',
-                        ),
+      body: SafeArea(
+        child: AuthLayout(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'สมัครใช้งาน (ครู)',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                // Offered while no Google account is linked: before one
+                // is chosen, and again after its ticket expired.
+                if (_linkTicket == null)
+                  GoogleSignUpSection(onRegistration: _useGoogle),
+                if (_linkTicket != null) ...[
+                  Card(
+                    key: const ValueKey('register_google_banner'),
+                    margin: EdgeInsets.zero,
+                    child: ListTile(
+                      leading: const Icon(Icons.account_circle_outlined),
+                      title: const Text('สมัครพร้อมเชื่อมบัญชี Google'),
+                      subtitle: Text(
+                        'บัญชี Google ${_google?.email ?? ''} จะเชื่อมกับบัญชีครูทันทีที่สมัคร '
+                        'ยังต้องตั้งรหัสผ่านไว้เป็นทางสำรอง',
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'เมื่อผู้ดูแลโรงเรียนอนุมัติแล้ว เข้าสู่ระบบได้ทั้งด้วยบัญชี Google นี้และรหัสผ่าน',
-                      key: const ValueKey('register_google_helper'),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'เมื่อผู้ดูแลโรงเรียนอนุมัติแล้ว เข้าสู่ระบบได้ทั้งด้วยบัญชี Google นี้และรหัสผ่าน',
+                    key: const ValueKey('register_google_helper'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                  _school(schools),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _name,
-                    decoration: const InputDecoration(
-                      labelText: 'ชื่อ-นามสกุล',
-                    ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'กรอกชื่อ' : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'อีเมล'),
-                    validator: (v) => (v == null || !v.contains('@'))
-                        ? 'กรอกอีเมลให้ถูกต้อง'
-                        : null,
+                ],
+                _school(schools),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _name,
+                  decoration: const InputDecoration(labelText: 'ชื่อ-นามสกุล'),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'กรอกชื่อ' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'อีเมล'),
+                  validator: (v) => (v == null || !v.contains('@'))
+                      ? 'กรอกอีเมลให้ถูกต้อง'
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _password,
+                  focusNode: _passwordFocus,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
                   ),
+                  validator: (v) => (v == null || v.length < 8)
+                      ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
+                      : null,
+                ),
+                if (_error != null) ...[
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _password,
-                    focusNode: _passwordFocus,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                    validator: (v) => (v == null || v.length < 8)
-                        ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
-                        : null,
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _busy || schools.isLoading ? null : _submit,
-                    child: const Text('สมัครใช้งาน'),
-                  ),
-                  TextButton(
-                    onPressed: _busy ? null : () => context.go(AppRoutes.login),
-                    child: const Text('มีบัญชีแล้ว? เข้าสู่ระบบ'),
                   ),
                 ],
-              ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _busy || schools.isLoading ? null : _submit,
+                  child: const Text('สมัครใช้งาน'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => context.go(AppRoutes.login),
+                  child: const Text('มีบัญชีแล้ว? เข้าสู่ระบบ'),
+                ),
+              ],
             ),
           ),
         ),

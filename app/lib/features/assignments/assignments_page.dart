@@ -142,8 +142,9 @@ class AssignmentsFab extends StatelessWidget {
         FloatingActionButton.extended(
           key: const ValueKey('exam_new_fab'),
           heroTag: 'exam_new',
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+          // The second action is quieter than "สร้างการบ้าน" below it.
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+          foregroundColor: Theme.of(context).colorScheme.primary,
           onPressed: () => context.push(AppRoutes.examNew),
           icon: const Icon(Icons.quiz_outlined),
           label: const Text('สร้างข้อสอบ'),

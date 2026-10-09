@@ -125,6 +125,7 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
     final items = ref.watch(practiceBankProvider(_filter));
     return Scaffold(
       appBar: AppBar(title: const Text('คลังแบบฝึก')),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'practice_generate',
         onPressed: _generate,

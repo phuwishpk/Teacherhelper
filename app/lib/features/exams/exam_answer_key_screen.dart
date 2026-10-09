@@ -330,34 +330,29 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
             },
           ),
         ),
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    key: const ValueKey('key_grid_save'),
-                    onPressed: _busy || changed == 0 ? null : _save,
-                    child: Text(
-                      changed == 0 ? 'บันทึกแล้ว' : 'บันทึก ($changed ข้อ)',
-                    ),
+        bottomNavigationBar: BottomActionBar(
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  key: const ValueKey('key_grid_save'),
+                  onPressed: _busy || changed == 0 ? null : _save,
+                  child: Text(
+                    changed == 0 ? 'บันทึกแล้ว' : 'บันทึก ($changed ข้อ)',
                   ),
                 ),
-                if (!_d.isManual) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      key: const ValueKey('key_grid_approve'),
-                      onPressed: _busy || !canApprove ? null : _approve,
-                      child: Text(
-                        _d.keyApproved ? 'อนุมัติแล้ว' : 'อนุมัติเฉลย',
-                      ),
-                    ),
+              ),
+              if (!_d.isManual) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    key: const ValueKey('key_grid_approve'),
+                    onPressed: _busy || !canApprove ? null : _approve,
+                    child: Text(_d.keyApproved ? 'อนุมัติแล้ว' : 'อนุมัติเฉลย'),
                   ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),

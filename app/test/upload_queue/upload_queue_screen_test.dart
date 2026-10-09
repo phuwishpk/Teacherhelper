@@ -7,6 +7,7 @@ import 'package:eduvision/features/scan/scan_processor.dart';
 import 'package:eduvision/features/upload_queue/scan_queue_repository.dart';
 import 'package:eduvision/features/upload_queue/upload_queue_screen.dart';
 import 'package:eduvision/features/upload_queue/upload_worker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fake_http_adapter.dart';
@@ -279,6 +280,18 @@ void main() {
     expect(find.text('ตัดภาพแล้ว 1 หน้า กำลังอัปโหลด'), findsOneWidget);
     expect(find.text('รออัปโหลด'), findsOneWidget);
     await unmountScreen(tester);
+  });
+
+  testWidgets('the web app explains that the queue is on the phone only', (
+    tester,
+  ) async {
+    // No database override: the page must not open the on-device database.
+    await pumpScreen(tester, const UploadQueueScreen(supported: false));
+
+    expect(find.byKey(const ValueKey('upload_queue_unsupported')), findsOne);
+    expect(find.text('คิวอัปโหลดมีเฉพาะในแอป Android'), findsOneWidget);
+    expect(find.text('อัปโหลดตอนนี้'), findsNothing);
+    expect(find.byTooltip('ลบรายการที่ส่งแล้ว'), findsNothing);
   });
 
   testWidgets('"ประมวลผลต่อ" while still offline says so', (tester) async {

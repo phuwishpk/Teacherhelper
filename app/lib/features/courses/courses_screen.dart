@@ -72,6 +72,7 @@ class CoursesScreen extends ConsumerWidget {
     final courses = ref.watch(coursesProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('รายวิชาและแผนการสอน')),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'course_new',
         onPressed: () => startNewCourse(context, ref),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/breakpoints.dart';
 import 'gradebook_models.dart';
 
 const _numberWidth = 44.0;
@@ -262,21 +264,40 @@ class GradebookTable extends StatelessWidget {
       ],
     );
 
+    // A phone gives the table the whole width; from tablet width it is a
+    // sheet that is only as wide as its columns (DESIGN §27.4).
+    final compact = context.windowSize == WindowSize.compact;
+    final gutter = compact ? 0.0 : context.pageGutter;
+    final scheme = theme.colorScheme;
     return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 88),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          left,
-          Expanded(
-            child: SingleChildScrollView(
-              key: const ValueKey('gradebook_horizontal'),
-              controller: horizontalController,
-              scrollDirection: Axis.horizontal,
-              child: right,
-            ),
+      padding: EdgeInsets.fromLTRB(gutter, 4, gutter, 88),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          color: scheme.surfaceContainerLow,
+          shape: compact
+              ? Border(top: BorderSide(color: scheme.outlineVariant))
+              : RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radius),
+                  side: BorderSide(color: scheme.outlineVariant),
+                ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              left,
+              Flexible(
+                child: SingleChildScrollView(
+                  key: const ValueKey('gradebook_horizontal'),
+                  controller: horizontalController,
+                  scrollDirection: Axis.horizontal,
+                  child: right,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

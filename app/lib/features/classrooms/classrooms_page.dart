@@ -249,6 +249,9 @@ class ClassroomsFab extends ConsumerWidget {
         FloatingActionButton.extended(
           key: const ValueKey('classroom_import_google'),
           heroTag: 'classroom_import_google',
+          // The second action is quieter than "สร้างห้องเรียน" below it.
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+          foregroundColor: Theme.of(context).colorScheme.primary,
           onPressed: () => context.push(AppRoutes.classroomImportGoogle),
           icon: const Icon(Icons.cloud_download_outlined),
           label: const Text('นำเข้าจาก Google Classroom'),

@@ -190,6 +190,7 @@ class ExamScreen extends ConsumerWidget {
           ],
         ],
       ),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: d == null || d.structureLocked
           ? null
           : FloatingActionButton.extended(

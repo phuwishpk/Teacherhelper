@@ -412,35 +412,30 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
     }
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              FilledButton.icon(
-                key: const ValueKey('course_import_save'),
-                onPressed: _saving ? null : _save,
-                icon: const Icon(Icons.check),
-                label: Text(
-                  _target == null
-                      ? 'ยืนยันและสร้างรายวิชา'
-                      : 'ยืนยันและเพิ่มลงรายวิชา',
+      bottomNavigationBar: BottomActionBar(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-            ],
-          ),
+            FilledButton.icon(
+              key: const ValueKey('course_import_save'),
+              onPressed: _saving ? null : _save,
+              icon: const Icon(Icons.check),
+              label: Text(
+                _target == null
+                    ? 'ยืนยันและสร้างรายวิชา'
+                    : 'ยืนยันและเพิ่มลงรายวิชา',
+              ),
+            ),
+          ],
         ),
       ),
       body: Form(

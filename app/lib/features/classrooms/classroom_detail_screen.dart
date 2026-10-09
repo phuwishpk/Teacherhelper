@@ -51,6 +51,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
             ClassroomMenu(classroom: c),
         ],
       ),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               heroTag: 'students_add',

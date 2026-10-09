@@ -109,6 +109,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
           ],
         ],
       ),
+      floatingActionButtonLocation: const ContentFabLocation(),
       floatingActionButton: manage
           ? FloatingActionButton.extended(
               heroTag: 'question_new',

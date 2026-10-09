@@ -361,56 +361,53 @@ class _ExamCopyQuestionsScreenState
 
   Widget _bottom(BuildContext context, ExamDetail d) {
     final locked = d.structureLocked;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (locked)
-              Text(
-                'ข้อสอบนี้พิมพ์แล้ว โครงสร้างถูกล็อก ปลดล็อกก่อนเพิ่มข้อ',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              )
-            else
-              DropdownButtonFormField<int?>(
-                key: const ValueKey('copy_target'),
-                initialValue: _targetSectionId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'คัดลอกไปที่'),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('ตอนใหม่ ตามตอนต้นทาง'),
-                  ),
-                  for (final s in d.sections)
-                    DropdownMenuItem(
-                      value: s.id,
-                      child: Text(
-                        '${s.heading} · ${s.typeSummary}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
+    return BottomActionBar(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (locked)
+            Text(
+              'ข้อสอบนี้พิมพ์แล้ว โครงสร้างถูกล็อก ปลดล็อกก่อนเพิ่มข้อ',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            )
+          else
+            DropdownButtonFormField<int?>(
+              key: const ValueKey('copy_target'),
+              initialValue: _targetSectionId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'คัดลอกไปที่'),
+              items: [
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('ตอนใหม่ ตามตอนต้นทาง'),
+                ),
+                for (final s in d.sections)
+                  DropdownMenuItem(
+                    value: s.id,
+                    child: Text(
+                      '${s.heading} · ${s.typeSummary}',
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
-                onChanged: (v) => setState(() => _targetSectionId = v),
-              ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              key: const ValueKey('copy_submit'),
-              onPressed: locked || _copying || _selected.isEmpty
-                  ? null
-                  : () => _copy(d),
-              icon: _copying
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.copy_all),
-              label: Text('คัดลอก ${_selected.length} ข้อ'),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _targetSectionId = v),
             ),
-          ],
-        ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            key: const ValueKey('copy_submit'),
+            onPressed: locked || _copying || _selected.isEmpty
+                ? null
+                : () => _copy(d),
+            icon: _copying
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.copy_all),
+            label: Text('คัดลอก ${_selected.length} ข้อ'),
+          ),
+        ],
       ),
     );
   }

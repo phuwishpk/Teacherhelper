@@ -281,7 +281,15 @@ abstract final class AppTheme {
         errorBorder: inputBorder(scheme.error),
         focusedErrorBorder: inputBorder(scheme.error, 1.6),
         labelStyle: text.bodyMedium?.copyWith(color: muted),
-        floatingLabelStyle: text.bodyMedium?.copyWith(color: scheme.primary),
+        floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+          (states) => (text.bodyMedium ?? const TextStyle()).copyWith(
+            color: states.contains(WidgetState.error)
+                ? scheme.error
+                : states.contains(WidgetState.focused)
+                ? scheme.primary
+                : muted,
+          ),
+        ),
         hintStyle: text.bodyMedium?.copyWith(color: scheme.outline),
         helperStyle: text.bodySmall?.copyWith(color: muted),
         errorStyle: text.bodySmall?.copyWith(color: scheme.error),
