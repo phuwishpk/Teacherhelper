@@ -19,6 +19,8 @@ use App\Models\Question;
  *   (ExamSheetCapacity, which also has the compact fallback).
  * - Page 1 of an exam with more than one version carries the version
  *   bubbles; one version has none (it is version ก).
+ * - A shared sheet (§22.19, sheet_identity = code) has the student-ID grid
+ *   in the first 10 grid rows of every page; the bubble rows start below it.
  *
  * The sheet numbers are the numbers of the original order (version ก); every
  * version has the same shape at each number, so one layout serves all
@@ -31,7 +33,11 @@ final class ExamSheetLayout
      */
     public static function forExam(Assignment $exam): ExamSheetPlan
     {
-        $plan = self::plan(self::items($exam), max(1, (int) $exam->version_count));
+        $plan = self::plan(
+            self::items($exam),
+            max(1, (int) $exam->version_count),
+            $exam->usesCodeSheets() ? (int) $exam->student_code_digits : 0,
+        );
         self::assertFits($plan);
 
         return $plan;
@@ -61,7 +67,9 @@ final class ExamSheetLayout
     {
         if ($plan->overflows()) {
             throw new ApiException(
-                'กระดาษคำตอบยาวเกิน 2 หน้า ลดจำนวนข้อหรือข้อเติมตัวเลข',
+                $plan->codeDigits > 0
+                    ? 'กระดาษคำตอบแบบฝนเลขประจำตัวยาวเกิน 2 หน้า (หน้าละ 60 ข้อ) ลดจำนวนข้อหรือข้อเติมตัวเลข'
+                    : 'กระดาษคำตอบยาวเกิน 2 หน้า ลดจำนวนข้อหรือข้อเติมตัวเลข',
                 'exam_sheet_overflow',
                 422,
             );
@@ -70,18 +78,25 @@ final class ExamSheetLayout
 
     /**
      * @param  list<ExamSheetItem>  $items  in number order
+     * @param  int  $codeDigits  columns of the student-ID grid, 0 = a sheet per student (QR)
      */
-    public static function plan(array $items, int $versionCount): ExamSheetPlan
+    public static function plan(array $items, int $versionCount, int $codeDigits = 0): ExamSheetPlan
     {
         $rowItems = array_values(array_filter($items, fn (ExamSheetItem $i) => ! $i->isNumeric()));
         $blockItems = array_values(array_filter($items, fn (ExamSheetItem $i) => $i->isNumeric()));
+        $reserved = $codeDigits > 0 ? ExamSheetCapacity::CODE_ROWS : 0;
+        $split = ExamSheetCapacity::split(count($rowItems), count($blockItems), $reserved);
+        if ($split === [] && $codeDigits > 0) {
+            // Never the case for a printable exam (it has questions); keeps the grid on page 1.
+            $split = [['rows' => 0, 'blocks' => 0, 'bands' => 0]];
+        }
 
         $pages = [];
-        foreach (ExamSheetCapacity::split(count($rowItems), count($blockItems)) as $index => $alloc) {
-            $perColumn = ExamSheetCapacity::rowsPerColumn($alloc['bands']);
+        foreach ($split as $index => $alloc) {
+            $perColumn = ExamSheetCapacity::rowsPerColumn($alloc['bands'], $reserved);
             $rows = [];
             foreach (array_splice($rowItems, 0, $alloc['rows']) as $i => $item) {
-                $rows[] = self::row($item, intdiv($i, $perColumn) + 1, $i % $perColumn + 1);
+                $rows[] = self::row($item, intdiv($i, $perColumn) + 1, $i % $perColumn + 1 + $reserved);
             }
             $blocks = [];
             foreach (array_splice($blockItems, 0, $alloc['blocks']) as $i => $item) {
@@ -93,12 +108,42 @@ final class ExamSheetLayout
                 'page' => $index + 1,
                 'bands' => $alloc['bands'],
                 'version' => $index === 0 && $versionCount > 1 ? self::versionBubbles($versionCount) : [],
+                'code' => $codeDigits > 0 ? self::codeGrid($codeDigits) : null,
                 'rows' => $rows,
                 'blocks' => $blocks,
             ];
         }
 
-        return new ExamSheetPlan($pages, $versionCount);
+        return new ExamSheetPlan($pages, $versionCount, $codeDigits);
+    }
+
+    /**
+     * The student-ID grid (§22.19): $digits columns of 0–9, the first column
+     * is the first digit of the ID.
+     *
+     * @return array{rect: array{x: float, y: float, w: float, h: float}, columns: list<array{col: int, x: float, bubbles: list<array{value: string, cx: float, cy: float, r: float}>}>}
+     */
+    private static function codeGrid(int $digits): array
+    {
+        $columns = [];
+        for ($col = 1; $col <= $digits; $col++) {
+            $x = ExamSheetGeometry::codeX($col);
+            $bubbles = [];
+            for ($d = 0; $d <= 9; $d++) {
+                $bubbles[] = ['value' => (string) $d, 'cx' => $x, 'cy' => ExamSheetGeometry::codeY($d), 'r' => ExamSheetGeometry::CODE_R];
+            }
+            $columns[] = ['col' => $col, 'x' => $x, 'bubbles' => $bubbles];
+        }
+
+        return [
+            'rect' => [
+                'x' => ExamSheetGeometry::GRID_X,
+                'y' => ExamSheetGeometry::codeTop(),
+                'w' => ExamSheetGeometry::codeWidth($digits),
+                'h' => ExamSheetGeometry::codeHeight(),
+            ],
+            'columns' => $columns,
+        ];
     }
 
     /**

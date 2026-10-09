@@ -69,6 +69,21 @@ final class ExamSheetGeometry
     /** Left margin of the first block column inside a grid column: (43.5 − 7 × 5.6) / 2. */
     public const BLOCK_MARGIN = 2.15;
 
+    // Student-ID grid of a shared sheet (DESIGN §22.19): the first CODE_ROWS
+    // grid rows of every page, columns of 0–9 with a box to write the digit in.
+    public const CODE_MARGIN = 4.0;
+
+    public const CODE_HEADER_H = 12.0;
+
+    public const CODE_ROW_STEP = 6.0;
+
+    public const CODE_COL_STEP = 5.6;
+
+    public const CODE_R = 2.0;
+
+    /** Left edge of the "how to fill in the ID" text, right of the widest grid. */
+    public const CODE_HELP_X = 104.0;
+
     // Footer instructions.
     public const FOOTER_Y = 262.0;
 
@@ -129,6 +144,47 @@ final class ExamSheetGeometry
     public static function digitY(float $top, int $row): float
     {
         return $top + self::BLOCK_HEADER_H + self::DIGIT_ROW_STEP / 2 + self::DIGIT_ROW_STEP * ($row - 1);
+    }
+
+    /** Top of the student-ID grid: the top of grid row 1. */
+    public static function codeTop(): float
+    {
+        return self::rowTop(1);
+    }
+
+    /** Height of the grid's box: header, ten bubble rows and a margin; it ends above the option labels of row 11. */
+    public static function codeHeight(): float
+    {
+        return self::CODE_HEADER_H + 10 * self::CODE_ROW_STEP + 2.0;
+    }
+
+    /** Bottom of the rows the grid reserves: the top of the first bubble row's slot. */
+    public static function codeBandBottom(): float
+    {
+        return self::rowTop(ExamSheetCapacity::CODE_ROWS + 1);
+    }
+
+    public static function codeWidth(int $digits): float
+    {
+        return 2 * self::CODE_MARGIN + self::CODE_COL_STEP * $digits;
+    }
+
+    /** Centre x of ID column $col (1-based, most significant digit first). */
+    public static function codeX(int $col): float
+    {
+        return self::GRID_X + self::CODE_MARGIN + self::CODE_COL_STEP / 2 + self::CODE_COL_STEP * ($col - 1);
+    }
+
+    /** Centre y of the bubble of digit $digit (0–9) in the ID grid. */
+    public static function codeY(int $digit): float
+    {
+        return self::codeTop() + self::CODE_HEADER_H + self::CODE_ROW_STEP / 2 + self::CODE_ROW_STEP * $digit;
+    }
+
+    /** y of the option labels above the first bubble row, which is grid row $firstRow. */
+    public static function columnHeaderY(int $firstRow): float
+    {
+        return self::rowTop($firstRow) - (self::rowTop(1) - self::COLUMN_HEADER_Y);
     }
 
     /**

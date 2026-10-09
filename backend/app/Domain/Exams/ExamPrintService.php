@@ -32,6 +32,9 @@ use Illuminate\Validation\ValidationException;
  *   approved (409 answer_key_not_approved).
  * - key_sheet: the teacher's key sheet, student_id 0, before the key is
  *   approved too (it is how the key can be filled in). App exams only.
+ * - An exam with sheet_identity = code (§22.19) prints one shared answer
+ *   sheet for the whole class (the teacher copies it): student_ids is
+ *   refused (422 errors.student_ids) and the roster may be empty.
  *
  * Sheets need QR_SIGNING_KEY (503 qr_key_missing) and at most two pages
  * (422 exam_sheet_overflow). They share one layout per layout_version in
@@ -75,7 +78,13 @@ class ExamPrintService
                 $plan = ExamSheetLayout::forExam($exam);
             }
             $studentIds = [];
-            if ($kind === WorksheetPrint::KIND_ANSWER_SHEET) {
+            $shared = $kind === WorksheetPrint::KIND_ANSWER_SHEET && $exam->usesCodeSheets();
+            if ($shared && $requestedStudents !== null) {
+                throw ValidationException::withMessages([
+                    'student_ids' => 'กระดาษคำตอบแบบฝนเลขประจำตัวเป็นใบเดียวใช้ทั้งห้อง เลือกนักเรียนไม่ได้',
+                ]);
+            }
+            if ($kind === WorksheetPrint::KIND_ANSWER_SHEET && ! $shared) {
                 $studentIds = self::roster($exam, $requestedStudents);
             }
 
@@ -91,7 +100,7 @@ class ExamPrintService
                 'status' => WorksheetPrint::STATUS_QUEUED,
             ]);
 
-            return [$print, self::jobs($print, $studentIds)];
+            return [$print, self::jobs($print, $studentIds, $shared)];
         }, allowClosed: true);
 
         Bus::chain($jobs)->onQueue('pdf')->dispatch();
@@ -168,12 +177,12 @@ class ExamPrintService
      * @param  list<int>  $studentIds
      * @return list<object>
      */
-    private static function jobs(WorksheetPrint $print, array $studentIds): array
+    private static function jobs(WorksheetPrint $print, array $studentIds, bool $shared = false): array
     {
         if ($print->kind === WorksheetPrint::KIND_EXAM_BOOKLET) {
             return [new RenderExamBookletJob($print->id)];
         }
-        if ($print->kind === WorksheetPrint::KIND_KEY_SHEET) {
+        if ($print->kind === WorksheetPrint::KIND_KEY_SHEET || $shared) {
             return [new RenderAnswerSheetsJob($print->id, 0, []), new MergeWorksheetsJob($print->id, 1)];
         }
 

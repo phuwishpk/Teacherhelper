@@ -62,6 +62,9 @@ class StoreAssignmentRequest extends FormRequest
             'version_count' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.ExamVersions::maxVersions()],
             'duration_minutes' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
             'show_key_to_students' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'boolean'],
+            // Answer sheets with a student-ID grid (DESIGN §22.19).
+            'sheet_identity' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', Rule::in(Assignment::SHEET_IDENTITIES)],
+            'student_code_digits' => ['nullable', 'prohibited_unless:sheet_identity,code', 'required_if:sheet_identity,code', 'integer', 'min:'.Assignment::MIN_CODE_DIGITS, 'max:'.Assignment::MAX_CODE_DIGITS],
             'manual_full_marks' => ['nullable', 'prohibited_unless:kind,exam', 'required_if:grading_method,manual', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
             // Gradebook (DESIGN §23.3): checked against the course in AssignmentCategories.
             'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],

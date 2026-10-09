@@ -15,11 +15,17 @@ use Illuminate\Validation\ValidationException;
  *   manual -> app: ready ⇔ the key is approved and still complete.
  * - version_count is structural (409 exam_structure_locked once printed)
  *   and rebuilds the shuffled versions.
+ * - sheet_identity and student_code_digits (§22.19) are structural too: they
+ *   change the answer-sheet layout. `code` needs the number of digits;
+ *   `qr` clears it.
  * - duration_minutes, show_key_to_students and manual_full_marks change any time.
  */
 final class ExamSettings
 {
-    private const FIELDS = ['grading_method', 'version_count', 'duration_minutes', 'show_key_to_students', 'manual_full_marks'];
+    private const FIELDS = [
+        'grading_method', 'version_count', 'duration_minutes', 'show_key_to_students', 'manual_full_marks',
+        'sheet_identity', 'student_code_digits',
+    ];
 
     /**
      * @param  array<string, mixed>  $data  the validated PATCH body
@@ -54,6 +60,8 @@ final class ExamSettings
             ExamVersions::sync($assignment);
         }
 
+        self::applySheetIdentity($assignment, $data);
+
         $method = $data['grading_method'] ?? $assignment->grading_method;
         if ($method !== $assignment->grading_method) {
             if ($method === Assignment::GRADING_MANUAL) {
@@ -81,5 +89,36 @@ final class ExamSettings
             $assignment->key_approved_at = null;
             $assignment->key_approved_by = null;
         }
+    }
+
+    /**
+     * How the answer sheet names its student (DESIGN §22.19).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function applySheetIdentity(Assignment $assignment, array $data): void
+    {
+        if (! array_key_exists('sheet_identity', $data) && ! array_key_exists('student_code_digits', $data)) {
+            return;
+        }
+        $identity = $data['sheet_identity'] ?? $assignment->sheet_identity;
+        $digits = array_key_exists('student_code_digits', $data) ? $data['student_code_digits'] : $assignment->student_code_digits;
+        $digits = $digits === null ? null : (int) $digits;
+
+        if ($identity === Assignment::IDENTITY_QR) {
+            if (($data['student_code_digits'] ?? null) !== null) {
+                throw ValidationException::withMessages(['student_code_digits' => 'จำนวนหลักใช้เมื่อเลือกฝนเลขประจำตัวเท่านั้น']);
+            }
+            $digits = null;
+        } elseif ($digits === null) {
+            throw ValidationException::withMessages(['student_code_digits' => 'กำหนดจำนวนหลักของเลขประจำตัวที่จะให้ฝน']);
+        }
+
+        if ($identity === $assignment->sheet_identity && $digits === $assignment->student_code_digits) {
+            return;
+        }
+        ExamEditor::assertUnlocked($assignment);
+        $assignment->sheet_identity = $identity;
+        $assignment->student_code_digits = $digits;
     }
 }

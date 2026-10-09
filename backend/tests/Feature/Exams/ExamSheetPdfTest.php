@@ -56,6 +56,11 @@ class ExamSheetPdfTest extends TestCase
             {
                 return $this->log[] = parent::signExamSheet($assignmentId, $studentId, $page, $layoutVersion);
             }
+
+            public function signCodeSheet(int $assignmentId, int $page, int $layoutVersion): string
+            {
+                return $this->log[] = parent::signCodeSheet($assignmentId, $page, $layoutVersion);
+            }
         };
 
         return new ExamSheetPdfRenderer(app(WorksheetMpdfFactory::class), $signer);
@@ -130,6 +135,45 @@ class ExamSheetPdfTest extends TestCase
 
         $this->assertSame(1, PdfStreams::pageCount($pdf));
         $this->assertSame([(new QrSigner(self::KEY))->signExamSheet($exam->id, 0, 1, 1)], $this->signed);
+    }
+
+    /** DESIGN §22.19: one sheet for everyone, the student named by the grid on every page. */
+    public function test_the_shared_sheet_has_an_evc1_qr_on_every_page_and_no_student(): void
+    {
+        $exam = $this->createExam(['sheet_identity' => 'code', 'student_code_digits' => 8]);
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 70]);
+        $this->fillExam($exam);
+        $layout = $this->layoutOf($exam, 2);
+        $this->assertCount(2, $layout->pages, '70 rows need two pages below the grid');
+
+        $pdf = $this->renderer()->render($exam, $layout, [ExamSheetPdfRenderer::SHARED_SHEET]);
+
+        $this->assertSame(2, PdfStreams::pageCount($pdf));
+        $signer = new QrSigner(self::KEY);
+        $this->assertSame([$signer->signCodeSheet($exam->id, 1, 2), $signer->signCodeSheet($exam->id, 2, 2)], $this->signed);
+        $this->assertNull($signer->verifyExamSheet($this->signed[0]), 'a shared sheet is not a sheet printed for a student');
+    }
+
+    public function test_the_student_id_grid_is_drawn_where_the_layout_says(): void
+    {
+        $exam = $this->createExam(['sheet_identity' => 'code', 'student_code_digits' => 13, 'version_count' => 2]);
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 10]);
+        $this->addSection($exam, ['type' => 'numeric', 'numeric' => ['digits' => 2, 'allow_negative' => false, 'allow_decimal' => false], 'question_count' => 1]);
+
+        // 10 × 4 row bubbles, 2 version bubbles, 13 ID columns × 10 and one block of 2 columns × 10.
+        $this->assertSame(40 + 2 + 130 + 20, $this->assertBubblesDrawn($exam));
+    }
+
+    public function test_the_key_sheet_of_a_shared_sheet_exam_keeps_the_grid_and_the_evx1_qr(): void
+    {
+        $exam = $this->createExam(['sheet_identity' => 'code', 'student_code_digits' => 6]);
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 5]);
+
+        $pages = $this->circleStarts($this->renderer()->render($exam, $this->layoutOf($exam), [null]));
+
+        $this->assertSame([(new QrSigner(self::KEY))->signExamSheet($exam->id, 0, 1, 1)], $this->signed);
+        // The rows, the grid, and the two example circles of the footer.
+        $this->assertCount(5 * 4 + 6 * 10 + 2, $pages[0]);
     }
 
     public function test_every_bubble_is_drawn_where_the_layout_says(): void

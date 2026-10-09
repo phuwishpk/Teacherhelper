@@ -104,6 +104,18 @@ class Assignment extends Model
 
     public const GRADING_METHODS = [self::GRADING_APP, self::GRADING_MANUAL];
 
+    /** Answer sheets printed per student with the student's QR (DESIGN §22.6). */
+    public const IDENTITY_QR = 'qr';
+
+    /** One answer sheet for everyone; the student fills in their student ID (DESIGN §22.19). */
+    public const IDENTITY_CODE = 'code';
+
+    public const SHEET_IDENTITIES = [self::IDENTITY_QR, self::IDENTITY_CODE];
+
+    public const MIN_CODE_DIGITS = 4;
+
+    public const MAX_CODE_DIGITS = 13;
+
     protected $fillable = [
         'school_id',
         'classroom_id',
@@ -132,6 +144,8 @@ class Assignment extends Model
         'manual_full_marks',
         'shuffle_nonce',
         'structure_locked_at',
+        'sheet_identity',
+        'student_code_digits',
         'gradebook_category_id',
         'excluded_from_grade',
     ];
@@ -147,6 +161,7 @@ class Assignment extends Model
         'version_count' => 1,
         'show_key_to_students' => false,
         'shuffle_nonce' => 0,
+        'sheet_identity' => self::IDENTITY_QR,
         'excluded_from_grade' => false,
     ];
 
@@ -173,6 +188,7 @@ class Assignment extends Model
             'manual_full_marks' => 'float',
             'shuffle_nonce' => 'integer',
             'structure_locked_at' => 'datetime',
+            'student_code_digits' => 'integer',
             'gradebook_category_id' => 'integer',
             'excluded_from_grade' => 'boolean',
         ];
@@ -309,6 +325,12 @@ class Assignment extends Model
     public function isManualExam(): bool
     {
         return $this->isExam() && $this->grading_method === self::GRADING_MANUAL;
+    }
+
+    /** The exam's answer sheet is the shared one with the student-ID grid (DESIGN §22.19). */
+    public function usesCodeSheets(): bool
+    {
+        return $this->isExam() && $this->sheet_identity === self::IDENTITY_CODE;
     }
 
     /** Structural changes of an exam are locked once anything was printed (DESIGN §22.2). */

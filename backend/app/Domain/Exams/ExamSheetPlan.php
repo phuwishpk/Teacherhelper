@@ -14,16 +14,23 @@ use App\Domain\Worksheets\WorksheetGeometry;
  * Page shape (mm):
  *   page, bands,
  *   version: list<{value, label, cx, cy, r}> (page 1 of a multi-version exam, else []),
+ *   code: {rect, columns: list<{col, x, bubbles: list<{value, cx, cy, r}>}>} | null (the student-ID grid, §22.19),
  *   rows: list<{sheet_no, column, row, labels, rect: {x,y,w,h}, bubbles: list<{value, label, cx, cy, r}>}>,
  *   blocks: list<{sheet_no, column, band, rect, sign: {cx,cy,r}|null,
  *                 columns: list<{col, x, bubbles: list<{value, cx, cy, r}>}>}>
  */
 final readonly class ExamSheetPlan
 {
+    /** region_id of the student-ID grid in the layout JSON (§22.19). */
+    public const CODE_REGION = 'student_code';
+
+    /** Its sheet number: the fill travels as `digits["0"]`. */
+    public const CODE_SHEET_NO = 0;
+
     /**
      * @param  list<array<string, mixed>>  $pages
      */
-    public function __construct(public array $pages, public int $versionCount) {}
+    public function __construct(public array $pages, public int $versionCount, public int $codeDigits = 0) {}
 
     public function pageCount(): int
     {
@@ -51,6 +58,21 @@ final readonly class ExamSheetPlan
                     'region_id' => 'version',
                     'kind' => 'version_bubbles',
                     'bubbles' => array_map(fn (array $b) => ['value' => $b['value'], 'label' => $b['label'], ...self::circle($b)], $page['version']),
+                ];
+            }
+            if (($page['code'] ?? null) !== null) {
+                // A digit_block at sheet number 0 (no question has it), so the
+                // phone reads it with the code that reads numeric answers.
+                $regions[] = [
+                    'region_id' => self::CODE_REGION,
+                    'kind' => 'digit_block',
+                    'sheet_no' => self::CODE_SHEET_NO,
+                    'rect' => self::rect($page['code']['rect']),
+                    'sign' => null,
+                    'columns' => array_map(fn (array $c) => [
+                        'col' => $c['col'],
+                        'bubbles' => array_map(fn (array $b) => ['value' => $b['value'], ...self::circle($b)], $c['bubbles']),
+                    ], $page['code']['columns']),
                 ];
             }
             foreach ($page['rows'] as $row) {

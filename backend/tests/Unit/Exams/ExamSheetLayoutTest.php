@@ -248,4 +248,88 @@ class ExamSheetLayoutTest extends TestCase
             $this->assertLessThanOrEqual(1, $rect['y'] + $rect['h']);
         }
     }
+
+    public function test_a_shared_sheet_has_the_student_id_grid_on_every_page_and_rows_below_it(): void
+    {
+        $plan = ExamSheetLayout::plan(self::items(70, 2), versionCount: 2, codeDigits: 8);
+        $this->assertSame(8, $plan->codeDigits);
+        $this->assertSame(2, $plan->pageCount());
+
+        foreach ($plan->pages as $page) {
+            $code = $page['code'];
+            $this->assertNotNull($code, 'page '.$page['page'].' names its student');
+            $this->assertCount(8, $code['columns']);
+            foreach ($code['columns'] as $column) {
+                $this->assertSame(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], array_column($column['bubbles'], 'value'));
+            }
+            // The grid's box stays inside its ten rows, clear of the option labels above the first bubble row.
+            $bottom = ExamSheetGeometry::codeBandBottom();
+            $this->assertSame(ExamSheetGeometry::rowTop(11), $bottom);
+            $box = $code['rect']['y'] + $code['rect']['h'];
+            $this->assertSame(126.0, $box);
+            $this->assertLessThan(ExamSheetGeometry::columnHeaderY(11) - 2.5, $box);
+            $this->assertLessThan($box, max(array_column($code['columns'][0]['bubbles'], 'cy')) + ExamSheetGeometry::CODE_R);
+            foreach ($page['rows'] as $row) {
+                $this->assertGreaterThanOrEqual(11, $row['row']);
+                $this->assertGreaterThanOrEqual($bottom, $row['rect']['y']);
+            }
+        }
+        // 60 rows on page 1; 10 rows and one band of 2 blocks on page 2.
+        $this->assertCount(60, $plan->pages[0]['rows']);
+        $this->assertSame(11, $plan->pages[0]['rows'][0]['row']);
+        $this->assertSame(25, $plan->pages[0]['rows'][14]['row']);
+        $this->assertSame(2, $plan->pages[0]['rows'][15]['column']);
+        $this->assertCount(10, $plan->pages[1]['rows']);
+        $this->assertCount(2, $plan->pages[1]['blocks']);
+        $this->assertSame(1, $plan->pages[1]['bands']);
+        $this->assertNotSame([], $plan->pages[0]['version']);
+        $this->assertSame([], $plan->pages[1]['version']);
+    }
+
+    public function test_the_widest_student_id_grid_leaves_room_for_the_instructions(): void
+    {
+        $this->assertSame(24.8, round(ExamSheetGeometry::codeX(1), 4));
+        $right = ExamSheetGeometry::GRID_X + ExamSheetGeometry::codeWidth(13);
+        $this->assertSame(98.8, round($right, 4));
+        $this->assertLessThan(ExamSheetGeometry::CODE_HELP_X, $right);
+        $this->assertLessThan($right, ExamSheetGeometry::codeX(13) + ExamSheetGeometry::CODE_R);
+        // Rows of 6 mm: the "9" bubble ends 9 mm above the bottom of the 80 mm grid.
+        $this->assertSame(121.0, ExamSheetGeometry::codeY(9));
+        $this->assertSame(50.0, ExamSheetGeometry::columnHeaderY(1));
+        $this->assertSame(130.0, ExamSheetGeometry::columnHeaderY(11));
+    }
+
+    public function test_the_layout_json_carries_the_grid_as_the_digit_block_of_sheet_number_zero(): void
+    {
+        $pages = ExamSheetLayout::plan(self::items(3), 1, 5)->toLayoutPages(301, 1, ArucoMarkers::load());
+        $regions = collect($pages[0]['regions']);
+        $code = $regions->firstWhere('region_id', 'student_code');
+
+        $this->assertSame('digit_block', $code['kind']);
+        $this->assertSame(0, $code['sheet_no']);
+        $this->assertNull($code['sign']);
+        $this->assertCount(5, $code['columns']);
+        $this->assertSame([1, 2, 3, 4, 5], array_column($code['columns'], 'col'));
+        $first = $code['columns'][0]['bubbles'][0];
+        $this->assertSame('0', $first['value']);
+        $this->assertEqualsWithDelta((24.8 - 16) / 178, $first['cx'], 0.0001);
+        $this->assertEqualsWithDelta((67.0 - 16) / 265, $first['cy'], 0.0001);
+        // No question has sheet number 0, and a sheet per student has no such region.
+        $this->assertSame([1, 2, 3], $regions->where('kind', 'omr_row')->pluck('sheet_no')->all());
+        $plain = ExamSheetLayout::plan(self::items(3), 1)->toLayoutPages(301, 1, ArucoMarkers::load());
+        $this->assertNull(collect($plain[0]['regions'])->firstWhere('region_id', 'student_code'));
+    }
+
+    public function test_a_shared_sheet_overflows_after_120_rows(): void
+    {
+        ExamSheetLayout::assertFits(ExamSheetLayout::plan(self::items(120), 1, 8));
+
+        try {
+            ExamSheetLayout::assertFits(ExamSheetLayout::plan(self::items(121), 1, 8));
+            $this->fail('121 rows do not fit two pages below the student-ID grid');
+        } catch (ApiException $e) {
+            $this->assertSame('exam_sheet_overflow', $e->errorCode);
+            $this->assertStringContainsString('ฝนเลขประจำตัว', $e->getMessage());
+        }
+    }
 }
