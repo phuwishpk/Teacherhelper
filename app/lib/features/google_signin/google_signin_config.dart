@@ -24,7 +24,7 @@ const googleSignInNoticeVersion = 'gsi-1';
 /// The PDPA notice shown before every self-made link and under the Google
 /// button of the login page (DESIGN §24.14, version [googleSignInNoticeVersion]).
 const googleSignInNotice =
-    'การเชื่อมบัญชี Google ใช้เพื่อเข้าสู่ระบบ EduVision เท่านั้น '
+    'การเชื่อมบัญชี Google ใช้เพื่อเข้าสู่ระบบ Krucheck เท่านั้น '
     'ระบบเก็บเฉพาะรหัสบัญชี ชื่อ อีเมล และรูปโปรไฟล์จาก Google '
     'ไม่เข้าถึงอีเมล ไฟล์ หรือข้อมูลอื่นในบัญชี '
     'ยกเลิกการเชื่อมได้ทุกเมื่อในหน้าบัญชีของฉัน หรือขอให้ครูประจำชั้นยกเลิกให้';

@@ -33,7 +33,7 @@ class BrandMark extends StatelessWidget {
         if (showName) ...[
           SizedBox(width: size * 0.32),
           Text(
-            'EduVision',
+            'Krucheck',
             style: size >= 40
                 ? theme.textTheme.headlineSmall
                 : theme.textTheme.titleMedium,

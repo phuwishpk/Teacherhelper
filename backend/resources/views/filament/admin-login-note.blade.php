@@ -5,5 +5,5 @@
     </p>
 @endif
 <p style="font-size: 0.875rem; opacity: 0.75; text-align: center; margin-top: 0.5rem;">
-    เข้าสู่ระบบจากแอป EduVision ได้ด้วยบัญชีเดียวกัน
+    เข้าสู่ระบบจากแอป Krucheck ได้ด้วยบัญชีเดียวกัน
 </p>

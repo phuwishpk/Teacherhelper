@@ -1,4 +1,4 @@
-# EduVision: คู่มือ deploy backend บน Plesk (Hostatom shared hosting)
+# Krucheck: คู่มือ deploy backend บน Plesk (Hostatom shared hosting)
 
 - **ฉบับ:** 27 ก.ย. 2569 (B7) เขียนจาก DESIGN §3.3, §7.2–§7.6 และ KICKOFF ส่วนที่ 3 (B7–B9) กับส่วนที่ 6 (Google Classroom) **ปรับ 30 ก.ย. 2569** สำหรับ Phase 8–9 (DESIGN §19–§21): งานรอบของ cron (§4.7), ค่า PHP (§4.1), ตัวแปร `.env` ใหม่ (§4.6) และ scope `classroom.announcements` (§6.3)
 - **สถานะ:** ยัง**ไม่เคย deploy จริง** ทุกข้อที่มี `⚠️ ต้องตรวจสอบ` คือสิ่งที่ยังไม่ได้ยืนยันกับหน้าจอ Plesk ของ Hostatom เมื่อทำจริงแล้วให้แก้เอกสารนี้ (และ DESIGN §7.2/§7.6 ถ้าค่าต่างจากที่เขียนไว้) ใน commit เดียวกัน ตาม KICKOFF Day 3 ข้อ 9
@@ -158,7 +158,7 @@ Files > `eduvision/backend/` > **Create File** ชื่อ `.env` แล้ว�
 
 ```ini
 # ---- แอป ----
-APP_NAME=EduVision
+APP_NAME=Krucheck                     # ชื่อในหน้า admin; server ที่ติดตั้งก่อน 10 ต.ค. 2569 ยังเป็น EduVision ดู DESIGN §28.3 ก่อนแก้
 APP_ENV=production
 APP_KEY=base64:...                    # จาก php artisan key:generate --show ในเครื่อง (§2 ข้อ 3) ดูคำเตือนใต้ตาราง
 APP_DEBUG=false                       # ห้าม true บน production (หน้า error จะโชว์ .env และ query)
@@ -199,7 +199,7 @@ DB_QUEUE_RETRY_AFTER=300              # > 240 วินาทีของ GradeS
 CACHE_STORE=database
 MAIL_MAILER=log
 
-# ---- EduVision (config/eduvision.php) ----
+# ---- Krucheck (config/eduvision.php) ----
 SEED_TEACHER_JOIN_CODE=...            # 8 ตัวสุ่ม (§2 ข้อ 3) รหัสสมัครครูของโรงเรียนแรกที่ seeder สร้าง
 HEARTBEAT_MAX_AGE_MINUTES=3           # /health เป็น degraded เมื่อ worker ไม่ได้รันนานกว่านี้
 ADMIN_EMAIL=                          # ใส่ชั่วคราวเฉพาะตอน seed admin คนแรก (§4.7 ข้อ 4) แล้วลบออก
@@ -457,10 +457,10 @@ Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** �
 
 1. **สร้าง project** Google Cloud Console → เลือก project (มุมซ้ายบน) → **New project** ชื่อ `eduvision-signin` (ชื่อไม่สำคัญ แต่ต้องเป็นคนละ project กับ Classroom/Firebase) → Create แล้วเลือก project นี้ให้แน่ใจก่อนทำข้อต่อไป
 2. **หน้าจอขอความยินยอม** (Google Auth Platform หรือ APIs & Services → OAuth consent screen)
-   - Branding: App name `EduVision`, User support email และ Developer contact = อีเมลของทีม **ไม่ต้องใส่โลโก้** (ใส่โลโก้แล้ว Google ต้องตรวจ brand ก่อนแสดง) Authorized domains: `phuwish.com` Application home page และ privacy policy ใส่ได้ถ้ามี
+   - Branding: App name `Krucheck` (project ที่สร้างก่อน 10 ต.ค. 2569 ใช้ชื่อ `EduVision` ให้แก้ที่ช่องนี้ DESIGN §28.3), User support email และ Developer contact = อีเมลของทีม **ไม่ต้องใส่โลโก้** (ใส่โลโก้แล้ว Google ต้องตรวจ brand ก่อนแสดง) Authorized domains: `phuwish.com` Application home page และ privacy policy ใส่ได้ถ้ามี
    - Audience: User type **External** → แล้วกด **Publish app** (In production) หลังตั้งเสร็จ scope พื้นฐานไม่ต้องผ่าน verification ถ้าค้างโหมด Testing จะใช้ได้เฉพาะ test users และบัญชีอื่นได้ error `access_denied`
    - Data access (Scopes): `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile` เท่านั้น ห้ามเพิ่ม scope ของ Classroom หรือ Drive ใน project นี้
-3. **client แบบ Web application** Credentials → Create credentials → OAuth client ID → Application type **Web application** ชื่อ `EduVision sign-in web`
+3. **client แบบ Web application** Credentials → Create credentials → OAuth client ID → Application type **Web application** ชื่อ `Krucheck sign-in web`
    - client ID ตัวนี้คือ `aud` ของ ID token **ทุกตัว** (แอป Android ส่งค่านี้เป็น `serverClientId`) จึงต้องสร้างแม้จะไม่ใช้ทางเว็บ
 4. **Authorized redirect URIs** ของ client Web (ใช้กับทางเว็บเท่านั้น): `https://teacherhelper.phuwish.com/auth/google/callback` และตอน dev `http://127.0.0.1:8000/auth/google/callback` (ตรงทุกตัวอักษร ไม่มี `/` ท้าย คนละ path กับ `/google/oauth/callback` ของ Classroom) *Authorized JavaScript origins* ไม่ต้องใส่ → Create แล้วจด **client ID** และ **client secret** (secret ใส่ `.env` เท่านั้น ห้าม commit หรือวางในแชต)
 5. **client แบบ Android** Create credentials → OAuth client ID → **Android**: package name `com.eduvision.app` และ **SHA-1** ของ keystore ที่เซ็นแอป

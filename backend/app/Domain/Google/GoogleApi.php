@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 /**
- * The few Google Classroom v1 and Drive v3 REST calls EduVision makes
+ * The few Google Classroom v1 and Drive v3 REST calls Krucheck makes
  * (DESIGN §18.2), through the Laravel HTTP client (no google/apiclient, which
  * is far too big for shared hosting). Every call sends the teacher's access
  * token as a Bearer header; a 401 drops the cached token and tries once more

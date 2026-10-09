@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * in, so any paper works. attach_blank_worksheet is still accepted from
  * older apps and ignored.
  *
- * Only courseWork created here can take grades from EduVision later, so an
+ * Only courseWork created here can take grades from Krucheck later, so an
  * assignment is posted at most once (409 already_posted); a cache lock stops
  * a double tap from creating two.
  */
@@ -124,7 +124,7 @@ final class CourseWorkPoster
         }
         $lines[] = '';
         $appLink = trim((string) config('services.google.app_link'));
-        $lines[] = 'คะแนนจะแสดงที่นี่เมื่อครูตรวจเสร็จ ดูคำอธิบายรายข้อได้ในแอป EduVision'.($appLink !== '' ? " {$appLink}" : '');
+        $lines[] = 'คะแนนจะแสดงที่นี่เมื่อครูตรวจเสร็จ ดูคำอธิบายรายข้อได้ในแอป Krucheck'.($appLink !== '' ? " {$appLink}" : '');
 
         return implode("\n", $lines);
     }

@@ -115,7 +115,7 @@ class PluginScanCamera implements ScanCamera {
   static ScanCameraException _map(CameraException e) {
     if (e.code.startsWith('CameraAccess')) {
       return const ScanCameraException(
-        'แอปยังไม่ได้รับอนุญาตให้ใช้กล้อง เปิดสิทธิ์กล้องให้ EduVision '
+        'แอปยังไม่ได้รับอนุญาตให้ใช้กล้อง เปิดสิทธิ์กล้องให้ Krucheck '
         'ในการตั้งค่าของเครื่อง แล้วลองใหม่',
         permissionDenied: true,
       );

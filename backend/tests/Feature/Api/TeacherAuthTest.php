@@ -42,7 +42,7 @@ class TeacherAuthTest extends TestCase
             ->assertJsonPath('user.email', 't1@example.com')
             ->assertJsonPath('user.role', 'teacher')
             ->assertJsonPath('user.status', 'pending') // DESIGN §9.1: admin approves in Filament
-            ->assertJsonPath('user.school.name', 'โรงเรียนสาธิต EduVision')
+            ->assertJsonPath('user.school.name', 'โรงเรียนสาธิต Krucheck')
             ->assertJsonMissingPath('user.password');
 
         $school = School::query()->where('teacher_join_code', self::JOIN_CODE)->firstOrFail();
@@ -208,7 +208,7 @@ class TeacherAuthTest extends TestCase
             ->assertOk()
             ->assertExactJson(['data' => [
                 ['id' => $second->id, 'name' => 'ก โรงเรียนแรกตามตัวอักษร'],
-                ['id' => $seeded->id, 'name' => 'โรงเรียนสาธิต EduVision'],
+                ['id' => $seeded->id, 'name' => 'โรงเรียนสาธิต Krucheck'],
             ]]);
 
         $this->assertStringNotContainsString(self::JOIN_CODE, $response->getContent());
@@ -343,7 +343,7 @@ class TeacherAuthTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.name', 'ครูทดสอบ')
             ->assertJsonPath('data.role', 'teacher')
-            ->assertJsonPath('data.school.name', 'โรงเรียนสาธิต EduVision');
+            ->assertJsonPath('data.school.name', 'โรงเรียนสาธิต Krucheck');
     }
 
     public function test_me_without_a_token_is_unauthenticated(): void

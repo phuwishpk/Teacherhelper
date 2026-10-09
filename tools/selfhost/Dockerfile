@@ -1,4 +1,4 @@
-# EduVision backend for the self-hosted Docker server (docs/SELFHOST.md).
+# Krucheck backend for the self-hosted Docker server (docs/SELFHOST.md).
 # Apache + mod_php, the same shape as the Plesk host, so public/.htaccess and
 # the web app's public/app/.htaccess apply unchanged. Build context: repo root.
 FROM composer:2 AS composer

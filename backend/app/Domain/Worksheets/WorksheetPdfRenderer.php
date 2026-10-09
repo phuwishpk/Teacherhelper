@@ -60,7 +60,7 @@ class WorksheetPdfRenderer
 
         $mpdf = $this->mpdfFactory->create();
         $mpdf->SetTitle($assignment->title);
-        $mpdf->SetCreator('EduVision');
+        $mpdf->SetCreator('Krucheck');
 
         foreach ($students as $student) {
             foreach ($plan->pages as $index => $placedQuestions) {
@@ -147,7 +147,7 @@ class WorksheetPdfRenderer
         $mpdf->SetFont(WorksheetMpdfFactory::FONT, '', 8);
         $mpdf->SetTextColor(120, 120, 120);
         $mpdf->SetXY(WorksheetGeometry::CONTENT_LEFT + 12, WorksheetGeometry::FOOTER_Y);
-        $mpdf->WriteCell(WorksheetGeometry::contentWidth() - 24, 4, 'EduVision · ใบงานเวอร์ชัน '.$version.' · เขียนคำตอบในกรอบเท่านั้น', 0, 0, 'C');
+        $mpdf->WriteCell(WorksheetGeometry::contentWidth() - 24, 4, 'Krucheck · ใบงานเวอร์ชัน '.$version.' · เขียนคำตอบในกรอบเท่านั้น', 0, 0, 'C');
         $mpdf->SetTextColor(0, 0, 0);
     }
 

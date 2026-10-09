@@ -381,7 +381,7 @@ final class GoogleSignIn
         return GoogleSignInErrors::notLinked(
             ($extra['needs_school'] ?? false)
                 ? 'เลือกโรงเรียนของคุณ แล้วเข้าสู่ระบบด้วย Google อีกครั้ง'
-                : 'ยังไม่มีบัญชี EduVision ที่เชื่อมกับบัญชี Google นี้ สมัครใช้งานครู หรือเข้าสู่ระบบด้วยรหัสผ่านแล้วเชื่อมบัญชี Google ในหน้าตั้งค่า',
+                : 'ยังไม่มีบัญชี Krucheck ที่เชื่อมกับบัญชี Google นี้ สมัครใช้งานครู หรือเข้าสู่ระบบด้วยรหัสผ่านแล้วเชื่อมบัญชี Google ในหน้าตั้งค่า',
             [
                 'link_ticket' => $this->tickets->issueLink($google),
                 'registration' => ['name' => $google->name, 'email' => $google->email],

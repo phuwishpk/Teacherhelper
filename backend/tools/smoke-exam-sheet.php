@@ -72,7 +72,7 @@ foreach ($kit['layouts'] as $index => $page) {
     @mkdir($dir, 0775, true);
     $img = imagecreatetruecolor(620, 877);
     imagefill($img, 0, 0, imagecolorallocate($img, 255, 255, 255));
-    imagestring($img, 5, 40, 40, "EduVision smoke answer sheet {$studentId} p{$pageNo}", imagecolorallocate($img, 20, 20, 60));
+    imagestring($img, 5, 40, 40, "Krucheck smoke answer sheet {$studentId} p{$pageNo}", imagecolorallocate($img, 20, 20, 60));
     imagewebp($img, "{$dir}/page.webp", 80);
     imagedestroy($img);
 

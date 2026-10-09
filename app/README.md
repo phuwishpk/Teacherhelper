@@ -1,6 +1,6 @@
-# EduVision app (Flutter, Android)
+# Krucheck app (Flutter, Android)
 
-แอปครูและนักเรียนของ EduVision โครงสร้างตาม `docs/DESIGN.md` §6
+แอปครูและนักเรียนของ Krucheck โครงสร้างตาม `docs/DESIGN.md` §6
 
 ## รัน
 
@@ -288,7 +288,7 @@ flutter test integration_test/teacher_flow_test.dart -d <device>   # flow เด
 - `tool/check_coverage.dart` อ่าน `lcov.info` เอง ตัด `*.g.dart`, `*.drift.dart`, `*.freezed.dart` และ `lib/platform/pigeons/` ออก
   แล้วพิมพ์ % ต่อไดเรกทอรีกับยอดรวม ออก exit 1 เมื่อต่ำกว่าเกณฑ์ (CI ใช้คำสั่งเดียวกัน) lcov จะไม่มีไฟล์ที่ไม่มี test ไหนโหลดเลย
   สคริปต์จึงเตือนรายชื่อไฟล์ใน `lib/` ที่หายไปจากรายงานด้วย จะได้ไม่หลอกตัวเอง
-- **integration flow** (`test/flows/teacher_flow.dart`): boot `EduVisionApp` ทั้งแอปแบบเดียวกับ `main.dart` (router, session,
+- **integration flow** (`test/flows/teacher_flow.dart`): boot `KrucheckApp` ทั้งแอปแบบเดียวกับ `main.dart` (router, session,
   interceptor แนบ token, drift, provider ทุกตัว) แล้วเดินตาม DESIGN §4: เข้าสู่ระบบครู → สร้างห้องเรียน → สร้างการบ้าน → เพิ่มข้อ →
   สร้าง layout (การบ้านเป็น `ready`) → คิวตรวจทาน → ออกจากระบบ โดยคุยกับ `FakeApiServer` (`test/helpers/fake_api_server.dart`)
   ที่อยู่ในโปรเซสเดียวกันผ่าน `HttpClientAdapter` ของ Dio: ไม่เปิด socket, ตรวจ bearer token ทุก route เหมือน Sanctum, ตอบ error

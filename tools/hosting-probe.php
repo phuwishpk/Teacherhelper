@@ -1,6 +1,6 @@
 <?php
 /*
- * EduVision: hosting probe (ใช้ครั้งเดียวแล้วลบทิ้ง)
+ * Krucheck: hosting probe (ใช้ครั้งเดียวแล้วลบทิ้ง)
  *
  * ตรวจว่า hosting รองรับ backend Laravel ตามที่ออกแบบไว้หรือไม่
  *   1. PHP >= 8.3 และมี extension ที่ Laravel/Filament ต้องใช้
@@ -248,7 +248,7 @@ header('X-Robots-Tag: noindex');
 </style>
 </head>
 <body>
-<h1>EduVision hosting probe</h1>
+<h1>Krucheck hosting probe</h1>
 <p>ตรวจเมื่อ <?= htmlspecialchars(date('Y-m-d H:i:s')) ?> (Asia/Bangkok)</p>
 <table>
   <tr><th>หมวด</th><th>รายการ</th><th>ผล</th><th>รายละเอียด</th></tr>

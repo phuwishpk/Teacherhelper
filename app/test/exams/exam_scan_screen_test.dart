@@ -394,7 +394,7 @@ void main() {
     scanner = FakeExamSheetScanner(FakeAnswerSheetPipeline(supported: false));
     await pump(tester);
     expect(
-      find.textContaining('ต้องใช้แอป EduVision บนโทรศัพท์ Android'),
+      find.textContaining('ต้องใช้แอป Krucheck บนโทรศัพท์ Android'),
       findsOneWidget,
     );
     expect(repo.kitCalls, 0);

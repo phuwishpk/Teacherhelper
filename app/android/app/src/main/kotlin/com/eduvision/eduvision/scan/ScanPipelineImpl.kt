@@ -236,7 +236,7 @@ class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
                 TimeUnit.SECONDS,
             )
             val values = codes.mapNotNull { it.rawValue }
-            values.firstOrNull { FrameMath.isEduVisionQr(it) } ?: values.firstOrNull()
+            values.firstOrNull { FrameMath.isKrucheckQr(it) } ?: values.firstOrNull()
         } catch (e: Exception) {
             Log.w(TAG, "QR reading failed", e)
             null

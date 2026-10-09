@@ -35,7 +35,7 @@ DioException apiError(
 DioException staffNotLinked() => apiError(
   404,
   'google_not_linked',
-  message: 'ยังไม่มีบัญชี EduVision ที่เชื่อมกับบัญชี Google นี้',
+  message: 'ยังไม่มีบัญชี Krucheck ที่เชื่อมกับบัญชี Google นี้',
   extra: {
     'link_ticket': 'a' * 48,
     'registration': {'name': 'ครูใหม่ ใจดี', 'email': 'new@school.ac.th'},

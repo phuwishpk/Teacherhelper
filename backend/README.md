@@ -1,6 +1,6 @@
-# EduVision backend (Laravel 13)
+# Krucheck backend (Laravel 13)
 
-API และ web admin ของ EduVision รันบน shared Plesk hosting (ไม่มี SSH, Docker, daemon หรือ Redis) ดู `docs/DESIGN.md` §7–§9 และ `docs/KICKOFF.md` ส่วนที่ 3 ก่อนแก้โค้ด
+API และ web admin ของ Krucheck รันบน shared Plesk hosting (ไม่มี SSH, Docker, daemon หรือ Redis) ดู `docs/DESIGN.md` §7–§9 และ `docs/KICKOFF.md` ส่วนที่ 3 ก่อนแก้โค้ด
 
 สถานะ: M0 → Phase 6 แล้ว (auth, ห้องเรียน/นักเรียน, การบ้าน/ใบงาน, สแกน, Gemini + fuzzy, ตรวจทาน/เผยแพร่/คำขอตรวจใหม่, FCM, Google Classroom, คลังแบบฝึก/mastery/analytics และโมเดลบนมือถือ) และ B7 (security suite, CI, คู่มือ deploy `docs/HOSTING.md`) ดูหัวข้อด้านล่างต่อส่วน
 
@@ -259,7 +259,7 @@ php artisan eduvision:purge-images
 | payload ที่ส่ง Gemini มีเฉพาะ crop ของช่องคำตอบ + โจทย์/เฉลย/rubric: ไม่มีชื่อ, เลขที่, ห้อง, โรงเรียน, ภาพหน้าเต็ม, QR, key (render body จริงของ `HttpGeminiClient::payload()` แล้วค้น) และ `ai_calls`/log ก็ไม่มี | `ExtractionRequests`, `ExplanationRequests` | `GeminiPayloadPrivacyTest` |
 | prompt injection ผ่านลายมือ: `tests/fixtures/injection/*.png` (+ `manifest.json`) ผ่าน `GradeScanJob` → `suspicious_instruction` → บนสุดของคิว, `bulk_approvable: false`, ไม่สร้างคำอธิบาย; system instruction บอกว่าภาพเป็นข้อมูล และ schema บังคับ flag ตรวจกับโมเดลจริงได้ด้วย `php artisan eduvision:gemini-check --injection` (ต้องมี key, 1 request ต่อภาพ, ส่งแต่ละภาพเป็น crop ของข้อเติมคำผ่าน prompt/schema `extract` ของจริง แล้วเทียบกับ `expect_suspicious_instruction` ไม่ตรงแม้ภาพเดียว = exit 1) | `FakeGeminiClient` อ่าน marker `[fake:...]` จาก tEXt chunk ของ PNG เหมือนโมเดลที่อ่านข้อความในภาพ | `PromptInjectionTest`, `Console/GeminiCheckCommandTest` |
 | Gemini key ของครูไม่ออกทาง response/log/`ai_calls`/แถว DB แม้ตอน Google ปฏิเสธ key; key กลางก็เช่นกัน | `TeacherApiKey` (encrypted), `GeminiKeyResolver` | `SecretsHygieneTest` |
-| ไม่มี `env()` นอก `config/` (production ใช้ `optimize`), ทุกตัวแปรของ EduVision อยู่ใน `.env.example`, `.env.example` ไม่มีค่าจริง, suite ไม่แตะ Gemini จริง; suite ไม่อ่าน config/route/event cache (`phpunit.xml` ชี้ `APP_CONFIG_CACHE`/`APP_ROUTES_CACHE`/`APP_EVENTS_CACHE` ไปที่ไฟล์ที่ไม่มีอยู่ใน `storage/framework/testing/` และ `tests/TestCase::setUp` fail ถ้าเจอ cache) จึงรัน `php artisan optimize` คู่กับ suite ได้โดย test ไม่ไปใช้ค่าใน `.env` (key Gemini จริง, database ในเครื่อง) | `phpunit.xml`, `tests/TestCase.php` | `ConfigCacheSafetyTest` |
+| ไม่มี `env()` นอก `config/` (production ใช้ `optimize`), ทุกตัวแปรของ Krucheck อยู่ใน `.env.example`, `.env.example` ไม่มีค่าจริง, suite ไม่แตะ Gemini จริง; suite ไม่อ่าน config/route/event cache (`phpunit.xml` ชี้ `APP_CONFIG_CACHE`/`APP_ROUTES_CACHE`/`APP_EVENTS_CACHE` ไปที่ไฟล์ที่ไม่มีอยู่ใน `storage/framework/testing/` และ `tests/TestCase::setUp` fail ถ้าเจอ cache) จึงรัน `php artisan optimize` คู่กับ suite ได้โดย test ไม่ไปใช้ค่าใน `.env` (key Gemini จริง, database ในเครื่อง) | `phpunit.xml`, `tests/TestCase.php` | `ConfigCacheSafetyTest` |
 | secret scan | pre-commit hook (`.git/hooks`, ในเครื่องเท่านั้น) กัน `AIza...` และ `AQ....`; CI รัน gitleaks ทั้งประวัติด้วยกฎ default + `google-aq-api-key` (`AQ\.[0-9A-Za-z_-]{40,}`) จาก `.gitleaks.toml` ที่ root เพราะกฎ default จับ key แบบ `AQ.` ได้เฉพาะเมื่ออยู่ติดคำว่า api_key | `.github/workflows/backend.yml`, `.gitleaks.toml` |
 
 CORS ของ `api/*` เป็นค่าเริ่มต้นของ Laravel (`allowed_origins: *`) จงใจคงไว้เพื่อ `flutter run -d chrome` ตอนพรีวิว UI; API ใช้ bearer token ไม่ใช่ cookie จึงไม่มี CSRF

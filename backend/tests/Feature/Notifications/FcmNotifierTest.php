@@ -165,7 +165,7 @@ class FcmNotifierTest extends TestCase
         $this->assertSame('Bearer ya29.test-access', $request->header('Authorization')[0]);
         $this->assertSame([
             'token' => 'tok-good',
-            'notification' => ['title' => 'EduVision', 'body' => 'ตรวจ การบ้านบทที่ 3 เสร็จแล้ว มี 12 ข้อรอตรวจทาน'],
+            'notification' => ['title' => 'Krucheck', 'body' => 'ตรวจ การบ้านบทที่ 3 เสร็จแล้ว มี 12 ข้อรอตรวจทาน'],
             'data' => ['type' => 'grading_done', 'assignment_id' => (string) $assignment->id],
             'android' => ['notification' => ['tag' => 'grading_done']],
         ], $request['message']);
@@ -307,6 +307,6 @@ class FcmNotifierTest extends TestCase
             ->doesntExpectOutputToContain('tok-check')
             ->assertSuccessful();
         [$request] = Http::recorded(fn (Request $r) => $r->url() === self::SEND_URL)->values()[0];
-        $this->assertSame('ทดสอบการแจ้งเตือนจาก EduVision', $request['message']['notification']['body']);
+        $this->assertSame('ทดสอบการแจ้งเตือนจาก Krucheck', $request['message']['notification']['body']);
     }
 }

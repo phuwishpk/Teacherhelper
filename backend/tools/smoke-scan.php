@@ -78,7 +78,7 @@ $bubbles = function (?string $chosen, string $path) use ($font): void {
 foreach ($layout['pages'] as $page) {
     $dir = rtrim($outDir, '/').'/page'.$page['page'];
     @mkdir($dir, 0777, true);
-    $render(['EduVision smoke page '.$page['page']], 600, 840, $dir.'/page.webp');
+    $render(['Krucheck smoke page '.$page['page']], 600, 840, $dir.'/page.webp');
 
     $regions = [];
     foreach ($page['regions'] as $region) {

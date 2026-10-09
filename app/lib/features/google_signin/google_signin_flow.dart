@@ -438,7 +438,7 @@ class _OrDivider extends StatelessWidget {
 /// button, the PDPA notice, the last error and a divider to the form.
 /// Nothing when Google sign-in is off for this build or server.
 /// [onRegistration] gets the Google name, e-mail and link ticket of an
-/// account that has no EduVision account yet.
+/// account that has no Krucheck account yet.
 class GoogleSignUpSection extends ConsumerStatefulWidget {
   const GoogleSignUpSection({super.key, required this.onRegistration});
 

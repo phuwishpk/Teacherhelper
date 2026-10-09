@@ -5,7 +5,7 @@ import '../google_classroom/google_auth.dart' show GoogleAuthException;
 /// the `error=` / `status=` of the web flow's redirects (§24.22). Null for
 /// a code the app does not know.
 String? googleSignInCodeMessage(String? code) => switch (code) {
-  'google_not_linked' => 'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชี EduVision',
+  'google_not_linked' => 'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชี Krucheck',
   'google_domain_not_allowed' =>
     'โรงเรียนไม่อนุญาตให้ใช้บัญชี Google ของโดเมนนี้ กรุณาใช้บัญชี Google ของโรงเรียน',
   'student_google_disabled' =>

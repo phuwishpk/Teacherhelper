@@ -9,7 +9,7 @@ use RecursiveIteratorIterator;
 /**
  * Production runs `artisan optimize` (config:cache), after which env()
  * returns null everywhere but inside config/*.php. This keeps every env()
- * call inside config/ and every EduVision variable documented in
+ * call inside config/ and every Krucheck variable documented in
  * .env.example, so a deploy never silently loses a setting.
  */
 class ConfigCacheSafetyTest extends TestCase

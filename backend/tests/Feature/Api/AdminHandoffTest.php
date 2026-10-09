@@ -238,7 +238,7 @@ class AdminHandoffTest extends TestCase
     {
         $this->get('/admin/login')
             ->assertOk()
-            ->assertSee('เข้าสู่ระบบจากแอป EduVision ได้ด้วยบัญชีเดียวกัน')
+            ->assertSee('เข้าสู่ระบบจากแอป Krucheck ได้ด้วยบัญชีเดียวกัน')
             ->assertDontSee('ลิงก์เข้าสู่ระบบนี้ใช้ไม่ได้แล้ว');
 
         $this->visit('/admin/handoff/'.str_repeat('c', 48));

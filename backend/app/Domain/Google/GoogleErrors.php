@@ -23,7 +23,7 @@ final class GoogleErrors
                 422,
             ),
             GoogleApiException::PROJECT_PERMISSION_DENIED => new ApiException(
-                'งานนี้ไม่ได้สร้างจากแอป EduVision จึงส่งคะแนนหรือส่งคืนงานผ่านแอปไม่ได้ ต้องสั่งงานด้วยปุ่ม "โพสต์ลง Classroom" ในแอป',
+                'งานนี้ไม่ได้สร้างจากแอป Krucheck จึงส่งคะแนนหรือส่งคืนงานผ่านแอปไม่ได้ ต้องสั่งงานด้วยปุ่ม "โพสต์ลง Classroom" ในแอป',
                 'project_permission_denied',
                 409,
             ),

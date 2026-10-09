@@ -15,7 +15,7 @@ class SchoolSeeder extends Seeder
     {
         School::firstOrCreate(
             ['teacher_join_code' => config('eduvision.seed_teacher_join_code')],
-            ['name' => 'โรงเรียนสาธิต EduVision'],
+            ['name' => 'โรงเรียนสาธิต Krucheck'],
         );
     }
 }

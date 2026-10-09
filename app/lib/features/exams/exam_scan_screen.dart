@@ -552,7 +552,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
         body: const _Message(
           icon: Icons.phone_android,
           text:
-              'การสแกนกระดาษคำตอบต้องใช้แอป EduVision บนโทรศัพท์ Android '
+              'การสแกนกระดาษคำตอบต้องใช้แอป Krucheck บนโทรศัพท์ Android '
               '(บนเว็บไม่มีตัวอ่านกระดาษคำตอบ)',
         ),
       );

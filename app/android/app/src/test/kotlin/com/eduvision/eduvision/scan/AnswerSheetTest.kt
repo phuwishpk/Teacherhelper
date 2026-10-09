@@ -174,9 +174,9 @@ class AnswerSheetTest {
     }
 
     @Test
-    fun onlyEduVisionQrsArePreferred() {
-        assertTrue(FrameMath.isEduVisionQr("EV1.1.2.1.1.ABCDEFGH"))
-        assertTrue(FrameMath.isEduVisionQr("EVX1.301.4567.1.1.Q2M7K3PA"))
-        assertFalse(FrameMath.isEduVisionQr("https://example.com"))
+    fun onlyKrucheckQrsArePreferred() {
+        assertTrue(FrameMath.isKrucheckQr("EV1.1.2.1.1.ABCDEFGH"))
+        assertTrue(FrameMath.isKrucheckQr("EVX1.301.4567.1.1.Q2M7K3PA"))
+        assertFalse(FrameMath.isKrucheckQr("https://example.com"))
     }
 }

@@ -47,16 +47,16 @@ class GoogleOAuthCallbackController extends Controller
 
             return $error === 'access_denied'
                 ? $this->page(200, 'cancelled', 'ยกเลิกการเชื่อม Google Classroom แล้ว',
-                    'ยังไม่ได้อนุญาตสิทธิ์ใน Google จึงไม่ได้เชื่อมบัญชี ถ้าต้องการเชื่อม กลับไปที่แอป EduVision แล้วกด "เชื่อม Google Classroom" อีกครั้ง')
+                    'ยังไม่ได้อนุญาตสิทธิ์ใน Google จึงไม่ได้เชื่อมบัญชี ถ้าต้องการเชื่อม กลับไปที่แอป Krucheck แล้วกด "เชื่อม Google Classroom" อีกครั้ง')
                 : $this->page(400, 'error', 'Google ไม่ได้ให้สิทธิ์',
-                    'Google ส่งกลับมาโดยไม่มีรหัสยืนยัน'.($error !== '' ? " ({$error})" : '').' กลับไปที่แอป EduVision แล้วกดเชื่อมอีกครั้ง');
+                    'Google ส่งกลับมาโดยไม่มีรหัสยืนยัน'.($error !== '' ? " ({$error})" : '').' กลับไปที่แอป Krucheck แล้วกดเชื่อมอีกครั้ง');
         }
 
         if ($teacherId === null) {
             Log::info('google.oauth_callback', ['result' => 'state_invalid']);
 
             return $this->page(400, 'error', 'ลิงก์เชื่อม Google ใช้ไม่ได้แล้ว',
-                'ลิงก์นี้ถูกใช้ไปแล้วหรือเปิดไว้นานเกิน 10 นาที กลับไปที่แอป EduVision แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
+                'ลิงก์นี้ถูกใช้ไปแล้วหรือเปิดไว้นานเกิน 10 นาที กลับไปที่แอป Krucheck แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
         }
 
         $teacher = User::query()->find($teacherId);
@@ -72,7 +72,7 @@ class GoogleOAuthCallbackController extends Controller
             Log::info('google.oauth_callback', ['result' => 'code_missing', 'user_id' => $teacher->id]);
 
             return $this->page(400, 'error', 'Google ไม่ได้ส่งรหัสยืนยันมา',
-                'กลับไปที่แอป EduVision แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
+                'กลับไปที่แอป Krucheck แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
         }
 
         try {
@@ -86,7 +86,7 @@ class GoogleOAuthCallbackController extends Controller
         }
 
         return $this->page(200, 'success', 'เชื่อม Google Classroom สำเร็จ',
-            'กลับไปที่แอป EduVision ได้เลย แอปจะเห็นการเชื่อมเองในไม่กี่วินาที (หรือกด "ตรวจสอบการเชื่อม") แล้วปิดหน้านี้ได้',
+            'กลับไปที่แอป Krucheck ได้เลย แอปจะเห็นการเชื่อมเองในไม่กี่วินาที (หรือกด "ตรวจสอบการเชื่อม") แล้วปิดหน้านี้ได้',
             email: (string) ($status['email'] ?? ''), teacher: (string) $teacher->name);
     }
 

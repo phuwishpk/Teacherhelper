@@ -44,7 +44,7 @@ final readonly class PushMessage
 
     public const COURSE_REQUEST_DECIDED = 'course_request_decided';
 
-    public const TITLE = 'EduVision';
+    public const TITLE = 'Krucheck';
 
     /**
      * @param  array<string, int|string>  $data  ids only; sent as strings

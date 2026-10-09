@@ -10,9 +10,9 @@ import 'package:go_router/go_router.dart';
 
 import '../helpers/pump_screen.dart';
 
-const _one = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision')];
+const _one = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck')];
 const _two = [
-  SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision'),
+  SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck'),
   SchoolOption(id: 9, name: 'โรงเรียนวัดใหม่'),
 ];
 
@@ -120,7 +120,7 @@ void main() {
     (tester) async {
       final auth = await _pump(tester, _FakeAuth());
       expect(find.byKey(const ValueKey('register_school_single')), findsOne);
-      expect(find.text('โรงเรียนสาธิต EduVision'), findsOneWidget);
+      expect(find.text('โรงเรียนสาธิต Krucheck'), findsOneWidget);
       expect(find.byType(DropdownButtonFormField<int>), findsNothing);
 
       await _fillTeacher(tester);
@@ -179,7 +179,7 @@ void main() {
     await tester.tap(find.text('ลองอีกครั้ง'));
     await tester.pumpAndSettle();
     expect(auth.schoolLoads, 2);
-    expect(find.text('โรงเรียนสาธิต EduVision'), findsOneWidget);
+    expect(find.text('โรงเรียนสาธิต Krucheck'), findsOneWidget);
   });
 
   testWidgets('without a list the server picks; school_required reloads it', (

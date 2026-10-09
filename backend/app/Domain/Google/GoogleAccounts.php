@@ -103,7 +103,7 @@ final class GoogleAccounts
             // stored one for the same account while it still works.
             if ($existing === null || $existing->google_sub !== $profile['id'] || $existing->needsReconnect()) {
                 throw new ApiException(
-                    'Google ไม่ได้ให้สิทธิ์แบบใช้งานต่อเนื่องมา ไปที่ myaccount.google.com → ความปลอดภัย → การเชื่อมต่อกับแอปของบุคคลที่สาม ลบ EduVision ออก แล้วกดเชื่อมอีกครั้ง',
+                    'Google ไม่ได้ให้สิทธิ์แบบใช้งานต่อเนื่องมา ไปที่ myaccount.google.com → ความปลอดภัย → การเชื่อมต่อกับแอปของบุคคลที่สาม ลบ Krucheck ออก แล้วกดเชื่อมอีกครั้ง',
                     'google_refresh_token_missing',
                     422,
                 );

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  * (DESIGN §24.10), so an import or a roster sync enrols the student's one
  * account instead of creating a second one. Passes, strongest first:
  *
- *   1. google       the account signs in to EduVision (user_google_identities.google_sub);
+ *   1. google       the account signs in to Krucheck (user_google_identities.google_sub);
  *   2. classroom_user  a classroom of the school has it matched (classroom_students.google_user_id);
  *   3. email        a classroom of the school saw the same e-mail (classroom_students.google_email, any case);
  *   4. name         the same full name after NameNormalizer (passes 1-2 of RosterMatcher).

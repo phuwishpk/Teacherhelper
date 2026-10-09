@@ -21,10 +21,7 @@ Future<void> main() async {
   // Registers the background upload isolate (no-op off Android).
   await container.read(uploadSchedulerProvider).initialize();
   runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const EduVisionApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const KrucheckApp()),
   );
 }
 
@@ -37,7 +34,7 @@ class MisconfiguredApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EduVision',
+      title: 'Krucheck',
       home: Scaffold(
         body: Center(
           child: Padding(

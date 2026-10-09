@@ -762,7 +762,7 @@ class _RetakeDialogState extends State<_RetakeDialog> {
           children: [
             const Text(
               'งานจะถูกส่งคืนใน Classroom ให้นักเรียนส่งใหม่ได้ '
-              'และนักเรียนเห็นเหตุผลนี้ในแอป EduVision',
+              'และนักเรียนเห็นเหตุผลนี้ในแอป Krucheck',
             ),
             const SizedBox(height: 12),
             TextField(

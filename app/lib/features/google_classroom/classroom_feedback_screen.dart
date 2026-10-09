@@ -195,7 +195,7 @@ class _FeedbackListState extends ConsumerState<FeedbackList> {
                     Text(
                       'เมื่อเผยแพร่ผล ระบบส่งประกาศส่วนตัวใน Classroom ถึงนักเรียนแต่ละคน '
                       '(เห็นเฉพาะนักเรียนคนนั้นและครูของคอร์ส) มีคะแนนรวม คำอธิบายรายข้อ '
-                      'และลิงก์เปิดผลในแอป EduVision ส่งเฉพาะนักเรียนที่จับคู่บัญชี Google แล้ว',
+                      'และลิงก์เปิดผลในแอป Krucheck ส่งเฉพาะนักเรียนที่จับคู่บัญชี Google แล้ว',
                       style: muted,
                     ),
                     if (counts[FeedbackPostState.queued]! > 0) ...[

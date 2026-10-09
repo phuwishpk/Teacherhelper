@@ -2,7 +2,7 @@
 
 /*
 |--------------------------------------------------------------------------
-| EduVision application settings
+| Krucheck application settings
 |--------------------------------------------------------------------------
 | Read these through config('eduvision.*'), never env() directly: production
 | runs `config:cache`, after which env() returns null outside config files.

@@ -1,4 +1,4 @@
-# EduVision: รายการตรวจตอนขึ้นเว็บครั้งแรก
+# Krucheck: รายการตรวจตอนขึ้นเว็บครั้งแรก
 
 - **สำหรับ:** คนที่มีสิทธิ์เข้า Plesk ของ `teacherhelper.phuwish.com` ทำตามลำดับ 1–10 รายละเอียดและวิธีแก้ปัญหาอยู่ใน [HOSTING.md](HOSTING.md) (เลขหัวข้อในวงเล็บ)
 - **ผลที่ได้:** backend ที่ `https://teacherhelper.phuwish.com/api/v1`, หน้าผู้ดูแลระบบที่ `/admin` และเว็บแอปของครูกับนักเรียนที่ `/app/` (DESIGN §25) แอป Android ทำภายหลัง

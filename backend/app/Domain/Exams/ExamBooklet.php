@@ -141,7 +141,7 @@ class ExamBooklet
         $plan ??= $this->plan($exam, $version);
         $mpdf = $this->mpdf();
         $mpdf->SetTitle($exam->title.($plan->versionLabel !== null ? ' ชุด '.$plan->versionLabel : ''));
-        $mpdf->SetCreator('EduVision');
+        $mpdf->SetCreator('Krucheck');
 
         foreach ($plan->pages as $index => $blocks) {
             $mpdf->AddPage();

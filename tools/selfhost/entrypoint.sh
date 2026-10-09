@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts an EduVision container: installs the mounted .env, makes the storage
+# Starts an Krucheck container: installs the mounted .env, makes the storage
 # volume writable, rebuilds Laravel's caches (web container only), then hands
 # over to the command.
 set -e

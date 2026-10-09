@@ -24,7 +24,7 @@ class RecordedRequest {
   Map<String, dynamic> get jsonBody => FakeApiServer.bodyOf(options);
 }
 
-/// In-process stand-in for the EduVision API (DESIGN §9), reached through
+/// In-process stand-in for the Krucheck API (DESIGN §9), reached through
 /// [adapter] by a Dio built with `createDio`, so the whole app runs without
 /// opening a socket. It keeps the state one teacher's session produces
 /// (classrooms, assignments, questions, layouts), rejects every protected

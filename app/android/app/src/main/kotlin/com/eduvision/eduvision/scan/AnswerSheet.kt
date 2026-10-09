@@ -186,6 +186,6 @@ object FrameMath {
         return PixelSize(max(1, round(w).toInt()), max(1, round(h).toInt()))
     }
 
-    /** True when [payload] is an EduVision worksheet or answer-sheet QR. */
-    fun isEduVisionQr(payload: String): Boolean = payload.startsWith("EV1.") || payload.startsWith("EVX1.")
+    /** True when [payload] is an Krucheck worksheet or answer-sheet QR. */
+    fun isKrucheckQr(payload: String): Boolean = payload.startsWith("EV1.") || payload.startsWith("EVX1.")
 }

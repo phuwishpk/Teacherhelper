@@ -8,14 +8,14 @@ import 'core/theme/app_theme.dart';
 import 'features/upload_queue/scan_queue_repository.dart';
 import 'features/upload_queue/upload_worker.dart';
 
-class EduVisionApp extends ConsumerStatefulWidget {
-  const EduVisionApp({super.key});
+class KrucheckApp extends ConsumerStatefulWidget {
+  const KrucheckApp({super.key});
 
   @override
-  ConsumerState<EduVisionApp> createState() => _EduVisionAppState();
+  ConsumerState<KrucheckApp> createState() => _KrucheckAppState();
 }
 
-class _EduVisionAppState extends ConsumerState<EduVisionApp>
+class _KrucheckAppState extends ConsumerState<KrucheckApp>
     with WidgetsBindingObserver {
   @override
   void initState() {
@@ -63,7 +63,7 @@ class _EduVisionAppState extends ConsumerState<EduVisionApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'EduVision',
+      title: 'Krucheck',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

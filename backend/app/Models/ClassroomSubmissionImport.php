@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §18.4 `classroom_submission_imports`: one Google Classroom
- * studentSubmission of a posted assignment and what EduVision did with it.
+ * studentSubmission of a posted assignment and what Krucheck did with it.
  *
  * @property int $id
  * @property int $assignment_id

@@ -157,7 +157,7 @@ void main() {
 
   group('a new teacher (#71)', () {
     const schools = [
-      SchoolOption(id: 7, name: 'โรงเรียนสาธิต EduVision'),
+      SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck'),
       SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
     ];
     final picker = find.byKey(const ValueKey('google_school_picker'));

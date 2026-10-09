@@ -65,7 +65,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     ];
 
     return AdaptiveShell(
-      title: user == null ? 'EduVision' : 'สวัสดี ${user.name}',
+      title: user == null ? 'Krucheck' : 'สวัสดี ${user.name}',
       accountName: user?.name,
       accountCaption: user?.schoolName,
       destinations: [

@@ -56,7 +56,7 @@ class _StudentQrScanScreenState extends ConsumerState<StudentQrScanScreen> {
       }
     }
     if (payload == null) {
-      setState(() => _error = 'QR นี้ไม่ใช่บัตรเข้าสู่ระบบของ EduVision');
+      setState(() => _error = 'QR นี้ไม่ใช่บัตรเข้าสู่ระบบของ Krucheck');
       return;
     }
     setState(() {

@@ -6,7 +6,7 @@ use Normalizer;
 
 /**
  * Normalises a student's name so the name in Google Classroom and the name
- * the teacher typed into EduVision compare equal (DESIGN §18.6 roster
+ * the teacher typed into Krucheck compare equal (DESIGN §18.6 roster
  * suggestions): Unicode NFC, lower case, Thai and English titles removed
  * (ด.ช., เด็กหญิง, นาย, Mr. ...), Thai and Arabic digits unified, and
  * everything but letters, marks and digits dropped.

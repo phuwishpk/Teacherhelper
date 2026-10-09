@@ -10,7 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>เปิดผลในแอป EduVision</title>
+<title>เปิดผลในแอป Krucheck</title>
 <style>
     :root { --bg: #f4f6fb; --card: #ffffff; --text: #1d2433; --muted: #5b6475; --line: #e3e7ef; --accent: #2f5bd3; --on-accent: #ffffff; }
     @media (prefers-color-scheme: dark) {
@@ -35,15 +35,15 @@
 </head>
 <body>
 <main>
-    <h1>เปิดผลในแอป EduVision</h1>
-    <p>ผลการตรวจงานพร้อมคำอธิบายรายข้ออยู่ในแอป EduVision กดปุ่มด้านล่างบนมือถือ Android ที่ติดตั้งแอปไว้</p>
-    <a class="button" href="{{ $intentUrl }}">เปิดในแอป EduVision</a>
-    <p class="muted">ถ้ากดแล้วไม่เปิด ให้เปิดแอป EduVision เอง เข้าสู่ระบบด้วยบัญชีนักเรียน แล้วไปที่ "ผลการตรวจ"</p>
+    <h1>เปิดผลในแอป Krucheck</h1>
+    <p>ผลการตรวจงานพร้อมคำอธิบายรายข้ออยู่ในแอป Krucheck กดปุ่มด้านล่างบนมือถือ Android ที่ติดตั้งแอปไว้</p>
+    <a class="button" href="{{ $intentUrl }}">เปิดในแอป Krucheck</a>
+    <p class="muted">ถ้ากดแล้วไม่เปิด ให้เปิดแอป Krucheck เอง เข้าสู่ระบบด้วยบัญชีนักเรียน แล้วไปที่ "ผลการตรวจ"</p>
     @if ($webUrl !== null)
         <p>ไม่มีแอป หรือใช้คอมพิวเตอร์อยู่ เปิดผลบนเว็บได้</p>
         <a class="button" href="{{ $webUrl }}">เปิดบนเว็บ</a>
     @endif
-    <footer class="muted">EduVision</footer>
+    <footer class="muted">Krucheck</footer>
 </main>
 </body>
 </html>

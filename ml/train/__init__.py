@@ -1,4 +1,4 @@
-"""EduVision CRNN digit reader: training, export and evaluation (DESIGN section 12).
+"""Krucheck CRNN digit reader: training, export and evaluation (DESIGN section 12).
 
 The on-device model reads the handwriting inside a numeric answer frame
 (``0-9 . - /``) and is only a *second reader*: its output feeds input ``D`` of

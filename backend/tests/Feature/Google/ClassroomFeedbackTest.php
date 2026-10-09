@@ -418,7 +418,7 @@ class ClassroomFeedbackTest extends TestCase
 
         $page = $this->get("/r/{$submission->id}")->assertOk();
 
-        $page->assertSee('เปิดผลในแอป EduVision');
+        $page->assertSee('เปิดผลในแอป Krucheck');
         $page->assertSee("intent://r/{$submission->id}#Intent;scheme=eduvision;package=com.eduvision.app;end", false);
         $page->assertDontSee('นักเรียนคนที่');
         $page->assertDontSee('การบ้านเศษส่วน');
