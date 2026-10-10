@@ -2,8 +2,13 @@
 
 namespace Tests\Feature\Console;
 
+use App\Models\Assignment;
 use App\Models\Classroom;
+use App\Models\Course;
+use App\Models\Response;
 use App\Models\Skill;
+use App\Models\SkillObservation;
+use App\Models\Submission;
 use App\Models\User;
 use Database\Seeders\AdminSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -107,6 +112,54 @@ class SeedersTest extends TestCase
             ->assertStatus(422);
         $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '135790'])
             ->assertOk();
+    }
+
+    public function test_demo_seeder_adds_a_course_with_results_a_review_queue_and_published_grades(): void
+    {
+        config([
+            'eduvision.admin_email' => 'admin@example.com',
+            'eduvision.admin_password' => 'admin-secret-1',
+            'eduvision.demo.teacher_email' => 'teacher@example.com',
+            'eduvision.demo.teacher_password' => 'teacher-secret-1',
+            'eduvision.demo.student_pin' => '246810',
+        ]);
+
+        $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--no-interaction' => true])
+            ->expectsOutputToContain('created with homework, an exam and published grades')
+            ->assertSuccessful();
+
+        $teacher = User::query()->where('email', 'teacher@example.com')->firstOrFail();
+        $classroom = Classroom::query()->where('teacher_id', $teacher->id)->firstOrFail();
+        $course = Course::query()->where('created_by', $teacher->id)->where('code', DemoSeeder::COURSE_CODE)->firstOrFail();
+        $students = $classroom->students()->orderBy('classroom_students.student_number')->get();
+        [$first, $second, $final] = Assignment::query()->where('course_id', $course->id)->orderBy('id')->get()->all();
+
+        // Homework 1 is published for everybody and fed the skills.
+        $this->assertSame(10, Submission::query()->where('assignment_id', $first->id)->where('status', 'published')->count());
+        $this->assertGreaterThan(0, SkillObservation::query()->count());
+
+        // The teacher's screens read the seeded rows through the real API.
+        $this->asUser($teacher)->getJson("/api/v1/assignments/{$second->id}/review-queue")
+            ->assertOk()->assertJsonPath('meta.counts.check', fn ($n) => $n > 0);
+        $response = Response::query()->whereHas('submission', fn ($q) => $q->where('assignment_id', $second->id))->firstOrFail();
+        $this->asUser($teacher)->getJson("/api/v1/responses/{$response->id}")->assertOk();
+        $grid = $this->asUser($teacher)->getJson("/api/v1/courses/{$course->id}/gradebook?classroom_id={$classroom->id}")->assertOk()->json('data');
+        $this->assertCount(10, $grid['rows']);
+        $this->assertTrue($final->isManualExam());
+
+        // Student 1 (full marks everywhere, 28/30 in the final) sees the result and grade 4.
+        $submission = Submission::query()->where('assignment_id', $first->id)->where('student_id', $students[0]->id)->firstOrFail();
+        $this->asUser($students[0])->getJson("/api/v1/student/results/{$submission->id}")
+            ->assertOk()->assertJsonPath('data.total_score', fn ($v) => (float) $v === 10.0);
+        $this->asUser($students[0])->getJson('/api/v1/student/grades')
+            ->assertOk()->assertJsonPath('data.0.grade', fn ($g) => (float) $g === 4.0);
+
+        // A second run leaves the content alone.
+        $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--no-interaction' => true])
+            ->expectsOutputToContain('already there, content left as it is')
+            ->assertSuccessful();
+        $this->assertSame(3, Assignment::query()->count());
+        $this->assertSame(20, Submission::query()->count());
     }
 
     public function test_demo_seeder_creates_no_teacher_or_student_without_its_settings(): void
