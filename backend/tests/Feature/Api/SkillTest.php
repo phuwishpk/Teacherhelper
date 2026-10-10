@@ -17,8 +17,8 @@ class SkillTest extends TestCase
     public function test_skills_can_be_filtered_by_subject_grade_and_text(): void
     {
         $teacher = $this->makeTeacher();
-        $math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
-        $sci = Subject::factory()->create(['code' => 'ว', 'name' => 'วิทยาศาสตร์']);
+        $math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
+        $sci = Subject::query()->updateOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
         Skill::factory()->create(['subject_id' => $math->id, 'code' => 'ค 1.1 ป.5/1', 'grade_level' => 5, 'name' => 'เศษส่วนและจำนวนคละ']);
         Skill::factory()->create(['subject_id' => $math->id, 'code' => 'ค 1.1 ป.5/2', 'grade_level' => 5, 'name' => 'ทศนิยม']);
         Skill::factory()->create(['subject_id' => $math->id, 'code' => 'ค 1.1 ป.6/1', 'grade_level' => 6, 'name' => 'ร้อยละ']);
@@ -79,14 +79,13 @@ class SkillTest extends TestCase
     public function test_subjects_are_listed_for_the_picker(): void
     {
         $teacher = $this->makeTeacher();
-        Subject::factory()->create(['code' => 'ว', 'name' => 'วิทยาศาสตร์']);
-        Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
 
+        // The eight learning areas come with the migration (DESIGN §29.4).
         $this->asUser($teacher)->getJson('/api/v1/subjects')
             ->assertOk()
-            ->assertJsonCount(2, 'data')
+            ->assertJsonCount(8, 'data')
             ->assertJsonPath('data.0.code', 'ค')
-            ->assertJsonStructure(['data' => [['id', 'code', 'name']]]);
+            ->assertJsonStructure(['data' => [['id', 'code', 'name', 'is_own']]]);
     }
 
     public function test_skills_require_a_teacher(): void

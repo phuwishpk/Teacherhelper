@@ -59,7 +59,7 @@ class SharedHomeroomTest extends TestCase
             $this->enrollStudent($this->classroom, 2, 'นักเรียน สอง')['student'],
         ];
         $this->homeroomCourse = $this->makeCourse($this->homeroom, [$this->classroom], ['code' => 'ค15101']);
-        $science = Subject::query()->create(['code' => 'ว', 'name' => 'วิทยาศาสตร์']);
+        $science = Subject::query()->updateOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
         $this->subjectCourse = $this->makeCourse($this->subjectTeacher, [], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5', 'subject_id' => $science->id]);
     }
 

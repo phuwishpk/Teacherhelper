@@ -58,7 +58,7 @@ class CourseDocumentTest extends TestCase
         ]);
 
         $this->teacher = $this->makeTeacher();
-        $this->math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $this->math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $standard = Skill::factory()->create(['subject_id' => $this->math->id, 'code' => 'ค 1.1', 'level' => Skill::LEVEL_STANDARD, 'grade_level' => null]);
         $this->p51 = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/1', 'grade_level' => 5]);
         $this->p52 = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/2', 'grade_level' => 5]);

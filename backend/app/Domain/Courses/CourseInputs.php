@@ -24,16 +24,18 @@ final class CourseInputs
     public const MAX_CLASSROOMS = 50;
 
     /**
+     * subject_id must be a subject group the teacher sees: a shared one or their own (§29.4).
+     *
      * @return array<string, array<int, mixed>>
      */
-    public static function courseRules(bool $partial): array
+    public static function courseRules(bool $partial, User $teacher): array
     {
         $required = $partial ? ['sometimes', 'required'] : ['required'];
 
         return [
             'code' => [...$required, 'string', 'max:20'],
             'name' => [...$required, 'string', 'max:255'],
-            'subject_id' => [...$required, 'integer', Rule::exists('subjects', 'id')],
+            'subject_id' => [...$required, 'integer', Rule::exists('subjects', 'id')->where(fn ($q) => $q->where(fn ($b) => $b->whereNull('owner_user_id')->orWhere('owner_user_id', $teacher->id)))],
             'grade_level' => [...$required, 'integer', 'min:1', 'max:12'],
             'semester' => ['sometimes', 'nullable', 'integer', Rule::in([0, 1, 2])],
             'academic_year' => [...$required, 'integer', 'min:2500', 'max:2700'],

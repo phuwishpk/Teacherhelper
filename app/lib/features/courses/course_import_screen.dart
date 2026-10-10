@@ -18,6 +18,7 @@ import 'course_models.dart';
 import 'courses_providers.dart';
 import 'courses_repository.dart';
 import 'indicator_widgets.dart';
+import 'subject_field.dart';
 
 /// Waits for a course document to be read (polling `GET
 /// /document-extractions/{id}` while the queue worker runs it), then shows
@@ -509,7 +510,8 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
 
   Widget _courseCard(BuildContext context) {
     final theme = Theme.of(context);
-    final subjects = ref.watch(subjectsProvider);
+    // Rebuilds when the subject groups arrive: _effectiveSubjectId reads them.
+    ref.watch(subjectsProvider);
     final classrooms = ref.watch(classroomsProvider);
     final subjectId = _effectiveSubjectId;
     return Card(
@@ -534,17 +536,10 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'กรอกชื่อรายวิชา' : null,
             ),
-            DropdownButtonFormField<int>(
-              key: ValueKey('import_course_subject_$subjectId'),
-              initialValue: subjectId,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'กลุ่มสาระ'),
-              items: [
-                for (final s in subjects.value ?? const <Subject>[])
-                  DropdownMenuItem(value: s.id, child: Text(s.name)),
-              ],
+            SubjectField(
+              fieldKey: ValueKey('import_course_subject_$subjectId'),
+              value: subjectId,
               onChanged: (v) => setState(() => _subjectId = v),
-              validator: (v) => v == null ? 'เลือกกลุ่มสาระ' : null,
             ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

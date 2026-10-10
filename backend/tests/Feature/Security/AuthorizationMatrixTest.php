@@ -106,6 +106,10 @@ class AuthorizationMatrixTest extends TestCase
         // A teacher-added indicator is shared by the school but edited by its creator only (§20.2).
         'api.skills.update' => ['PATCH', 'skills/{teacher_skill}', 403, 404],
         'api.subjects.index' => ['GET', 'subjects', self::OK, self::OK],
+        // A teacher's own subject group is invisible to every other teacher (§29.4).
+        'api.subjects.store' => ['POST', 'subjects', self::OK, self::OK],
+        'api.subjects.update' => ['PATCH', 'subjects/{own_subject}', 404, 404],
+        'api.subjects.destroy' => ['DELETE', 'subjects/{own_subject}', 404, 404],
         // A course, its units and plans belong to their creator only (§20.9): others get 404.
         'api.courses.index' => ['GET', 'courses', self::OK, self::OK],
         'api.courses.store' => ['POST', 'courses', self::OK, self::OK],
@@ -592,6 +596,7 @@ class AuthorizationMatrixTest extends TestCase
             '{item}' => $this->practiceItemA->id,
             '{skill}' => $this->skillA->id,
             '{teacher_skill}' => $this->teacherSkillA->id,
+            '{own_subject}' => $this->ownSubjectA->id,
             '{resource}' => $this->resourceA->id,
             '{import}' => $this->importA->id,
             '{conflict}' => $this->conflictA->id,

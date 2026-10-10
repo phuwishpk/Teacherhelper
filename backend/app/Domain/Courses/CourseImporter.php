@@ -78,7 +78,7 @@ final class CourseImporter
                 throw new ApiException('ไม่พบรายวิชานี้', 'validation_failed', 422, ['course_id' => ['ไม่พบรายวิชานี้']]);
             }
         } else {
-            $courseData = self::prefixed(fn () => CourseInputs::validate((array) $validated['course'], CourseInputs::courseRules(false)), 'course');
+            $courseData = self::prefixed(fn () => CourseInputs::validate((array) $validated['course'], CourseInputs::courseRules(false, $teacher)), 'course');
         }
         $classroomIds = array_key_exists('classroom_ids', $input) ? CourseInputs::classroomIds($teacher, $input['classroom_ids']) : [];
         $skillIds = array_key_exists('skill_ids', $input) ? CourseInputs::skillIds($teacher, $input['skill_ids']) : [];

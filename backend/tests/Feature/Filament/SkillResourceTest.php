@@ -31,7 +31,7 @@ class SkillResourceTest extends TestCase
 
     public function test_skills_are_listed_read_only(): void
     {
-        $subject = Subject::factory()->create(['code' => 'ค']);
+        $subject = Subject::query()->where('code', 'ค')->firstOrFail();
         $skill = Skill::factory()->create(['subject_id' => $subject->id, 'code' => 'ค 1.1 ป.5/1', 'name' => 'เศษส่วน', 'grade_level' => 5]);
 
         $this->get('/admin/skills')->assertOk();
@@ -56,7 +56,7 @@ class SkillResourceTest extends TestCase
             ->assertNotified();
 
         $this->assertSame(13, Skill::query()->count());
-        $this->assertSame(2, Subject::query()->count());
+        $this->assertSame(8, Subject::query()->count());
     }
 
     public function test_admin_imports_school_sub_skills_and_sees_errors_for_a_bad_file(): void
@@ -79,7 +79,7 @@ class SkillResourceTest extends TestCase
 
     public function test_an_admin_edits_a_teacher_added_indicator_but_not_the_curriculum(): void
     {
-        $subject = Subject::factory()->create(['code' => 'ค']);
+        $subject = Subject::query()->where('code', 'ค')->firstOrFail();
         $curriculum = Skill::factory()->create(['subject_id' => $subject->id, 'code' => 'ค 1.1', 'level' => Skill::LEVEL_STANDARD]);
         $teacher = $this->makeTeacher();
         $added = Skill::factory()->create([

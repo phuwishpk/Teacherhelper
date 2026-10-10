@@ -56,7 +56,7 @@ class ChartsTest extends TestCase
     {
         parent::setUp();
         $this->teacher = $this->makeTeacher();
-        $math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $skill = fn (array $a) => Skill::factory()->create($a + ['subject_id' => $math->id, 'grade_level' => 5]);
         $strand = $skill(['code' => 'ค 1', 'name' => 'จำนวนและพีชคณิต', 'level' => Skill::LEVEL_STRAND, 'grade_level' => null]);
         $this->s['S1'] = $skill(['code' => 'ค 1.1', 'name' => 'เศษส่วน', 'level' => Skill::LEVEL_STANDARD, 'parent_id' => $strand->id, 'grade_level' => null]);

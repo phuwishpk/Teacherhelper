@@ -53,7 +53,7 @@ class CourseController extends Controller
     {
         Gate::authorize('create', Course::class);
         $teacher = $request->user();
-        $data = CourseInputs::validate($request->all(), CourseInputs::courseRules(false));
+        $data = CourseInputs::validate($request->all(), CourseInputs::courseRules(false, $teacher));
         $classroomIds = $request->has('classroom_ids') ? CourseInputs::classroomIds($teacher, $request->input('classroom_ids')) : [];
         ClosedClassrooms::assertAllOpen($classroomIds); // §24.6
         $skillIds = $request->has('skill_ids') ? CourseInputs::skillIds($teacher, $request->input('skill_ids')) : [];
@@ -77,7 +77,7 @@ class CourseController extends Controller
     {
         $course = self::ownQuery($request)->findOrFail($id);
         Gate::authorize('update', $course);
-        $data = CourseInputs::validate($request->all(), CourseInputs::courseRules(true));
+        $data = CourseInputs::validate($request->all(), CourseInputs::courseRules(true, $request->user()));
 
         return self::detail($this->editor->update($course, $data));
     }

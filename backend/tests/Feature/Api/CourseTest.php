@@ -34,7 +34,7 @@ class CourseTest extends TestCase
     {
         parent::setUp();
         $this->teacher = $this->makeTeacher();
-        $this->math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $this->math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $standard = Skill::factory()->create(['subject_id' => $this->math->id, 'code' => 'ค 1.1', 'level' => Skill::LEVEL_STANDARD, 'grade_level' => null]);
         $this->indicator = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/1', 'grade_level' => 5]);
         $this->indicator2 = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/2', 'grade_level' => 5]);
@@ -224,7 +224,7 @@ class CourseTest extends TestCase
         $this->asUser($this->teacher)->putJson("/api/v1/courses/{$course->id}/classrooms", ['classroom_ids' => [$other->id]])
             ->assertStatus(409)->assertJsonPath('code', 'course_in_use');
         $this->asUser($this->teacher)->putJson("/api/v1/courses/{$course->id}/classrooms", ['classroom_ids' => [$room->id]])->assertOk();
-        $science = Subject::factory()->create(['code' => 'ว']);
+        $science = Subject::query()->where('code', 'ว')->firstOrFail();
         $this->asUser($this->teacher)->patchJson("/api/v1/courses/{$course->id}", ['subject_id' => $science->id])->assertStatus(409)->assertJsonPath('code', 'course_in_use');
 
         $unused = $this->makeCourse($this->teacher, [$room], ['code' => 'ค15102']);
@@ -250,7 +250,7 @@ class CourseTest extends TestCase
         $this->asUser($this->teacher)->postJson('/api/v1/assignments', $body(['course_id' => $colleagueCourse->id]))->assertStatus(422)->assertJsonValidationErrors(['course_id']);
         $this->asUser($this->teacher)->postJson('/api/v1/assignments', $body(['course_id' => $course->id, 'lesson_plan_id' => $foreignPlan->id]))->assertStatus(422)->assertJsonValidationErrors(['lesson_plan_id']);
 
-        $science = Subject::factory()->create(['code' => 'ว']);
+        $science = Subject::query()->where('code', 'ว')->firstOrFail();
         $id = $this->asUser($this->teacher)->postJson('/api/v1/assignments', $body(['course_id' => $course->id, 'lesson_plan_id' => $plan->id, 'subject_id' => $science->id]))
             ->assertCreated()
             ->assertJsonPath('data.course_id', $course->id)

@@ -22,7 +22,7 @@ class AssignmentsTest extends TestCase
     {
         $teacher = $this->makeTeacher();
         $classroom = $this->makeClassroom($teacher, ['name' => 'ป.5/2']);
-        $subject = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $subject = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
 
         return [$teacher, $classroom, $subject];
     }

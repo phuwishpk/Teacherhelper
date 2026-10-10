@@ -25,10 +25,11 @@ class ImportSkillsCommandTest extends TestCase
     public function test_the_sample_csv_imports_with_levels_and_is_idempotent(): void
     {
         $this->artisan('eduvision:import-skills', ['csv' => SkillSeeder::SAMPLE_CSV])
-            ->expectsOutputToContain('Imported 13 skills (13 created, 0 updated, 0 unchanged), 2 new subjects')
+            ->expectsOutputToContain('Imported 13 skills (13 created, 0 updated, 0 unchanged), 0 new subjects')
             ->assertSuccessful();
 
-        $this->assertSame(2, Subject::query()->count());
+        // The eight learning areas come with the migration (DESIGN §29.4).
+        $this->assertSame(8, Subject::query()->count());
         $this->assertSame(13, Skill::query()->count());
         $this->assertDatabaseHas('subjects', ['code' => 'ค', 'name' => 'คณิตศาสตร์']);
 
@@ -102,7 +103,7 @@ class ImportSkillsCommandTest extends TestCase
             }
         }
         $this->assertSame(0, Skill::query()->count());
-        $this->assertSame(0, Subject::query()->count());
+        $this->assertSame(8, Subject::query()->count());
 
         $this->artisan('eduvision:import-skills', ['csv' => '/nonexistent.csv'])->assertFailed();
         $this->artisan('eduvision:import-skills', ['csv' => SkillSeeder::SAMPLE_CSV, '--school' => 'abc'])->assertExitCode(2);

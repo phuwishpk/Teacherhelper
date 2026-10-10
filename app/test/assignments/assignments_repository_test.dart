@@ -53,6 +53,22 @@ void main() {
     expect(subjects.map((s) => s.name), ['คณิตศาสตร์', 'วิทยาศาสตร์']);
   });
 
+  test('createSubject POSTs /subjects {name}', () async {
+    final adapter = FakeHttpAdapter(
+      (_) async => jsonResponse(201, {
+        'data': {'id': 9, 'code': 'T3-1', 'name': 'ลูกเสือ', 'is_own': true},
+      }),
+    );
+    final repo = ApiAssignmentsRepository(fakeDio(adapter));
+    final subject = await repo.createSubject('ลูกเสือ');
+    final request = adapter.requests.single;
+    expect(request.method, 'POST');
+    expect(request.uri.path, '/api/v1/subjects');
+    expect(request.data, {'name': 'ลูกเสือ'});
+    expect(subject.id, 9);
+    expect(subject.isOwn, isTrue);
+  });
+
   test(
     'saveRubric PUTs {criteria[], reference_steps?} with positions',
     () async {

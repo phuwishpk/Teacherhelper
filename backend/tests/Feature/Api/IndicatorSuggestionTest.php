@@ -64,7 +64,7 @@ class IndicatorSuggestionTest extends TestCase
         $this->app->instance(GeminiClient::class, $this->gemini);
 
         $this->teacher = $this->makeTeacher();
-        $this->math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $this->math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $standard = Skill::factory()->create(['subject_id' => $this->math->id, 'code' => 'ค 1.1', 'level' => Skill::LEVEL_STANDARD, 'grade_level' => null]);
         $this->p51 = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/1', 'name' => 'บวกลบเศษส่วน', 'grade_level' => 5]);
         $this->p52 = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $standard->id, 'code' => 'ค 1.1 ป.5/2', 'name' => 'คูณหารเศษส่วน', 'grade_level' => 5]);
@@ -279,7 +279,7 @@ class IndicatorSuggestionTest extends TestCase
     {
         [$q1] = $this->questions;
         $standard = Skill::query()->where('code', 'ค 1.1')->firstOrFail();
-        $otherSubject = Skill::factory()->create(['subject_id' => Subject::factory()->create(['code' => 'ว'])->id]);
+        $otherSubject = Skill::factory()->create(['subject_id' => Subject::query()->where('code', 'ว')->firstOrFail()->id]);
         $otherSchool = Skill::factory()->create(['subject_id' => $this->math->id, 'school_id' => $this->makeSchool()->id, 'parent_id' => $this->p51->id, 'level' => Skill::LEVEL_SUB_INDICATOR]);
         $foreign = Question::factory()->create();
 
