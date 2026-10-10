@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../core/auth/session.dart';
+import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import '../auth/sign_out_action.dart';
 import '../google_signin/google_identity_card.dart';
@@ -24,9 +27,22 @@ class StudentAccountScreen extends ConsumerWidget {
               child: ListTile(
                 leading: const Icon(Icons.person_outline),
                 title: Text(user.name),
-                subtitle: user.schoolName == null
-                    ? null
-                    : Text(user.schoolName!),
+                subtitle: Text(
+                  [
+                    if (user.username case final u?) 'ชื่อผู้ใช้: $u',
+                    ?user.schoolName,
+                  ].join('\n'),
+                ),
+              ),
+            ),
+          if (user?.username != null)
+            Card(
+              child: ListTile(
+                key: const ValueKey('account_change_password'),
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('เปลี่ยนรหัสผ่าน'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.studentPassword),
               ),
             ),
           const SizedBox(height: 8),

@@ -147,7 +147,7 @@ class _StudentQrScanScreenState extends ConsumerState<StudentQrScanScreen> {
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => context.pop(),
-                  child: const Text('ใช้รหัสห้องและ PIN แทน'),
+                  child: const Text('ใช้ชื่อผู้ใช้และรหัสผ่านแทน'),
                 ),
               ],
             ),

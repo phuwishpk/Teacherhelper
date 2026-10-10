@@ -8,6 +8,8 @@ class User {
     this.status,
     this.schoolId,
     this.schoolName,
+    this.username,
+    this.mustChangePassword = false,
   });
 
   final int id;
@@ -21,6 +23,13 @@ class User {
   /// From the nested `school: {id, name}` object (DESIGN §9.1 GET /me).
   final int? schoolId;
   final String? schoolName;
+
+  /// A student's sign-in name (DESIGN §29.10).
+  final String? username;
+
+  /// A student still on the initial password: the app opens only the
+  /// change-password screen until it is replaced.
+  final bool mustChangePassword;
 
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
@@ -37,6 +46,8 @@ class User {
     'role': role,
     'email': email,
     'status': status,
+    'username': username,
+    'must_change_password': mustChangePassword,
     'school': schoolId == null && schoolName == null
         ? null
         : {'id': schoolId, 'name': schoolName},
@@ -54,6 +65,8 @@ class User {
           (school?['id'] as num?)?.toInt() ??
           (json['school_id'] as num?)?.toInt(),
       schoolName: school?['name'] as String?,
+      username: json['username'] as String?,
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
     );
   }
 }

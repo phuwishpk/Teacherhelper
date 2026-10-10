@@ -233,7 +233,7 @@ void main() {
       );
       await _tap(tester, _unlink);
       expect(
-        find.textContaining('บัตร QR หรือ PIN ได้ตามเดิม'),
+        find.textContaining('บัตร QR หรือรหัสผ่านได้ตามเดิม'),
         findsOneWidget,
       );
     });

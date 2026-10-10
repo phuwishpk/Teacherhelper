@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiBatchClient;
 use App\Domain\Gemini\GeminiClient;
@@ -15,6 +14,7 @@ use App\Domain\Notifications\Fcm\ServiceAccount;
 use App\Domain\Notifications\FcmNotifier;
 use App\Domain\Notifications\LogNotifier;
 use App\Domain\Notifications\Notifier;
+use App\Domain\Students\StudentUsernames;
 use App\Domain\Worksheets\QrSigner;
 use App\Models\ClassroomCourseRequest;
 use App\Policies\CourseRequestPolicy;
@@ -108,17 +108,16 @@ class AppServiceProvider extends ServiceProvider
         // Student login (DESIGN §7.4): a whole class scans its QR cards from one
         // school NAT address within a minute, so the per-IP limit is wide. QR
         // tokens are 256-bit random, so the IP limit is only abuse protection;
-        // the PIN path adds a per-credential limit on top of the 5-attempt
+        // the password path adds a per-credential limit on top of the 5-attempt
         // lockout in StudentAuthenticator.
         RateLimiter::for('student-auth', function (Request $request) {
             $limits = [Limit::perMinute(120)->by('ip|'.$request->ip())];
 
-            if ($request->routeIs('api.auth.student.pin', 'api.auth.google.link-with-pin')) {
+            if ($request->routeIs('api.auth.student.login', 'api.auth.google.link-with-password')) {
                 $limits[] = Limit::perMinute(10)->by(implode('|', [
-                    'pin',
+                    'password',
                     $request->ip(),
-                    ClassCodeGenerator::normalize(self::scalarInput($request, 'class_code')),
-                    self::scalarInput($request, 'student_number'),
+                    StudentUsernames::normalize(self::scalarInput($request, 'username')),
                 ]));
             }
 

@@ -156,17 +156,15 @@ class FakeGoogleSignInRepository implements GoogleSignInRepository {
   }
 
   @override
-  Future<String> linkWithPin({
+  Future<String> linkWithPassword({
     required String linkTicket,
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+    required String username,
+    required String password,
   }) async {
     pinLinks.add({
       'link_ticket': linkTicket,
-      'class_code': classCode,
-      'student_number': studentNumber,
-      'pin': pin,
+      'username': username,
+      'password': password,
     });
     if (pinError != null) throw pinError!;
     return token;
@@ -267,10 +265,15 @@ class FakeMeAuth implements AuthRepository {
       throw UnimplementedError();
 
   @override
-  Future<String> loginStudentPin({
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+  Future<String> loginStudent({
+    required String username,
+    required String password,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<User> changeStudentPassword({
+    required String password,
+    String? currentPassword,
   }) => throw UnimplementedError();
 
   @override

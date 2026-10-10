@@ -82,11 +82,11 @@ class StudentAuthTest extends TestCase
 
     public function test_pin_login_returns_a_student_token(): void
     {
-        $this->postJson('/api/v1/auth/student/pin', [
+        $this->postJson('/api/v1/auth/student/login', $this->cred([
             'class_code' => 'abc234', // case and spacing are normalised
             'student_number' => 7,
             'pin' => $this->pin,
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('user.id', $this->student->id);
 
@@ -96,10 +96,10 @@ class StudentAuthTest extends TestCase
 
     public function test_pin_login_validates_the_body(): void
     {
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => '', 'student_number' => 'x', 'pin' => '12'])
+        $this->postJson('/api/v1/auth/student/login', ['username' => '', 'password' => ''])
             ->assertStatus(422)
             ->assertJsonPath('code', 'validation_failed')
-            ->assertJsonValidationErrors(['class_code', 'student_number', 'pin']);
+            ->assertJsonValidationErrors(['username', 'password']);
     }
 
     public function test_wrong_class_code_number_or_pin_all_fail_the_same_way(): void
@@ -109,10 +109,10 @@ class StudentAuthTest extends TestCase
             ['class_code' => 'ABC234', 'student_number' => 8, 'pin' => $this->pin],
             ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin === '000000' ? '111111' : '000000'],
         ] as $body) {
-            $this->postJson('/api/v1/auth/student/pin', $body)
+            $this->postJson('/api/v1/auth/student/login', $this->cred($body))
                 ->assertStatus(422)
                 ->assertJsonPath('code', 'invalid_credentials')
-                ->assertJsonPath('message', 'รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง');
+                ->assertJsonPath('message', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
         }
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -120,9 +120,9 @@ class StudentAuthTest extends TestCase
 
     public function test_five_wrong_pins_lock_the_student_for_fifteen_minutes(): void
     {
-        $wrong = fn () => $this->postJson('/api/v1/auth/student/pin', [
+        $wrong = fn () => $this->postJson('/api/v1/auth/student/login', $this->cred([
             'class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->wrongPin(),
-        ]);
+        ]));
 
         for ($i = 1; $i <= 4; $i++) {
             $wrong()->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
@@ -136,13 +136,13 @@ class StudentAuthTest extends TestCase
         $this->assertTrue($credential->locked_until->between(now()->addMinutes(14), now()->addMinutes(16)));
 
         // While locked, even the right PIN is refused.
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))
             ->assertStatus(423)
             ->assertJsonPath('code', 'pin_locked');
 
         // After the lockout the right PIN works and the counters are reset.
         $this->travel(16)->minutes();
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))
             ->assertOk();
         $credential = $this->student->credential->fresh();
         $this->assertSame(0, $credential->failed_pin_attempts);
@@ -152,10 +152,10 @@ class StudentAuthTest extends TestCase
     public function test_a_correct_pin_resets_the_failure_counter(): void
     {
         for ($i = 0; $i < 3; $i++) {
-            $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->wrongPin()])
+            $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->wrongPin()]))
                 ->assertStatus(422);
         }
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])->assertOk();
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))->assertOk();
 
         $this->assertSame(0, $this->student->credential->fresh()->failed_pin_attempts);
     }
@@ -194,16 +194,16 @@ class StudentAuthTest extends TestCase
         // 10 tries for (ip, class_code, student_number) per minute; the key is
         // normalised like the class code itself, so "abc 234" counts as ABC234.
         for ($i = 0; $i < 10; $i++) {
-            $status = $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'abc 234', 'student_number' => 7, 'pin' => $this->wrongPin()])->status();
+            $status = $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'abc 234', 'student_number' => 7, 'pin' => $this->wrongPin()]))->status();
             $this->assertContains($status, [422, 423]);
         }
 
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))
             ->assertStatus(429)
             ->assertJsonPath('code', 'too_many_requests');
 
         // Same IP, another student of the same class: not throttled.
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 8, 'pin' => $classmate['pin']])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 8, 'pin' => $classmate['pin']]))
             ->assertOk()
             ->assertJsonPath('user.id', $classmate['student']->id);
     }
@@ -247,13 +247,13 @@ class StudentAuthTest extends TestCase
 
     public function test_resetting_the_pin_invalidates_the_old_pin_and_sessions(): void
     {
-        $old = $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])->json('token');
+        $old = $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))->json('token');
 
         $newPin = app(CredentialIssuer::class)->issuePin($this->student);
 
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $this->pin]))
             ->assertStatus(422);
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $newPin])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC234', 'student_number' => 7, 'pin' => $newPin]))
             ->assertOk();
 
         $this->forgetGuards();

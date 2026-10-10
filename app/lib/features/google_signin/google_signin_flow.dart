@@ -273,7 +273,7 @@ Future<String?> handleGoogleSignInError(
       context.push(AppRoutes.register, extra: registration);
       return null;
     }
-    return 'เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน แล้วกด "เชื่อมบัญชี Google" '
+    return 'เข้าสู่ระบบด้วยอีเมลและรหัสผ่านแล้วกด "เชื่อมบัญชี Google" '
         'ในหน้าตั้งค่า ครั้งต่อไปจึงใช้ปุ่ม Google ได้';
   }
 
@@ -395,7 +395,7 @@ class _GoogleSignInSectionState extends ConsumerState<GoogleSignInSection> {
         const SizedBox(height: 8),
         Text(
           widget.intent == GoogleIntent.student
-              ? 'ใช้ได้เมื่อเชื่อมบัญชี Google แล้ว ครั้งแรกต้องยืนยันด้วย PIN หรือบัตร QR'
+              ? 'ใช้ได้เมื่อเชื่อมบัญชี Google แล้ว ครั้งแรกต้องยืนยันด้วยรหัสผ่านหรือบัตร QR'
               : 'ครูที่ยังไม่มีบัญชีเข้าใช้งานได้ทันทีถ้าโรงเรียนเปิดให้ ครูที่มีบัญชีแล้วใช้อีเมลเดียวกันหรือเชื่อมไว้ในหน้าตั้งค่า',
           style: muted,
         ),

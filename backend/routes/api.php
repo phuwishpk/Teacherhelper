@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\V1\StudentGradeController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentMergeController;
 use App\Http\Controllers\Api\V1\StudentOverviewController;
+use App\Http\Controllers\Api\V1\StudentPasswordController;
 use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
@@ -104,7 +105,7 @@ Route::prefix('v1')->group(function () {
             ->name('api.auth.schools');
         Route::middleware('throttle:student-auth')->group(function () {
             Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
-            Route::post('student/pin', [StudentAuthController::class, 'pin'])->name('api.auth.student.pin');
+            Route::post('student/login', [StudentAuthController::class, 'login'])->name('api.auth.student.login');
         });
 
         // Google sign-in for every role (DESIGN §24.9). /config tells the app whether to show the
@@ -117,7 +118,7 @@ Route::prefix('v1')->group(function () {
             Route::post('google/web-url', [GoogleSignInController::class, 'webUrl'])->name('api.auth.google.web-url');
             Route::post('google/ticket', [GoogleSignInController::class, 'ticket'])->name('api.auth.google.ticket');
             Route::middleware('throttle:student-auth')->group(function () {
-                Route::post('google/link-with-pin', [GoogleSignInController::class, 'linkWithPin'])->name('api.auth.google.link-with-pin');
+                Route::post('google/link-with-password', [GoogleSignInController::class, 'linkWithPassword'])->name('api.auth.google.link-with-password');
                 Route::post('google/link-with-qr', [GoogleSignInController::class, 'linkWithQr'])->name('api.auth.google.link-with-qr');
             });
         });
@@ -128,7 +129,9 @@ Route::prefix('v1')->group(function () {
 
         // Every other route also requires status = active (`active` middleware), and a
         // write on a closed classroom answers 409 classroom_closed (`classroom.open`, §24.6).
-        Route::middleware(['active', 'classroom.open'])->group(function () {
+        // and a student still on the initial password gets 403 password_change_required
+        // everywhere but /me and the password change (`student.password`, §29.10).
+        Route::middleware(['active', 'classroom.open', 'student.password'])->group(function () {
             Route::get('me', MeController::class)->name('api.me');
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
@@ -436,6 +439,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('courses', [StudentCourseController::class, 'index'])->name('api.student.courses.index');
                 Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
                 // Their own row of the latest published grades only (§23.7, §23.12).
+                // The student's own password (§29.10): required first while it is the initial one.
+                Route::put('password', StudentPasswordController::class)->name('api.student.password');
                 Route::get('grades', [StudentGradeController::class, 'index'])->name('api.student.grades.index');
                 // The student's own attendance, per course and classroom (§29.5).
                 Route::get('attendance', StudentAttendanceController::class)->name('api.student.attendance');

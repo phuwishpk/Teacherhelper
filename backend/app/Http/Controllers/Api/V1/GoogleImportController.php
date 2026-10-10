@@ -63,6 +63,7 @@ class GoogleImportController extends Controller
                 'student_id' => $row['student']->id,
                 'student_number' => $row['student_number'],
                 'name' => $row['student']->name,
+                'username' => $row['student']->username,
                 'pin' => $row['pin'],
                 'existing' => $row['existing'],
             ], $result['students']),

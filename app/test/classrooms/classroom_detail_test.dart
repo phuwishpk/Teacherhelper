@@ -92,7 +92,7 @@ void main() {
       expect(find.byKey(const ValueKey('pin_pending_4568')), findsOneWidget);
       expect(find.byKey(const ValueKey('pin_pending_4567')), findsNothing);
       expect(
-        find.text('นักเรียนใหม่จาก Google Classroom 1 คนยังไม่ได้รับ PIN'),
+        find.text('นักเรียนใหม่จาก Google Classroom 1 คนยังไม่ได้รับรหัสผ่าน'),
         findsOneWidget,
       );
 
@@ -109,7 +109,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('550011'), findsOneWidget);
 
-      await tester.tap(find.text('จด PIN แล้ว เสร็จสิ้น'));
+      await tester.tap(find.text('จดรหัสผ่านแล้ว เสร็จสิ้น'));
       await tester.pumpAndSettle();
       expect(find.text('550011'), findsNothing);
       expect(find.byKey(const ValueKey('pending_pins_card')), findsNothing);
@@ -145,25 +145,25 @@ void main() {
 
     await tester.tap(find.byTooltip('ตัวเลือก'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('รีเซ็ต PIN'));
+    await tester.tap(find.text('รีเซ็ตรหัสผ่าน'));
     await tester.pumpAndSettle();
 
     // Confirmation dialog first; cancelling calls nothing.
-    expect(find.text('รีเซ็ต PIN ของ ด.ญ. สมหญิง?'), findsOneWidget);
+    expect(find.text('รีเซ็ตรหัสผ่านของ ด.ญ. สมหญิง?'), findsOneWidget);
     await tester.tap(find.text('ยกเลิก'));
     await tester.pumpAndSettle();
     expect(fake.pinResets, isEmpty);
 
     await tester.tap(find.byTooltip('ตัวเลือก'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('รีเซ็ต PIN'));
+    await tester.tap(find.text('รีเซ็ตรหัสผ่าน'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'รีเซ็ต PIN'));
+    await tester.tap(find.widgetWithText(FilledButton, 'รีเซ็ตรหัสผ่าน'));
     await tester.pumpAndSettle();
 
     expect(fake.pinResets, [4567]);
     expect(find.text('048213'), findsOneWidget);
-    expect(find.textContaining('ระบบจะไม่แสดง PIN นี้อีก'), findsOneWidget);
+    expect(find.textContaining('ระบบให้ตั้งรหัสผ่านใหม่ทันที'), findsOneWidget);
 
     await tester.tap(find.text('จดแล้ว'));
     await tester.pumpAndSettle();

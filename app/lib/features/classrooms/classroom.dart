@@ -165,6 +165,7 @@ class RosterStudent {
     this.leftCourseAt,
     this.pinPending = false,
     this.googleLinked,
+    this.username,
   });
 
   final int studentId;
@@ -177,6 +178,10 @@ class RosterStudent {
 
   /// เลขประจำตัวนักเรียน of the school (DESIGN §24.4), if known.
   final String? studentCode;
+
+  /// The student's sign-in name (DESIGN §29.10); null for a subject
+  /// teacher, who does not see it.
+  final String? username;
 
   /// Added by the background roster sync (DESIGN §19.2): nobody has seen
   /// the student's first PIN yet, shown as "ยังไม่ได้รับ PIN".
@@ -199,6 +204,7 @@ class RosterStudent {
     },
     pinPending: json['pin_pending'] == true,
     googleLinked: json['google_linked'] as bool?,
+    username: json['username'] as String?,
   );
 }
 
@@ -214,11 +220,15 @@ class EnrolledStudent {
     required this.name,
     required this.pin,
     this.existing = false,
+    this.username,
   });
 
   final int studentId;
   final int studentNumber;
   final String name;
+
+  /// The student's sign-in name (DESIGN §29.10).
+  final String? username;
 
   /// Empty when no PIN was issued (an existing student keeping theirs).
   final String pin;
@@ -236,6 +246,7 @@ class EnrolledStudent {
           final Object pin => pin.toString(),
         },
         existing: json['existing'] == true,
+        username: json['username'] as String?,
       );
 }
 

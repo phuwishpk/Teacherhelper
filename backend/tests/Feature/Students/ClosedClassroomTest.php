@@ -41,7 +41,7 @@ class ClosedClassroomTest extends TestCase
         'api.auth.teacher.register' => null,
         'api.auth.teacher.login' => null,
         'api.auth.student.qr' => null,
-        'api.auth.student.pin' => null,
+        'api.auth.student.login' => null,
         'api.auth.logout' => null,
         'api.auth.admin-handoff' => null,
         'api.devices.store' => null,
@@ -82,6 +82,7 @@ class ClosedClassroomTest extends TestCase
         'api.subjects.destroy' => null,
         // The values of the statuses belong to the course; a closed classroom's scores are left alone.
         'api.courses.attendance.scores' => null,
+        'api.student.password' => null,
         'api.skills.practice-items.generate' => null,
         'api.skills.resources.store' => null,
         'api.practice-items.store' => null,
@@ -108,7 +109,7 @@ class ClosedClassroomTest extends TestCase
         'api.auth.google' => null,
         'api.auth.google.web-url' => null,
         'api.auth.google.ticket' => null,
-        'api.auth.google.link-with-pin' => null,
+        'api.auth.google.link-with-password' => null,
         'api.auth.google.link-with-qr' => null,
         'api.me.google-identity.store' => null,
         'api.me.google-identity.ticket' => null,
@@ -201,9 +202,9 @@ class ClosedClassroomTest extends TestCase
         $enrolled = $this->enrollStudent($this->classroomA, 30, 'นักเรียนห้องเก่า');
         $this->classroomA->refresh()->forceFill(['closed_at' => now()])->save();
 
-        $this->asGuest()->postJson('/api/v1/auth/student/pin', [
+        $this->asGuest()->postJson('/api/v1/auth/student/login', $this->cred([
             'class_code' => $this->classroomA->class_code, 'student_number' => 30, 'pin' => $enrolled['pin'],
-        ])->assertOk();
+        ]))->assertOk();
     }
 
     public function test_nothing_of_a_closed_classroom_waits_on_the_home_screen(): void

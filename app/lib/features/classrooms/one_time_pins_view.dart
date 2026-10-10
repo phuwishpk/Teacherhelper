@@ -6,8 +6,9 @@ import 'classroom.dart';
 
 /// Tab-separated "เลขที่ ชื่อ PIN" rows for pasting into a spreadsheet.
 String pinsAsText(List<EnrolledStudent> enrolled) => [
-  'เลขที่\tชื่อ\tPIN',
-  for (final s in enrolled) '${s.studentNumber}\t${s.name}\t${s.pin}',
+  'เลขที่\tชื่อ\tชื่อผู้ใช้\tรหัสผ่านเริ่มต้น',
+  for (final s in enrolled)
+    '${s.studentNumber}\t${s.name}\t${s.username ?? ''}\t${s.pin}',
 ].join('\n');
 
 /// Copies [enrolled]'s PINs and says so.
@@ -17,7 +18,7 @@ Future<void> copyPins(
 ) async {
   await Clipboard.setData(ClipboardData(text: pinsAsText(enrolled)));
   if (context.mounted) {
-    showMessage(context, 'คัดลอก PIN ${enrolled.length} คนแล้ว');
+    showMessage(context, 'คัดลอกรหัสผ่าน ${enrolled.length} คนแล้ว');
   }
 }
 
@@ -27,7 +28,7 @@ Future<bool> confirmLeavePins(BuildContext context) => confirm(
   context,
   title: 'ออกจากหน้านี้?',
   message:
-      'PIN จะไม่แสดงอีก ถ้ายังไม่ได้จด ต้องรีเซ็ต PIN ทีละคนจากหน้าห้องเรียน',
+      'ชื่อผู้ใช้ของนักเรียนดูได้อีกในหน้ารายชื่อของห้อง รหัสผ่านเริ่มต้นคือค่าที่แสดงในหน้านี้',
   confirmLabel: 'ออก',
 );
 
@@ -68,8 +69,9 @@ class OneTimePinsView extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'PIN เริ่มต้นของนักเรียนแสดงครั้งเดียว จดหรือคัดลอกไว้ก่อนออกจากหน้านี้ '
-                      '(นักเรียนใช้ PIN คู่กับรหัสห้องและเลขที่ เมื่อไม่มีบัตร QR)',
+                      'นักเรียนเข้าสู่ระบบด้วยชื่อผู้ใช้ด้านล่างและรหัสผ่านเริ่มต้น '
+                      'แล้วระบบให้ตั้งรหัสผ่านของตัวเองทันที '
+                      'ชื่อผู้ใช้ดูได้อีกในหน้ารายชื่อของห้อง',
                       style: TextStyle(
                         color: theme.colorScheme.onTertiaryContainer,
                       ),
@@ -88,6 +90,9 @@ class OneTimePinsView extends StatelessWidget {
                     dense: true,
                     leading: Text('${s.studentNumber}'),
                     title: Text(s.name),
+                    subtitle: s.username == null
+                        ? null
+                        : SelectableText('ชื่อผู้ใช้: ${s.username}'),
                     trailing: SelectableText(
                       s.pin,
                       style: theme.textTheme.titleMedium?.copyWith(
@@ -103,13 +108,13 @@ class OneTimePinsView extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onCopy,
             icon: const Icon(Icons.copy_all_outlined),
-            label: const Text('คัดลอก PIN ทั้งหมด'),
+            label: const Text('คัดลอกรหัสผ่านทั้งหมด'),
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: onDone,
             icon: const Icon(Icons.check),
-            label: const Text('จด PIN แล้ว เสร็จสิ้น'),
+            label: const Text('จดรหัสผ่านแล้ว เสร็จสิ้น'),
           ),
         ],
       ),

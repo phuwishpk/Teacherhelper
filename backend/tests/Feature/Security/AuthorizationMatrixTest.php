@@ -46,10 +46,10 @@ class AuthorizationMatrixTest extends TestCase
 
     /** Public routes, exercised by TeacherAuthTest and StudentAuthTest instead. */
     private const PUBLIC = [
-        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.schools', 'api.auth.student.qr', 'api.auth.student.pin',
+        'api.health', 'api.auth.teacher.register', 'api.auth.teacher.login', 'api.auth.schools', 'api.auth.student.qr', 'api.auth.student.login',
         // Google sign-in (§24.9), exercised by GoogleSignInTest.
         'api.auth.google.config', 'api.auth.google', 'api.auth.google.web-url', 'api.auth.google.ticket',
-        'api.auth.google.link-with-pin', 'api.auth.google.link-with-qr',
+        'api.auth.google.link-with-password', 'api.auth.google.link-with-qr',
     ];
 
     private const OK = 'ok';
@@ -353,6 +353,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
         // Always the signed-in student's own records (§29.5).
         'api.student.attendance' => ['GET', 'student/attendance', self::OK, self::OK],
+        // The signed-in student's own password (§29.10); an empty body is a 422 (counts as reached).
+        'api.student.password' => ['PUT', 'student/password', self::OK, self::OK],
         'api.student.courses.grade' => ['GET', 'student/courses/{own_course}/grade', self::OK, 404],
         // Always the signed-in student's own lines (§20.9).
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],

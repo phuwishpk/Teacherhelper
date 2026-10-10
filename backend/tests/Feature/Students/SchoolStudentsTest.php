@@ -80,8 +80,8 @@ class SchoolStudentsTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^\d{6}$/', $pin);
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $existing['student']->id]);
-        $this->asGuest()->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room1->class_code, 'student_number' => 1, 'pin' => $existing['pin']])->assertStatus(422);
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 3, 'pin' => $pin])->assertOk();
+        $this->asGuest()->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room1->class_code, 'student_number' => 1, 'pin' => $existing['pin']]))->assertStatus(422);
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 3, 'pin' => $pin]))->assertOk();
     }
 
     public function test_a_student_code_another_student_holds_names_them(): void
@@ -142,8 +142,8 @@ class SchoolStudentsTest extends TestCase
         ]])->assertCreated();
 
         $this->asGuest();
-        $a = $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $student['pin']])->assertOk();
-        $b = $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 11, 'pin' => $student['pin']])->assertOk();
+        $a = $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $student['pin']]))->assertOk();
+        $b = $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 11, 'pin' => $student['pin']]))->assertOk();
         $this->assertSame($student['student']->id, $a->json('user.id'));
         $this->assertSame($student['student']->id, $b->json('user.id'));
         $this->assertSame(2, DB::table('personal_access_tokens')->where('tokenable_id', $student['student']->id)->count());
@@ -151,10 +151,10 @@ class SchoolStudentsTest extends TestCase
         // Wrong PINs through both classrooms count on the student, not on the classroom.
         $wrong = $student['pin'] === '000000' ? '111111' : '000000';
         for ($i = 0; $i < CredentialIssuer::MAX_FAILED_PIN_ATTEMPTS - 1; $i++) {
-            $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $wrong])->assertStatus(422);
+            $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $wrong]))->assertStatus(422);
         }
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 11, 'pin' => $wrong])->assertStatus(423);
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $student['pin']])->assertStatus(423);
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 11, 'pin' => $wrong]))->assertStatus(423);
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room1->class_code, 'student_number' => 4, 'pin' => $student['pin']]))->assertStatus(423);
     }
 
     public function test_the_school_wide_search(): void

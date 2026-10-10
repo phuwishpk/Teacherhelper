@@ -6,6 +6,7 @@ use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\RosterCopier;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\StudentUsernames;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BulkStoreStudentsRequest;
@@ -67,6 +68,7 @@ class ClassroomStudentController extends Controller
                 'name' => $row['student']->name,
                 'student_code' => $row['student']->student_code,
                 'status' => $row['student']->status,
+                'username' => $row['student']->username,
                 'pin' => $row['pin'],
                 'existing' => $row['existing'],
             ], $created),
@@ -97,6 +99,7 @@ class ClassroomStudentController extends Controller
                 'name' => $row['student']->name,
                 'student_code' => $row['student']->student_code,
                 'status' => $row['student']->status,
+                'username' => $row['student']->username,
                 'pin' => $row['pin'],
                 'existing' => $row['existing'],
             ], $result['enrolled']),
@@ -105,22 +108,33 @@ class ClassroomStudentController extends Controller
     }
 
     /**
-     * PATCH /api/v1/classrooms/{id}/students/{student_id} {student_number}
-     * -> {data: roster row}; 422 student_number_taken (DESIGN §24.4).
+     * PATCH /api/v1/classrooms/{id}/students/{student_id} {student_number?, username?}
+     * -> {data: roster row}; 422 student_number_taken (DESIGN §24.4), 422
+     * errors.username when the sign-in name is taken (DESIGN §29.10).
      */
     public function update(Request $request, int $id, int $studentId): RosterStudentResource
     {
         $classroom = $this->ownClassroom($request, $id);
         Gate::authorize('manageStudents', $classroom);
         $student = $classroom->students()->findOrFail($studentId);
-        $number = (int) $request->validate([
-            'student_number' => ['required', 'integer', 'min:1', 'max:255'],
+        $data = $request->validate([
+            'student_number' => ['required_without:username', 'integer', 'min:1', 'max:255'],
+            'username' => ['sometimes', 'required', 'string', 'max:40'],
         ], [
+            'student_number.required_without' => 'กรุณากรอกเลขที่',
+            'username.required' => 'กรุณากรอกชื่อผู้ใช้',
             'student_number.required' => 'กรุณากรอกเลขที่',
             'student_number.integer' => 'เลขที่ต้องเป็นตัวเลข',
             'student_number.min' => 'เลขที่ต้องอยู่ระหว่าง 1–255',
             'student_number.max' => 'เลขที่ต้องอยู่ระหว่าง 1–255',
-        ])['student_number'];
+        ]);
+        if (array_key_exists('username', $data)) {
+            $this->rename($student, $data['username']);
+        }
+        if (! array_key_exists('student_number', $data)) {
+            return new RosterStudentResource($classroom->students()->findOrFail($studentId));
+        }
+        $number = (int) $data['student_number'];
 
         try {
             DB::transaction(function () use ($classroom, $student, $number) {
@@ -136,6 +150,27 @@ class ClassroomStudentController extends Controller
         }
 
         return new RosterStudentResource($classroom->students()->findOrFail($studentId));
+    }
+
+    /** Sets the student's sign-in name; their sessions stay. */
+    private function rename(User $student, string $username): void
+    {
+        $username = StudentUsernames::normalize($username);
+        $message = match (true) {
+            ! StudentUsernames::valid($username) => 'ชื่อผู้ใช้ต้องยาว 3-40 ตัว ใช้ได้เฉพาะ a-z 0-9 จุด ขีด และขีดล่าง',
+            StudentUsernames::taken($username, $student->id) => 'มีคนใช้ชื่อผู้ใช้นี้แล้ว',
+            default => null,
+        };
+        if ($message !== null) {
+            throw new ApiException($message, 'validation_failed', 422, ['username' => [$message]]);
+        }
+        try {
+            $student->forceFill(['username' => $username])->save();
+        } catch (UniqueConstraintViolationException) {
+            $message = 'มีคนใช้ชื่อผู้ใช้นี้แล้ว';
+
+            throw new ApiException($message, 'validation_failed', 422, ['username' => [$message]]);
+        }
     }
 
     /**
@@ -205,6 +240,7 @@ class ClassroomStudentController extends Controller
                 'student_id' => $student->id,
                 'student_number' => (int) $student->pivot->student_number,
                 'name' => $student->name,
+                'username' => $student->username,
                 'pin' => $this->issuer->issuePin($student),
             ])->values()->all();
         });

@@ -126,12 +126,12 @@ class StudentMergerTest extends TestCase
         $this->assertDatabaseMissing('student_credentials', ['student_id' => $d->id]);
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $d->id]);
         $this->assertDatabaseMissing('device_tokens', ['user_id' => $d->id]);
-        $this->asGuest()->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->merge['pin']])->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
+        $this->asGuest()->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->merge['pin']]))->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
         $this->postJson('/api/v1/auth/student/qr', ['qr_token' => $this->merge['qr_token']])->assertStatus(422)->assertJsonPath('code', 'qr_invalid');
         $this->forgetGuards();
         $this->withToken($dToken)->getJson('/api/v1/me')->assertStatus(401);
         // K logs in through D's old classroom with K's own PIN and D's old number there.
-        $this->asGuest()->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->keep['pin']])
+        $this->asGuest()->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->keep['pin']]))
             ->assertOk()->assertJsonPath('user.id', $k->id);
 
         $record = StudentMerge::query()->sole();
@@ -168,7 +168,7 @@ class StudentMergerTest extends TestCase
         $this->mergeOk($k, $d);
 
         $this->assertNull(DB::table('classroom_students')->where('classroom_id', $this->room2->id)->where('student_id', $k->id)->value('pin_pending_at'));
-        $this->asGuest()->postJson('/api/v1/auth/student/pin', ['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->keep['pin']])
+        $this->asGuest()->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $this->room2->class_code, 'student_number' => 5, 'pin' => $this->keep['pin']]))
             ->assertOk()->assertJsonPath('user.id', $k->id);
     }
 

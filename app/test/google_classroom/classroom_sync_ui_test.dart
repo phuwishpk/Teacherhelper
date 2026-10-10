@@ -711,7 +711,10 @@ void main() {
         ),
       );
       expect(find.text('เฉลยรออนุมัติ 2 งาน'), findsOneWidget);
-      expect(find.text('นักเรียนใหม่ยังไม่ได้รับ PIN 2 คน'), findsOneWidget);
+      expect(
+        find.text('นักเรียนใหม่ยังไม่ได้รับรหัสผ่าน 2 คน'),
+        findsOneWidget,
+      );
       expect(find.text('คะแนนไม่ตรงกับ Classroom 1 รายการ'), findsOneWidget);
       expect(
         find.text('ส่งคะแนนกลับ Classroom ไม่สำเร็จ 3 คน'),

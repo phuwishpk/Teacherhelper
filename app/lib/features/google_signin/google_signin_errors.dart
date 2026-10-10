@@ -9,7 +9,7 @@ String? googleSignInCodeMessage(String? code) => switch (code) {
   'google_domain_not_allowed' =>
     'โรงเรียนไม่อนุญาตให้ใช้บัญชี Google ของโดเมนนี้ กรุณาใช้บัญชี Google ของโรงเรียน',
   'student_google_disabled' =>
-    'โรงเรียนยังไม่เปิดให้นักเรียนเข้าสู่ระบบด้วย Google กรุณาใช้บัตร QR หรือ PIN',
+    'โรงเรียนยังไม่เปิดให้นักเรียนเข้าสู่ระบบด้วย Google กรุณาใช้บัตร QR หรือรหัสผ่าน',
   'account_not_active' =>
     'บัญชีนี้ยังใช้งานไม่ได้ (รอผู้ดูแลระบบอนุมัติหรือถูกระงับ)',
   'google_token_invalid' =>
@@ -29,7 +29,7 @@ String? googleSignInCodeMessage(String? code) => switch (code) {
   'google_ticket_invalid' =>
     'ลิงก์เข้าสู่ระบบด้วย Google หมดอายุหรือถูกใช้ไปแล้ว กรุณาลองใหม่',
   'google_signin_not_configured' =>
-    'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาใช้รหัสผ่าน PIN หรือบัตร QR',
+    'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาใช้รหัสผ่านหรือบัตร QR',
   'google_signin_web_not_configured' =>
     'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google ทางเว็บ กรุณาใช้แอปบน Android หรือรหัสผ่าน',
   'cancelled' => 'ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว',

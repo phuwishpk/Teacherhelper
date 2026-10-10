@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureClassroomOpen;
 use App\Http\Middleware\EnsureGoogleConfigured;
 use App\Http\Middleware\EnsureGoogleSignInConfigured;
 use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\EnsureStudentPasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -47,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'google.signin' => EnsureGoogleSignInConfigured::class,
             // DESIGN §24.6: writes on a closed classroom answer 409 classroom_closed.
             'classroom.open' => EnsureClassroomOpen::class,
+            // DESIGN §29.10: a student on the initial password changes it before anything else.
+            'student.password' => EnsureStudentPasswordChanged::class,
         ]);
 
         // There is no `login` route: the only web login is Filament's. API guests get

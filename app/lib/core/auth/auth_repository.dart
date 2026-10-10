@@ -43,11 +43,18 @@ abstract class AuthRepository {
   /// Student login with the token from a login card (`EVL1.{token}`).
   Future<String> loginStudentQr(String qrToken);
 
-  /// Student fallback login; the server rate-limits and locks after 5 misses.
-  Future<String> loginStudentPin({
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+  /// Student login with a username and password (DESIGN §29.10); the
+  /// server rate-limits and locks after 5 misses.
+  Future<String> loginStudent({
+    required String username,
+    required String password,
+  });
+
+  /// `PUT /student/password`: the student's own new password.
+  /// [currentPassword] is left out while the password is the initial one.
+  Future<User> changeStudentPassword({
+    required String password,
+    String? currentPassword,
   });
 
   Future<User> me();
@@ -108,20 +115,30 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<String> loginStudentPin({
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+  Future<String> loginStudent({
+    required String username,
+    required String password,
   }) async {
     final res = await _dio.post<Object?>(
-      '/auth/student/pin',
-      data: {
-        'class_code': classCode,
-        'student_number': studentNumber,
-        'pin': pin,
-      },
+      '/auth/student/login',
+      data: {'username': username, 'password': password},
     );
     return unwrapJson(res.data)['token'] as String;
+  }
+
+  @override
+  Future<User> changeStudentPassword({
+    required String password,
+    String? currentPassword,
+  }) async {
+    final res = await _dio.put<Object?>(
+      '/student/password',
+      data: {'password': password, 'current_password': ?currentPassword},
+    );
+    final body = res.data;
+    return User.fromJson(
+      (body as Map<String, dynamic>)['user'] as Map<String, dynamic>,
+    );
   }
 
   @override

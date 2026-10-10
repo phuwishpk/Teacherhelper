@@ -111,7 +111,7 @@ class _MergePreviewScreenState extends ConsumerState<MergePreviewScreen> {
       title: 'รวม ${preview.merge.name} เข้ากับ ${preview.keep.name}?',
       message:
           'งาน คะแนน ทักษะ และห้องเรียนของ "${preview.merge.name}" จะย้ายไปอยู่ในบัญชี '
-          '"${preview.keep.name}" บัญชีที่รวมเข้ามาจะถูกปิด PIN และบัตร QR ของบัญชีนั้นใช้ไม่ได้ทันที '
+          '"${preview.keep.name}" บัญชีที่รวมเข้ามาจะถูกปิดรหัสผ่านและบัตร QR ของบัญชีนั้นใช้ไม่ได้ทันที '
           'ย้อนกลับไม่ได้',
       confirmLabel: 'รวมบัญชี',
       destructive: true,
@@ -177,7 +177,7 @@ class _MergePreviewScreenState extends ConsumerState<MergePreviewScreen> {
                 _AccountCard(
                   key: const ValueKey('merge_merge'),
                   title: 'บัญชีที่จะรวมเข้ามา',
-                  note: 'บัญชีนี้จะถูกปิด PIN และบัตร QR ใช้ไม่ได้',
+                  note: 'บัญชีนี้จะถูกปิดรหัสผ่านและบัตร QR ใช้ไม่ได้',
                   account: p.merge,
                   color: theme.colorScheme.surfaceContainerHighest,
                 ),

@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,7 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
-import '../auth/student_login_form.dart' show studentPinErrorMessage;
+import '../auth/student_login_form.dart' show studentLoginErrorMessage;
 import '../auth/student_qr_scan_screen.dart' show cardErrorMessage;
 import 'google_signin_config.dart';
 import 'google_signin_errors.dart';
@@ -22,7 +21,7 @@ class GoogleLinkTicketMissing implements Exception {
 
 /// Thai message for a failed first confirmation: a Google code (expired
 /// ticket, school switch, domain, already linked) is about Google; anything
-/// else is the PIN login's message, or with [qr] the card's.
+/// else is the password login's message, or with [qr] the card's.
 String googleFirstLinkErrorMessage(Object error, {bool qr = false}) {
   if (error is GoogleLinkTicketMissing) {
     return googleReturnCodeMessage('link_ticket_invalid');
@@ -30,7 +29,7 @@ String googleFirstLinkErrorMessage(Object error, {bool qr = false}) {
   if (isGoogleSignInCode(apiErrorCode(error))) {
     return googleSignInErrorMessage(error);
   }
-  return qr ? cardErrorMessage(error) : studentPinErrorMessage(error);
+  return qr ? cardErrorMessage(error) : studentLoginErrorMessage(error);
 }
 
 /// Spends the held link ticket on success; drops it when the server says
@@ -64,7 +63,7 @@ Future<void> linkGoogleWithQr(WidgetRef ref, String payload) => _confirm(
 
 /// "ยืนยันตัวตนครั้งแรก" (DESIGN §24.9.5, §24.13): the student's Google
 /// account is not linked yet, so they prove who they are once with the
-/// class code + number + PIN or the login card, after accepting the PDPA
+/// their username and password or the login card, after accepting the PDPA
 /// notice (§24.14). Success links the account and signs the student in.
 class GoogleFirstLinkScreen extends ConsumerStatefulWidget {
   const GoogleFirstLinkScreen({super.key, this.qrScanSupported = !kIsWeb});
@@ -79,18 +78,16 @@ class GoogleFirstLinkScreen extends ConsumerStatefulWidget {
 
 class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _classCode = TextEditingController();
-  final _number = TextEditingController();
-  final _pin = TextEditingController();
+  final _username = TextEditingController();
+  final _password = TextEditingController();
   bool _accepted = false;
   bool _busy = false;
   String? _error;
 
   @override
   void dispose() {
-    _classCode.dispose();
-    _number.dispose();
-    _pin.dispose();
+    _username.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -103,11 +100,10 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
     try {
       await _confirm(
         ref,
-        (repo, ticket) => repo.linkWithPin(
+        (repo, ticket) => repo.linkWithPassword(
           linkTicket: ticket,
-          classCode: _classCode.text.trim().toUpperCase(),
-          studentNumber: int.parse(_number.text.trim()),
-          pin: _pin.text,
+          username: _username.text.trim(),
+          password: _password.text,
         ),
       );
       // The router takes the signed-in student to /student.
@@ -127,7 +123,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('สแกนบัตร QR ได้ในแอป Android'),
-        content: const Text('บนเว็บให้กรอกรหัสห้อง เลขที่ และ PIN แทน'),
+        content: const Text('บนเว็บให้กรอกชื่อผู้ใช้และรหัสผ่านแทน'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -170,7 +166,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
           'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน '
           'ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส ไม่ต้องกรอกอะไร '
           'รอประมาณ 20 นาทีแล้วกด "เข้าสู่ระบบด้วย Google" อีกครั้ง '
-          'หรือยืนยันว่าเป็นคุณครั้งเดียวด้วยบัตร QR หรือรหัสห้อง เลขที่ และ PIN '
+          'หรือยืนยันว่าเป็นคุณครั้งเดียวด้วยบัตร QR หรือชื่อผู้ใช้และรหัสผ่าน '
           'ครั้งต่อไปกด "เข้าสู่ระบบด้วย Google" ได้เลย',
           style: theme.textTheme.bodyLarge,
         ),
@@ -219,7 +215,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
             const Expanded(child: Divider()),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('หรือใช้ PIN', style: theme.textTheme.labelLarge),
+              child: Text('หรือใช้รหัสผ่าน', style: theme.textTheme.labelLarge),
             ),
             const Expanded(child: Divider()),
           ],
@@ -231,39 +227,23 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
-                controller: _classCode,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(labelText: 'รหัสห้อง'),
-                validator: (v) => (v == null || v.trim().length != 6)
-                    ? 'รหัสห้องมี 6 ตัวอักษร'
-                    : null,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _number,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'เลขที่'),
-                validator: (v) {
-                  final n = int.tryParse(v?.trim() ?? '');
-                  return (n == null || n < 1) ? 'กรอกเลขที่' : null;
-                },
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _pin,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'PIN 6 หลัก',
-                  counterText: '',
-                ),
+                key: const ValueKey('link_username'),
+                controller: _username,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(labelText: 'ชื่อผู้ใช้'),
                 validator: (v) =>
-                    (v == null || v.length != 6) ? 'PIN ต้องมี 6 หลัก' : null,
+                    (v == null || v.trim().isEmpty) ? 'กรอกชื่อผู้ใช้' : null,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey('link_password'),
+                controller: _password,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'รหัสผ่าน'),
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'กรอกรหัสผ่าน' : null,
                 onFieldSubmitted: (_) {
                   if (ready) _submit();
                 },

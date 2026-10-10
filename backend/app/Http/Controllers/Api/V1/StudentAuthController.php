@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Students\StudentAuthenticator;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\StudentPinLoginRequest;
+use App\Http\Requests\Api\V1\StudentLoginRequest;
 use App\Http\Requests\Api\V1\StudentQrLoginRequest;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Laravel\Sanctum\NewAccessToken;
 
 /**
- * Student auth (DESIGN §9.1): QR card (main) and class code + number + PIN (fallback).
+ * Student auth (DESIGN §9.1, §29.10): username + password, or the QR card.
  */
 class StudentAuthController extends Controller
 {
@@ -27,18 +27,13 @@ class StudentAuthController extends Controller
         );
     }
 
-    /** POST /api/v1/auth/student/pin -> 200 {token, user} | 422 invalid_credentials | 423 pin_locked */
-    public function pin(StudentPinLoginRequest $request): JsonResponse
+    /** POST /api/v1/auth/student/login {username, password} -> 200 {token, user} | 422 invalid_credentials | 423 pin_locked */
+    public function login(StudentLoginRequest $request): JsonResponse
     {
         $data = $request->validated();
 
         return $this->tokenResponse(
-            $this->authenticator->loginWithPin(
-                $data['class_code'],
-                (int) $data['student_number'],
-                $data['pin'],
-                $data['device_name'] ?? null,
-            ),
+            $this->authenticator->loginWithPassword($data['username'], $data['password'], $data['device_name'] ?? null),
         );
     }
 

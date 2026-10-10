@@ -158,7 +158,7 @@ void main() {
       expect(find.text('ป.4/1 ปี 2568 เลขที่ 4 (ห้องเก่า)'), findsOneWidget);
       expect(find.text(ImportMatchKind.name.label), findsOneWidget);
       expect(find.text('ยังไม่อยู่ในห้องใด'), findsOneWidget);
-      expect(find.text('บัญชีใหม่ (ได้ PIN ใหม่)'), findsOneWidget);
+      expect(find.text('บัญชีใหม่ (ได้รหัสผ่านใหม่)'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('import_existing_g3')));
       await tester.pumpAndSettle();
@@ -207,7 +207,7 @@ void main() {
       expect(find.text('stub-home'), findsOneWidget);
       expect(
         find.text(
-          'สร้างห้อง ป.5/1 แล้ว นักเรียน 1 คนใช้ PIN และบัตร QR เดิมได้',
+          'สร้างห้อง ป.5/1 แล้ว นักเรียน 1 คนใช้รหัสผ่านและบัตร QR เดิมได้',
         ),
         findsOneWidget,
       );
@@ -261,7 +261,7 @@ void main() {
       expect(find.text('ซิงก์รายชื่อแล้ว'), findsOneWidget);
       expect(find.text('333333'), findsOneWidget);
       expect(find.text('นักเรียนเดิมของโรงเรียนเข้าห้อง 1 คน'), findsOneWidget);
-      await tester.tap(find.text('จด PIN แล้ว'));
+      await tester.tap(find.text('จดรหัสผ่านแล้ว'));
       await tester.pumpAndSettle();
       expect(find.text('stub-home'), findsOneWidget);
     });

@@ -33,6 +33,7 @@ class RosterStudentResource extends JsonResource
             'student_number' => (int) $this->pivot->student_number,
             'name' => $this->name,
             'student_code' => $this->student_code,
+            'username' => $limited ? null : $this->username,
             'status' => $this->status,
             'left_course_at' => $limited ? null : $this->pivot->left_course_at?->toIso8601String(),
             'pin_pending' => $limited ? null : $this->pivot->pin_pending_at !== null,

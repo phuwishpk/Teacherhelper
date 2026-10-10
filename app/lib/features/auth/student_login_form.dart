@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,29 +7,29 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 
-/// Thai message for a failed PIN login.
+/// Thai message for a failed username + password login.
 ///
-/// - 423 `pin_locked`: this student's PIN is locked after 5 wrong tries
-///   (DESIGN §7.4). The server says how long in `errors.pin[0]`.
+/// - 423 `pin_locked`: this student is locked after 5 wrong tries
+///   (DESIGN §7.4). The server says how long in `errors.password[0]`.
 /// - 429: the per-IP `throttle:student-auth` limiter. A whole class shares
-///   one school NAT address, so this is NOT about this student's PIN.
-String studentPinErrorMessage(Object error) {
+///   one school NAT address, so this is NOT about this student's password.
+String studentLoginErrorMessage(Object error) {
   final status = apiStatusCode(error);
   final code = apiErrorCode(error);
   if (status == 423 || code == 'pin_locked') {
     // e.g. "ล็อกชั่วคราว ลองใหม่ในอีก 12 นาที" (StudentAuthenticator).
-    final remaining = _firstFieldError(error, 'pin');
+    final remaining = _firstFieldError(error, 'password');
     if (remaining != null) {
-      return 'ใส่ PIN ผิดหลายครั้ง $remaining หรือให้ครูรีเซ็ต PIN';
+      return 'ใส่รหัสผ่านผิดหลายครั้ง $remaining หรือให้ครูรีเซ็ตรหัสผ่าน';
     }
-    return 'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที แล้วค่อยลองใหม่ '
-        'หรือให้ครูรีเซ็ต PIN';
+    return 'ใส่รหัสผ่านผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที แล้วค่อยลองใหม่ '
+        'หรือให้ครูรีเซ็ตรหัสผ่าน';
   }
   if (status == 429) {
     return 'มีการเข้าสู่ระบบถี่เกินไป รอสักครู่แล้วลองใหม่';
   }
   if (status == 401 || status == 422) {
-    return 'รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง';
+    return 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
   }
   return apiErrorMessage(error);
 }
@@ -49,9 +48,9 @@ String? _firstFieldError(Object error, String field) {
   return null;
 }
 
-/// The "นักเรียน" tab of the login page: scan the login card, or fall back
-/// to class code + number + PIN (DESIGN §9.1 /auth/student/qr and
-/// /auth/student/pin).
+/// The "นักเรียน" tab of the login page: scan the login card, or sign in
+/// with a username and password (DESIGN §9.1 /auth/student/qr, §29.10
+/// /auth/student/login).
 class StudentLoginForm extends ConsumerStatefulWidget {
   const StudentLoginForm({super.key, this.qrScanSupported = true});
 
@@ -65,17 +64,15 @@ class StudentLoginForm extends ConsumerStatefulWidget {
 
 class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
   final _formKey = GlobalKey<FormState>();
-  final _classCode = TextEditingController();
-  final _number = TextEditingController();
-  final _pin = TextEditingController();
+  final _username = TextEditingController();
+  final _password = TextEditingController();
   bool _busy = false;
   String? _error;
 
   @override
   void dispose() {
-    _classCode.dispose();
-    _number.dispose();
-    _pin.dispose();
+    _username.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -88,14 +85,13 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
     try {
       await ref
           .read(sessionProvider.notifier)
-          .signInStudentPin(
-            classCode: _classCode.text.trim().toUpperCase(),
-            studentNumber: int.parse(_number.text.trim()),
-            pin: _pin.text,
+          .signInStudent(
+            username: _username.text.trim(),
+            password: _password.text,
           );
       // The router redirects to /student once the session is SignedIn.
     } catch (e) {
-      if (mounted) setState(() => _error = studentPinErrorMessage(e));
+      if (mounted) setState(() => _error = studentLoginErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -112,7 +108,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
         title: const Text('สแกนบัตร QR ได้ในแอป Android'),
         content: const Text(
           'การสแกนบัตรต้องใช้กล้องของแอป Krucheck บน Android '
-          'บนเว็บให้กรอกรหัสห้อง เลขที่ และ PIN ด้านล่างแทน',
+          'บนเว็บให้กรอกชื่อผู้ใช้และรหัสผ่านด้านล่างแทน',
         ),
         actions: [
           TextButton(
@@ -170,7 +166,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
             const Expanded(child: Divider()),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('หรือใช้ PIN', style: theme.textTheme.labelLarge),
+              child: Text('หรือใช้รหัสผ่าน', style: theme.textTheme.labelLarge),
             ),
             const Expanded(child: Divider()),
           ],
@@ -182,42 +178,32 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
-                controller: _classCode,
-                textCapitalization: TextCapitalization.characters,
+                key: const ValueKey('student_username'),
+                controller: _username,
+                autocorrect: false,
+                enableSuggestions: false,
+                autofillHints: const [AutofillHints.username],
                 decoration: const InputDecoration(
-                  labelText: 'รหัสห้อง',
-                  hintText: '6 ตัวอักษร ถามครูประจำวิชา',
-                ),
-                validator: (v) => (v == null || v.trim().length != 6)
-                    ? 'รหัสห้องมี 6 ตัวอักษร'
-                    : null,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _number,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'เลขที่'),
-                validator: (v) {
-                  final n = int.tryParse(v?.trim() ?? '');
-                  return (n == null || n < 1) ? 'กรอกเลขที่' : null;
-                },
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _pin,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'PIN 6 หลัก',
-                  counterText: '',
+                  labelText: 'ชื่อผู้ใช้',
+                  hintText: 'ถามครูประจำวิชา',
                 ),
                 validator: (v) =>
-                    (v == null || v.length != 6) ? 'PIN ต้องมี 6 หลัก' : null,
+                    (v == null || v.trim().isEmpty) ? 'กรอกชื่อผู้ใช้' : null,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const ValueKey('student_password'),
+                controller: _password,
+                obscureText: true,
+                autofillHints: const [AutofillHints.password],
+                decoration: const InputDecoration(
+                  labelText: 'รหัสผ่าน',
+                  helperText:
+                      'เข้าครั้งแรกใช้ 123456 แล้วตั้งรหัสผ่านของตัวเอง',
+                ),
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'กรอกรหัสผ่าน' : null,
                 onFieldSubmitted: (_) => _submit(),
               ),
               if (_error != null) ...[

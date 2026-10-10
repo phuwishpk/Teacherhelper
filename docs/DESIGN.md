@@ -490,7 +490,7 @@ task worker เรียกผ่าน `artisan eduvision:queue-work` ซึ่
 **หน้า login เดียว (แก้ 1 ต.ค. 2569)** แอปมีหน้า login หน้าเดียวสำหรับทุก role แบ่ง 2 แท็บ (`SegmentedButton`):
 
 - **"ครู / ผู้ดูแลระบบ"**: อีเมล + รหัสผ่าน ส่งไป `POST /auth/teacher/login` ทั้งครูและ admin ใต้ฟอร์มมีลิงก์ "ยังไม่มีบัญชี? สมัครใช้งาน" response มี `user.role` แอปจึงพาแต่ละ role ไปหน้าของตัวเอง: `admin` → `/admin-home`, `teacher` → shell ของครู, `student` → shell ของนักเรียน (redirect ของ go_router ตาม role ทุกครั้ง admin เปิดหน้าครูหรือนักเรียนไม่ได้)
-- **"นักเรียน"**: ฟอร์มรหัสห้อง + เลขที่ + PIN 6 หลักอยู่ในหน้าเลย และปุ่ม "สแกนบัตร QR" ที่เปิดกล้องสแกนบัตรเดิม (`/student/login/qr`) บนเว็บ (ใช้ดู UI เท่านั้น) ปุ่มนี้บอกว่าต้องใช้แอป Android
+- **"นักเรียน"**: ฟอร์มชื่อผู้ใช้ + รหัสผ่านอยู่ในหน้าเลย (§29.10; เดิมคือรหัสห้อง + เลขที่ + PIN) และปุ่ม "สแกนบัตร QR" ที่เปิดกล้องสแกนบัตรเดิม (`/student/login/qr`) บนเว็บ (ใช้ดู UI เท่านั้น) ปุ่มนี้บอกว่าต้องใช้แอป Android
 - แอปจำแท็บที่ใช้ล่าสุดไว้ใน `flutter_secure_storage` ที่เก็บ token อยู่แล้ว (ไม่ใช่ข้อมูลส่วนตัว ไม่ถูกลบตอน logout) เครื่องประจำห้องจึงเปิดมาที่แท็บนักเรียน `/login?tab=student` เลือกแท็บนักเรียนเสมอ และ route เดิม `/student/login` (รวมถึงลิงก์ผลจาก Classroom §19.7 ที่รอ login) redirect มาที่ `/login?tab=student`
 - ตอบได้ทั้งจอ 360 px และจอกว้าง (คอลัมน์กว้างไม่เกิน 440 px กลางจอ)
 
@@ -934,7 +934,7 @@ CREATE TABLE training_samples (
 | POST | `/auth/teacher/register` | สาธารณะ | `{school_id?, name, email, password, google_link_ticket?}` ได้บัญชีสถานะ `pending` เสมอ เลือกโรงเรียนตามลำดับ: `school_id` (ต้องมีจริง ไม่อย่างนั้น 422 `validation_failed` ที่ `errors.school_id`) → `school_code` (ของแอปรุ่นเก่า ต้องตรง `teacher_join_code` ไม่อย่างนั้น 422 `school_code_invalid`) → ถ้าระบบมีโรงเรียนเดียวใช้โรงเรียนนั้น → ไม่อย่างนั้น 422 `school_required` (`errors.school_id` "กรุณาเลือกโรงเรียน") ด่านเดียวคือ admin อนุมัติ (แก้ 2 ต.ค. 2569 #70) |
 | POST | `/auth/teacher/login` | สาธารณะ | ครูและ admin (หน้า login เดียว §7.4) ได้ `{token, user}` (ต้องมีสถานะ `active`) token มี ability ตาม `user.role`: `teacher` หรือ `admin` |
 | POST | `/auth/student/qr` | สาธารณะ | `{qr_token}` |
-| POST | `/auth/student/pin` | สาธารณะ | `{class_code, student_number, pin}` มี rate limit และ lockout |
+| POST | `/auth/student/login` | สาธารณะ | `{username, password}` มี rate limit และ lockout (§29.10; แทน `/auth/student/pin` เดิม) |
 | POST | `/auth/logout` | ทุก role | ยกเลิก token ปัจจุบัน |
 | GET | `/me` | ทุก role | |
 | POST | `/auth/admin-handoff` | admin | `{data: {url, expires_at}}` ลิงก์ `GET /admin/handoff/{token}` ใช้ได้ครั้งเดียวภายใน 60 วินาที เข้า Filament (§7.4) |
@@ -956,7 +956,7 @@ CREATE TABLE training_samples (
 | POST | `/students/{id}/login-card` | ออกบัตรใหม่ ยกเลิก token เดิม ตอบ `202` พร้อม print job |
 | GET | `/login-card-prints/{id}` | สถานะ print job `{id, status: queued\|rendering\|ready\|failed, classroom_id, student_id, download_url, status_url, error, created_at}` (`download_url` มีค่าเมื่อ `ready`) |
 | GET | `/login-card-prints/{id}/file` | ดาวน์โหลด PDF บัตร (ตรวจสิทธิ์) |
-| POST | `/students/{id}/pin` | รีเซ็ต PIN ยกเลิก token เดิมและการเชื่อม Google (เว้นแต่ `keep_google=true`, §24.9.5) ตอบ `{pin, google_unlinked}` ครั้งเดียว |
+| POST | `/students/{id}/pin` | รีเซ็ตรหัสผ่านกลับเป็นค่าเริ่มต้น 123456 (ต้องเปลี่ยนตอนเข้าครั้งถัดไป §29.10) ยกเลิก token เดิมและการเชื่อม Google (เว้นแต่ `keep_google=true`, §24.9.5) ตอบ `{username, pin, google_unlinked}` |
 | GET | `/subjects` | กลุ่มสาระที่ครูเห็น `{data: [{id, code, name, is_own}]}` (กลุ่มที่ใช้ร่วมกัน ตามด้วยกลุ่มของครูเอง §29.4) |
 | POST | `/subjects` | ครูเพิ่มกลุ่มสาระของตัวเอง `{name}` → 201 (§29.4) |
 | PATCH / DELETE | `/subjects/{id}` | แก้ชื่อหรือลบกลุ่มสาระของตัวเอง ลบไม่ได้เมื่อมีรายวิชา การบ้าน หรือตัวชี้วัดใช้อยู่ (409 `subject_in_use`) |
@@ -4264,7 +4264,7 @@ ALTER TABLE classroom_google_links
 | ครูใหม่ | สมัครจาก `google_not_linked` (โรงเรียนปิดสวิตช์อนุมัติอัตโนมัติ) | `POST /auth/teacher/register` เดิมรับ `google_link_ticket?` เพิ่ม ตรวจโดเมนของโรงเรียนที่เลือกตอนสมัคร (§9.1 ไม่ต้องใช้รหัสโรงเรียนแล้ว) แล้วเชื่อมทันทีที่สร้างบัญชี (`linked_via = registration`) บัญชียัง `pending` จึงเข้าได้หลัง admin อนุมัติเท่านั้น ยังต้องตั้งรหัสผ่าน (เป็นทางสำรอง) |
 | admin | หน้า `/admin-home` ในแอป "เชื่อมบัญชี Google" หลัง login ด้วยรหัสผ่าน | token ability `admin` เปิด `GET/POST/DELETE /me/google-identity` ได้เพิ่ม ไม่เชื่อมอัตโนมัติจาก email |
 | นักเรียน | อัตโนมัติจาก roster ของ Classroom | §24.9.3 ข้อ 4 |
-| นักเรียน | "ยืนยันตัวตนครั้งแรก" ที่หน้า login | `POST /auth/google/link-with-pin {link_ticket, class_code, student_number, pin, accept_notice}` หรือ `link-with-qr {link_ticket, qr_token, accept_notice}` ตรวจ PIN/QR ด้วยกติกาเดิมทั้งหมด (ข้อความกลาง, ล็อก 5 ครั้ง 15 นาที, limiter `student-auth`) แล้วเชื่อม (`pin_confirm`) และ login |
+| นักเรียน | "ยืนยันตัวตนครั้งแรก" ที่หน้า login | `POST /auth/google/link-with-password {link_ticket, username, password, accept_notice}` (§29.10) หรือ `link-with-qr {link_ticket, qr_token, accept_notice}` ตรวจ PIN/QR ด้วยกติกาเดิมทั้งหมด (ข้อความกลาง, ล็อก 5 ครั้ง 15 นาที, limiter `student-auth`) แล้วเชื่อม (`pin_confirm`) และ login |
 | นักเรียน | หน้า "บัญชีของฉัน" หลัง login ด้วย PIN/QR กด "เชื่อมบัญชี Google" | ข้อความแจ้ง PDPA (§24.14) ต้องกดยอมรับ → `POST /me/google-identity` (`self`) |
 
 - ทุกทางตรวจ: โดเมน, สวิตช์นักเรียน, `sub` ยังไม่เป็นของผู้ใช้อื่น (409 `google_already_linked`) และผู้ใช้ยังไม่มีบัญชี Google อื่น (409 `google_identity_exists` ต้องยกเลิกก่อน) นักเรียนต้องส่ง `accept_notice: true` (ไม่ส่ง 422 `notice_required`) ครูและ admin เห็นข้อความเดียวกันก่อนกดเชื่อมและใต้ปุ่ม Google ในหน้า login
@@ -4327,7 +4327,7 @@ ALTER TABLE classroom_google_links
 | POST | `/auth/google/web-url` | สาธารณะ (`link` ต้องมี token) | `{purpose: login\|link, intent?, school_id?}` → `{data: {url}}` 503 `google_signin_web_not_configured` |
 | GET | `/auth/google/callback` (web route) | เบราว์เซอร์ | redirect ไปแอปเว็บพร้อม ticket หรือผลการเชื่อม state ผิด/หมดอายุ/ใช้แล้ว ได้หน้า HTML ภาษาไทย 400 |
 | POST | `/auth/google/ticket` | สาธารณะ | `{ticket, school_id?}` คำตอบเดียวกับ `POST /auth/google` ticket ผิด 422 `google_ticket_invalid` |
-| POST | `/auth/google/link-with-pin` | สาธารณะ | `{link_ticket, class_code, student_number, pin, accept_notice}` error ของ PIN เดิม + 422 `link_ticket_invalid`, `notice_required` |
+| POST | `/auth/google/link-with-password` | สาธารณะ | `{link_ticket, username, password, accept_notice}` error ของการเข้าด้วยรหัสผ่าน (§29.10) + 422 `link_ticket_invalid`, `notice_required` |
 | POST | `/auth/google/link-with-qr` | สาธารณะ | `{link_ticket, qr_token, accept_notice}` |
 | POST | `/auth/teacher/register` | สาธารณะ | เดิม + `google_link_ticket?` |
 | GET | `/me/google-identity` | ทุก role (รวม admin) | `{data: {linked, email, name, picture_url, linked_via, linked_at, can_link, notice_version}}` `can_link` = false เมื่อปิดสำหรับนักเรียนของโรงเรียน |
@@ -4589,7 +4589,7 @@ route ของครูที่มีอยู่แล้วทั้งห�
 | ทำได้ | ทำไม่ได้ (ต้องใช้แอป Android) |
 |---|---|
 | ครู: ห้องและนักเรียน, รายวิชาและแผน, การบ้านและเฉลย, พิมพ์ใบงาน/บัตร QR/กระดาษคำตอบ (ดาวน์โหลด PDF), **อัปโหลดรูปหรือ PDF เพื่อตรวจ** (`/hand-ins/upload` ทางรูปทั้งหน้า §19.6), ตรวจทาน เผยแพร่ สมุดคะแนน ตัดเกรด กราฟ, เชื่อมและซิงก์ Google Classroom | สแกนใบงานและกระดาษคำตอบด้วยกล้อง (marker/QR/crop §6.2, §22), คิวอัปโหลดออฟไลน์และฐานข้อมูลในเครื่อง (drift), อ่านตัวเลขด้วย CNN, render ภาพประกอบข้อสอบจาก PDF (§22) |
-| นักเรียน: เข้าด้วยรหัสห้อง + เลขที่ + PIN หรือ Google, ส่งงานด้วยไฟล์, ดูผล คำอธิบาย เกรด กราฟ แบบฝึก, ขอตรวจใหม่ | สแกนบัตร QR เพื่อเข้าสู่ระบบ, ถ่ายรูปงานด้วยกล้องในแอป (เลือกไฟล์รูปแทน) |
+| นักเรียน: เข้าด้วยชื่อผู้ใช้ + รหัสผ่าน หรือ Google, ส่งงานด้วยไฟล์, ดูผล คำอธิบาย เกรด กราฟ แบบฝึก, ขอตรวจใหม่ | สแกนบัตร QR เพื่อเข้าสู่ระบบ, ถ่ายรูปงานด้วยกล้องในแอป (เลือกไฟล์รูปแทน) |
 | admin: หน้า login เดียวแล้วเปิด Filament (§7.4) | – |
 
 หน้าที่ทำไม่ได้แสดงข้อความภาษาไทยและทางไปต่อ (เช่นหน้าสแกนมีปุ่ม "อัปโหลดรูปเพื่อตรวจ") ไม่ล้ม (test `scan_screen_web_test.dart`)
@@ -4780,7 +4780,7 @@ route ของครูที่มีอยู่แล้วทั้งห�
 - เข้าห้องครั้งแรกด้วยรหัสห้อง 6 ตัว หรือ QR ของห้องซึ่งเป็นลิงก์ `https://<โดเมน>/app/#/join/<รหัส>` (สแกนด้วยกล้องปกติของมือถือ) เข้าได้ทันที ทำครั้งเดียว ครูนำนักเรียนออกและปิดรับสมาชิกได้ นักเรียนออกจากห้องเองไม่ได้
 - ครูสร้างรายชื่อไว้ก่อนได้ นักเรียนเลือกชื่อของตัวเองเพื่อรับที่นั่ง (ต้องตรงกับรหัสนักเรียนเมื่อครูกรอกไว้) คนที่ไม่มีชื่อพิมพ์ชื่อเอง
 - เข้าสู่ระบบด้วย Google: ที่นั่งผูกกับอีเมล ห้องที่นำเข้าจาก Classroom เข้าให้เอง ห้องอื่นกรอกรหัสหรือสแกน QR ครั้งเดียว
-- ไม่มี Google: รหัสห้อง + เลขที่ + PIN บัญชีที่ครูสร้างเริ่มด้วย PIN `123456` และถูกบังคับให้ตั้ง PIN 6 หลักใหม่ (ห้ามเป็น 123456) ตอนเข้าครั้งแรก ครูรีเซ็ตแล้วกลับเป็น 123456 หน้าห้องแสดงว่าใครยังไม่เคยเข้า บัญชี PIN เชื่อม Google ภายหลังได้
+- ไม่มี Google: ชื่อผู้ใช้ + รหัสผ่าน (§29.10 สร้างแล้ว) บัญชีที่ครูสร้างเริ่มด้วยรหัสผ่าน `123456` และถูกบังคับให้ตั้งรหัสผ่านใหม่ตอนเข้าครั้งแรก ครูรีเซ็ตแล้วกลับเป็น 123456 หน้าห้องแสดงว่าใครยังไม่เคยเข้า (ยังไม่ทำ) บัญชีนี้เชื่อม Google ภายหลังได้
 - เจ้าของห้องรวมบัญชีซ้ำในห้องได้ด้วย "ย้ายไปที่นั่งนี้"
 - เลิกบัตรเข้าสู่ระบบรายคน QR บนใบงานและกระดาษคำตอบยังอยู่
 
@@ -4865,3 +4865,16 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 | GET | `/student/attendance?course_id=&classroom_id=` | นักเรียนดูสถานะของตัวเองทุกคาบ แยกรายวิชา |
 
 แอป: ปุ่ม "เช็คชื่อ" ในหน้ารายวิชา → `/courses/:id/attendance` (ประวัติ สรุปรายคน ค่าของสถานะ นับเป็นคะแนน) → `/courses/:id/attendance/new` และ `/courses/:id/attendance/:sid` (หนึ่งคาบ เริ่มที่มาทุกคน) นักเรียน: "การเข้าเรียน" ในหน้าวิชาของฉัน → `/student/attendance`
+
+### 29.10 นักเรียนเข้าด้วยชื่อผู้ใช้และรหัสผ่าน
+
+ตัดสินใจ 11 ต.ค. 2569 (ผู้ใช้สั่ง): เลิกการเข้าด้วยรหัสห้อง + เลขที่ + PIN ใช้ชื่อผู้ใช้ + รหัสผ่านแทน หัวข้อนี้มาแทนคำอธิบาย PIN ใน §7.4, §9.1, §24.4 และ §24.9.5 ในส่วนที่ขัดกัน บัตร QR และ Google ยังใช้ได้ตามเดิม
+
+- **ชื่อผู้ใช้** (`users.username` ไม่ซ้ำทั้งระบบ ตัวพิมพ์เล็ก 3-40 ตัว ใช้ได้ a-z 0-9 จุด ขีด ขีดล่าง): ระบบสร้างให้ตอนสร้างบัญชีนักเรียน ใช้รหัสนักเรียนถ้ารูปแบบใช้ได้และยังไม่มีใครใช้ ไม่อย่างนั้นเป็น `s` + เลข 7 หลัก migration สร้างให้นักเรียนเดิมทุกคนด้วยกฎเดียวกัน ครูประจำชั้นเห็นในหน้ารายชื่อและแก้ได้ (`PATCH /classrooms/{id}/students/{student_id} {username}`) ครูประจำวิชาไม่เห็น
+- **รหัสผ่าน**: เก็บใน `student_credentials.pin_hash` เดิม (ชื่อ column ไม่เปลี่ยน) บัญชีใหม่และการรีเซ็ตของครูได้รหัสผ่านเริ่มต้น `123456` พร้อม `must_change_password = true` นักเรียนเดิมใช้ PIN 6 หลักเดิมเป็นรหัสผ่านต่อได้และไม่ถูกบังคับเปลี่ยน
+- **บังคับเปลี่ยน**: ขณะที่ `must_change_password` เป็นจริง ทุก route ของนักเรียนตอบ 403 `password_change_required` ยกเว้น `GET /me`, `PUT /student/password` และ logout (middleware `student.password`) แอปพานักเรียนไปหน้า `/student/password` และเปิดหน้าอื่นไม่ได้ `/me` ส่ง `username` และ `must_change_password`
+- **เปลี่ยนรหัสผ่าน**: `PUT /student/password {password, current_password?}` อย่างน้อย 6 ตัว ห้ามเป็น 123456 ต้องส่ง `current_password` เว้นแต่ยังเป็นรหัสผ่านเริ่มต้น session อื่นของนักเรียนถูกยกเลิก
+- **เข้าสู่ระบบ**: `POST /auth/student/login {username, password}` ข้อความผิดพลาดเดียวสำหรับทุกกรณี (422 `invalid_credentials`) ผิด 5 ครั้งล็อก 15 นาที (423 `pin_locked` ชื่อ code เดิม) rate limit ต่อ IP + ชื่อผู้ใช้
+- **Google ครั้งแรก**: `POST /auth/google/link-with-password {link_ticket, username, password, accept_notice}` แทน `link-with-pin`
+- response ของการเพิ่มนักเรียน (เพิ่มทีละหลายคน นำเข้า Classroom ซิงก์รายชื่อ ออกรหัสให้คนที่ค้าง) ยังใช้ key `pin` สำหรับรหัสผ่านเริ่มต้น และเพิ่ม `username` ทุกแถว
+- แอป Android รุ่นเก่าเข้าด้วย PIN ไม่ได้อีก ต้องติดตั้ง build ใหม่ เว็บแอปต้อง build และอัปโหลดใหม่

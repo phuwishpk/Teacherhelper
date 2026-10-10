@@ -325,6 +325,7 @@ final class GoogleRosterSync
                     'student_id' => $created['student']->id,
                     'student_number' => $created['student_number'],
                     'name' => $created['student']->name,
+                    'username' => $created['student']->username,
                     'pin' => $created['pin'],
                     'existing' => $created['existing'],
                 ];

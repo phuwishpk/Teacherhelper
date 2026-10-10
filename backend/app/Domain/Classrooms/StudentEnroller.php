@@ -4,6 +4,7 @@ namespace App\Domain\Classrooms;
 
 use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\StudentCode;
+use App\Domain\Students\StudentUsernames;
 use App\Exceptions\ApiException;
 use App\Models\Classroom;
 use App\Models\User;
@@ -79,6 +80,7 @@ class StudentEnroller
                         'password' => null,
                         'status' => User::STATUS_ACTIVE,
                         'student_code' => $codes[$i] ?? null,
+                        'username' => StudentUsernames::generate($codes[$i] ?? null),
                     ]);
                     $classroom->students()->attach($student->id, ['student_number' => $number]);
                     $credentials = $this->issuer->create($student);
