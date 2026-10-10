@@ -28,7 +28,7 @@ class TeacherSkillTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $this->math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $this->strand = Skill::factory()->create(['subject_id' => $this->math->id, 'code' => 'ค 1', 'name' => 'จำนวนและพีชคณิต', 'grade_level' => null, 'level' => Skill::LEVEL_STRAND]);
         $this->standard = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $this->strand->id, 'code' => 'ค 1.1', 'name' => 'มาตรฐาน', 'grade_level' => null, 'level' => Skill::LEVEL_STANDARD]);
         $this->indicator = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $this->standard->id, 'code' => 'ค 1.1 ป.5/1', 'name' => 'เศษส่วน', 'grade_level' => 5]);
@@ -115,7 +115,7 @@ class TeacherSkillTest extends TestCase
         $teacher = $this->makeTeacher();
         $otherSchoolSkill = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $this->standard->id, 'school_id' => $this->makeSchool()->id, 'level' => Skill::LEVEL_INDICATOR]);
         $sub = Skill::factory()->create(['subject_id' => $this->math->id, 'parent_id' => $this->indicator->id, 'level' => Skill::LEVEL_SUB_INDICATOR]);
-        $science = Subject::factory()->create(['code' => 'ว']);
+        $science = Subject::query()->where('code', 'ว')->firstOrFail();
 
         $this->asUser($teacher)->postJson('/api/v1/skills', ['parent_id' => $this->strand->id, 'name' => 'x'])->assertStatus(422)->assertJsonValidationErrors(['parent_id']);
         $this->asUser($teacher)->postJson('/api/v1/skills', ['parent_id' => $sub->id, 'name' => 'x'])->assertStatus(422)->assertJsonValidationErrors(['parent_id']);

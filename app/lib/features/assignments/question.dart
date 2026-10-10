@@ -80,16 +80,25 @@ class Skill {
 }
 
 class Subject {
-  const Subject({required this.id, required this.code, required this.name});
+  const Subject({
+    required this.id,
+    required this.code,
+    required this.name,
+    this.isOwn = false,
+  });
 
   final int id;
   final String code;
   final String name;
 
+  /// A subject group the signed-in teacher added; nobody else sees it.
+  final bool isOwn;
+
   factory Subject.fromJson(Map<String, dynamic> json) => Subject(
     id: (json['id'] as num).toInt(),
     code: json['code'] as String? ?? '',
     name: json['name'] as String,
+    isOwn: json['is_own'] as bool? ?? false,
   );
 }
 

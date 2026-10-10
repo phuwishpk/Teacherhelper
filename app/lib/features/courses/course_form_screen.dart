@@ -8,7 +8,6 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
-import '../assignments/assignments_providers.dart';
 import '../assignments/question.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
@@ -16,6 +15,7 @@ import 'course_models.dart';
 import 'courses_providers.dart';
 import 'courses_repository.dart';
 import 'indicator_widgets.dart';
+import 'subject_field.dart';
 
 /// `/courses/:id/edit`: the course handed over as route `extra`, or loaded
 /// by id (a deep link never opens the form in create mode).
@@ -188,7 +188,6 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final subjects = ref.watch(subjectsProvider);
     final classrooms = ref.watch(classroomsProvider);
     final editing = _c != null;
     final lockedSubject = (_c?.assignmentCount ?? 0) > 0;
@@ -235,30 +234,16 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              key: const ValueKey('course_subject'),
-              initialValue: _subjectId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: 'กลุ่มสาระ',
-                helperText: lockedSubject
-                    ? 'เปลี่ยนกลุ่มสาระไม่ได้ เพราะมีการบ้านใช้รายวิชานี้แล้ว'
-                    : null,
-              ),
-              items: [
-                for (final s in subjects.value ?? const <Subject>[])
-                  DropdownMenuItem(value: s.id, child: Text(s.name)),
-              ],
+            SubjectField(
+              fieldKey: const ValueKey('course_subject'),
+              value: _subjectId,
+              helperText: lockedSubject
+                  ? 'เปลี่ยนกลุ่มสาระไม่ได้ เพราะมีการบ้านใช้รายวิชานี้แล้ว'
+                  : null,
               onChanged: lockedSubject
                   ? null
                   : (v) => setState(() => _subjectId = v),
-              validator: (v) => v == null ? 'เลือกกลุ่มสาระ' : null,
             ),
-            if (subjects.hasError)
-              Text(
-                'โหลดกลุ่มสาระไม่ได้: ${apiErrorMessage(subjects.error!)}',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
             const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

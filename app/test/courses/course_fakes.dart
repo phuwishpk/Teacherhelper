@@ -429,11 +429,21 @@ class FakeClassrooms extends Fake implements ClassroomsRepository {
 class FakeSkills extends Fake implements AssignmentsRepository {
   final searches = <Map<String, Object?>>[];
 
-  @override
-  Future<List<Subject>> subjects() async => const [
+  /// Set to const [] for an installation without subject groups.
+  List<Subject> subjectList = const [
     Subject(id: 1, code: 'ค', name: 'คณิตศาสตร์'),
     Subject(id: 2, code: 'ว', name: 'วิทยาศาสตร์'),
   ];
+
+  @override
+  Future<List<Subject>> subjects() async => subjectList;
+
+  @override
+  Future<Subject> createSubject(String name) async {
+    final subject = Subject(id: 90, code: 'T1-1', name: name, isOwn: true);
+    subjectList = [...subjectList, subject];
+    return subject;
+  }
 
   @override
   Future<List<Skill>> searchSkills({

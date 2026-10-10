@@ -99,6 +99,9 @@ trait SecurityWorld
     /** An indicator teacher A added for school A (DESIGN §20.2, "ครูเพิ่มเอง"). */
     protected Skill $teacherSkillA;
 
+    /** A subject group teacher A added for themselves (DESIGN §29.4). */
+    protected Subject $ownSubjectA;
+
     protected Assignment $assignmentA;
 
     /** An exam of classroom A (DESIGN §22) with one mcq section, one question and images. */
@@ -190,9 +193,10 @@ trait SecurityWorld
         $this->studentA2 = $this->enrollStudent($this->classroomA, 2, 'นักเรียน ก สอง')['student'];
         $this->studentB = $this->enrollStudent($this->classroomB, 1, 'นักเรียน ข')['student'];
 
-        $this->subject = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $this->subject = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         $this->curriculumSkill = Skill::factory()->create(['subject_id' => $this->subject->id, 'code' => 'ค 1.1 ป.4/1', 'name' => 'จำนวนนับ']);
         $this->skillA = Skill::factory()->create(['subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id, 'code' => 'ค 1.1 ป.4/1-ก', 'name' => 'ทักษะย่อยของโรงเรียน ก', 'level' => Skill::LEVEL_SUB_INDICATOR, 'source' => Skill::SOURCE_SCHOOL_ADMIN]);
+        $this->ownSubjectA = Subject::factory()->create(['code' => 'T'.$this->teacherA->id.'-1', 'name' => 'หน้าที่พลเมือง', 'owner_user_id' => $this->teacherA->id]);
         $this->teacherSkillA = Skill::factory()->create([
             'subject_id' => $this->subject->id, 'school_id' => $this->schoolA->id, 'parent_id' => $this->curriculumSkill->id,
             'code' => 'ค 1.1 ป.4/1/ค1', 'name' => 'ครู ก เพิ่มเอง', 'level' => Skill::LEVEL_SUB_INDICATOR,

@@ -64,6 +64,40 @@ void main() {
   });
 
   group('CourseFormScreen', () {
+    testWidgets('adds an own subject group and selects it', (tester) async {
+      tall(tester);
+      final skills = FakeSkills()..subjectList = const [];
+      await pumpScreen(
+        tester,
+        const CourseFormScreen(),
+        overrides: overrides(FakeCoursesRepository(), skills: skills),
+      );
+      expect(find.byKey(const ValueKey('subject_empty_hint')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('subject_add')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('subject_save')));
+      await tester.pumpAndSettle();
+      expect(find.text('กรอกชื่อกลุ่มสาระ'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('subject_name')),
+        'หน้าที่พลเมือง',
+      );
+      await tester.tap(find.byKey(const ValueKey('subject_save')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('subject_empty_hint')), findsNothing);
+      expect(find.text('หน้าที่พลเมือง (ของฉัน)'), findsOneWidget);
+      expect(
+        tester
+            .state<FormFieldState<int>>(
+              find.byKey(const ValueKey('course_subject')),
+            )
+            .value,
+        90,
+      );
+    });
+
     testWidgets('creates a course bound to classrooms with indicators', (
       tester,
     ) async {

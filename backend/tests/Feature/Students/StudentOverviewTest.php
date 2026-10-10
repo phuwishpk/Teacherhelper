@@ -69,9 +69,9 @@ class StudentOverviewTest extends TestCase
         app(StudentEnroller::class)->enroll($this->open, [['student_id' => $this->student->id, 'student_number' => 7]]);
         $this->classmate = $this->enrollStudent($this->open, 1, 'เด็กชาย เพื่อน ร่วมห้อง')['student'];
 
-        $science = Subject::query()->create(['code' => 'ว', 'name' => 'วิทยาศาสตร์']);
-        $thaiSubject = Subject::query()->create(['code' => 'ท', 'name' => 'ภาษาไทย']);
-        $this->art = Subject::query()->create(['code' => 'ศ', 'name' => 'ศิลปะ']);
+        $science = Subject::query()->updateOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
+        $thaiSubject = Subject::query()->updateOrCreate(['code' => 'ท'], ['name' => 'ภาษาไทย']);
+        $this->art = Subject::query()->updateOrCreate(['code' => 'ศ'], ['name' => 'ศิลปะ']);
         $this->math = $this->makeCourse($homeroom, [$this->open], ['code' => 'ค15101', 'name' => 'คณิตศาสตร์ 5']);
         $this->science = $this->makeCourse($subjectTeacher, [$this->open], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5', 'subject_id' => $science->id]);
         $this->thai = $this->makeCourse($oldHomeroom, [$this->closed], ['code' => 'ท14101', 'name' => 'ภาษาไทย 4', 'subject_id' => $thaiSubject->id, 'academic_year' => 2568]);

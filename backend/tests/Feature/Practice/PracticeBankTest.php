@@ -42,8 +42,8 @@ class PracticeBankTest extends TestCase
         parent::setUp();
         $this->teacher = $this->makeTeacher();
         $this->classroom = $this->makeClassroom($this->teacher);
-        $this->math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
-        $sci = Subject::factory()->create(['code' => 'ว', 'name' => 'วิทยาศาสตร์']);
+        $this->math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
+        $sci = Subject::query()->updateOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
         $this->fractions = Skill::factory()->create(['subject_id' => $this->math->id, 'code' => 'ค 1.1 ป.4/2', 'name' => 'บวกลบเศษส่วน', 'grade_level' => 4]);
         $this->otherSubjectSkill = Skill::factory()->create(['subject_id' => $sci->id, 'code' => 'ว 1.1 ป.4/1', 'name' => 'สิ่งมีชีวิต', 'grade_level' => 4]);
         // The teacher teaches maths: an assignment in that subject in their classroom.

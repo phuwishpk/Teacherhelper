@@ -84,6 +84,7 @@ final class StudentMerger
         'document_extractions.requested_by' => self::UNRELATED,
         'grade_conflicts.resolved_by' => self::UNRELATED,
         'skills.created_by' => self::UNRELATED,
+        'subjects.owner_user_id' => self::UNRELATED,
         'courses.created_by' => self::UNRELATED,
         'analysis_batches.key_owner_id' => self::UNRELATED,
         'student_analyses.approved_by' => self::UNRELATED,

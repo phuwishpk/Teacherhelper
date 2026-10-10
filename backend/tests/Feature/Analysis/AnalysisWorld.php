@@ -38,7 +38,7 @@ trait AnalysisWorld
     protected function makeAnalysisWorld(): void
     {
         $this->teacher = $this->makeTeacher();
-        $math = Subject::factory()->create(['code' => 'ค', 'name' => 'คณิตศาสตร์']);
+        $math = Subject::query()->updateOrCreate(['code' => 'ค'], ['name' => 'คณิตศาสตร์']);
         foreach (['i1' => 'บวกเลข', 'i2' => 'ลบเลข', 'i3' => 'คูณเลข', 'i4' => 'เศษส่วน', 'i5' => 'ทศนิยม'] as $k => $name) {
             $this->s[$k] = Skill::factory()->create(['subject_id' => $math->id, 'grade_level' => 5, 'code' => 'ค 1.1 ป.5/'.substr($k, 1), 'name' => $name]);
         }

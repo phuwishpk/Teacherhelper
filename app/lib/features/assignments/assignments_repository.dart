@@ -74,6 +74,9 @@ abstract class AssignmentsRepository {
     String? level,
   });
   Future<List<Subject>> subjects();
+
+  /// Adds a subject group only this teacher sees.
+  Future<Subject> createSubject(String name);
 }
 
 class ApiAssignmentsRepository implements AssignmentsRepository {
@@ -288,6 +291,12 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
   Future<List<Subject>> subjects() async {
     final rows = await fetchAllPages(_dio, '/subjects');
     return rows.map(Subject.fromJson).toList();
+  }
+
+  @override
+  Future<Subject> createSubject(String name) async {
+    final res = await _dio.post<Object?>('/subjects', data: {'name': name});
+    return Subject.fromJson(unwrapJson(res.data));
   }
 }
 

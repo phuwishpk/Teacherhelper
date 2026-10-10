@@ -203,6 +203,10 @@ Route::prefix('v1')->group(function () {
                 Route::post('skills', [SkillController::class, 'store'])->name('api.skills.store');
                 Route::patch('skills/{id}', [SkillController::class, 'update'])->name('api.skills.update');
                 Route::get('subjects', [SubjectController::class, 'index'])->name('api.subjects.index');
+                // A teacher's own subject groups, seen by that teacher only (§29.4).
+                Route::post('subjects', [SubjectController::class, 'store'])->name('api.subjects.store');
+                Route::patch('subjects/{id}', [SubjectController::class, 'update'])->name('api.subjects.update');
+                Route::delete('subjects/{id}', [SubjectController::class, 'destroy'])->name('api.subjects.destroy');
 
                 // Courses, units and lesson plans of the teacher (§20.1, §20.7).
                 Route::get('courses', [CourseController::class, 'index'])->name('api.courses.index');
