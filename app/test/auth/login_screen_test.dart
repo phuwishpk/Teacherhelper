@@ -11,7 +11,7 @@ import '../helpers/pump_screen.dart';
 Finder get _studentTab => find.text('นักเรียน');
 Finder get _teacherTab => find.text('ครู / ผู้ดูแลระบบ');
 Finder get _emailField => find.widgetWithText(TextFormField, 'อีเมล');
-Finder get _pinField => find.widgetWithText(TextFormField, 'PIN 6 หลัก');
+Finder get _pinField => find.byKey(const ValueKey('student_password'));
 
 Future<InMemoryTokenStorage> _pump(
   WidgetTester tester, {

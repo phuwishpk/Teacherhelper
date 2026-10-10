@@ -20,7 +20,14 @@ class CredentialIssuer
     /** Prefix of the login-card QR payload (DESIGN §5.4): `EVL1.{token}`. */
     public const QR_PREFIX = 'EVL1.';
 
-    public const PIN_LENGTH = 6;
+    /**
+     * The password of a new student and of a reset (DESIGN §29.10). It is not
+     * a secret: must_change_password makes the student replace it at the
+     * next sign-in, and nothing else opens until they do.
+     */
+    public const INITIAL_PASSWORD = '123456';
+
+    public const MIN_PASSWORD_LENGTH = 6;
 
     /**
      * bcrypt cost of PIN hashes. A 6-digit PIN has only 10^6 values, so a high
@@ -46,7 +53,7 @@ class CredentialIssuer
     public function create(User $student): array
     {
         $qrToken = self::randomQrToken();
-        $pin = self::randomPin();
+        $pin = self::INITIAL_PASSWORD;
 
         StudentCredential::create([
             'student_id' => $student->id,
@@ -55,6 +62,7 @@ class CredentialIssuer
             'pin_hash' => self::hashPin($pin),
             'failed_pin_attempts' => 0,
             'locked_until' => null,
+            'must_change_password' => true,
         ]);
 
         return ['qr_token' => $qrToken, 'pin' => $pin];
@@ -98,7 +106,7 @@ class CredentialIssuer
      */
     public function issuePin(User $student): string
     {
-        $pin = self::randomPin();
+        $pin = self::INITIAL_PASSWORD;
 
         DB::transaction(function () use ($student, $pin) {
             $student->credential()->updateOrCreate(
@@ -107,6 +115,7 @@ class CredentialIssuer
                     'pin_hash' => self::hashPin($pin),
                     'failed_pin_attempts' => 0,
                     'locked_until' => null,
+                    'must_change_password' => true,
                 ],
             );
             $student->tokens()->delete();
@@ -114,6 +123,23 @@ class CredentialIssuer
         });
 
         return $pin;
+    }
+
+    /**
+     * The student's own new password: stored at the configured bcrypt cost,
+     * the lockout cleared, and every other session revoked.
+     */
+    public function setPassword(User $student, string $password, ?int $keepTokenId = null): void
+    {
+        DB::transaction(function () use ($student, $password, $keepTokenId) {
+            $student->credential()->update([
+                'pin_hash' => Hash::make($password),
+                'failed_pin_attempts' => 0,
+                'locked_until' => null,
+                'must_change_password' => false,
+            ]);
+            $student->tokens()->when($keepTokenId !== null, fn ($q) => $q->whereKeyNot($keepTokenId))->delete();
+        });
     }
 
     public static function hashQrToken(string $token): string
@@ -147,10 +173,5 @@ class CredentialIssuer
     public static function randomQrToken(): string
     {
         return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-    }
-
-    public static function randomPin(): string
-    {
-        return str_pad((string) random_int(0, 10 ** self::PIN_LENGTH - 1), self::PIN_LENGTH, '0', STR_PAD_LEFT);
     }
 }

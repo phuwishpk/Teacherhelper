@@ -59,13 +59,12 @@ Future<ProviderContainer> _pump(
 
 Future<void> _fillPin(WidgetTester tester) async {
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'รหัสห้อง'),
-    'k7q3m2',
+    find.byKey(const ValueKey('link_username')),
+    ' s1234567 ',
   );
-  await tester.enterText(find.widgetWithText(TextFormField, 'เลขที่'), '4');
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'PIN 6 หลัก'),
-    '123456',
+    find.byKey(const ValueKey('link_password')),
+    'ปลาทอง99',
   );
 }
 
@@ -105,9 +104,8 @@ void main() {
 
     expect(repo.pinLinks.single, {
       'link_ticket': _ticket,
-      'class_code': 'K7Q3M2',
-      'student_number': 4,
-      'pin': '123456',
+      'username': 's1234567',
+      'password': 'ปลาทอง99',
     });
     expect(container.read(sessionProvider), isA<SignedIn>());
     expect(container.read(googleLinkTicketProvider), isNull, reason: 'spent');
@@ -123,7 +121,7 @@ void main() {
 
     expect(
       tester.widget<Text>(_error).data,
-      'รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง',
+      'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
     );
     expect(container.read(googleLinkTicketProvider), _ticket);
     expect(container.read(sessionProvider), isNot(isA<SignedIn>()));

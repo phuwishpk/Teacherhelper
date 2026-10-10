@@ -71,7 +71,7 @@ class RosterSyncResultDialog extends StatelessWidget {
               if (added.isNotEmpty) ...[
                 heading('เพิ่มนักเรียนใหม่ ${added.length} คน'),
                 Text(
-                  'PIN เริ่มต้นแสดงครั้งเดียว จดหรือคัดลอกไว้ก่อนปิด',
+                  'รหัสผ่านเริ่มต้นแสดงครั้งเดียว จดหรือคัดลอกไว้ก่อนปิด',
                   style: muted,
                 ),
                 for (final s in added)
@@ -86,8 +86,8 @@ class RosterSyncResultDialog extends StatelessWidget {
                   'นักเรียนเดิมของโรงเรียนเข้าห้อง ${result.enrolled.length} คน',
                 ),
                 Text(
-                  'ใช้บัญชี PIN และบัตร QR เดิม '
-                  '(คนที่ยังไม่เคยมี PIN ได้ PIN ใหม่ แสดงครั้งเดียว)',
+                  'ใช้บัญชีรหัสผ่านและบัตร QR เดิม '
+                  '(คนที่ยังไม่เคยมีรหัสผ่านได้รหัสผ่านใหม่ แสดงครั้งเดียว)',
                   style: muted,
                 ),
                 for (final s in result.enrolled)
@@ -140,11 +140,11 @@ class RosterSyncResultDialog extends StatelessWidget {
           TextButton.icon(
             onPressed: () => copyPins(context, pins),
             icon: const Icon(Icons.copy_all_outlined),
-            label: const Text('คัดลอก PIN'),
+            label: const Text('คัดลอกรหัสผ่าน'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('จด PIN แล้ว'),
+            child: const Text('จดรหัสผ่านแล้ว'),
           ),
         ] else
           FilledButton(

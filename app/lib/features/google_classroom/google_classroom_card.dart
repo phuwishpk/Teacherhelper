@@ -146,7 +146,7 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
             const Text(
               'โพสต์การบ้านลง Classroom ตรวจรูปหรือ PDF ที่นักเรียนส่งจากทั้งหน้า '
               'ส่งคะแนนกลับ และส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนแต่ละคนเมื่อเผยแพร่ผล '
-              'นักเรียนยังเข้าแอปด้วยบัตร QR/PIN เหมือนเดิม',
+              'นักเรียนยังเข้าแอปด้วยบัตร QR หรือรหัสผ่านเหมือนเดิม',
             ),
             const SizedBox(height: 4),
             Text(

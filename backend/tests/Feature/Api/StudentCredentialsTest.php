@@ -169,7 +169,7 @@ class StudentCredentialsTest extends TestCase
         $teacher = $this->makeTeacher();
         $classroom = $this->makeClassroom($teacher, ['class_code' => 'PINPIN']);
         $s = $this->enrollStudent($classroom, 4);
-        $session = $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'PINPIN', 'student_number' => 4, 'pin' => $s['pin']])->json('token');
+        $session = $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'PINPIN', 'student_number' => 4, 'pin' => $s['pin']]))->json('token');
         $s['student']->credential->forceFill(['failed_pin_attempts' => 3, 'locked_until' => now()->addMinutes(10)])->save();
 
         $response = $this->asUser($teacher)->postJson("/api/v1/students/{$s['student']->id}/pin")
@@ -183,7 +183,7 @@ class StudentCredentialsTest extends TestCase
         $this->assertNull($credential->locked_until);
         $this->assertSame(CredentialIssuer::PIN_HASH_ROUNDS, password_get_info($credential->pin_hash)['options']['cost']);
 
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'PINPIN', 'student_number' => 4, 'pin' => $newPin])->assertOk();
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'PINPIN', 'student_number' => 4, 'pin' => $newPin]))->assertOk();
         $this->forgetGuards();
         $this->withToken($session)->getJson('/api/v1/me')->assertUnauthorized();
     }

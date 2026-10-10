@@ -97,7 +97,7 @@ class SeedersTest extends TestCase
         // The app's own logins work with the seeded values.
         $this->postJson('/api/v1/auth/teacher/login', ['email' => 'teacher@example.com', 'password' => 'teacher-secret-1'])
             ->assertOk();
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810'])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810']))
             ->assertOk()
             ->assertJsonPath('user.name', DemoSeeder::STUDENTS[2]);
 
@@ -108,9 +108,9 @@ class SeedersTest extends TestCase
         $this->assertSame(1, Classroom::query()->count());
         $this->assertSame(count(DemoSeeder::STUDENTS), User::query()->where('role', 'student')->count());
         $this->assertTrue(Hash::check('teacher-secret-2', $teacher->fresh()->password));
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810'])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810']))
             ->assertStatus(422);
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '135790'])
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '135790']))
             ->assertOk();
     }
 

@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * POST /api/v1/students/{id}/pin {keep_google?: bool} -> 200
- * {student_id, pin, google_unlinked} (DESIGN §9.2, §24.9.5).
- * Resets the PIN, clears any lockout and revokes the student's sessions.
- * The plain PIN is returned once and never stored.
+ * {student_id, username, pin, google_unlinked} (DESIGN §9.2, §24.9.5, §29.10).
+ * Resets the password to the initial one (`pin`, 123456, to be replaced at
+ * the next sign-in), clears any lockout and revokes the student's sessions.
  *
  * A reset also removes the student's Google sign-in link unless the teacher
  * sends keep_google=true: a PIN is usually reset because someone else may
@@ -44,6 +44,7 @@ class StudentPinController extends Controller
 
         return response()->json([
             'student_id' => $student->id,
+            'username' => $student->username,
             'pin' => $pin,
             'google_unlinked' => $unlinked,
         ]);

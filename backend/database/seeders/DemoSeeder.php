@@ -10,6 +10,7 @@ use App\Domain\Gradebook\GradebookSettings;
 use App\Domain\Grading\ReviewPriority;
 use App\Domain\Review\Publisher;
 use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\StudentUsernames;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\Course;
@@ -130,12 +131,18 @@ class DemoSeeder extends Seeder
                 $enroller->enroll($classroom, $rows);
             }
 
-            // One known PIN for the whole demo class, and no lockout left over.
+            // One known password (DEMO_STUDENT_PIN) for the whole demo class, and no lockout left over.
             foreach ($classroom->students()->get() as $student) {
+                // demo01 ... demo10 while nobody else has the name.
+                $username = sprintf('demo%02d', $student->pivot->student_number);
+                if ($student->username !== $username && ! StudentUsernames::taken($username)) {
+                    $student->forceFill(['username' => $username])->save();
+                }
                 $student->credential()->update([
                     'pin_hash' => CredentialIssuer::hashPin($pin),
                     'failed_pin_attempts' => 0,
                     'locked_until' => null,
+                    'must_change_password' => false,
                 ]);
             }
 
@@ -148,7 +155,7 @@ class DemoSeeder extends Seeder
         $count = $classroom->students()->count();
         $this->command?->info("DemoSeeder: teacher {$email} ready");
         $this->command?->info('DemoSeeder: course '.self::COURSE_CODE.($created ? ' created with homework, an exam and published grades' : ' already there, content left as it is'));
-        $this->command?->info("DemoSeeder: classroom {$classroom->name}, class code {$classroom->class_code}, students 1-{$count} (PIN = DEMO_STUDENT_PIN)");
+        $this->command?->info("DemoSeeder: classroom {$classroom->name}, class code {$classroom->class_code}, students 1-{$count} (password = DEMO_STUDENT_PIN), usernames: ".$classroom->students()->pluck('username')->implode(', '));
     }
 
     /**

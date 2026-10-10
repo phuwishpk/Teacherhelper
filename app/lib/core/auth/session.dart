@@ -92,6 +92,15 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
+  /// Reads `/me` again after something about the user changed on the
+  /// server, e.g. the student's own password (DESIGN §29.10).
+  Future<void> reloadUser() async {
+    if (state is! SignedIn) return;
+    final user = await ref.read(authRepositoryProvider).me();
+    await ref.read(tokenStorageProvider).writeUser(user.toJson());
+    state = SignedIn(user);
+  }
+
   Future<User?> _cachedUser(TokenStorage storage) async {
     final json = await storage.readUser();
     if (json == null) return null;
@@ -119,18 +128,13 @@ class SessionNotifier extends Notifier<SessionState> {
   Future<void> signInWithToken(Future<String> tokenFuture) =>
       _finishSignIn(tokenFuture);
 
-  Future<void> signInStudentPin({
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+  Future<void> signInStudent({
+    required String username,
+    required String password,
   }) async {
     final repo = ref.read(authRepositoryProvider);
     await _finishSignIn(
-      repo.loginStudentPin(
-        classCode: classCode,
-        studentNumber: studentNumber,
-        pin: pin,
-      ),
+      repo.loginStudent(username: username, password: password),
     );
   }
 

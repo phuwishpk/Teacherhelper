@@ -240,7 +240,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
         showMessage(
           context,
           'สร้างห้อง ${result.classroom.name} แล้ว'
-          '${kept == 0 ? '' : ' นักเรียน $kept คนใช้ PIN และบัตร QR เดิมได้'}',
+          '${kept == 0 ? '' : ' นักเรียน $kept คนใช้รหัสผ่านและบัตร QR เดิมได้'}',
         );
         context.pop(result.classroom.id);
         return;
@@ -607,7 +607,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
       Text(
         'เลขที่เรียงตามชื่อ (ไม่นับคำนำหน้า) แก้เลขที่ได้ '
         'และกด "เอาออก" สำหรับบัญชีที่ไม่ใช่นักเรียน เช่น บัญชีทดสอบ'
-        '${anyMatch ? ' คนที่ติ๊ก "ใช้บัญชีเดิม" ใช้ PIN และบัตร QR เดิม '
+        '${anyMatch ? ' คนที่ติ๊ก "ใช้บัญชีเดิม" ใช้รหัสผ่านและบัตร QR เดิม '
                   'เอาติ๊กออกถ้าไม่ใช่คนเดียวกัน (ระบบจะสร้างบัญชีใหม่)' : ''}',
         style: muted,
       ),
@@ -789,7 +789,7 @@ class _StudentRow extends StatelessWidget {
                     onChanged: onUseExisting,
                   )
                 else if (showNewLabel)
-                  Text('บัญชีใหม่ (ได้ PIN ใหม่)', style: small),
+                  Text('บัญชีใหม่ (ได้รหัสผ่านใหม่)', style: small),
               ],
             ),
           ),

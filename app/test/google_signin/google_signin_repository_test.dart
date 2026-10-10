@@ -110,18 +110,16 @@ void main() {
 
   test('link-with-pin and link-with-qr accept the notice', () async {
     answer(200, tokenBody);
-    await repo.linkWithPin(
+    await repo.linkWithPassword(
       linkTicket: 't1',
-      classCode: 'K7Q3M2',
-      studentNumber: 4,
-      pin: '123456',
+      username: 's1234567',
+      password: 'ปลาทอง99',
     );
-    expect(only().path, '/auth/google/link-with-pin');
+    expect(only().path, '/auth/google/link-with-password');
     expect(_body(only()), {
       'link_ticket': 't1',
-      'class_code': 'K7Q3M2',
-      'student_number': 4,
-      'pin': '123456',
+      'username': 's1234567',
+      'password': 'ปลาทอง99',
       'accept_notice': true,
     });
 

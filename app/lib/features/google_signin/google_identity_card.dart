@@ -78,7 +78,7 @@ class _GoogleIdentityCardState extends ConsumerState<GoogleIdentityCard> {
       title: 'ยกเลิกการเชื่อมบัญชี Google?',
       message:
           'จะเข้าสู่ระบบด้วยปุ่ม Google ไม่ได้จนกว่าจะเชื่อมใหม่ '
-          '${_isStudent ? 'ยังเข้าสู่ระบบด้วยบัตร QR หรือ PIN ได้ตามเดิม' : 'ยังเข้าสู่ระบบด้วยอีเมลและรหัสผ่านได้ตามเดิม'}',
+          '${_isStudent ? 'ยังเข้าสู่ระบบด้วยบัตร QR หรือรหัสผ่านได้ตามเดิม' : 'ยังเข้าสู่ระบบด้วยอีเมลและรหัสผ่านได้ตามเดิม'}',
       confirmLabel: 'ยกเลิกการเชื่อม',
       destructive: true,
     );
@@ -140,7 +140,7 @@ class _GoogleIdentityCardState extends ConsumerState<GoogleIdentityCard> {
       AsyncData() => [
         Text(
           _isStudent
-              ? 'เชื่อมบัญชี Google แล้วครั้งต่อไปเข้าสู่ระบบด้วยปุ่ม Google ได้โดยไม่ต้องใช้บัตรหรือ PIN'
+              ? 'เชื่อมบัญชี Google แล้วครั้งต่อไปเข้าสู่ระบบด้วยปุ่ม Google ได้โดยไม่ต้องใช้บัตรหรือรหัสผ่าน'
               : 'เชื่อมบัญชี Google แล้วเข้าสู่ระบบด้วยปุ่ม Google ได้โดยไม่ต้องพิมพ์รหัสผ่าน',
         ),
         const SizedBox(height: 8),

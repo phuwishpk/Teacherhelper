@@ -74,7 +74,7 @@ void main() {
       app.router.routerDelegate.currentConfiguration.uri.toString(),
       AppRoutes.loginStudent,
     );
-    expect(find.widgetWithText(TextFormField, 'PIN 6 หลัก'), findsOneWidget);
+    expect(find.byKey(const ValueKey('student_password')), findsOneWidget);
     await app.stop(tester);
   });
 }

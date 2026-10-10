@@ -35,12 +35,11 @@ abstract class GoogleSignInRepository {
   /// `POST /auth/google/ticket {ticket}`: the web flow's one-time ticket.
   Future<String> redeemTicket(String ticket);
 
-  /// `POST /auth/google/link-with-pin`: a student's first confirmation.
-  Future<String> linkWithPin({
+  /// `POST /auth/google/link-with-password`: a student's first confirmation.
+  Future<String> linkWithPassword({
     required String linkTicket,
-    required String classCode,
-    required int studentNumber,
-    required String pin,
+    required String username,
+    required String password,
   });
 
   /// `POST /auth/google/link-with-qr`: the same with the login card.
@@ -125,16 +124,14 @@ class ApiGoogleSignInRepository implements GoogleSignInRepository {
       _token('/auth/google/ticket', {'ticket': ticket});
 
   @override
-  Future<String> linkWithPin({
+  Future<String> linkWithPassword({
     required String linkTicket,
-    required String classCode,
-    required int studentNumber,
-    required String pin,
-  }) => _token('/auth/google/link-with-pin', {
+    required String username,
+    required String password,
+  }) => _token('/auth/google/link-with-password', {
     'link_ticket': linkTicket,
-    'class_code': classCode,
-    'student_number': studentNumber,
-    'pin': pin,
+    'username': username,
+    'password': password,
     ..._accepted,
   });
 

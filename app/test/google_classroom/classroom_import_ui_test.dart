@@ -327,7 +327,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('123400'), findsOneWidget);
 
-      await tester.tap(find.text('จด PIN แล้ว เสร็จสิ้น'));
+      await tester.tap(find.text('จดรหัสผ่านแล้ว เสร็จสิ้น'));
       await tester.pumpAndSettle();
       expect(find.text('stub-home'), findsOneWidget);
     });
@@ -479,7 +479,7 @@ void main() {
       await tester.tap(find.text('ยกเลิก'));
       await tester.pumpAndSettle();
       expect(find.text('771100'), findsOneWidget);
-      await tester.tap(find.text('จด PIN แล้ว'));
+      await tester.tap(find.text('จดรหัสผ่านแล้ว'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('left_course_12')), findsOneWidget);

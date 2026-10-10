@@ -139,7 +139,10 @@ void main() {
     await tester.tap(find.text('นักเรียน'));
     await tester.pumpAndSettle();
     expect(_button, findsOneWidget);
-    expect(find.textContaining('ครั้งแรกต้องยืนยันด้วย PIN'), findsOneWidget);
+    expect(
+      find.textContaining('ครั้งแรกต้องยืนยันด้วยรหัสผ่าน'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a linked teacher signs in with the staff intent', (

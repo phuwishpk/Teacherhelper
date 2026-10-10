@@ -187,9 +187,9 @@ class TeacherAttentionCard extends ConsumerWidget {
               _Line(
                 key: 'attention_pins',
                 icon: Icons.password,
-                text: 'นักเรียนใหม่ยังไม่ได้รับ PIN ${a.pinsPending} คน',
+                text: 'นักเรียนใหม่ยังไม่ได้รับรหัสผ่าน ${a.pinsPending} คน',
                 detail:
-                    'ซิงก์จาก Google Classroom อัตโนมัติ เปิดห้องเรียนแล้วกด "ออก PIN ให้นักเรียนใหม่"',
+                    'ซิงก์จาก Google Classroom อัตโนมัติ เปิดห้องเรียนแล้วกด "ออกรหัสผ่านให้นักเรียนใหม่"',
                 target: AttentionTarget.classrooms,
               ),
           ];

@@ -54,6 +54,7 @@ class User extends Authenticatable implements FilamentUser
         'status',
         'approved_by',
         'student_code',
+        'username',
         'merged_into_id',
     ];
 

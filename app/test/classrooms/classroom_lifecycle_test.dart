@@ -110,7 +110,7 @@ void main() {
       await _studentMenu(tester, 'ด.ญ. มานี มีนา');
       expect(find.text('ทักษะและจุดอ่อน'), findsOneWidget);
       expect(find.text('รวมบัญชีนักเรียน'), findsOneWidget);
-      expect(find.text('รีเซ็ต PIN'), findsNothing);
+      expect(find.text('รีเซ็ตรหัสผ่าน'), findsNothing);
       expect(find.text('ออกบัตร QR ใหม่'), findsNothing);
       expect(find.text('เอาออกจากห้อง'), findsNothing);
       expect(find.text('แก้ชื่อ เลขประจำตัว และเลขที่'), findsNothing);

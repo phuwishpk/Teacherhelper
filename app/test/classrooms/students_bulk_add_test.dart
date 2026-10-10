@@ -111,13 +111,13 @@ void main() {
     expect(find.text('000001'), findsOneWidget);
     expect(find.text('000002'), findsOneWidget);
 
-    await tester.tap(find.text('จด PIN แล้ว เสร็จสิ้น'));
+    await tester.tap(find.text('จดรหัสผ่านแล้ว เสร็จสิ้น'));
     await tester.pumpAndSettle();
     expect(find.text('stub-home'), findsOneWidget, reason: 'popped when done');
   });
 
   testWidgets(
-    '"คัดลอก PIN ทั้งหมด" puts a tab-separated list on the clipboard',
+    '"คัดลอกรหัสผ่านทั้งหมด" puts a tab-separated list on the clipboard',
     (tester) async {
       String? copied;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -137,16 +137,16 @@ void main() {
       );
 
       await _addTwo(tester, _FakeClassrooms());
-      await tester.tap(find.text('คัดลอก PIN ทั้งหมด'));
+      await tester.tap(find.text('คัดลอกรหัสผ่านทั้งหมด'));
       await tester.pumpAndSettle();
 
       expect(
         copied,
-        'เลขที่\tชื่อ\tPIN\n'
-        '1\tด.ช. สมชาย ใจดี\t000001\n'
-        '2\tด.ญ. สมหญิง รักเรียน\t000002',
+        'เลขที่\tชื่อ\tชื่อผู้ใช้\tรหัสผ่านเริ่มต้น\n'
+        '1\tด.ช. สมชาย ใจดี\t\t000001\n'
+        '2\tด.ญ. สมหญิง รักเรียน\t\t000002',
       );
-      expect(find.text('คัดลอก PIN 2 คนแล้ว'), findsOneWidget);
+      expect(find.text('คัดลอกรหัสผ่าน 2 คนแล้ว'), findsOneWidget);
     },
   );
 
@@ -273,7 +273,7 @@ void main() {
       // No PIN was issued: nothing to show, back to the room with a note.
       expect(find.text('stub-home'), findsOneWidget);
       expect(
-        find.text('เพิ่มนักเรียน 1 คนแล้ว ใช้ PIN และบัตร QR เดิมได้'),
+        find.text('เพิ่มนักเรียน 1 คนแล้ว ใช้รหัสผ่านและบัตร QR เดิมได้'),
         findsOneWidget,
       );
     });

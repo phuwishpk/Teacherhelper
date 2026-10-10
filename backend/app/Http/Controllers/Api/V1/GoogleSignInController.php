@@ -133,22 +133,21 @@ class GoogleSignInController extends Controller
     }
 
     /**
-     * POST /auth/google/link-with-pin {link_ticket, class_code, student_number, pin, accept_notice, device_name?}
-     * -> {token, user}: the PIN login's checks (generic error, lockout), then the link (pin_confirm).
+     * POST /auth/google/link-with-password {link_ticket, username, password, accept_notice, device_name?}
+     * -> {token, user}: the password login's checks (generic error, lockout), then the link (pin_confirm).
      */
-    public function linkWithPin(Request $request, StudentAuthenticator $students): JsonResponse
+    public function linkWithPassword(Request $request, StudentAuthenticator $students): JsonResponse
     {
         $data = $request->validate([
             'link_ticket' => ['required', 'string', 'max:64'],
-            'class_code' => ['required', 'string', 'max:12'],
-            'student_number' => ['required', 'integer', 'min:1', 'max:255'],
-            'pin' => ['required', 'string', 'digits:6'],
+            'username' => ['required', 'string', 'max:40'],
+            'password' => ['required', 'string', 'max:72'],
             'accept_notice' => ['sometimes', 'boolean'],
             'device_name' => ['sometimes', 'nullable', 'string', 'max:100'],
         ], self::messages());
         $google = $this->ticketIdentity($data);
 
-        $student = $students->studentByPin($data['class_code'], (int) $data['student_number'], $data['pin']);
+        $student = $students->studentByPassword($data['username'], $data['password']);
 
         return self::tokenResponse($this->signIn->linkStudentWithTicket($student, $google, $data['link_ticket'], $data['device_name'] ?? null));
     }

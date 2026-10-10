@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property string $pin_hash
  * @property int $failed_pin_attempts
  * @property Carbon|null $locked_until
+ * @property bool $must_change_password the password is the initial one (DESIGN §29.10)
  */
 class StudentCredential extends Model
 {
@@ -29,6 +30,7 @@ class StudentCredential extends Model
         'pin_hash',
         'failed_pin_attempts',
         'locked_until',
+        'must_change_password',
     ];
 
     protected $hidden = [

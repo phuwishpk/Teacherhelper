@@ -66,7 +66,7 @@ class GoogleSignInTest extends TestCase
 
         $this->getJson('/api/v1/auth/google/config')->assertOk()
             ->assertExactJson(['data' => ['enabled' => false, 'web_flow' => false, 'notice_version' => 'gsi-1']]);
-        foreach (['auth/google', 'auth/google/web-url', 'auth/google/ticket', 'auth/google/link-with-pin', 'auth/google/link-with-qr'] as $uri) {
+        foreach (['auth/google', 'auth/google/web-url', 'auth/google/ticket', 'auth/google/link-with-password', 'auth/google/link-with-qr'] as $uri) {
             $this->postJson('/api/v1/'.$uri, [])->assertStatus(503)->assertJsonPath('code', 'google_signin_not_configured');
         }
         foreach ([[$this->teacher, 'GET'], [$this->teacher, 'POST'], [$this->teacher, 'DELETE'], [$student, 'GET'], [$this->makeAdmin(), 'DELETE']] as [$user, $method]) {
@@ -542,14 +542,14 @@ class GoogleSignInTest extends TestCase
         $ticket = $this->notLinkedStudent(['sub' => 'pin-sub', 'email' => 'nong@school.ac.th']);
         $body = ['link_ticket' => $ticket, 'class_code' => 'abc123', 'student_number' => 7, 'pin' => $enrolled['pin'], 'accept_notice' => true];
 
-        $this->postJson('/api/v1/auth/google/link-with-pin', ['accept_notice' => false] + $body)
+        $this->postJson('/api/v1/auth/google/link-with-password', $this->cred(['accept_notice' => false] + $body))
             ->assertStatus(422)->assertJsonPath('code', 'notice_required');
-        $this->postJson('/api/v1/auth/google/link-with-pin', ['pin' => $this->wrongPin($enrolled['pin'])] + $body)
+        $this->postJson('/api/v1/auth/google/link-with-password', $this->cred(['pin' => $this->wrongPin($enrolled['pin'])] + $body))
             ->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
         $this->assertSame(0, UserGoogleIdentity::count());
 
         // A wrong PIN does not spend the ticket.
-        $response = $this->postJson('/api/v1/auth/google/link-with-pin', $body + ['device_name' => 'tablet'])->assertOk();
+        $response = $this->postJson('/api/v1/auth/google/link-with-password', $this->cred($body + ['device_name' => 'tablet']))->assertOk();
         $this->assertSame($enrolled['student']->id, $response->json('user.id'));
         $this->assertSame(['student'], PersonalAccessToken::findToken($response->json('token'))->abilities);
         $identity = $enrolled['student']->googleIdentity()->first();
@@ -558,7 +558,7 @@ class GoogleSignInTest extends TestCase
         $this->assertSame('gsi-1', $identity->notice_version);
         $this->assertNotNull($identity->last_login_at);
 
-        $this->postJson('/api/v1/auth/google/link-with-pin', $body)->assertStatus(422)->assertJsonPath('code', 'link_ticket_invalid');
+        $this->postJson('/api/v1/auth/google/link-with-password', $this->cred($body))->assertStatus(422)->assertJsonPath('code', 'link_ticket_invalid');
         // From now on Google signs in directly.
         $this->signIn(['sub' => 'pin-sub', 'email' => 'nong@school.ac.th'], 'student')->assertOk()->assertJsonPath('user.id', $enrolled['student']->id);
     }
@@ -571,12 +571,12 @@ class GoogleSignInTest extends TestCase
         $body = ['link_ticket' => $ticket, 'class_code' => 'ABC123', 'student_number' => 3, 'pin' => $this->wrongPin($enrolled['pin']), 'accept_notice' => true];
 
         for ($i = 0; $i < 4; $i++) {
-            $this->postJson('/api/v1/auth/google/link-with-pin', $body)->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
+            $this->postJson('/api/v1/auth/google/link-with-password', $this->cred($body))->assertStatus(422)->assertJsonPath('code', 'invalid_credentials');
         }
-        $this->postJson('/api/v1/auth/google/link-with-pin', $body)->assertStatus(423)->assertJsonPath('code', 'pin_locked');
-        $this->postJson('/api/v1/auth/google/link-with-pin', ['pin' => $enrolled['pin']] + $body)->assertStatus(423);
+        $this->postJson('/api/v1/auth/google/link-with-password', $this->cred($body))->assertStatus(423)->assertJsonPath('code', 'pin_locked');
+        $this->postJson('/api/v1/auth/google/link-with-password', $this->cred(['pin' => $enrolled['pin']] + $body))->assertStatus(423);
         // The PIN login shares the same lock.
-        $this->postJson('/api/v1/auth/student/pin', ['class_code' => 'ABC123', 'student_number' => 3, 'pin' => $enrolled['pin']])->assertStatus(423);
+        $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => 'ABC123', 'student_number' => 3, 'pin' => $enrolled['pin']]))->assertStatus(423);
     }
 
     public function test_a_student_confirms_with_the_qr_card(): void

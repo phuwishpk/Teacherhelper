@@ -207,7 +207,7 @@ class _HeaderCard extends StatelessWidget {
             ),
             _Fact(label: 'ปีการศึกษา', value: '${classroom.academicYear}'),
             _Fact(
-              label: 'รหัสห้อง (ใช้ login ด้วย PIN)',
+              label: 'รหัสห้อง',
               value: classroom.classCode,
               valueStyle: theme.textTheme.titleLarge?.copyWith(
                 fontFamily: 'monospace',
@@ -392,14 +392,14 @@ class _PendingPinsCardState extends ConsumerState<_PendingPinsCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'นักเรียนใหม่จาก Google Classroom ${widget.count} คนยังไม่ได้รับ PIN',
+              'นักเรียนใหม่จาก Google Classroom ${widget.count} คนยังไม่ได้รับรหัสผ่าน',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.onTertiaryContainer,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              'ระบบเพิ่มชื่อให้อัตโนมัติตอนซิงก์ กดออก PIN แล้วจดให้นักเรียน '
+              'ระบบเพิ่มชื่อให้อัตโนมัติตอนซิงก์ กดออกรหัสผ่านแล้วจดให้นักเรียน '
               'หรือพิมพ์บัตร QR ของห้อง',
               style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
             ),
@@ -408,7 +408,7 @@ class _PendingPinsCardState extends ConsumerState<_PendingPinsCard> {
               key: const ValueKey('issue_pending_pins'),
               onPressed: _busy ? null : _issue,
               icon: const Icon(Icons.password),
-              label: const Text('ออก PIN ให้นักเรียนใหม่'),
+              label: const Text('ออกรหัสผ่านให้นักเรียนใหม่'),
             ),
           ],
         ),
@@ -442,7 +442,7 @@ class PendingPinsPage extends StatelessWidget {
         if (!didPop) _leave(context);
       },
       child: OneTimePinsView(
-        title: 'PIN ใหม่ $classroomName',
+        title: 'รหัสผ่านใหม่ $classroomName',
         enrolled: enrolled,
         onCopy: () => copyPins(context, enrolled),
         onDone: () => Navigator.of(context).pop(),
@@ -503,8 +503,8 @@ class _StudentTile extends ConsumerWidget {
       title: 'ยกเลิกการเชื่อม Google ของ ${student.name}?',
       message:
           'นักเรียนจะเข้าสู่ระบบด้วยปุ่ม Google ไม่ได้จนกว่าจะเชื่อมใหม่ '
-          'ยังเข้าสู่ระบบด้วยบัตร QR หรือ PIN ได้ตามเดิม '
-          'เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้ ถ้าต้องการให้ออกทุกเครื่องให้รีเซ็ต PIN',
+          'ยังเข้าสู่ระบบด้วยบัตร QR หรือรหัสผ่านได้ตามเดิม '
+          'เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้ ถ้าต้องการให้ออกทุกเครื่องให้รีเซ็ตรหัสผ่าน',
       confirmLabel: 'ยกเลิกการเชื่อม',
       destructive: true,
     );
@@ -542,14 +542,33 @@ class _StudentTile extends ConsumerWidget {
     );
   }
 
+  Future<void> _editUsername(BuildContext context, WidgetRef ref) async {
+    final username = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _UsernameDialog(name: student.name, initial: student.username ?? ''),
+    );
+    if (username == null || !context.mounted) return;
+    try {
+      await ref
+          .read(classroomsRepositoryProvider)
+          .updateStudentUsername(classroomId, student.studentId, username);
+      ref.invalidate(rosterProvider(classroomId));
+      if (context.mounted) showMessage(context, 'เปลี่ยนชื่อผู้ใช้แล้ว');
+    } catch (e) {
+      if (context.mounted) showMessage(context, apiErrorMessage(e));
+    }
+  }
+
   Future<void> _resetPin(BuildContext context, WidgetRef ref) async {
     final ok = await confirm(
       context,
-      title: 'รีเซ็ต PIN ของ ${student.name}?',
+      title: 'รีเซ็ตรหัสผ่านของ ${student.name}?',
       message:
-          'PIN เดิมจะใช้ไม่ได้ นักเรียนจะถูกออกจากระบบทุกเครื่อง '
-          'และการเชื่อมบัญชี Google (ถ้ามี) จะถูกยกเลิก PIN ใหม่จะแสดงครั้งเดียว',
-      confirmLabel: 'รีเซ็ต PIN',
+          'รหัสผ่านเดิมจะใช้ไม่ได้ นักเรียนจะถูกออกจากระบบทุกเครื่อง '
+          'และการเชื่อมบัญชี Google (ถ้ามี) จะถูกยกเลิก รหัสผ่านกลับเป็นค่าเริ่มต้น '
+          'และนักเรียนต้องตั้งรหัสผ่านใหม่ตอนเข้าครั้งถัดไป',
+      confirmLabel: 'รีเซ็ตรหัสผ่าน',
     );
     if (!ok || !context.mounted) return;
     try {
@@ -565,7 +584,7 @@ class _StudentTile extends ConsumerWidget {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('PIN ใหม่ของ ${student.name}'),
+          title: Text('รหัสผ่านใหม่ของ ${student.name}'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -578,13 +597,13 @@ class _StudentTile extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'จดไว้ให้นักเรียนตอนนี้ ระบบจะไม่แสดง PIN นี้อีก',
+                'รหัสผ่านเริ่มต้น นักเรียนเข้าด้วยรหัสนี้แล้วระบบให้ตั้งรหัสผ่านใหม่ทันที',
                 textAlign: TextAlign.center,
               ),
               if (reset.googleUnlinked) ...[
                 const SizedBox(height: 8),
                 const Text(
-                  'ยกเลิกการเชื่อมบัญชี Google แล้ว นักเรียนต้องเข้าด้วย PIN ใหม่แล้วเชื่อม Google อีกครั้ง',
+                  'ยกเลิกการเชื่อมบัญชี Google แล้ว นักเรียนต้องเข้าด้วยรหัสผ่านใหม่แล้วเชื่อม Google อีกครั้ง',
                   key: ValueKey('pin_reset_google_unlinked'),
                   textAlign: TextAlign.center,
                 ),
@@ -635,6 +654,7 @@ class _StudentTile extends ConsumerWidget {
       subtitle:
           student.leftCourse ||
               student.pinPending ||
+              student.username != null ||
               student.studentCode != null
           ? Align(
               alignment: AlignmentDirectional.centerStart,
@@ -642,6 +662,12 @@ class _StudentTile extends ConsumerWidget {
                 spacing: 6,
                 runSpacing: 4,
                 children: [
+                  if (student.username case final username?)
+                    Text(
+                      'ชื่อผู้ใช้ $username',
+                      key: ValueKey('roster_username_${student.studentId}'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   if (student.studentCode case final code?)
                     Text(
                       'เลขประจำตัว $code',
@@ -656,7 +682,7 @@ class _StudentTile extends ConsumerWidget {
                   if (student.pinPending)
                     StatusChip(
                       key: ValueKey('pin_pending_${student.studentId}'),
-                      label: 'ยังไม่ได้รับ PIN',
+                      label: 'ยังไม่ได้รับรหัสผ่าน',
                       color: Theme.of(context).colorScheme.error,
                     ),
                 ],
@@ -673,6 +699,7 @@ class _StudentTile extends ConsumerWidget {
           ),
           'card' => _reissueCard(context, ref),
           'pin' => _resetPin(context, ref),
+          'username' => _editUsername(context, ref),
           'edit' => _edit(context, ref),
           'merge' => context.push(
             AppRoutes.studentMerge(classroomId, student.studentId),
@@ -709,6 +736,13 @@ class _StudentTile extends ConsumerWidget {
               ),
             ),
             PopupMenuItem(
+              value: 'username',
+              child: ListTile(
+                leading: Icon(Icons.badge_outlined),
+                title: Text('แก้ชื่อผู้ใช้'),
+              ),
+            ),
+            PopupMenuItem(
               value: 'card',
               child: ListTile(
                 leading: Icon(Icons.qr_code_2),
@@ -719,7 +753,7 @@ class _StudentTile extends ConsumerWidget {
               value: 'pin',
               child: ListTile(
                 leading: Icon(Icons.password),
-                title: Text('รีเซ็ต PIN'),
+                title: Text('รีเซ็ตรหัสผ่าน'),
               ),
             ),
           ],
@@ -796,6 +830,70 @@ class SubjectTeacherBanner extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _UsernameDialog extends StatefulWidget {
+  const _UsernameDialog({required this.name, required this.initial});
+
+  final String name;
+  final String initial;
+
+  @override
+  State<_UsernameDialog> createState() => _UsernameDialogState();
+}
+
+class _UsernameDialogState extends State<_UsernameDialog> {
+  late final _text = TextEditingController(text: widget.initial);
+  String? _error;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _text.text.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,39}$').hasMatch(value)) {
+      setState(
+        () => _error = 'ยาว 3-40 ตัว ใช้ได้เฉพาะ a-z 0-9 จุด ขีด และขีดล่าง',
+      );
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('ชื่อผู้ใช้ของ ${widget.name}'),
+      content: TextField(
+        key: const ValueKey('username_field'),
+        controller: _text,
+        autofocus: true,
+        autocorrect: false,
+        maxLength: 40,
+        decoration: InputDecoration(
+          labelText: 'ชื่อผู้ใช้',
+          helperText: 'นักเรียนใช้ชื่อนี้เข้าสู่ระบบ รหัสผ่านไม่เปลี่ยน',
+          errorText: _error,
+          errorMaxLines: 2,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ยกเลิก'),
+        ),
+        FilledButton(
+          key: const ValueKey('username_save'),
+          onPressed: _submit,
+          child: const Text('บันทึก'),
+        ),
+      ],
     );
   }
 }

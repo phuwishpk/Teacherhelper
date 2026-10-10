@@ -35,8 +35,9 @@ class SchoolStudentMigrationTest extends TestCase
     {
         // Step 8: the build-2 (classroom_course_requests), build-3 (Google sign-in), build-4
         // (several Google courses per classroom), #71 (teacher_google_auto_approve),
-        // #74 (exam code sheets), §29.4 (subject owner) and §29.5 (attendance) migrations run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 8])->assertSuccessful();
+        // #74 (exam code sheets), §29.4 (subject owner), §29.5 (attendance) and §29.10 (student usernames)
+        // migrations run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 9])->assertSuccessful();
         $this->assertFalse(DB::getSchemaBuilder()->hasColumn('users', 'student_code'));
         $this->assertFalse(DB::getSchemaBuilder()->hasTable('student_merges'));
         $this->artisan('migrate')->assertSuccessful();

@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Students\CredentialIssuer;
 use App\Models\Classroom;
@@ -89,14 +90,44 @@ abstract class TestCase extends BaseTestCase
      * Enrols one student the way POST /classrooms/{id}/students does and also
      * issues a QR token (returned in plain, like the card renderer would see it).
      *
-     * @return array{student: User, pin: string, qr_token: string}
+     * The student has already replaced the initial password (DESIGN §29.10),
+     * like a pupil who uses the app: `pin` is that password.
+     *
+     * @return array{student: User, pin: string, qr_token: string, username: string}
      */
     protected function enrollStudent(Classroom $classroom, int $number = 1, string $name = 'นักเรียนทดสอบ'): array
     {
         $created = app(StudentEnroller::class)->enroll($classroom, [['name' => $name, 'student_number' => $number]])[0];
         $qrToken = app(CredentialIssuer::class)->issueQrToken($created['student']);
 
-        return ['student' => $created['student'], 'pin' => $created['pin'], 'qr_token' => $qrToken];
+        // Never the initial password, and different for every student.
+        $pin = (string) random_int(200000, 999999);
+        $created['student']->credential()->update(['pin_hash' => CredentialIssuer::hashPin($pin), 'must_change_password' => false]);
+
+        return ['student' => $created['student'], 'pin' => $pin, 'qr_token' => $qrToken, 'username' => (string) $created['student']->username];
+    }
+
+    /**
+     * The body of a student sign-in (DESIGN §29.10) from the way tests name a
+     * student: class code + student number + pin become that student's
+     * username and password. An unknown student gets a username nobody has.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    protected function cred(array $body): array
+    {
+        if (array_key_exists('pin', $body)) {
+            $body['password'] = $body['pin'];
+        }
+        if (array_key_exists('class_code', $body) || array_key_exists('student_number', $body)) {
+            $classroom = Classroom::query()->where('class_code', ClassCodeGenerator::normalize((string) ($body['class_code'] ?? '')))->first();
+            $student = $classroom?->students()->wherePivot('student_number', (int) ($body['student_number'] ?? 0))->first();
+            $body['username'] = $student === null ? 'nobody-here' : (string) $student->username;
+        }
+        unset($body['pin'], $body['class_code'], $body['student_number']);
+
+        return $body;
     }
 
     /** A real Sanctum token (so revocation can be observed) for the given abilities. */

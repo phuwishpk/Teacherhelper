@@ -63,6 +63,14 @@ abstract class ClassroomsRepository {
     required bool newPins,
   });
 
+  /// `PATCH /classrooms/{id}/students/{student_id}` {username}: the
+  /// student's sign-in name (422 `errors.username` when taken or malformed).
+  Future<RosterStudent> updateStudentUsername(
+    int classroomId,
+    int studentId,
+    String username,
+  );
+
   /// `PATCH /classrooms/{id}/students/{student_id}` {student_number}.
   Future<RosterStudent> updateStudentNumber(
     int classroomId,
@@ -222,6 +230,19 @@ class ApiClassroomsRepository implements ClassroomsRepository {
       },
     );
     return StudentsCopyResult.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<RosterStudent> updateStudentUsername(
+    int classroomId,
+    int studentId,
+    String username,
+  ) async {
+    final res = await _dio.patch<Object?>(
+      '/classrooms/$classroomId/students/$studentId',
+      data: {'username': username},
+    );
+    return RosterStudent.fromJson(unwrapJson(res.data));
   }
 
   @override

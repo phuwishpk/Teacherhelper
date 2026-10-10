@@ -98,11 +98,11 @@ class AuthHardeningTest extends TestCase
         $body = fn (string $pin) => ['class_code' => 'SEC234', 'student_number' => 3, 'pin' => $pin];
 
         for ($i = 0; $i < 5; $i++) {
-            $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])->postJson('/api/v1/auth/student/pin', $body($wrong));
+            $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])->postJson('/api/v1/auth/student/login', $this->cred($body($wrong)));
         }
 
         // Another address, the right PIN: still locked (the counter lives on the credential row).
-        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->postJson('/api/v1/auth/student/pin', $body($this->pin))
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->postJson('/api/v1/auth/student/login', $this->cred($body($this->pin)))
             ->assertStatus(423)
             ->assertJsonPath('code', 'pin_locked');
         $this->assertDatabaseCount('personal_access_tokens', 0);

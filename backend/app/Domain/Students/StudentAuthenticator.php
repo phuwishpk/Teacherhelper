@@ -2,9 +2,7 @@
 
 namespace App\Domain\Students;
 
-use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Exceptions\ApiException;
-use App\Models\Classroom;
 use App\Models\StudentCredential;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -12,14 +10,14 @@ use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\NewAccessToken;
 
 /**
- * Student login (DESIGN §7.4, §9.1): the QR card is the main way, class code +
- * student number + PIN the fallback. Both return a Sanctum token with the
- * `student` ability that lives 180 days.
+ * Student login (DESIGN §7.4, §9.1, §29.10): a username and password, or the
+ * QR card. Both return a Sanctum token with the `student` ability that lives
+ * 180 days.
  *
- * Every failure of the PIN path answers with the same generic message so the
- * endpoint cannot be used to enumerate class codes or student numbers; the
- * lockout is the only distinguishable state and it is per student, not per IP
- * (the route throttle handles IPs).
+ * Every failure of the password path answers with the same generic message
+ * so the endpoint cannot be used to enumerate usernames; the lockout is the
+ * only distinguishable state and it is per student, not per IP (the route
+ * throttle handles IPs).
  */
 class StudentAuthenticator
 {
@@ -55,21 +53,25 @@ class StudentAuthenticator
         return $student;
     }
 
-    public function loginWithPin(string $classCode, int $studentNumber, string $pin, ?string $deviceName = null): NewAccessToken
+    public function loginWithPassword(string $username, string $password, ?string $deviceName = null): NewAccessToken
     {
-        return $this->issueToken($this->studentByPin($classCode, $studentNumber, $pin), $deviceName);
+        return $this->issueToken($this->studentByPassword($username, $password), $deviceName);
     }
 
     /**
-     * The active student behind class code + number + PIN, with the generic
-     * error, the failure counter and the lockout of the PIN login but no
-     * token (also the first Google link of DESIGN §24.9.5).
+     * The active student behind a username and password (DESIGN §29.10), with
+     * one generic error, the failure counter and the lockout, but no token
+     * (also the first Google link of DESIGN §24.9.5).
      */
-    public function studentByPin(string $classCode, int $studentNumber, string $pin): User
+    public function studentByPassword(string $username, string $password): User
     {
-        $classroom = Classroom::query()->where('class_code', ClassCodeGenerator::normalize($classCode))->first();
+        $student = User::query()->where('role', User::ROLE_STUDENT)->where('username', StudentUsernames::normalize($username))->first();
 
-        $student = $classroom?->students()->wherePivot('student_number', $studentNumber)->first();
+        return $this->checked($student, $password);
+    }
+
+    private function checked(?User $student, string $password): User
+    {
         $credential = $student?->credential;
 
         if ($student === null || $credential === null) {
@@ -80,7 +82,7 @@ class StudentAuthenticator
             throw self::locked($credential);
         }
 
-        if (! Hash::check($pin, $credential->pin_hash)) {
+        if (! Hash::check($password, $credential->pin_hash)) {
             $credential = $this->recordFailure($credential);
 
             throw $credential->isLocked() ? self::locked($credential) : self::invalidCredentials();
@@ -138,8 +140,8 @@ class StudentAuthenticator
 
     private static function invalidCredentials(): ApiException
     {
-        return new ApiException('รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง', 'invalid_credentials', 422, [
-            'pin' => ['รหัสห้อง เลขที่ หรือ PIN ไม่ถูกต้อง'],
+        return new ApiException('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'invalid_credentials', 422, [
+            'password' => ['ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'],
         ]);
     }
 
@@ -148,10 +150,10 @@ class StudentAuthenticator
         $seconds = max(1, (int) now()->diffInSeconds($credential->locked_until, false));
 
         return new ApiException(
-            'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที หรือให้ครูรีเซ็ต PIN',
+            'ใส่รหัสผ่านผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที หรือให้ครูรีเซ็ตรหัสผ่าน',
             'pin_locked',
             423,
-            ['pin' => ['ล็อกชั่วคราว ลองใหม่ในอีก '.(int) ceil($seconds / 60).' นาที']],
+            ['password' => ['ล็อกชั่วคราว ลองใหม่ในอีก '.(int) ceil($seconds / 60).' นาที']],
         );
     }
 }

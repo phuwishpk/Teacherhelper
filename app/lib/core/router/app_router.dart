@@ -77,6 +77,7 @@ import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/student/student_account_screen.dart';
+import '../../features/student/student_password_screen.dart';
 import '../../features/student/student_shell.dart';
 import '../../features/student/student_subject_screen.dart';
 import '../../features/upload_queue/upload_queue_screen.dart';
@@ -111,6 +112,10 @@ abstract final class AppRoutes {
 
   /// Student: "บัญชีของฉัน" with the Google account (DESIGN §24.13).
   static const studentAccount = '/student/account';
+
+  /// The student's own password (DESIGN §29.10); the only screen open
+  /// while the password is still the initial one.
+  static const studentPassword = '/student/password';
 
   /// The web flow's returns, kept while the session restores (see
   /// [routerProvider]).
@@ -383,7 +388,9 @@ abstract final class AppRoutes {
   static bool isStudentArea(String location) =>
       location == student ||
       location == studentAccount ||
+      location == studentPassword ||
       location == myGrades ||
+      location == myAttendance ||
       location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/assignments/') ||
@@ -488,6 +495,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             if (pending != location) return pending;
             pendingResult = null;
           }
+          // On the initial password nothing else opens (DESIGN §29.10).
+          if (user.mustChangePassword) {
+            return location == AppRoutes.studentPassword
+                ? null
+                : AppRoutes.studentPassword;
+          }
           return inStudentArea ? null : AppRoutes.student;
         }(),
         SignedIn() => () {
@@ -570,6 +583,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentAccount,
         builder: (context, state) => const StudentAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentPassword,
+        builder: (context, state) => const StudentPasswordScreen(),
       ),
       GoRoute(
         path: AppRoutes.myGrades,
