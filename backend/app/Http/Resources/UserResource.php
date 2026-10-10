@@ -29,7 +29,8 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'school' => $this->school === null ? null : [
                 'id' => $this->school->id,
-                'name' => $this->school->name,
+                // The teacher's own text wins over the school row (DESIGN §29.1).
+                'name' => $this->school_name ?? $this->school->name,
             ],
         ];
     }

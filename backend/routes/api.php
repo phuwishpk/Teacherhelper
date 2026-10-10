@@ -46,6 +46,7 @@ use App\Http\Controllers\Api\V1\MasterySummaryController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ModelController;
 use App\Http\Controllers\Api\V1\PracticeItemController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\QuestionController;
 use App\Http\Controllers\Api\V1\ResponseController;
 use App\Http\Controllers\Api\V1\ReviewController;
@@ -133,6 +134,9 @@ Route::prefix('v1')->group(function () {
         // everywhere but /me and the password change (`student.password`, §29.10).
         Route::middleware(['active', 'classroom.open', 'student.password'])->group(function () {
             Route::get('me', MeController::class)->name('api.me');
+            // The teacher's own name, school name and password (§29.1).
+            Route::patch('me', [ProfileController::class, 'update'])->middleware('role:teacher')->name('api.me.update');
+            Route::put('me/password', [ProfileController::class, 'password'])->middleware('role:teacher')->name('api.me.password');
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
             Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');

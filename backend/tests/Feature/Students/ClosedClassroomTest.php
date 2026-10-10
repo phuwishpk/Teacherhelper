@@ -83,6 +83,8 @@ class ClosedClassroomTest extends TestCase
         // The values of the statuses belong to the course; a closed classroom's scores are left alone.
         'api.courses.attendance.scores' => null,
         'api.student.password' => null,
+        'api.me.update' => null,
+        'api.me.password' => null,
         'api.skills.practice-items.generate' => null,
         'api.skills.resources.store' => null,
         'api.practice-items.store' => null,

@@ -271,6 +271,18 @@ class FakeMeAuth implements AuthRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<User> updateProfile({
+    required String name,
+    required String schoolName,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> changePassword({
+    required String password,
+    String? currentPassword,
+  }) => throw UnimplementedError();
+
+  @override
   Future<User> changeStudentPassword({
     required String password,
     String? currentPassword,

@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/auth/session.dart';
 import '../../core/push/push_messaging.dart';
 import '../google_classroom/google_classroom_card.dart';
 import '../google_signin/google_identity_card.dart';
 import 'ai_key_section.dart';
+import 'profile_section.dart';
 
-/// Teacher settings: the Google account for sign-in (DESIGN §24.9.5), the
+/// Teacher settings: the own profile (§29.1), the Google account for sign-in (DESIGN §24.9.5), the
 /// Gemini key (§10.1) and the Google Classroom connection (§18.7).
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
     final push = ref.watch(pushMessagingProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('ตั้งค่า')),
@@ -27,16 +26,7 @@ class SettingsScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (user != null)
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.person_outline),
-                        title: Text(user.name),
-                        subtitle: Text(
-                          [?user.email, ?user.schoolName].join(' · '),
-                        ),
-                      ),
-                    ),
+                  const ProfileSection(),
                   const SizedBox(height: 8),
                   const GoogleIdentityCard(),
                   const SizedBox(height: 8),
