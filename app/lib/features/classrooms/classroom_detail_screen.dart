@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,9 +26,17 @@ import 'one_time_pins_view.dart';
 import 'student_edit_dialog.dart';
 
 class ClassroomDetailScreen extends ConsumerWidget {
-  const ClassroomDetailScreen({super.key, required this.classroomId});
+  const ClassroomDetailScreen({
+    super.key,
+    required this.classroomId,
+    this.offlineScanSupported = !kIsWeb,
+  });
 
   final int classroomId;
+
+  /// Scanning with the camera and its offline data exist in the Android
+  /// app only (DESIGN §25.2): the web has no "เตรียมสแกนออฟไลน์".
+  final bool offlineScanSupported;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,7 +89,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
                 ],
                 _HeaderCard(classroom: c),
                 const SizedBox(height: 12),
-                _ActionsRow(classroom: c),
+                _ActionsRow(classroom: c, offlineScan: offlineScanSupported),
                 const SizedBox(height: 12),
                 ClassroomCoursesSection(classroom: c),
                 const SizedBox(height: 12),
@@ -234,9 +243,10 @@ class _Fact extends StatelessWidget {
 }
 
 class _ActionsRow extends ConsumerWidget {
-  const _ActionsRow({required this.classroom});
+  const _ActionsRow({required this.classroom, required this.offlineScan});
 
   final Classroom classroom;
+  final bool offlineScan;
 
   Future<void> _printCards(BuildContext context, WidgetRef ref) async {
     // One QR card per student across rooms (DESIGN §24.4): printing the
@@ -292,7 +302,7 @@ class _ActionsRow extends ConsumerWidget {
             icon: const Icon(Icons.qr_code_2),
             label: const Text('พิมพ์บัตร QR'),
           ),
-        if (open)
+        if (open && offlineScan)
           FilledButton.tonalIcon(
             onPressed: () => _prepareOffline(context, ref),
             icon: const Icon(Icons.download_for_offline_outlined),

@@ -22,11 +22,15 @@ Future<void> _pumpDetail(
   WidgetTester tester,
   FakeSchoolClassrooms fake, {
   List<GoRoute> extraRoutes = const [],
+  bool offlineScanSupported = true,
 }) async {
   _tall(tester);
   await pumpScreen(
     tester,
-    const ClassroomDetailScreen(classroomId: 7),
+    ClassroomDetailScreen(
+      classroomId: 7,
+      offlineScanSupported: offlineScanSupported,
+    ),
     overrides: [
       classroomsRepositoryProvider.overrideWithValue(fake),
       coursesRepositoryProvider.overrideWithValue(
@@ -55,6 +59,26 @@ Future<void> _studentMenu(WidgetTester tester, String name) async {
 }
 
 void main() {
+  testWidgets('the web has no offline scan preparation (DESIGN §25.2)', (
+    tester,
+  ) async {
+    final fake = FakeSchoolClassrooms(open: [room()], closed: []);
+    await _pumpDetail(tester, fake, offlineScanSupported: false);
+
+    expect(find.text('พิมพ์บัตร QR'), findsOneWidget);
+    expect(find.text('สร้างการบ้าน'), findsOneWidget);
+    expect(find.text('เตรียมสแกนออฟไลน์'), findsNothing);
+  });
+
+  testWidgets('the Android app offers offline scan preparation', (
+    tester,
+  ) async {
+    final fake = FakeSchoolClassrooms(open: [room()], closed: []);
+    await _pumpDetail(tester, fake);
+
+    expect(find.text('เตรียมสแกนออฟไลน์'), findsOneWidget);
+  });
+
   group('ห้องเก่า (DESIGN §24.6)', () {
     testWidgets('a closed room is read-only and can be reopened', (
       tester,
