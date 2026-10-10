@@ -38,6 +38,7 @@ final readonly class GradebookColumn
         public bool $anyScored = false,
         public ?string $kind = null,
         public ?CarbonInterface $createdAt = null,
+        public bool $autoAttendance = false,
     ) {}
 
     public static function assignmentKey(int $id): string
@@ -76,6 +77,7 @@ final readonly class GradebookColumn
 
     public function scoreEditable(): bool
     {
-        return $this->type !== self::ASSIGNMENT;
+        // The "การเข้าเรียน" item is written from the attendance records (§29.5).
+        return $this->type !== self::ASSIGNMENT && ! $this->autoAttendance;
     }
 }

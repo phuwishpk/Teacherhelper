@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Attendance\AttendanceBook;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Gradebook\GradebookAccess;
 use App\Domain\Gradebook\GradebookScores;
 use App\Domain\Gradebook\GradebookSettings;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Classroom;
 use App\Models\Course;
@@ -31,7 +33,9 @@ class GradebookItemController extends Controller
 
     /**
      * POST /api/v1/courses/{id}/gradebook-items {classroom_ids[], category_id,
-     * name, max_points, is_attendance?} -> 201 {data: [item]}
+     * name, max_points, is_attendance?, auto_attendance?} -> 201 {data: [item]}.
+     * auto_attendance makes the "การเข้าเรียน" item of §29.5: one per
+     * classroom, its scores written from the attendance records.
      */
     public function store(Request $request, int $id): JsonResponse
     {
@@ -48,20 +52,36 @@ class GradebookItemController extends Controller
             $classrooms[] = GradebookAccess::openClassroom($request->user(), $course, $classroomId, "classroom_ids.{$i}");
         }
         $categoryId = self::categoryId($course, $data['category_id']);
+        $auto = (bool) ($data['auto_attendance'] ?? false);
 
-        $items = DB::transaction(function () use ($course, $classrooms, $categoryId, $data, $request) {
+        $items = DB::transaction(function () use ($course, $classrooms, $categoryId, $data, $request, $auto) {
             Course::query()->whereKey($course->id)->lockForUpdate()->first();
+            if ($auto) {
+                foreach ($classrooms as $i => $classroom) {
+                    if (AttendanceBook::autoItem($course->id, $classroom->id) !== null) {
+                        throw ValidationException::withMessages(["classroom_ids.{$i}" => 'ห้อง '.$classroom->name.' มีรายการ "การเข้าเรียน" จากการเช็คชื่ออยู่แล้ว']);
+                    }
+                }
+            }
 
-            return array_map(fn (Classroom $classroom) => GradebookItem::create([
+            $items = array_map(fn (Classroom $classroom) => GradebookItem::create([
                 'course_id' => $course->id,
                 'classroom_id' => $classroom->id,
                 'category_id' => $categoryId,
                 'name' => trim($data['name']),
                 'max_points' => round((float) $data['max_points'], 2),
-                'is_attendance' => (bool) ($data['is_attendance'] ?? false),
+                'is_attendance' => $auto || ($data['is_attendance'] ?? false),
+                'auto_attendance' => $auto,
                 'position' => (int) GradebookItem::query()->where('course_id', $course->id)->where('classroom_id', $classroom->id)->max('position') + 1,
                 'created_by' => $request->user()->id,
             ]), $classrooms);
+            if ($auto) {
+                foreach ($classrooms as $classroom) {
+                    AttendanceBook::syncGrades($course, $classroom->id, $request->user());
+                }
+            }
+
+            return $items;
         });
 
         return response()->json(['data' => array_map(fn (GradebookItem $item) => self::payload($item), $items)], 201);
@@ -80,7 +100,7 @@ class GradebookItemController extends Controller
             ...self::fieldRules(true),
         ], self::messages());
 
-        DB::transaction(function () use ($item, $data) {
+        DB::transaction(function () use ($item, $data, $request) {
             $item = GradebookItem::query()->lockForUpdate()->findOrFail($item->id);
             if (array_key_exists('name', $data)) {
                 $item->name = trim($data['name']);
@@ -88,12 +108,13 @@ class GradebookItemController extends Controller
             if (array_key_exists('category_id', $data)) {
                 $item->category_id = $data['category_id'] === null ? null : self::categoryId($item->course()->firstOrFail(), $data['category_id']);
             }
-            if (array_key_exists('is_attendance', $data)) {
+            if (array_key_exists('is_attendance', $data) && ! $item->auto_attendance) {
                 $item->is_attendance = (bool) $data['is_attendance'];
             }
             if (array_key_exists('max_points', $data)) {
                 $max = round((float) $data['max_points'], 2);
-                $highest = GradebookEntry::query()->where('gradebook_item_id', $item->id)->max('score');
+                // The scores of the automatic item are rewritten for the new full marks below.
+                $highest = $item->auto_attendance ? null : GradebookEntry::query()->where('gradebook_item_id', $item->id)->max('score');
                 if ($highest !== null && (float) $highest > $max + 1e-9) {
                     throw ValidationException::withMessages([
                         'max_points' => 'มีคะแนนที่กรอกไว้สูงกว่านี้ ('.GradebookSettings::formatWeight((float) $highest).') แก้คะแนนก่อนลดคะแนนเต็ม',
@@ -102,6 +123,9 @@ class GradebookItemController extends Controller
                 $item->max_points = $max;
             }
             $item->save();
+            if ($item->auto_attendance) {
+                AttendanceBook::syncGrades($item->course()->firstOrFail(), $item->classroom_id, $request->user());
+            }
         });
 
         return response()->json(['data' => self::payload($item->refresh())]);
@@ -122,6 +146,7 @@ class GradebookItemController extends Controller
     public function scores(Request $request, int $id): JsonResponse
     {
         $item = $this->item($request, $id);
+        self::assertTyped($item);
 
         return response()->json(['data' => ['entries' => GradebookScores::saveForItem($item, $request->user(), $request->input('scores'))]]);
     }
@@ -130,6 +155,7 @@ class GradebookItemController extends Controller
     public function fillFull(Request $request, int $id): JsonResponse
     {
         $item = $this->item($request, $id);
+        self::assertTyped($item);
 
         return response()->json(['data' => ['filled' => GradebookScores::fillItem($item, $request->user())]]);
     }
@@ -145,6 +171,7 @@ class GradebookItemController extends Controller
             'name' => $item->name,
             'max_points' => $item->max_points,
             'is_attendance' => $item->is_attendance,
+            'auto_attendance' => $item->auto_attendance,
             'position' => $item->position,
             'created_at' => $item->created_at?->toIso8601String(),
         ];
@@ -161,6 +188,14 @@ class GradebookItemController extends Controller
         Gate::authorize('update', $item->course()->firstOrFail());
 
         return $item;
+    }
+
+    /** @throws ApiException 422 score_from_attendance for the "การเข้าเรียน" item */
+    private static function assertTyped(GradebookItem $item): void
+    {
+        if ($item->auto_attendance) {
+            throw new ApiException('คะแนนของรายการนี้มาจากการเช็คชื่อ แก้ได้ที่หน้าเช็คชื่อของรายวิชา', 'score_from_attendance', 422);
+        }
     }
 
     private static function categoryId(Course $course, mixed $categoryId): int
@@ -184,6 +219,7 @@ class GradebookItemController extends Controller
             'name' => [...$required, 'string', 'max:100'],
             'max_points' => [...$required, 'numeric', 'gt:0', 'max:'.self::MAX_POINTS, 'decimal:0,2'],
             'is_attendance' => ['sometimes', 'boolean'],
+            ...($partial ? [] : ['auto_attendance' => ['sometimes', 'boolean']]),
         ];
     }
 

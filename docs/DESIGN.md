@@ -4816,9 +4816,52 @@ admin เข้าใช้ในฐานะผู้ใช้คนใดก�
 | ขั้น | เนื้อหา | สถานะ |
 |---|---|---|
 | 1 | กลุ่มสาระมาตรฐาน 8 กลุ่ม กลุ่มสาระของครูเอง ข้อความเมื่อรายการว่าง (§29.4) | เสร็จ |
-| 2ก | เช็คชื่อรายคาบ ประวัติ รายการอัตโนมัติในสมุดคะแนน หน้าของนักเรียน | |
+| 2ก | เช็คชื่อรายคาบ ประวัติ รายการอัตโนมัติในสมุดคะแนน หน้าของนักเรียน (§29.9) | เสร็จ |
 | 2ข | ตารางสอนรายสัปดาห์ หน้าตารางของครูและนักเรียน | |
 | 3 | ครูอิสระ: บัญชี การเข้าห้อง สอนร่วม (§29.1–§29.3) และ `DemoSeeder` | |
 | 4 | admin เข้าใช้ในฐานะผู้ใช้ (§29.6) | |
 | 2ค | ผูกคาบกับแผนการสอน และ AI วางแผนลงคาบ (ตัดออกได้) | |
 | 5 | ปุ่ม "เพิ่มตัวชี้วัดทั้งหมด" และคู่มือ | |
+
+### 29.9 การเช็คชื่อ: ตารางและ API (ขั้น 2ก)
+
+```sql
+CREATE TABLE attendance_sessions (          -- หนึ่งคาบที่เช็คชื่อของรายวิชาในห้องหนึ่ง
+  id           BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  course_id    BIGINT UNSIGNED NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  classroom_id BIGINT UNSIGNED NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  held_on      DATE NOT NULL,
+  period_no    TINYINT UNSIGNED NULL,       -- NULL = ไม่ระบุคาบ (วันละหนึ่งรายการ ตรวจในโค้ด)
+  starts_at    TIME NULL, ends_at TIME NULL, -- ใช้ในขั้น 2ข
+  note         VARCHAR(255) NULL,
+  created_by   BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  UNIQUE (course_id, classroom_id, held_on, period_no)
+);
+CREATE TABLE attendance_records (
+  id                    BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  attendance_session_id BIGINT UNSIGNED NOT NULL REFERENCES attendance_sessions(id) ON DELETE CASCADE,
+  student_id            BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  status                ENUM('present','late','absent','personal_leave','sick_leave') NOT NULL,
+  note                  VARCHAR(255) NULL,
+  updated_by            BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+  UNIQUE (attendance_session_id, student_id)
+);
+ALTER TABLE courses ADD attendance_scores JSON NULL;            -- {present, late, absent} ค่า 0..1; NULL = 1, 0.5, 0
+ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+- อัตราการเข้าเรียนของนักเรียน = ผลรวมค่าของสถานะที่นับ ÷ จำนวนรายการที่นับ (มาตรง มาสาย ขาด) ลากิจและลาป่วยไม่อยู่ทั้งตัวตั้งและตัวหาร ไม่มีรายการที่นับ = ไม่มีอัตรา
+- รายการ "การเข้าเรียน" ในสมุดคะแนนคือ `gradebook_items` ที่ `auto_attendance = true` (และ `is_attendance = true` จึงเข้าคำเตือน มส ของ §23) มีได้หนึ่งรายการต่อรายวิชาต่อห้อง คะแนน = อัตรา × คะแนนเต็ม ระบบเขียน `gradebook_entries` ให้ทุกครั้งที่การเช็คชื่อ ค่าของสถานะ หรือคะแนนเต็มเปลี่ยน ครูกรอกคะแนนของรายการนี้เองไม่ได้ (422 `score_from_attendance`) สมุดคะแนนส่ง `auto_attendance` และ `editable: false` ของคอลัมน์นี้
+- สิทธิ์เหมือนสมุดคะแนน: รายวิชาที่ครูสร้างและห้องที่ผูกกับรายวิชา ห้องที่ปิดแล้วแก้ไม่ได้ (409 `classroom_closed`)
+- การรวมบัญชีนักเรียน (§24.5): ย้าย `attendance_records` ถ้าสองบัญชีมีรายการในคาบเดียวกัน ใช้ของบัญชีที่เก็บไว้
+
+| Method | Path | ทำอะไร |
+|---|---|---|
+| GET | `/courses/{id}/attendance?classroom_id=` | ค่าของสถานะ รายการอัตโนมัติ คาบที่เช็คแล้ว (ใหม่สุดก่อน) และสรุปรายคน |
+| PUT | `/courses/{id}/attendance/scores` | `{present, late, absent}` ค่า 0..1 แล้วคิดคะแนนใหม่ทุกห้องที่ยังเปิด |
+| POST | `/courses/{id}/attendance-sessions` | `{classroom_id, held_on, period_no?, note?, records?}` นักเรียนที่ไม่ส่งมา = มาตรง; คาบซ้ำในวันเดียวกัน 422 `attendance_period_taken` |
+| GET / PUT / DELETE | `/attendance-sessions/{id}` | ดู แก้ (เฉพาะนักเรียนที่ส่งมา) หรือลบคาบ |
+| POST | `/courses/{id}/gradebook-items` + `auto_attendance: true` | เพิ่มรายการ "การเข้าเรียน" (§23.11 เดิม เพิ่ม field) |
+| GET | `/student/attendance?course_id=&classroom_id=` | นักเรียนดูสถานะของตัวเองทุกคาบ แยกรายวิชา |
+
+แอป: ปุ่ม "เช็คชื่อ" ในหน้ารายวิชา → `/courses/:id/attendance` (ประวัติ สรุปรายคน ค่าของสถานะ นับเป็นคะแนน) → `/courses/:id/attendance/new` และ `/courses/:id/attendance/:sid` (หนึ่งคาบ เริ่มที่มาทุกคน) นักเรียน: "การเข้าเรียน" ในหน้าวิชาของฉัน → `/student/attendance`

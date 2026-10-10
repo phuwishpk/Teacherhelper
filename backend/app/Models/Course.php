@@ -48,6 +48,7 @@ class Course extends Model
         'description',
         'grade_cutoffs',
         'gradebook_template',
+        'attendance_scores',
     ];
 
     protected $attributes = [
@@ -68,6 +69,7 @@ class Course extends Model
             'academic_year' => 'integer',
             'hours' => 'integer',
             'grade_cutoffs' => 'array',
+            'attendance_scores' => 'array',
         ];
     }
 

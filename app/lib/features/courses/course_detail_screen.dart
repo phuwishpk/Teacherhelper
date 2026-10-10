@@ -251,6 +251,12 @@ class CourseDetailScreen extends ConsumerWidget {
                       label: const Text('สมุดคะแนน'),
                     ),
                     FilledButton.icon(
+                      key: const ValueKey('course_attendance'),
+                      onPressed: () => context.push(AppRoutes.attendance(c.id)),
+                      icon: const Icon(Icons.how_to_reg_outlined),
+                      label: const Text('เช็คชื่อ'),
+                    ),
+                    FilledButton.icon(
                       key: const ValueKey('course_charts'),
                       onPressed: () =>
                           context.push(AppRoutes.courseCharts(c.id)),

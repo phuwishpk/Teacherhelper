@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\AnswerKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
+use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomCourseController;
@@ -53,6 +54,7 @@ use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SchoolStudentController;
 use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
+use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
@@ -263,6 +265,13 @@ Route::prefix('v1')->group(function () {
                 Route::delete('gradebook-items/{id}', [GradebookItemController::class, 'destroy'])->name('api.gradebook-items.destroy');
                 Route::put('gradebook-items/{id}/scores', [GradebookItemController::class, 'scores'])->name('api.gradebook-items.scores');
                 Route::post('gradebook-items/{id}/fill-full', [GradebookItemController::class, 'fillFull'])->name('api.gradebook-items.fill-full');
+                // Attendance of a course in a classroom, per period (§29.5).
+                Route::get('courses/{id}/attendance', [AttendanceController::class, 'index'])->name('api.courses.attendance.index');
+                Route::put('courses/{id}/attendance/scores', [AttendanceController::class, 'scores'])->name('api.courses.attendance.scores');
+                Route::post('courses/{id}/attendance-sessions', [AttendanceController::class, 'store'])->name('api.courses.attendance-sessions.store');
+                Route::get('attendance-sessions/{id}', [AttendanceController::class, 'show'])->name('api.attendance-sessions.show');
+                Route::put('attendance-sessions/{id}', [AttendanceController::class, 'update'])->name('api.attendance-sessions.update');
+                Route::delete('attendance-sessions/{id}', [AttendanceController::class, 'destroy'])->name('api.attendance-sessions.destroy');
                 Route::put('assignments/{id}/gradebook-scores', [GradebookScoreController::class, 'update'])->name('api.assignments.gradebook-scores');
                 Route::post('assignments/{id}/gradebook-scores/fill-full', [GradebookScoreController::class, 'fillFull'])->name('api.assignments.gradebook-scores.fill-full');
 
@@ -428,6 +437,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('courses/{id}/mastery-summary', [StudentCourseController::class, 'summary'])->name('api.student.courses.mastery-summary');
                 // Their own row of the latest published grades only (§23.7, §23.12).
                 Route::get('grades', [StudentGradeController::class, 'index'])->name('api.student.grades.index');
+                // The student's own attendance, per course and classroom (§29.5).
+                Route::get('attendance', StudentAttendanceController::class)->name('api.student.attendance');
                 Route::get('courses/{id}/grade', [StudentGradeController::class, 'show'])->name('api.student.courses.grade');
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 // Only the analysis texts the teacher shared, never the teacher's version (§20.5).

@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property float $max_points > 0
  * @property bool $is_attendance its scores feed the "อาจติด มส" warning
+ * @property bool $auto_attendance the "การเข้าเรียน" item: its scores come from the attendance records (DESIGN §29.5)
  * @property int $position
  * @property int $created_by
  * @property Carbon|null $created_at
@@ -26,7 +27,7 @@ use Illuminate\Support\Carbon;
  */
 class GradebookItem extends Model
 {
-    protected $fillable = ['course_id', 'classroom_id', 'category_id', 'name', 'max_points', 'is_attendance', 'position', 'created_by'];
+    protected $fillable = ['course_id', 'classroom_id', 'category_id', 'name', 'max_points', 'is_attendance', 'auto_attendance', 'position', 'created_by'];
 
     /**
      * @return array<string, string>
@@ -39,6 +40,7 @@ class GradebookItem extends Model
             'category_id' => 'integer',
             'max_points' => 'float',
             'is_attendance' => 'boolean',
+            'auto_attendance' => 'boolean',
             'position' => 'integer',
             'created_by' => 'integer',
         ];

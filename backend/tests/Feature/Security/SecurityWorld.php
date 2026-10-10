@@ -8,6 +8,8 @@ use App\Domain\Worksheets\QrSigner;
 use App\Models\Appeal;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\AttendanceRecord;
+use App\Models\AttendanceSession;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
@@ -171,6 +173,9 @@ trait SecurityWorld
     /** A gradebook item of course A in classroom A (DESIGN §23.3). */
     protected GradebookItem $gradebookItemA;
 
+    /** A checked period of course A in classroom A (DESIGN §29.5), both students present. */
+    protected AttendanceSession $attendanceSessionA;
+
     /** Published grades of classroom A in course A: rows of student A and A2 (§23.7). */
     protected GradebookPublication $publicationA;
 
@@ -264,6 +269,10 @@ trait SecurityWorld
             'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'category_id' => $categoryA->id,
             'name' => 'การแต่งกาย', 'max_points' => 10, 'position' => 1, 'created_by' => $this->teacherA->id,
         ]);
+        $this->attendanceSessionA = AttendanceSession::create(['course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'held_on' => '2026-10-01', 'period_no' => 1, 'created_by' => $this->teacherA->id]);
+        foreach ([$this->studentA, $this->studentA2] as $student) {
+            AttendanceRecord::create(['attendance_session_id' => $this->attendanceSessionA->id, 'student_id' => $student->id, 'status' => AttendanceRecord::PRESENT, 'updated_by' => $this->teacherA->id]);
+        }
         $this->publicationA = GradebookPublication::create([
             'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'categories' => [['id' => $categoryA->id, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'drop_lowest' => 0]],
             'cutoffs' => [80, 75, 70, 65, 60, 55, 50], 'published_by' => $this->teacherA->id, 'published_at' => now(),

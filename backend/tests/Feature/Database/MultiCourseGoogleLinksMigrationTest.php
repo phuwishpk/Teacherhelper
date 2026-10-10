@@ -37,8 +37,8 @@ class MultiCourseGoogleLinksMigrationTest extends TestCase
         // A subject teacher's course bound to classroom one is not the owner's.
         $this->makeCourse($subject, [$one], ['code' => 'ว15101']);
 
-        // Step 4: the teacher_google_auto_approve (#71), exam code sheets (#74) and subject owner (§29.4) migrations run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 4])->assertSuccessful();
+        // Step 5: the teacher_google_auto_approve (#71), exam code sheets (#74), subject owner (§29.4) and attendance (§29.5) migrations run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 5])->assertSuccessful();
         $this->assertFalse(Schema::hasColumn('classroom_google_links', 'app_course_id'));
         foreach ([[$one, 'c-one'], [$two, 'c-two'], [$none, 'c-none']] as [$room, $course]) {
             DB::table('classroom_google_links')->insert(['classroom_id' => $room->id, 'course_id' => $course, 'course_name' => $course, 'owner_user_id' => $teacher->id, 'linked_at' => now(), 'roster_synced_at' => '2026-09-30 01:00:00']);
@@ -66,8 +66,8 @@ class MultiCourseGoogleLinksMigrationTest extends TestCase
             }
         }
 
-        // Step 4: the teacher_google_auto_approve (#71), exam code sheets (#74) and subject owner (§29.4) migrations run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 4])->assertSuccessful();
+        // Step 5: the teacher_google_auto_approve (#71), exam code sheets (#74), subject owner (§29.4) and attendance (§29.5) migrations run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 5])->assertSuccessful();
         $this->assertSame(
             [[$one->id, 'c-one'], [$two->id, 'c-two'], [$none->id, 'c-none']],
             DB::table('classroom_google_links')->orderBy('classroom_id')->get()->map(fn ($r) => [(int) $r->classroom_id, $r->course_id])->all(),
