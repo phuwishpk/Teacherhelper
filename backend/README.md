@@ -31,6 +31,7 @@ composer install
 cp -n .env.example .env && php artisan key:generate
 # ตั้ง ADMIN_EMAIL / ADMIN_PASSWORD ใน .env ก่อน seed ไม่งั้นไม่มีบัญชี /admin ไว้อนุมัติครู (seeder ขึ้น WARN)
 php artisan migrate --seed          # สร้าง schools, users, cache, jobs, personal_access_tokens + โรงเรียนสาธิต 1 แห่ง + admin
+php artisan db:seed --class=DemoSeeder   # (ไม่บังคับ) ครูที่อนุมัติแล้ว 1 คน + ห้องตัวอย่างที่มีนักเรียน 10 คน ตั้ง DEMO_* ใน .env ก่อน
 
 # 3. รัน
 php artisan serve                                  # AVD: http://10.0.2.2:8000

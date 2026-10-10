@@ -24,6 +24,15 @@ return [
     'admin_email' => env('ADMIN_EMAIL'),
     'admin_password' => env('ADMIN_PASSWORD'),
 
+    // Demo accounts created by DemoSeeder (`db:seed --class=DemoSeeder`): one
+    // approved teacher and one classroom of fictional students who share
+    // student_pin (6 digits). Any value empty = the seeder creates neither.
+    'demo' => [
+        'teacher_email' => env('DEMO_TEACHER_EMAIL'),
+        'teacher_password' => env('DEMO_TEACHER_PASSWORD'),
+        'student_pin' => env('DEMO_STUDENT_PIN'),
+    ],
+
     // HMAC-SHA256 key that signs the worksheet QR (DESIGN §5.4). Only the
     // server can verify a QR, so a forged page cannot land in another
     // student's submission. Rotating it invalidates every worksheet printed

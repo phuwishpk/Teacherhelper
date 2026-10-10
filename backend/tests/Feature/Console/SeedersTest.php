@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Console;
 
+use App\Models\Classroom;
 use App\Models\Skill;
 use App\Models\User;
 use Database\Seeders\AdminSeeder;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -63,5 +65,65 @@ class SeedersTest extends TestCase
         $this->assertDatabaseHas('schools', ['teacher_join_code' => config('eduvision.seed_teacher_join_code')]);
         $this->assertDatabaseHas('users', ['email' => 'admin@example.com', 'role' => 'admin']);
         $this->assertSame(13, Skill::query()->count());
+    }
+
+    public function test_demo_seeder_creates_an_admin_a_teacher_and_a_class_of_students(): void
+    {
+        config([
+            'eduvision.admin_email' => 'admin@example.com',
+            'eduvision.admin_password' => 'admin-secret-1',
+            'eduvision.demo.teacher_email' => 'teacher@example.com',
+            'eduvision.demo.teacher_password' => 'teacher-secret-1',
+            'eduvision.demo.student_pin' => '246810',
+        ]);
+
+        $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--no-interaction' => true])
+            ->expectsOutputToContain('DemoSeeder: teacher teacher@example.com ready')
+            ->assertSuccessful();
+
+        $this->assertSame(1, User::query()->where('role', 'admin')->count());
+        $teacher = User::query()->where('email', 'teacher@example.com')->firstOrFail();
+        $this->assertSame('teacher', $teacher->role);
+        $this->assertSame('active', $teacher->status);
+        $classroom = Classroom::query()->where('teacher_id', $teacher->id)->firstOrFail();
+        $this->assertSame($teacher->school_id, $classroom->school_id);
+        $this->assertSame(count(DemoSeeder::STUDENTS), $classroom->students()->count());
+
+        // The app's own logins work with the seeded values.
+        $this->postJson('/api/v1/auth/teacher/login', ['email' => 'teacher@example.com', 'password' => 'teacher-secret-1'])
+            ->assertOk();
+        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810'])
+            ->assertOk()
+            ->assertJsonPath('user.name', DemoSeeder::STUDENTS[2]);
+
+        // Re-seeding rotates the password and the PIN and adds nothing twice.
+        config(['eduvision.demo.teacher_password' => 'teacher-secret-2', 'eduvision.demo.student_pin' => '135790']);
+        $this->seed(DemoSeeder::class);
+
+        $this->assertSame(1, Classroom::query()->count());
+        $this->assertSame(count(DemoSeeder::STUDENTS), User::query()->where('role', 'student')->count());
+        $this->assertTrue(Hash::check('teacher-secret-2', $teacher->fresh()->password));
+        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810'])
+            ->assertStatus(422);
+        $this->postJson('/api/v1/auth/student/pin', ['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '135790'])
+            ->assertOk();
+    }
+
+    public function test_demo_seeder_creates_no_teacher_or_student_without_its_settings(): void
+    {
+        config([
+            'eduvision.admin_email' => '',
+            'eduvision.admin_password' => '',
+            'eduvision.demo.teacher_email' => 'teacher@example.com',
+            'eduvision.demo.teacher_password' => 'teacher-secret-1',
+            'eduvision.demo.student_pin' => '12345', // not 6 digits
+        ]);
+
+        $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--no-interaction' => true])
+            ->expectsOutputToContain('so no demo teacher or student was created')
+            ->assertSuccessful();
+
+        $this->assertSame(0, User::query()->count());
+        $this->assertSame(0, Classroom::query()->count());
     }
 }
