@@ -73,7 +73,9 @@ class RenderLoginCardsJob implements ShouldQueue
                 ];
             }
 
-            $pdf = $renderer->render($print->school->name, $cards);
+            // The requesting teacher's own school name when they set one (DESIGN §29.1).
+            $schoolName = User::query()->whereKey($print->requested_by)->value('school_name') ?? $print->school->name;
+            $pdf = $renderer->render($schoolName, $cards);
             $path = LoginCardPrintService::filePath($print);
             Storage::disk('local')->put($path, $pdf);
 

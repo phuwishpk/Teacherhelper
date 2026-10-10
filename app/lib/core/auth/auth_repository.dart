@@ -50,6 +50,20 @@ abstract class AuthRepository {
     required String password,
   });
 
+  /// `PATCH /me`: the teacher's own name and school name (DESIGN §29.1);
+  /// an empty [schoolName] clears it.
+  Future<User> updateProfile({
+    required String name,
+    required String schoolName,
+  });
+
+  /// `PUT /me/password`: the teacher's own password. [currentPassword] is
+  /// null only for an account that never had one (signed up with Google).
+  Future<void> changePassword({
+    required String password,
+    String? currentPassword,
+  });
+
   /// `PUT /student/password`: the student's own new password.
   /// [currentPassword] is left out while the password is the initial one.
   Future<User> changeStudentPassword({
@@ -125,6 +139,27 @@ class ApiAuthRepository implements AuthRepository {
     );
     return unwrapJson(res.data)['token'] as String;
   }
+
+  @override
+  Future<User> updateProfile({
+    required String name,
+    required String schoolName,
+  }) async {
+    final res = await _dio.patch<Object?>(
+      '/me',
+      data: {'name': name, 'school_name': schoolName},
+    );
+    return User.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<void> changePassword({
+    required String password,
+    String? currentPassword,
+  }) => _dio.put<Object?>(
+    '/me/password',
+    data: {'password': password, 'current_password': ?currentPassword},
+  );
 
   @override
   Future<User> changeStudentPassword({
