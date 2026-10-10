@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:eduvision/features/worksheets/pdf_actions.dart';
+import 'package:eduvision/features/worksheets/pdf_files.dart';
 import 'package:eduvision/features/worksheets/print_flow.dart';
 import 'package:eduvision/features/worksheets/print_job.dart';
 import 'package:flutter/material.dart';
@@ -10,25 +11,53 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../review/review_fixtures.dart';
 
-class _Downloader extends PdfDownloader {
-  _Downloader() : super(Dio());
+/// Stands in for the Android cache file or, with [web], for the bytes the
+/// browser build keeps in memory (DESIGN §25.2).
+class _Files extends PdfFiles {
+  _Files({this.web = false}) : super(Dio(), PdfDownloader(Dio()));
 
+  final bool web;
   final calls = <(String url, String fileName)>[];
+  final opened = <String>[];
+  final saved = <String>[];
+  final shared = <(String name, String subject)>[];
 
   @override
-  Future<String> download(String url, {required String fileName}) async {
+  bool get canOpen => !web;
+
+  @override
+  String get saveLabel => web ? 'ดาวน์โหลด' : 'บันทึกลงเครื่อง';
+
+  @override
+  Future<PdfFile> fetch(String url, {required String fileName}) async {
     calls.add((url, fileName));
-    return '/cache/pdf/$fileName';
+    return PdfFile(name: fileName, path: web ? null : '/cache/pdf/$fileName');
+  }
+
+  @override
+  Future<void> open(BuildContext context, PdfFile file) async {
+    opened.add(file.name);
+  }
+
+  @override
+  Future<bool> save(PdfFile file) async {
+    saved.add(file.name);
+    return true;
+  }
+
+  @override
+  Future<void> share(PdfFile file, {required String subject}) async {
+    shared.add((file.name, subject));
   }
 }
 
 Widget _host({
   required Future<PrintJob> Function() request,
   required Future<PrintJob> Function(PrintJob) poll,
-  required _Downloader downloader,
+  required _Files downloader,
 }) {
   return ProviderScope(
-    overrides: [pdfDownloaderProvider.overrideWithValue(downloader)],
+    overrides: [pdfFilesProvider.overrideWithValue(downloader)],
     child: MaterialApp(
       home: Scaffold(
         body: Consumer(
@@ -55,7 +84,7 @@ void main() {
   testWidgets('queued -> ready: progress dialog, download, open/share sheet', (
     tester,
   ) async {
-    final downloader = _Downloader();
+    final downloader = _Files();
     final requested = Completer<PrintJob>();
     final polled = Completer<PrintJob>();
     var polls = 0;
@@ -96,14 +125,72 @@ void main() {
     ));
     expect(find.text('กำลังส่งคำขอ…'), findsNothing);
     expect(find.text('เปิดไฟล์'), findsOneWidget);
+    expect(find.text('บันทึกลงเครื่อง'), findsOneWidget);
     expect(find.text('แชร์ / ส่งไปพิมพ์'), findsOneWidget);
     expect(find.text('worksheets-5-v1.pdf'), findsOneWidget);
+
+    await tester.tap(find.text('เปิดไฟล์'));
+    await tester.pumpAndSettle();
+    expect(downloader.opened, ['worksheets-5-v1.pdf']);
+    expect(find.text('แชร์ / ส่งไปพิมพ์'), findsNothing);
+  });
+
+  testWidgets('on the web the sheet offers a download instead of opening', (
+    tester,
+  ) async {
+    final files = _Files(web: true);
+    await tester.pumpWidget(
+      _host(
+        request: () async => const PrintJob(
+          id: 3,
+          status: 'ready',
+          downloadUrl: '/api/v1/login-card-prints/3/file',
+        ),
+        poll: (job) async => job,
+        downloader: files,
+      ),
+    );
+
+    await tester.tap(find.text('พิมพ์'));
+    await tester.pumpAndSettle();
+
+    expect(files.calls.single.$1, '/api/v1/login-card-prints/3/file');
+    expect(find.text('เปิดไฟล์'), findsNothing);
+    expect(find.text('ดาวน์โหลด'), findsOneWidget);
+    expect(find.text('แชร์ / ส่งไปพิมพ์'), findsOneWidget);
+
+    await tester.tap(find.text('ดาวน์โหลด'));
+    await tester.pumpAndSettle();
+    expect(files.saved, ['worksheets-5-v1.pdf']);
+    expect(find.text('บันทึก worksheets-5-v1.pdf แล้ว'), findsOneWidget);
+  });
+
+  testWidgets('sharing passes the title as the subject', (tester) async {
+    final files = _Files();
+    await tester.pumpWidget(
+      _host(
+        request: () async => const PrintJob(
+          id: 4,
+          status: 'ready',
+          downloadUrl: '/api/v1/worksheet-prints/4/file',
+        ),
+        poll: (job) async => job,
+        downloader: files,
+      ),
+    );
+
+    await tester.tap(find.text('พิมพ์'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('แชร์ / ส่งไปพิมพ์'));
+    await tester.pumpAndSettle();
+
+    expect(files.shared, [('worksheets-5-v1.pdf', 'ใบงาน บวกเลข')]);
   });
 
   testWidgets('a failed render closes the dialog and shows the reason', (
     tester,
   ) async {
-    final downloader = _Downloader();
+    final downloader = _Files();
     await tester.pumpWidget(
       _host(
         request: () async => const PrintJob(id: 2, status: 'queued'),
@@ -123,7 +210,7 @@ void main() {
   });
 
   testWidgets('an API error shows the server message', (tester) async {
-    final downloader = _Downloader();
+    final downloader = _Files();
     await tester.pumpWidget(
       _host(
         request: () async => throw apiError(422, {

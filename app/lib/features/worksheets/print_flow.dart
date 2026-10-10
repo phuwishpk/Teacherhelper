@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/widgets/content_column.dart';
-import 'pdf_actions.dart';
+import 'pdf_files.dart';
 import 'print_job.dart';
 import 'print_job_poller.dart';
 
-/// Shared "queue a PDF → wait → download → open/share" flow used by the
-/// login-card and worksheet buttons. Shows a progress dialog meanwhile.
+/// Shared "queue a PDF → wait → download → open, save or share" flow used
+/// by the login-card and worksheet buttons. Shows a progress dialog
+/// meanwhile. Works on the web too: the file is kept in memory there and
+/// offered as a browser download (DESIGN §25.2).
 Future<void> runPrintFlow(
   BuildContext context,
   WidgetRef ref, {
@@ -55,12 +57,11 @@ Future<void> runPrintFlow(
       );
     }
     status.value = 'กำลังดาวน์โหลด…';
-    final path = await ref
-        .read(pdfDownloaderProvider)
-        .download(job.downloadUrl!, fileName: fileName);
+    final files = ref.read(pdfFilesProvider);
+    final file = await files.fetch(job.downloadUrl!, fileName: fileName);
     if (dialogOpen) navigator.pop();
     if (!context.mounted) return;
-    await showPdfActions(context, path: path, title: title);
+    await showPdfFileActions(context, files: files, file: file, title: title);
   } catch (e) {
     if (dialogOpen) navigator.pop();
     if (!context.mounted) return;
