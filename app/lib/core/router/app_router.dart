@@ -48,6 +48,9 @@ import '../../features/google_classroom/classroom_feedback_screen.dart';
 import '../../features/google_signin/google_first_link_screen.dart';
 import '../../features/google_signin/google_signin_models.dart';
 import '../../features/google_signin/google_web_return_screens.dart';
+import '../../features/attendance/attendance_screen.dart';
+import '../../features/attendance/attendance_session_screen.dart';
+import '../../features/attendance/my_attendance_screen.dart';
 import '../../features/gradebook/gradebook_screen.dart';
 import '../../features/gradebook/gradebook_settings_screen.dart';
 import '../../features/gradebook/student_grades.dart';
@@ -211,6 +214,23 @@ abstract final class AppRoutes {
 
   static String gradebookSettings(int courseId) =>
       '/courses/$courseId/gradebook/settings';
+
+  /// Attendance of a course (DESIGN §29.5), opened on [classroomId].
+  static String attendance(int courseId, {int? classroomId}) =>
+      classroomId == null
+      ? '/courses/$courseId/attendance'
+      : '/courses/$courseId/attendance?classroom=$classroomId';
+
+  /// A new period of [classroomId].
+  static String attendanceNew(int courseId, int classroomId) =>
+      '/courses/$courseId/attendance/new?classroom=$classroomId';
+
+  /// A checked period, to edit.
+  static String attendanceSession(int courseId, int sessionId) =>
+      '/courses/$courseId/attendance/$sessionId';
+
+  /// Student: their own attendance in every course.
+  static const myAttendance = '/student/attendance';
 
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
@@ -556,6 +576,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MyGradesScreen(),
       ),
       GoRoute(
+        path: AppRoutes.myAttendance,
+        builder: (context, state) => const MyAttendanceScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.studentSubjectPath,
         builder: (context, state) => StudentSubjectScreen(
           initialKey: state.uri.queryParameters['key'] ?? '',
@@ -763,6 +787,36 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: 'settings',
                 builder: (context, state) =>
                     GradebookSettingsScreen(courseId: _id(state, 'id')),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'attendance',
+            builder: (context, state) => AttendanceScreen(
+              courseId: _id(state, 'id'),
+              initialClassroomId: int.tryParse(
+                state.uri.queryParameters['classroom'] ?? '',
+              ),
+            ),
+            routes: [
+              // Before ':sid', which would take "new" as an id.
+              GoRoute(
+                path: 'new',
+                builder: (context, state) => AttendanceSessionScreen(
+                  courseId: _id(state, 'id'),
+                  classroomId:
+                      int.tryParse(
+                        state.uri.queryParameters['classroom'] ?? '',
+                      ) ??
+                      0,
+                ),
+              ),
+              GoRoute(
+                path: ':sid',
+                builder: (context, state) => AttendanceSessionScreen(
+                  courseId: _id(state, 'id'),
+                  sessionId: _id(state, 'sid'),
+                ),
               ),
             ],
           ),

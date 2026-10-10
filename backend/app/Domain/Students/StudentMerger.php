@@ -48,6 +48,7 @@ final class StudentMerger
         'submissions.student_id' => self::MOVE,
         'appeals.student_id' => self::MOVE,
         'gradebook_entries.student_id' => self::MOVE,
+        'attendance_records.student_id' => self::MOVE, // K's own status of a session wins
         'gradebook_special_grades.student_id' => self::MOVE,
         'gradebook_published_grades.student_id' => self::MOVE,
         'skill_observations.student_id' => self::MOVE,
@@ -91,6 +92,8 @@ final class StudentMerger
         'ai_calls.guidance_by' => self::UNRELATED,
         'gradebook_items.created_by' => self::UNRELATED,
         'gradebook_entries.updated_by' => self::UNRELATED,
+        'attendance_records.updated_by' => self::UNRELATED,
+        'attendance_sessions.created_by' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,
         'gradebook_publications.published_by' => self::UNRELATED,
         'exam_page_images.uploaded_by' => self::UNRELATED,
@@ -158,6 +161,7 @@ final class StudentMerger
             $summary['submissions'] = $this->moveSubmissions($k->id, $d->id);
             $summary['appeals'] = ['moved' => $this->moveColumn('appeals', 'student_id', $k->id, $d->id)];
             $summary['gradebook_entries'] = $this->moveGradebookEntries($k->id, $d->id);
+            $summary['attendance_records'] = $this->moveKeyed('attendance_records', ['attendance_session_id'], $k->id, $d->id);
             $summary['gradebook_special_grades'] = $this->moveKeyed('gradebook_special_grades', ['course_id', 'classroom_id'], $k->id, $d->id);
             $summary['gradebook_published_grades'] = $this->moveKeyed('gradebook_published_grades', ['publication_id'], $k->id, $d->id);
 

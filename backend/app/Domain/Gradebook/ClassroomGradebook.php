@@ -180,6 +180,7 @@ final class ClassroomGradebook
             'due_at' => $c->dueAt?->toIso8601String(),
             'excluded_from_grade' => $c->excluded,
             'is_attendance' => $c->isAttendance,
+            'auto_attendance' => $c->autoAttendance,
             'editable' => $c->scoreEditable(),
         ], $this->columns);
 
@@ -378,6 +379,7 @@ final class ClassroomGradebook
                 isAttendance: $item->is_attendance,
                 anyScored: $anyScored[$key] ?? false,
                 createdAt: $item->created_at,
+                autoAttendance: $item->auto_attendance,
             );
         }
         // By category, then date (§23.3); a column without a category goes last.

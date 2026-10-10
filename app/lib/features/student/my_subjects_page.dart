@@ -62,14 +62,22 @@ class MySubjectsPage extends ConsumerWidget {
           child: ContentColumn(
             child: ListView(
               children: [
-                Row(
+                // Wraps on a narrow phone: the links go under the count.
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
                   children: [
-                    Expanded(
-                      child: Text(
-                        todo > 0 ? 'ต้องส่งอีก $todo งาน' : 'ไม่มีงานค้าง',
-                        key: const ValueKey('subjects_todo_total'),
-                        style: theme.textTheme.titleMedium,
-                      ),
+                    Text(
+                      todo > 0 ? 'ต้องส่งอีก $todo งาน' : 'ไม่มีงานค้าง',
+                      key: const ValueKey('subjects_todo_total'),
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('subjects_attendance'),
+                      onPressed: () => context.push(AppRoutes.myAttendance),
+                      icon: const Icon(Icons.how_to_reg_outlined),
+                      label: const Text('การเข้าเรียน'),
                     ),
                     TextButton.icon(
                       key: const ValueKey('subjects_all_grades'),

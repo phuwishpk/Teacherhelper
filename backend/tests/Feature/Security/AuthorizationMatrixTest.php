@@ -147,6 +147,13 @@ class AuthorizationMatrixTest extends TestCase
         'api.gradebook-items.update' => ['PATCH', 'gradebook-items/{gradebook_item}', 404, 404],
         'api.gradebook-items.destroy' => ['DELETE', 'gradebook-items/{gradebook_item}', 404, 404],
         'api.gradebook-items.scores' => ['PUT', 'gradebook-items/{gradebook_item}/scores', 404, 404],
+        // Attendance (§29.5) follows the gradebook: the creator of the course only.
+        'api.courses.attendance.index' => ['GET', 'courses/{own_course}/attendance', 404, 404],
+        'api.courses.attendance.scores' => ['PUT', 'courses/{own_course}/attendance/scores', 404, 404],
+        'api.courses.attendance-sessions.store' => ['POST', 'courses/{own_course}/attendance-sessions', 404, 404],
+        'api.attendance-sessions.show' => ['GET', 'attendance-sessions/{attendance_session}', 404, 404],
+        'api.attendance-sessions.update' => ['PUT', 'attendance-sessions/{attendance_session}', 404, 404],
+        'api.attendance-sessions.destroy' => ['DELETE', 'attendance-sessions/{attendance_session}', 404, 404],
         'api.gradebook-items.fill-full' => ['POST', 'gradebook-items/{gradebook_item}/fill-full', 404, 404],
         'api.assignments.gradebook-scores' => ['PUT', 'assignments/{assignment}/gradebook-scores', 404, 404],
         'api.assignments.gradebook-scores.fill-full' => ['POST', 'assignments/{assignment}/gradebook-scores/fill-full', 404, 404],
@@ -344,6 +351,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.courses.mastery-summary' => ['GET', 'student/courses/{own_course}/mastery-summary', self::OK, 404],
         // Their own row of the latest publication only (§23.12): a classmate reads their own row, another school's student nothing.
         'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
+        // Always the signed-in student's own records (§29.5).
+        'api.student.attendance' => ['GET', 'student/attendance', self::OK, self::OK],
         'api.student.courses.grade' => ['GET', 'student/courses/{own_course}/grade', self::OK, 404],
         // Always the signed-in student's own lines (§20.9).
         'api.student.indicator-progress' => ['GET', 'student/indicator-progress', self::OK, self::OK],
@@ -617,6 +626,7 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_page_image}' => $this->examPageImageA->id,
             '{exam_document}' => $this->examDocumentA->id,
             '{gradebook_item}' => $this->gradebookItemA->id,
+            '{attendance_session}' => $this->attendanceSessionA->id,
             '{incoming_request}' => $this->incomingRequest->id,
             '{outgoing_request}' => $this->outgoingRequest->id,
         ]);
