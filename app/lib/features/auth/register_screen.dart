@@ -18,9 +18,10 @@ final registrationSchoolsProvider =
       retry: (_, _) => null,
     );
 
-/// "สมัครใช้งาน (ครู)" (DESIGN §9.1). No school code since 2 Oct 2569: with
-/// one school its name is shown, with several the teacher picks one, and an
-/// admin approves the account before it can log in. Opened from a Google
+/// "สมัครใช้งาน (ครู)" (DESIGN §9.1). No school code since 2 Oct 2569: the
+/// teacher types their own school name (optional, DESIGN §29.11), with
+/// several schools in the system they also pick one, and an admin approves
+/// the account before it can log in. Opened from a Google
 /// sign-in that found no account ([google], DESIGN §24.9.5), or after
 /// "สมัครด้วย Google" on this page, the name and e-mail start from the
 /// Google account and the account is linked as it is created. That form
@@ -38,6 +39,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   int? _schoolId;
+  final _schoolName = TextEditingController();
   late final _name = TextEditingController(text: widget.google?.name);
   late final _email = TextEditingController(text: widget.google?.email);
   final _password = TextEditingController();
@@ -55,6 +57,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   void dispose() {
+    _schoolName.dispose();
     _name.dispose();
     _email.dispose();
     _password.dispose();
@@ -95,6 +98,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           .read(authRepositoryProvider)
           .register(
             schoolId: schoolId,
+            schoolName: _schoolName.text.trim().isEmpty
+                ? null
+                : _schoolName.text.trim(),
             name: _name.text.trim(),
             email: _email.text.trim(),
             password: _password.text,
@@ -146,7 +152,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  Widget _school(AsyncValue<List<SchoolOption>> schools) {
+  /// What the form shows about the `schools` rows: nothing while there is
+  /// just one (the teacher's own school name is typed below).
+  Widget? _school(AsyncValue<List<SchoolOption>> schools) {
     final errorColor = Theme.of(context).colorScheme.error;
     return switch (schools) {
       AsyncData(:final value) when value.length > 1 =>
@@ -154,7 +162,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           key: const ValueKey('register_school'),
           initialValue: _schoolId,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: 'โรงเรียน'),
+          decoration: const InputDecoration(labelText: 'โรงเรียนในระบบ'),
           items: [
             for (final school in value)
               DropdownMenuItem(
@@ -165,14 +173,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           onChanged: (v) => setState(() => _schoolId = v),
           validator: (v) => v == null ? 'กรุณาเลือกโรงเรียน' : null,
         ),
-      AsyncData(:final value) when value.length == 1 => InputDecorator(
-        key: const ValueKey('register_school_single'),
-        decoration: const InputDecoration(
-          labelText: 'โรงเรียน',
-          border: InputBorder.none,
-        ),
-        child: Text(value.single.name),
-      ),
+      AsyncData(:final value) when value.length == 1 => null,
       AsyncData() => Text(
         'ยังไม่มีโรงเรียนในระบบ กรุณาติดต่อผู้ดูแลระบบ',
         style: TextStyle(color: errorColor),
@@ -207,6 +208,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final schools = ref.watch(registrationSchoolsProvider);
+    final school = _school(schools);
     return Scaffold(
       body: SafeArea(
         child: AuthLayout(
@@ -247,7 +249,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                _school(schools),
+                if (school != null) ...[school, const SizedBox(height: 16)],
+                TextFormField(
+                  key: const ValueKey('register_school_name'),
+                  controller: _schoolName,
+                  maxLength: 150,
+                  decoration: const InputDecoration(
+                    labelText: 'ชื่อโรงเรียน',
+                    helperText: 'เว้นว่างได้ แก้ภายหลังได้ในหน้าตั้งค่า',
+                  ),
+                ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _name,

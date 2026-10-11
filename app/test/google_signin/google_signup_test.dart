@@ -46,6 +46,7 @@ class _Auth extends FakeMeAuth {
   @override
   Future<void> register({
     int? schoolId,
+    String? schoolName,
     required String name,
     required String email,
     required String password,

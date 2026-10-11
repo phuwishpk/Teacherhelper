@@ -31,6 +31,7 @@ abstract class AuthRepository {
   /// created (DESIGN §24.9.5).
   Future<void> register({
     int? schoolId,
+    String? schoolName,
     required String name,
     required String email,
     required String password,
@@ -90,6 +91,7 @@ class ApiAuthRepository implements AuthRepository {
   @override
   Future<void> register({
     int? schoolId,
+    String? schoolName,
     required String name,
     required String email,
     required String password,
@@ -99,6 +101,7 @@ class ApiAuthRepository implements AuthRepository {
       '/auth/teacher/register',
       data: {
         'school_id': ?schoolId,
+        'school_name': ?schoolName,
         'name': name,
         'email': email,
         'password': password,

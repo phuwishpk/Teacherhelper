@@ -40,6 +40,7 @@ class _FakeAuth extends Fake implements AuthRepository {
   @override
   Future<void> register({
     int? schoolId,
+    String? schoolName,
     required String name,
     required String email,
     required String password,
@@ -53,6 +54,7 @@ class _FakeAuth extends Fake implements AuthRepository {
     }
     calls.add({
       'school_id': schoolId,
+      'school_name': schoolName,
       'name': name,
       'email': email,
       'password': password,
@@ -105,7 +107,7 @@ void main() {
     final auth = await _pump(tester, _FakeAuth());
     expect(find.textContaining('รหัสโรงเรียน'), findsNothing);
     expect(find.textContaining('school_code'), findsNothing);
-    expect(find.byType(TextFormField), findsNWidgets(3));
+    expect(find.byType(TextFormField), findsNWidgets(4));
 
     await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
     await tester.pump();
@@ -116,19 +118,23 @@ void main() {
   });
 
   testWidgets(
-    'one school: its name as plain text, sent as school_id, then the pending-approval message',
+    'one school: its name is not shown, the typed school name is sent, then the pending-approval message',
     (tester) async {
       final auth = await _pump(tester, _FakeAuth());
-      expect(find.byKey(const ValueKey('register_school_single')), findsOne);
-      expect(find.text('โรงเรียนสาธิต Krucheck'), findsOneWidget);
+      expect(find.text('โรงเรียนสาธิต Krucheck'), findsNothing);
       expect(find.byType(DropdownButtonFormField<int>), findsNothing);
 
+      await tester.enterText(
+        find.byKey(const ValueKey('register_school_name')),
+        '  โรงเรียนบ้านหนองบัว ',
+      );
       await _fillTeacher(tester);
       await _submit(tester);
 
       expect(auth.calls, [
         {
           'school_id': 7,
+          'school_name': 'โรงเรียนบ้านหนองบัว',
           'name': 'ครูสมศรี ใจดี',
           'email': 'somsri@example.com',
           'password': 'secret-pass-1',
@@ -152,7 +158,7 @@ void main() {
   ) async {
     final auth = await _pump(tester, _FakeAuth(schoolList: _two));
     expect(find.byKey(const ValueKey('register_school')), findsOneWidget);
-    expect(find.byKey(const ValueKey('register_school_single')), findsNothing);
+    expect(find.byKey(const ValueKey('register_school_name')), findsOneWidget);
 
     await _fillTeacher(tester);
     await _submit(tester);
@@ -166,6 +172,11 @@ void main() {
     await _submit(tester);
 
     expect(auth.calls.single['school_id'], 9);
+    expect(
+      auth.calls.single['school_name'],
+      isNull,
+      reason: 'an empty school name is left out',
+    );
     expect(find.text('สมัครสำเร็จ'), findsOneWidget);
   });
 
@@ -179,7 +190,7 @@ void main() {
     await tester.tap(find.text('ลองอีกครั้ง'));
     await tester.pumpAndSettle();
     expect(auth.schoolLoads, 2);
-    expect(find.text('โรงเรียนสาธิต Krucheck'), findsOneWidget);
+    expect(find.textContaining('โหลดรายชื่อโรงเรียนไม่สำเร็จ'), findsNothing);
   });
 
   testWidgets('without a list the server picks; school_required reloads it', (

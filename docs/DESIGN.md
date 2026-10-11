@@ -487,7 +487,7 @@ task worker เรียกผ่าน `artisan eduvision:queue-work` ซึ่
 - นักเรียนมีบัญชีเดียวต่อโรงเรียน (§24.4) PIN และบัตร QR จึงใช้ได้ทุกห้อง และ `class_code` ของห้องใดก็ได้ที่นักเรียนอยู่ (รวมห้องเก่า) พาไปบัญชีเดียวกัน
 - rate limit ใช้ Laravel `RateLimiter` บน `/api/v1/auth/*` และเพิ่ม Cloudflare WAF เป็นชั้นที่สองเมื่อเปิดใช้ Cloudflare
 
-**หน้า login เดียว (แก้ 1 ต.ค. 2569)** แอปมีหน้า login หน้าเดียวสำหรับทุก role แบ่ง 2 แท็บ (`SegmentedButton`):
+**หน้า login เดียว (แก้ 1 ต.ค. 2569)** แอปมีหน้า login หน้าเดียวสำหรับทุก role แบ่ง 2 แท็บ (`SegmentedButton`) แท็บ "นักเรียน" อยู่ซ้ายและเป็นแท็บที่เปิดมาครั้งแรก (แก้ 11 ต.ค. 2569 ผู้ใช้สั่ง เดิมคือแท็บครู เพราะคนที่เปิดหน้านี้ส่วนใหญ่เป็นนักเรียน):
 
 - **"ครู / ผู้ดูแลระบบ"**: อีเมล + รหัสผ่าน ส่งไป `POST /auth/teacher/login` ทั้งครูและ admin ใต้ฟอร์มมีลิงก์ "ยังไม่มีบัญชี? สมัครใช้งาน" response มี `user.role` แอปจึงพาแต่ละ role ไปหน้าของตัวเอง: `admin` → `/admin-home`, `teacher` → shell ของครู, `student` → shell ของนักเรียน (redirect ของ go_router ตาม role ทุกครั้ง admin เปิดหน้าครูหรือนักเรียนไม่ได้)
 - **"นักเรียน"**: ฟอร์มชื่อผู้ใช้ + รหัสผ่านอยู่ในหน้าเลย (§29.10; เดิมคือรหัสห้อง + เลขที่ + PIN) และปุ่ม "สแกนบัตร QR" ที่เปิดกล้องสแกนบัตรเดิม (`/student/login/qr`) บนเว็บ (ใช้ดู UI เท่านั้น) ปุ่มนี้บอกว่าต้องใช้แอป Android
@@ -931,7 +931,7 @@ CREATE TABLE training_samples (
 | Method | Path | ใคร | หมายเหตุ |
 |---|---|---|---|
 | GET | `/auth/schools` | สาธารณะ | `{data: [{id, name}]}` รายชื่อโรงเรียนสำหรับฟอร์มสมัครครู เรียงตามชื่อ มีแค่ชื่อ ไม่มีรหัสใดๆ limiter `school-list` (30 ครั้ง/นาที ต่อ IP แยกจาก login) (เพิ่ม 2 ต.ค. 2569 #70) |
-| POST | `/auth/teacher/register` | สาธารณะ | `{school_id?, name, email, password, google_link_ticket?}` ได้บัญชีสถานะ `pending` เสมอ เลือกโรงเรียนตามลำดับ: `school_id` (ต้องมีจริง ไม่อย่างนั้น 422 `validation_failed` ที่ `errors.school_id`) → `school_code` (ของแอปรุ่นเก่า ต้องตรง `teacher_join_code` ไม่อย่างนั้น 422 `school_code_invalid`) → ถ้าระบบมีโรงเรียนเดียวใช้โรงเรียนนั้น → ไม่อย่างนั้น 422 `school_required` (`errors.school_id` "กรุณาเลือกโรงเรียน") ด่านเดียวคือ admin อนุมัติ (แก้ 2 ต.ค. 2569 #70) |
+| POST | `/auth/teacher/register` | สาธารณะ | `{school_id?, school_name?, name, email, password, google_link_ticket?}` ได้บัญชีสถานะ `pending` เสมอ `school_name` คือชื่อโรงเรียนที่ครูพิมพ์เอง (§29.11 ไม่บังคับ ยาวไม่เกิน 150 ว่างหรือไม่ส่ง = ไม่ตั้ง) เลือกโรงเรียนตามลำดับ: `school_id` (ต้องมีจริง ไม่อย่างนั้น 422 `validation_failed` ที่ `errors.school_id`) → `school_code` (ของแอปรุ่นเก่า ต้องตรง `teacher_join_code` ไม่อย่างนั้น 422 `school_code_invalid`) → ถ้าระบบมีโรงเรียนเดียวใช้โรงเรียนนั้น → ไม่อย่างนั้น 422 `school_required` (`errors.school_id` "กรุณาเลือกโรงเรียน") ด่านเดียวคือ admin อนุมัติ (แก้ 2 ต.ค. 2569 #70) |
 | POST | `/auth/teacher/login` | สาธารณะ | ครูและ admin (หน้า login เดียว §7.4) ได้ `{token, user}` (ต้องมีสถานะ `active`) token มี ability ตาม `user.role`: `teacher` หรือ `admin` |
 | POST | `/auth/student/qr` | สาธารณะ | `{qr_token}` |
 | POST | `/auth/student/login` | สาธารณะ | `{username, password}` มี rate limit และ lockout (§29.10; แทน `/auth/student/pin` เดิม) |
@@ -4885,6 +4885,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 
 - `users.school_name` (ข้อความอิสระ ไม่บังคับ ยาวไม่เกิน 150): ชื่อโรงเรียนของครูคนนั้นเอง ไม่แตะแถวใน `schools` และครูคนอื่นไม่เห็นการเปลี่ยนแปลง `/me` ส่ง `school.name` เป็นค่านี้เมื่อมี ไม่อย่างนั้นเป็นชื่อของแถว `schools` ตามเดิม บัตร QR ของนักเรียนพิมพ์ชื่อโรงเรียนของครูที่สั่งพิมพ์
 - `PATCH /me {name?, school_name?}` (ครูเท่านั้น) ส่ง `school_name` ว่างเพื่อล้างค่า
+- ฟอร์มสมัครครู (เพิ่ม 11 ต.ค. 2569): มีช่อง "ชื่อโรงเรียน" (ไม่บังคับ) ส่งเป็น `school_name` ของ `POST /auth/teacher/register` และไม่แสดงชื่อของแถว `schools` อีกเมื่อระบบมีแถวเดียว (เดิมแสดงเป็นข้อความที่แก้ไม่ได้ ครูจึงเห็น "โรงเรียนสาธิต Krucheck" ค้างอยู่) ระบบที่มีหลายแถวยังมี dropdown "โรงเรียนในระบบ" จนกว่าขั้นที่ 3 จะเลิกใช้โรงเรียน ครูที่สมัครด้วย Google แล้วเข้าได้ทันทีตั้งชื่อโรงเรียนในหน้าตั้งค่า
 - `PUT /me/password {password, current_password?}` (ครูเท่านั้น) รหัสผ่านใหม่อย่างน้อย 8 ตัว ต้องส่ง `current_password` เว้นแต่บัญชียังไม่เคยมีรหัสผ่าน (สมัครด้วย Google) session อื่นของครูถูกยกเลิก
 - นักเรียนยังเห็นชื่อของแถว `schools` จนกว่าขั้นที่ 3 จะเลิกใช้โรงเรียน
 

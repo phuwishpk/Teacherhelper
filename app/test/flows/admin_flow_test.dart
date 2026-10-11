@@ -23,6 +23,7 @@ void main() {
         ],
       );
       expect(app.location, AppRoutes.login);
+      await openTeacherTab(tester);
 
       await tester.enterText(
         find.widgetWithText(TextFormField, 'อีเมล'),

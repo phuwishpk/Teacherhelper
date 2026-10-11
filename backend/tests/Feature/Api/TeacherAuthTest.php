@@ -55,6 +55,25 @@ class TeacherAuthTest extends TestCase
         ]);
     }
 
+    public function test_register_keeps_the_school_name_the_teacher_typed(): void
+    {
+        $response = $this->postJson('/api/v1/auth/teacher/register', $this->registration(['school_name' => '  โรงเรียนบ้านหนองบัว ']))
+            ->assertCreated()
+            ->assertJsonPath('user.school.name', 'โรงเรียนบ้านหนองบัว');
+
+        $this->assertDatabaseHas('users', ['id' => $response->json('user.id'), 'school_name' => 'โรงเรียนบ้านหนองบัว']);
+        $this->assertDatabaseHas('schools', ['name' => 'โรงเรียนสาธิต Krucheck']);
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['email' => 't2@example.com', 'school_name' => '   ']))
+            ->assertCreated()
+            ->assertJsonPath('user.school.name', 'โรงเรียนสาธิต Krucheck');
+        $this->assertDatabaseHas('users', ['email' => 't2@example.com', 'school_name' => null]);
+
+        $this->postJson('/api/v1/auth/teacher/register', $this->registration(['email' => 't3@example.com', 'school_name' => str_repeat('ก', 151)]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.school_name.0', 'ชื่อโรงเรียนยาวไม่เกิน 150 ตัวอักษร');
+    }
+
     public function test_a_freshly_registered_teacher_cannot_log_in_until_approved(): void
     {
         $this->postJson('/api/v1/auth/teacher/register', $this->registration())->assertCreated();

@@ -298,6 +298,7 @@ class FakeMeAuth implements AuthRepository {
   @override
   Future<void> register({
     int? schoolId,
+    String? schoolName,
     required String name,
     required String email,
     required String password,

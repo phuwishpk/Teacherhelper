@@ -37,6 +37,7 @@ class TeacherAuthController extends Controller
      * can log in only after an admin approves it in Filament (UserResource
      * "approve"), which sets status=active + approved_by. Since 2 Oct 2569 that
      * approval is the only gate: no school code is needed to sign up.
+     * school_name? is the teacher's own school name (DESIGN §29.11).
      *
      * google_link_ticket (DESIGN §24.9.5): the Google account of a 404
      * google_not_linked is linked as the account is created (`registration`),
@@ -52,9 +53,12 @@ class TeacherAuthController extends Controller
         $ticket = $data['google_link_ticket'] ?? null;
         $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket, $school);
 
-        $user = DB::transaction(function () use ($data, $school, $google, $ticket, $tickets, $signIn) {
+        $schoolName = trim((string) ($data['school_name'] ?? ''));
+
+        $user = DB::transaction(function () use ($data, $school, $schoolName, $google, $ticket, $tickets, $signIn) {
             $user = User::create([
                 'school_id' => $school->id,
+                'school_name' => $schoolName === '' ? null : $schoolName,
                 'role' => User::ROLE_TEACHER,
                 'name' => $data['name'],
                 'email' => $data['email'],
