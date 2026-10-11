@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/api/api_config.dart';
+import 'core/api/api_retry.dart';
 import 'core/push/push_messaging.dart';
 import 'features/upload_queue/upload_worker.dart';
 
@@ -17,6 +18,9 @@ Future<void> main() async {
   final push = await initPushMessaging();
   final container = ProviderContainer(
     overrides: [pushMessagingProvider.overrideWithValue(push)],
+    // A 4xx answer is final: without this every provider that sets no
+    // policy of its own asks again up to ten times.
+    retry: apiRetry,
   );
   // Registers the background upload isolate (no-op off Android).
   await container.read(uploadSchedulerProvider).initialize();
