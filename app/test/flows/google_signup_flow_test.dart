@@ -56,6 +56,7 @@ void main() {
   ) async {
     final app = await start(tester);
     expect(app.location, AppRoutes.login);
+    await openTeacherTab(tester);
     await tapAndExpectHome(tester, app, 'google_signin_button');
     await app.stop(tester);
   });

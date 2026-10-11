@@ -78,6 +78,7 @@ void main() {
     tester,
   ) async {
     final app = await TeacherFlowApp.start(tester);
+    await openTeacherTab(tester);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'อีเมล'),
       app.server.teacherEmail,

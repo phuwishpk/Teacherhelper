@@ -131,11 +131,17 @@ void _expectMessageOnce(String text) {
   expect(find.byType(SnackBar), findsOneWidget);
 }
 
+/// The unified login page opens on the student tab: switch to the
+/// teacher / admin one.
+Future<void> openTeacherTab(WidgetTester tester) async {
+  await tester.tap(find.text('ครู / ผู้ดูแลระบบ'));
+  await tester.pumpAndSettle();
+}
+
 /// Splash -> login -> `POST /auth/teacher/login` -> `GET /me` -> teacher home.
 Future<void> signInAsTeacher(WidgetTester tester, TeacherFlowApp app) async {
   expect(app.location, AppRoutes.login);
-  // The unified login page opens on the teacher / admin tab.
-  expect(find.text('ครู / ผู้ดูแลระบบ'), findsOneWidget);
+  await openTeacherTab(tester);
   expect(find.widgetWithText(TextFormField, 'อีเมล'), findsOneWidget);
 
   await tester.enterText(

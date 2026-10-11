@@ -28,9 +28,9 @@ enum LoginTab {
   };
 }
 
-/// One login page for every role: "ครู / ผู้ดูแลระบบ" and "นักเรียน".
+/// One login page for every role: "นักเรียน" and "ครู / ผู้ดูแลระบบ".
 /// Opens on [initialTab] (from `/login?tab=student`), else on the tab used
-/// last on this device, else on the teacher tab.
+/// last on this device, else on the student tab.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
     super.key,
@@ -48,7 +48,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  late LoginTab _tab = widget.initialTab ?? LoginTab.teacher;
+  late LoginTab _tab = widget.initialTab ?? LoginTab.student;
 
   /// Set once the user picks a tab, so a late read of the remembered tab
   /// never switches it back.
@@ -107,12 +107,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(
-                    value: LoginTab.teacher,
-                    label: Text('ครู / ผู้ดูแลระบบ'),
-                  ),
-                  ButtonSegment(
                     value: LoginTab.student,
                     label: Text('นักเรียน'),
+                  ),
+                  ButtonSegment(
+                    value: LoginTab.teacher,
+                    label: Text('ครู / ผู้ดูแลระบบ'),
                   ),
                 ],
                 selected: {_tab},

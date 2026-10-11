@@ -45,7 +45,10 @@ void main() {
   testWidgets('the teacher tab validates an empty form without the API', (
     tester,
   ) async {
-    await _pump(tester);
+    await _pump(
+      tester,
+      screen: const LoginScreen(initialTab: LoginTab.teacher),
+    );
 
     expect(_emailField, findsOneWidget);
     expect(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'), findsOneWidget);
@@ -59,30 +62,39 @@ void main() {
   testWidgets('the tabs switch between the two forms and are remembered', (
     tester,
   ) async {
+    // A device that never picked a tab opens on the student one, which is
+    // also the first segment.
     final storage = await _pump(tester);
+    expect(_pinField, findsOneWidget);
+    expect(_emailField, findsNothing);
+    expect(find.text('สแกนบัตร QR'), findsOneWidget);
+    // The register link belongs to the teacher tab only.
+    expect(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'), findsNothing);
+    expect(
+      tester.getCenter(_studentTab).dx,
+      lessThan(tester.getCenter(_teacherTab).dx),
+    );
+    expect(storage.loginTab, isNull);
+
+    await tester.tap(_teacherTab);
+    await tester.pumpAndSettle();
     expect(_emailField, findsOneWidget);
     expect(_pinField, findsNothing);
+    expect(storage.loginTab, 'teacher');
 
     await tester.tap(_studentTab);
     await tester.pumpAndSettle();
     expect(_emailField, findsNothing);
     expect(_pinField, findsOneWidget);
-    expect(find.text('สแกนบัตร QR'), findsOneWidget);
-    // The register link belongs to the teacher tab only.
-    expect(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'), findsNothing);
     expect(storage.loginTab, 'student');
-
-    await tester.tap(_teacherTab);
-    await tester.pumpAndSettle();
-    expect(_emailField, findsOneWidget);
-    expect(storage.loginTab, 'teacher');
   });
 
   testWidgets('opens on the tab used last on this device', (tester) async {
-    await _pump(tester, storage: InMemoryTokenStorage(loginTab: 'student'));
+    await _pump(tester, storage: InMemoryTokenStorage(loginTab: 'teacher'));
+    await tester.pumpAndSettle();
 
-    expect(_pinField, findsOneWidget);
-    expect(_emailField, findsNothing);
+    expect(_emailField, findsOneWidget);
+    expect(_pinField, findsNothing);
   });
 
   testWidgets('a ?tab= from the route wins over the remembered tab', (
@@ -99,7 +111,10 @@ void main() {
   });
 
   testWidgets('the register link opens the register page', (tester) async {
-    await _pump(tester);
+    await _pump(
+      tester,
+      screen: const LoginScreen(initialTab: LoginTab.teacher),
+    );
 
     await tester.tap(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'));
     await tester.pumpAndSettle();
@@ -161,7 +176,11 @@ void main() {
   }
 
   testWidgets('stays a readable column on a desktop window', (tester) async {
-    await _pump(tester, size: const Size(1440, 900));
+    await _pump(
+      tester,
+      screen: const LoginScreen(initialTab: LoginTab.teacher),
+      size: const Size(1440, 900),
+    );
 
     final form = tester.getRect(_emailField);
     expect(form.width, lessThanOrEqualTo(440));
