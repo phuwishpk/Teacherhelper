@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../class_posts/student_class_feed.dart';
 import '../gradebook/student_grades.dart' show GradeBadge;
 import 'student_labels.dart';
 import 'student_overview.dart';
@@ -31,6 +32,12 @@ class MySubjectsPage extends ConsumerWidget {
             onRefresh: refresh,
             child: ListView(
               children: [
+                // A classroom can have posts before it has a course.
+                if (o.classrooms.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: LatestPostsCard(),
+                  ),
                 if (o.classrooms.isEmpty)
                   const EmptyView(
                     key: ValueKey('subjects_no_classroom'),
@@ -62,6 +69,7 @@ class MySubjectsPage extends ConsumerWidget {
           child: ContentColumn(
             child: ListView(
               children: [
+                const LatestPostsCard(),
                 // Wraps on a narrow phone: the links go under the count.
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,

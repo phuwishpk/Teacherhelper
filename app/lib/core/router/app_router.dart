@@ -51,6 +51,9 @@ import '../../features/google_signin/google_web_return_screens.dart';
 import '../../features/attendance/attendance_screen.dart';
 import '../../features/attendance/attendance_session_screen.dart';
 import '../../features/attendance/my_attendance_screen.dart';
+import '../../features/class_posts/class_post_form_screen.dart';
+import '../../features/class_posts/class_posts_screen.dart';
+import '../../features/class_posts/student_class_feed.dart';
 import '../../features/gradebook/gradebook_screen.dart';
 import '../../features/gradebook/gradebook_settings_screen.dart';
 import '../../features/gradebook/student_grades.dart';
@@ -234,6 +237,18 @@ abstract final class AppRoutes {
   static String attendanceSession(int courseId, int sessionId) =>
       '/courses/$courseId/attendance/$sessionId';
 
+  /// The posts of a classroom (DESIGN §30.1).
+  static String classPosts(int classroomId) => '/classrooms/$classroomId/posts';
+
+  static String classPostNew(int classroomId) =>
+      '/classrooms/$classroomId/posts/new';
+
+  static String classPostEdit(int classroomId, int postId) =>
+      '/classrooms/$classroomId/posts/$postId/edit';
+
+  /// Student: one post (DESIGN §30.3).
+  static String studentClassPost(int postId) => '/student/posts/$postId';
+
   /// Student: their own attendance in every course.
   static const myAttendance = '/student/attendance';
 
@@ -393,6 +408,7 @@ abstract final class AppRoutes {
       location == myAttendance ||
       location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
+      location.startsWith('$student/posts/') ||
       location.startsWith('$student/assignments/') ||
       location.startsWith('$student/practice/') ||
       location.startsWith('$student/courses/');
@@ -597,6 +613,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MyAttendanceScreen(),
       ),
       GoRoute(
+        path: '/student/posts/:postId',
+        builder: (context, state) =>
+            StudentClassPostScreen(postId: _id(state, 'postId')),
+      ),
+      GoRoute(
         path: AppRoutes.studentSubjectPath,
         builder: (context, state) => StudentSubjectScreen(
           initialKey: state.uri.queryParameters['key'] ?? '',
@@ -723,6 +744,25 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'google-roster',
             builder: (context, state) =>
                 GoogleRosterScreen(classroomId: _id(state, 'id')),
+          ),
+          GoRoute(
+            path: 'posts',
+            builder: (context, state) =>
+                ClassPostsScreen(classroomId: _id(state, 'id')),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (context, state) =>
+                    ClassPostFormScreen(classroomId: _id(state, 'id')),
+              ),
+              GoRoute(
+                path: ':postId/edit',
+                builder: (context, state) => ClassPostFormScreen(
+                  classroomId: _id(state, 'id'),
+                  postId: _id(state, 'postId'),
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: 'mastery',
