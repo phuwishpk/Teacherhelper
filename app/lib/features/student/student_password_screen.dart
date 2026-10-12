@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
+import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/password_field.dart';
 import '../auth/sign_out_action.dart';
@@ -57,7 +58,13 @@ class _StudentPasswordScreenState extends ConsumerState<StudentPasswordScreen> {
       await ref.read(sessionProvider.notifier).reloadUser();
       if (!mounted) return;
       showMessage(context, 'ตั้งรหัสผ่านใหม่แล้ว');
-      if (!_forced && context.canPop()) context.pop();
+      if (_forced) {
+        // Staying here after the forced change reads as "still locked out":
+        // go straight to the student home instead.
+        context.go(AppRoutes.student);
+      } else if (context.canPop()) {
+        context.pop();
+      }
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e));
     } finally {
