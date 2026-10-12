@@ -1,6 +1,8 @@
 import 'package:eduvision/core/api/scan_pages.dart';
 import 'package:eduvision/core/widgets/submission_page_image.dart';
 import 'package:eduvision/features/exams/exam_results_screen.dart';
+import 'package:eduvision/features/google_classroom/google_providers.dart';
+import 'package:eduvision/features/exams/exam_models.dart';
 import 'package:eduvision/features/exams/exam_scan_repository.dart';
 import 'package:eduvision/features/exams/exam_version_picker_screen.dart';
 import 'package:eduvision/features/review/review_models.dart';
@@ -326,5 +328,53 @@ void main() {
       ),
       'บันทึกแล้ว',
     );
+  });
+
+  testWidgets('"คะแนนใน Google Classroom" sends the scores by hand', (
+    tester,
+  ) async {
+    final repo = FakeExamsRepository(
+      detail: examJson(
+        status: 'ready',
+        keyApprovedAt: '2026-10-01T02:00:00Z',
+        keyComplete: true,
+      ),
+    )..googleScoresValue = const ExamGoogleScores(linked: true, scored: 3);
+    await pumpExamScreen(
+      tester,
+      const ExamResultsScreen(examId: 40),
+      repo: repo,
+      overrides: [
+        examScanRepositoryProvider.overrideWithValue(
+          FakeExamScanRepository()..status = _status(),
+        ),
+        reviewRepositoryProvider.overrideWithValue(FakeReviewRepository()),
+        googleClassroomEnabledProvider.overrideWithValue(true),
+        scanPageLoaderProvider.overrideWithValue(_NoPages()),
+      ],
+      stubs: false,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('exam_google_scores')), findsOneWidget);
+    expect(find.text('ส่งคะแนนไป Classroom'), findsOneWidget);
+
+    // What the server will say once the scores went: read back after the send.
+    repo.googleScoresValue = const ExamGoogleScores(
+      linked: true,
+      posted: true,
+      link: 'https://classroom.google.com/c/1/a/9',
+      scored: 3,
+      graded: 2,
+      unpaired: 1,
+    );
+    await tester.tap(find.byKey(const ValueKey('exam_google_send')));
+    await tester.pumpAndSettle();
+    expect(repo.args('sendGoogleScores'), [40]);
+    expect(find.text('กำลังส่งคะแนนไป Google Classroom'), findsOneWidget);
+    expect(
+      find.text('ส่งแล้ว 2 จาก 3 คน · ยังไม่จับคู่บัญชี Google 1 คน'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('exam_google_open')), findsOneWidget);
   });
 }

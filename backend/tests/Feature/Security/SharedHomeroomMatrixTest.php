@@ -65,6 +65,8 @@ class SharedHomeroomMatrixTest extends TestCase
         'api.assignments.google-grades.retry' => [self::NCT, 404],
         'api.assignments.google-feedback' => [self::NCT, 404],
         'api.assignments.google-feedback.retry' => [self::NCT, 404],
+        'api.assignments.google-exam-scores.show' => [self::NCT, 404],
+        'api.assignments.google-exam-scores.send' => [self::NCT, 404],
         'api.assignments.grade-conflicts' => [self::NCT, 404],
         'api.exams.show' => [self::OK, 404],
         'api.exams.sections.store' => [self::NCT, 404],

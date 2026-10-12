@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/api_retry.dart';
 import '../../core/auth/session.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/assignment.dart';
@@ -156,6 +157,13 @@ class ExamDetailNotifier extends AsyncNotifier<ExamDetail> {
     return result;
   }
 }
+
+/// The exam's scores in Google Classroom (DESIGN §30.14).
+final examGoogleScoresProvider = FutureProvider.autoDispose
+    .family<ExamGoogleScores, int>((ref, examId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(examsRepositoryProvider).googleScores(examId);
+    }, retry: apiRetry);
 
 final examDetailProvider = AsyncNotifierProvider.autoDispose
     .family<ExamDetailNotifier, ExamDetail, int>(ExamDetailNotifier.new);

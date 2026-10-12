@@ -533,6 +533,17 @@ class FakeExamsRepository implements ExamsRepository {
     );
   }
 
+  ExamGoogleScores googleScoresValue = const ExamGoogleScores();
+
+  @override
+  Future<ExamGoogleScores> googleScores(int examId) async => googleScoresValue;
+
+  @override
+  Future<void> sendGoogleScores(int examId) async {
+    _check();
+    calls.add(('sendGoogleScores', examId));
+  }
+
   /// The arguments of every call named [name].
   List<Object?> args(String name) => [
     for (final c in calls)
