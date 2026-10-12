@@ -421,6 +421,8 @@ Route::prefix('v1')->group(function () {
                     // Private announcements of published results (§19.7): the job calls Google.
                     Route::get('assignments/{id}/google-feedback', [AssignmentGoogleController::class, 'feedback'])->name('api.assignments.google-feedback');
                     Route::post('assignments/{id}/google-feedback/retry', [AssignmentGoogleController::class, 'retryFeedback'])->name('api.assignments.google-feedback.retry');
+                    // The Classroom copy of a class post, sent again (§30.4).
+                    Route::post('class-posts/{id}/google/retry', [ClassPostController::class, 'googleRetry'])->name('api.class-posts.google.retry');
                     Route::middleware('throttle:google')->group(function () {
                         Route::post('google/connect', [GoogleAccountController::class, 'connect'])->name('api.google.connect');
                         Route::post('google/oauth/url', [GoogleAccountController::class, 'oauthUrl'])->name('api.google.oauth-url');

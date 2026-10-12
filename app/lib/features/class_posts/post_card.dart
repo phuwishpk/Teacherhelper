@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
@@ -7,8 +8,9 @@ import 'post_files.dart';
 
 /// One post as it reads in the stream: who and when, the text, the
 /// attachments. [menu] is the teacher's edit/delete button; [teacherView]
-/// adds the state and the recipients.
-class PostCard extends StatelessWidget {
+/// adds the state, the recipients and the Google Classroom copy
+/// ([onRetryGoogle] sends a failed one again, DESIGN §30.4).
+class PostCard extends ConsumerWidget {
   const PostCard({
     super.key,
     required this.post,
@@ -16,16 +18,18 @@ class PostCard extends StatelessWidget {
     this.teacherView = false,
     this.showClassroom = false,
     this.onTap,
+    this.onRetryGoogle,
   });
 
   final ClassPost post;
   final Widget? menu;
+  final VoidCallback? onRetryGoogle;
   final bool teacherView;
   final bool showClassroom;
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -103,6 +107,7 @@ class PostCard extends StatelessWidget {
                   ),
                 ),
               ],
+              if (teacherView) ..._google(context, ref, muted),
             ],
           ),
         ),
@@ -110,11 +115,64 @@ class PostCard extends StatelessWidget {
     );
   }
 
+  /// The Classroom copy, for the teacher: the error, "เปิดใน Classroom"
+  /// and "ส่งอีกครั้ง".
+  List<Widget> _google(BuildContext context, WidgetRef ref, TextStyle? muted) {
+    final g = post.google;
+    final theme = Theme.of(context);
+    final link = g.link;
+    final failed = g.state == GoogleSendState.failed;
+    if (link == null && !failed) return const [];
+    return [
+      const SizedBox(height: 12),
+      if (failed && g.lastError != null)
+        Padding(
+          padding: const EdgeInsets.only(right: 8, bottom: 8),
+          child: Text(
+            g.lastError!,
+            key: ValueKey('post_google_error_${post.id}'),
+            style: muted?.copyWith(color: theme.colorScheme.error),
+          ),
+        ),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (link != null)
+            OutlinedButton.icon(
+              key: ValueKey('post_open_classroom_${post.id}'),
+              onPressed: () async {
+                final ok = await ref.read(postFilesProvider).openLink(link);
+                if (!ok && context.mounted) {
+                  showMessage(context, 'เปิดลิงก์ไม่ได้');
+                }
+              },
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: const Text('เปิดใน Classroom'),
+            ),
+          if (failed && onRetryGoogle != null)
+            FilledButton.tonalIcon(
+              key: ValueKey('post_google_retry_${post.id}'),
+              onPressed: onRetryGoogle,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('ส่งไป Classroom อีกครั้ง'),
+            ),
+        ],
+      ),
+    ];
+  }
+
   List<Widget> _chips(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return [
       if (teacherView && !post.isPublished)
         StatusChip(label: post.state.label, color: scheme.tertiary),
+      if (teacherView && post.google.state == GoogleSendState.queued)
+        StatusChip(label: 'กำลังส่งไป Classroom', color: scheme.tertiary),
+      if (teacherView && post.google.state == GoogleSendState.sent)
+        StatusChip(label: 'อยู่ใน Classroom แล้ว', color: scheme.primary),
+      if (teacherView && post.google.state == GoogleSendState.failed)
+        StatusChip(label: 'ส่งไป Classroom ไม่สำเร็จ', color: scheme.error),
       if (post.topic case final t? when t.isNotEmpty) StatusChip(label: t),
       if (teacherView && post.forStudents)
         StatusChip(label: 'เฉพาะ ${post.studentIds.length} คน'),

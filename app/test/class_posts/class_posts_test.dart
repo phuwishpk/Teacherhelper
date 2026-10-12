@@ -6,6 +6,7 @@ import 'package:eduvision/features/class_posts/class_posts_repository.dart';
 import 'package:eduvision/features/class_posts/class_posts_screen.dart';
 import 'package:eduvision/features/class_posts/post_files.dart';
 import 'package:eduvision/features/class_posts/student_class_feed.dart';
+import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
 import 'package:flutter/material.dart';
@@ -62,6 +63,34 @@ List<Override> _teacher(
   postFilesProvider.overrideWithValue(files ?? _FakeFiles()),
   postFilePickerProvider.overrideWithValue(() async => picked),
 ];
+
+final _linkedRoom = Classroom(
+  id: 7,
+  name: 'ป.5/2',
+  gradeLevel: 5,
+  academicYear: 2569,
+  classCode: 'K7Q3M2',
+  studentCount: 2,
+  googleLink: const ClassroomGoogleLink(
+    courseId: '612',
+    courseName: 'คณิต ป.5',
+  ),
+);
+
+ClassPost _withGoogle(ClassPost p, PostGoogle google) => ClassPost(
+  id: p.id,
+  kind: p.kind,
+  title: p.title,
+  body: p.body,
+  classroom: p.classroom,
+  course: p.course,
+  authorName: p.authorName,
+  publishedAt: p.publishedAt,
+  attachments: p.attachments,
+  state: p.state,
+  isMine: p.isMine,
+  google: google,
+);
 
 void _size(WidgetTester tester, [Size size = const Size(820, 2400)]) {
   tester.view.physicalSize = size;
@@ -184,6 +213,59 @@ void main() {
       );
       expect(find.text('เขียนโพสต์'), findsNothing);
       expect(find.byKey(const ValueKey('post_menu_1')), findsNothing);
+    });
+
+    testWidgets('the Classroom copy: open it, or send a failed one again', (
+      tester,
+    ) async {
+      _size(tester);
+      final files = _FakeFiles();
+      final posts = FakeClassPosts(
+        posts: [
+          _withGoogle(
+            announcementFixture(id: 1),
+            const PostGoogle(
+              linked: true,
+              state: GoogleSendState.sent,
+              link: 'https://classroom.google.com/c/1/p/9',
+              inClassroom: true,
+            ),
+          ),
+          _withGoogle(
+            announcementFixture(id: 2, body: 'ส่งไม่ผ่าน'),
+            const PostGoogle(
+              linked: true,
+              state: GoogleSendState.failed,
+              lastError: 'ต้องเชื่อมบัญชี Google ใหม่ แล้วกดส่งอีกครั้ง',
+            ),
+          ),
+          _withGoogle(
+            announcementFixture(id: 3, body: 'ของครูอีกคน', isMine: false),
+            const PostGoogle(linked: true, state: GoogleSendState.failed),
+          ),
+        ],
+      );
+      await pumpScreen(
+        tester,
+        const ClassPostsScreen(classroomId: 7),
+        overrides: _teacher(posts, files: files),
+        extraRoutes: _routes,
+      );
+      expect(find.text('อยู่ใน Classroom แล้ว'), findsOneWidget);
+      expect(find.text('ส่งไป Classroom ไม่สำเร็จ'), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('post_google_error_2')), findsOneWidget);
+      // Only the author sends again.
+      expect(find.byKey(const ValueKey('post_google_retry_2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('post_google_retry_3')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('post_open_classroom_1')));
+      await tester.pumpAndSettle();
+      expect(files.links, ['https://classroom.google.com/c/1/p/9']);
+
+      await tester.tap(find.byKey(const ValueKey('post_google_retry_2')));
+      await tester.pumpAndSettle();
+      expect(posts.googleRetries, [2]);
+      expect(find.text('ส่งไป Google Classroom แล้ว'), findsOneWidget);
     });
 
     for (final width in [390.0, 820.0, 1440.0]) {
@@ -411,6 +493,71 @@ void main() {
       expect(draft.attachments, hasLength(2));
       expect(draft.toJson().containsKey('classroom_ids'), isFalse);
       expect(draft.toJson().containsKey('kind'), isFalse);
+    });
+
+    testWidgets('a linked classroom offers "ส่งไป Google Classroom ด้วย"', (
+      tester,
+    ) async {
+      final posts = await pump(
+        tester,
+        classrooms: FakeSchoolClassrooms(open: [_linkedRoom]),
+      );
+      expect(find.byKey(const ValueKey('post_send_google')), findsOneWidget);
+      expect(
+        find.text('คอร์ส คณิต ป.5 ที่คุณผูกไว้กับห้องนี้'),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byKey(const ValueKey('post_body')), 'x');
+      await submit(tester);
+      expect(posts.created.single.$2.sendToGoogle, isTrue);
+      expect(posts.created.single.$2.toJson()['send_to_google'], isTrue);
+    });
+
+    testWidgets('the checkbox switched off keeps the post in Krucheck only', (
+      tester,
+    ) async {
+      final posts = await pump(
+        tester,
+        classrooms: FakeSchoolClassrooms(open: [_linkedRoom]),
+      );
+      await tester.enterText(find.byKey(const ValueKey('post_body')), 'x');
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('post_send_google')),
+      );
+      await tester.tap(find.byKey(const ValueKey('post_send_google')));
+      await tester.pumpAndSettle();
+      await submit(tester);
+      expect(posts.created.single.$2.sendToGoogle, isFalse);
+    });
+
+    testWidgets('an unlinked classroom has no checkbox', (tester) async {
+      await pump(tester);
+      expect(find.byKey(const ValueKey('post_send_google')), findsNothing);
+    });
+
+    testWidgets('the files of a copy in Classroom are locked', (tester) async {
+      await pump(
+        tester,
+        posts: FakeClassPosts(
+          posts: [
+            _withGoogle(
+              materialFixture(),
+              const PostGoogle(
+                linked: true,
+                state: GoogleSendState.sent,
+                inClassroom: true,
+              ),
+            ),
+          ],
+        ),
+        postId: 2,
+        classrooms: FakeSchoolClassrooms(open: [_linkedRoom]),
+      );
+      expect(find.byKey(const ValueKey('post_files_locked')), findsOneWidget);
+      expect(find.byKey(const ValueKey('post_attach_file')), findsNothing);
+      expect(find.byKey(const ValueKey('post_attach_link')), findsNothing);
+      expect(find.byTooltip('เอาออก'), findsNothing);
+      expect(find.text('ใบความรู้.pdf'), findsOneWidget);
     });
 
     testWidgets('a server refusal stays on the form', (tester) async {
@@ -645,6 +792,27 @@ void main() {
     expect(teacher.studentIds, [502, 503]);
     expect(teacher.sendToGoogle, isFalse);
     expect(teacher.attachments.single.isLink, isTrue);
+    expect(teacher.google.state, GoogleSendState.notSent);
+
+    final failed = ClassPost.fromJson({
+      'id': 10,
+      'kind': 'announcement',
+      'author': {'id': 2, 'name': 'ครูสมศรี'},
+      'audience': 'all',
+      'attachments': <Object?>[],
+      'google': {
+        'linked': true,
+        'state': 'failed',
+        'last_error': 'ติดต่อ Google ไม่ได้',
+        'link': null,
+        'sent_at': null,
+        'in_classroom': false,
+      },
+    });
+    expect(failed.google.linked, isTrue);
+    expect(failed.google.state, GoogleSendState.failed);
+    expect(failed.google.lastError, 'ติดต่อ Google ไม่ได้');
+    expect(failed.google.inClassroom, isFalse);
 
     final student = ClassPost.fromJson({
       'id': 9,

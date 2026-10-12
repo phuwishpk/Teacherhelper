@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\ClassPosts\ClassPostGoogle;
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
@@ -38,6 +39,8 @@ class ClassPostController extends Controller
 
     public const LIST_LIMIT = 200;
 
+    public function __construct(private readonly ClassPostGoogle $google) {}
+
     /**
      * GET /api/v1/classrooms/{id}/posts -> {data: [post]}: the published
      * posts of every teacher and the caller's own drafts and scheduled
@@ -56,7 +59,9 @@ class ClassPostController extends Controller
             ->limit(self::LIST_LIMIT)
             ->get();
 
-        return response()->json(['data' => $posts->map(fn (ClassPost $p) => ClassPosts::payload($p, $teacher))->all()]);
+        $linked = ClassPostGoogle::linkedAuthors($classroom->id);
+
+        return response()->json(['data' => $posts->map(fn (ClassPost $p) => ClassPosts::payload($p, $teacher, in_array((int) $p->author_id, $linked, true)))->all()]);
     }
 
     /**
@@ -166,6 +171,11 @@ class ClassPostController extends Controller
             array_key_exists('body', $data) ? $data['body'] : $post->body,
         );
         $attachments = array_key_exists('attachments', $data) ? self::attachments($teacher, $data['attachments'] ?? []) : null;
+        if ($attachments !== null && ($post->googlePost()->first()?->isInClassroom() ?? false) && ClassPostGoogle::attachmentsChanged($post, $attachments)) {
+            // Classroom does not patch materials (DESIGN §30.4): the files of a sent copy stay as they are.
+            throw new ApiException('โพสต์นี้ส่งไป Google Classroom แล้ว แก้ไฟล์แนบไม่ได้ ลบโพสต์แล้วสร้างใหม่ถ้าต้องเปลี่ยนไฟล์', 'attachments_locked', 409);
+        }
+        $alreadyPublished = $post->isPublished();
         $audience = $data['audience'] ?? $post->audience;
         $studentIds = null;
         if ($audience === ClassPost::AUDIENCE_STUDENTS && (array_key_exists('student_ids', $data) || $post->audience !== ClassPost::AUDIENCE_STUDENTS)) {
@@ -182,7 +192,7 @@ class ClassPostController extends Controller
             ? [$post->state, $post->scheduled_at]
             : self::schedule($data['state'] ?? $post->state, array_key_exists('scheduled_at', $data) ? $data['scheduled_at'] : $post->scheduled_at?->toIso8601String());
 
-        DB::transaction(function () use ($post, $data, $course, $unitId, $topic, $content, $attachments, $audience, $studentIds, $state, $scheduledAt) {
+        DB::transaction(function () use ($post, $data, $course, $unitId, $topic, $content, $attachments, $audience, $studentIds, $state, $scheduledAt, $alreadyPublished) {
             $post = ClassPost::query()->lockForUpdate()->findOrFail($post->id);
             $removed = [];
             if ($attachments !== null) {
@@ -212,7 +222,13 @@ class ClassPostController extends Controller
             }
             $post->save();
             if (! $post->isPublished() && $state === ClassPost::STATE_PUBLISHED) {
-                ClassPosts::publish($post);
+                ClassPosts::publish($post); // its listener queues the Classroom copy
+            } elseif ($alreadyPublished) {
+                if ($post->send_to_google) {
+                    $this->google->queue($post);
+                } else {
+                    $this->google->unsend($post);
+                }
             }
             ClassPosts::deleteUnused($removed);
         });
@@ -228,11 +244,34 @@ class ClassPostController extends Controller
 
         DB::transaction(function () use ($post) {
             $fileIds = $post->attachments()->whereNotNull('class_post_file_id')->pluck('class_post_file_id')->map(fn ($id) => (int) $id)->all();
+            $this->google->unsend($post);
             $post->delete(); // attachments and recipients cascade
             ClassPosts::deleteUnused($fileIds);
         });
 
         return response()->noContent();
+    }
+
+    /**
+     * POST /api/v1/class-posts/{id}/google/retry -> 202 {data: google}: the
+     * author sends a failed (or never sent) Classroom copy again (DESIGN
+     * §30.4). 422 classroom_not_linked when the author has no link.
+     */
+    public function googleRetry(Request $request, int $id): JsonResponse
+    {
+        $post = $this->own($request, $id);
+        ClosedClassrooms::assertOpen($post->classroom);
+        if (! $post->isPublished()) {
+            throw new ApiException('โพสต์นี้ยังไม่ได้เผยแพร่', 'post_not_published', 409);
+        }
+        if (! $post->send_to_google) {
+            $post->forceFill(['send_to_google' => true])->save();
+        }
+        if ($this->google->retry($post) === null) {
+            throw new ApiException('ห้องเรียนนี้ยังไม่ได้ผูกกับ Google Classroom ของคุณ', 'classroom_not_linked', 422);
+        }
+
+        return response()->json(['data' => ClassPostGoogle::payload($post->refresh())], 202);
     }
 
     /** The caller's own post (404 when not visible, 403 not_post_author when another teacher's). */

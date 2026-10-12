@@ -225,20 +225,12 @@ final class GoogleApi
      */
     public function createPrivateAnnouncement(string $courseId, string $text, array $studentIds): array
     {
-        $body = $this->send(
-            'announcements.create',
-            fn (PendingRequest $http) => $http->post(self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/announcements', [
-                'text' => $text,
-                'state' => 'PUBLISHED',
-                'assigneeMode' => 'INDIVIDUAL_STUDENTS',
-                'individualStudentsOptions' => ['studentIds' => array_values($studentIds)],
-            ]),
-        )->json();
-
-        return [
-            'id' => (string) ($body['id'] ?? ''),
-            'alternate_link' => (string) ($body['alternateLink'] ?? ''),
-        ];
+        return $this->createAnnouncement($courseId, [
+            'text' => $text,
+            'state' => 'PUBLISHED',
+            'assigneeMode' => 'INDIVIDUAL_STUDENTS',
+            'individualStudentsOptions' => ['studentIds' => array_values($studentIds)],
+        ]);
     }
 
     /** studentSubmissions.return: the student sees the work returned (and may hand in again). */
@@ -252,17 +244,128 @@ final class GoogleApi
     }
 
     /**
-     * Drive files.create (multipart upload) of a PDF into the teacher's Drive
+     * announcements.create (DESIGN §19.7, §30.4): $body is the Classroom
+     * Announcement resource (text, materials, state, assigneeMode, ...).
+     * Needs the classroom.announcements scope.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createAnnouncement(string $courseId, array $body): array
+    {
+        return self::created($this->send(
+            'announcements.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'announcements'), $body),
+        )->json());
+    }
+
+    /**
+     * announcements.patch: text, state and scheduledTime are the fields
+     * Classroom lets a developer change (materials are not).
+     *
+     * @param  array<string, mixed>  $body
+     * @param  list<string>  $updateMask
+     */
+    public function patchAnnouncement(string $courseId, string $id, array $body, array $updateMask): void
+    {
+        $this->send(
+            'announcements.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'announcements', $id).'?updateMask='.rawurlencode(implode(',', $updateMask)), $body),
+        );
+    }
+
+    /** announcements.delete; one that is already gone counts as deleted. */
+    public function deleteAnnouncement(string $courseId, string $id): void
+    {
+        $this->deleteIgnoringNotFound('announcements.delete', self::coursePath($courseId, 'announcements', $id));
+    }
+
+    /**
+     * courseWorkMaterials.create (DESIGN §30.4): $body is the Classroom
+     * CourseWorkMaterial resource. Needs classroom.courseworkmaterials.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createCourseWorkMaterial(string $courseId, array $body): array
+    {
+        return self::created($this->send(
+            'courseWorkMaterials.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'courseWorkMaterials'), $body),
+        )->json());
+    }
+
+    /**
+     * courseWorkMaterials.patch: title, description, state, scheduledTime
+     * and topicId (materials are not patchable).
+     *
+     * @param  array<string, mixed>  $body
+     * @param  list<string>  $updateMask
+     */
+    public function patchCourseWorkMaterial(string $courseId, string $id, array $body, array $updateMask): void
+    {
+        $this->send(
+            'courseWorkMaterials.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'courseWorkMaterials', $id).'?updateMask='.rawurlencode(implode(',', $updateMask)), $body),
+        );
+    }
+
+    /** courseWorkMaterials.delete; one that is already gone counts as deleted. */
+    public function deleteCourseWorkMaterial(string $courseId, string $id): void
+    {
+        $this->deleteIgnoringNotFound('courseWorkMaterials.delete', self::coursePath($courseId, 'courseWorkMaterials', $id));
+    }
+
+    /**
+     * topics.list (classroom.topics): every topic of the course.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function topics(string $courseId): array
+    {
+        $rows = [];
+        foreach ($this->pages('topics.list', self::coursePath($courseId, 'topics'), ['pageSize' => 100], 'topic') as $topic) {
+            $rows[] = ['id' => (string) ($topic['topicId'] ?? ''), 'name' => (string) ($topic['name'] ?? '')];
+        }
+
+        return $rows;
+    }
+
+    /** topics.create -> the new topic's id. */
+    public function createTopic(string $courseId, string $name): string
+    {
+        $id = $this->send(
+            'topics.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'topics'), ['name' => $name]),
+        )->json('topicId');
+        if (! is_string($id) || $id === '') {
+            throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'topics.create answered without a topicId');
+        }
+
+        return $id;
+    }
+
+    /** topics.patch (the name only). */
+    public function renameTopic(string $courseId, string $topicId, string $name): void
+    {
+        $this->send(
+            'topics.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'topics', $topicId).'?updateMask=name', ['name' => $name]),
+        );
+    }
+
+    /**
+     * Drive files.create (multipart upload) into the teacher's Drive
      * (drive.file scope: the app only sees files it created).
      *
      * @return string the Drive file id
      */
-    public function uploadPdf(string $name, string $bytes): string
+    public function uploadDriveFile(string $name, string $mimeType, string $bytes): string
     {
         $boundary = 'eduvision-'.Str::random(24);
-        $metadata = json_encode(['name' => $name, 'mimeType' => 'application/pdf'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $metadata = json_encode(['name' => $name, 'mimeType' => $mimeType], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         $body = "--{$boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$metadata}\r\n"
-            ."--{$boundary}\r\nContent-Type: application/pdf\r\n\r\n{$bytes}\r\n--{$boundary}--";
+            ."--{$boundary}\r\nContent-Type: {$mimeType}\r\n\r\n{$bytes}\r\n--{$boundary}--";
 
         $response = $this->send(
             'drive.files.create',
@@ -277,16 +380,58 @@ final class GoogleApi
         return $id;
     }
 
+    /** The PDF case of [uploadDriveFile]. */
+    public function uploadPdf(string $name, string $bytes): string
+    {
+        return $this->uploadDriveFile($name, 'application/pdf', $bytes);
+    }
+
     /** Drive files.delete; a file that is already gone counts as deleted. */
     public function deleteDriveFile(string $fileId): void
     {
+        $this->deleteIgnoringNotFound('drive.files.delete', self::DRIVE.'/files/'.rawurlencode($fileId));
+    }
+
+    /** Drive files.update {trashed: true}: into the teacher's bin (DESIGN §30.2); already gone counts as done. */
+    public function trashDriveFile(string $fileId): void
+    {
         try {
-            $this->send('drive.files.delete', fn (PendingRequest $http) => $http->delete(self::DRIVE.'/files/'.rawurlencode($fileId)));
+            $this->send('drive.files.trash', fn (PendingRequest $http) => $http->patch(self::DRIVE.'/files/'.rawurlencode($fileId), ['trashed' => true]));
         } catch (GoogleApiException $e) {
             if ($e->kind !== GoogleApiException::NOT_FOUND) {
                 throw $e;
             }
         }
+    }
+
+    private function deleteIgnoringNotFound(string $what, string $url): void
+    {
+        try {
+            $this->send($what, fn (PendingRequest $http) => $http->delete($url));
+        } catch (GoogleApiException $e) {
+            if ($e->kind !== GoogleApiException::NOT_FOUND) {
+                throw $e;
+            }
+        }
+    }
+
+    /** /courses/{id}/{resource}[/{item}] */
+    private static function coursePath(string $courseId, string $resource, ?string $item = null): string
+    {
+        $url = self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/'.$resource;
+
+        return $item === null ? $url : $url.'/'.rawurlencode($item);
+    }
+
+    /**
+     * @return array{id: string, alternate_link: string}
+     */
+    private static function created(mixed $body): array
+    {
+        return [
+            'id' => (string) (is_array($body) ? ($body['id'] ?? '') : ''),
+            'alternate_link' => (string) (is_array($body) ? ($body['alternateLink'] ?? '') : ''),
+        ];
     }
 
     /** Drive files.get?fields=mimeType (drive.readonly). */

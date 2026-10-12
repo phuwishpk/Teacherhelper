@@ -35,6 +35,25 @@ class ClassPostsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _retryGoogle(
+    BuildContext context,
+    WidgetRef ref,
+    ClassPost p,
+  ) async {
+    try {
+      final g = await ref.read(classPostsRepositoryProvider).retryGoogle(p.id);
+      ref.invalidate(classroomPostsProvider(classroomId));
+      if (!context.mounted) return;
+      showMessage(context, switch (g.state) {
+        GoogleSendState.sent => 'ส่งไป Google Classroom แล้ว',
+        GoogleSendState.failed => g.lastError ?? 'ส่งไม่สำเร็จ',
+        _ => 'กำลังส่งไป Google Classroom',
+      });
+    } catch (e) {
+      if (context.mounted) showMessage(context, apiErrorMessage(e));
+    }
+  }
+
   Future<void> _delete(BuildContext context, WidgetRef ref, ClassPost p) async {
     final ok = await confirm(
       context,
@@ -102,6 +121,9 @@ class ClassPostsScreen extends ConsumerWidget {
                     key: ValueKey('post_${p.id}'),
                     post: p,
                     teacherView: true,
+                    onRetryGoogle: p.isMine && open
+                        ? () => _retryGoogle(context, ref, p)
+                        : null,
                     menu: p.isMine && open
                         ? PopupMenuButton<String>(
                             key: ValueKey('post_menu_${p.id}'),
