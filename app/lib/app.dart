@@ -5,6 +5,7 @@ import 'core/auth/session.dart';
 import 'core/push/push_coordinator.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'features/upload_queue/scan_queue_repository.dart';
 import 'features/upload_queue/upload_worker.dart';
 
@@ -67,6 +68,7 @@ class _KrucheckAppState extends ConsumerState<KrucheckApp>
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: ref.watch(routerProvider),
       scaffoldMessengerKey: ref.watch(rootMessengerKeyProvider),
     );

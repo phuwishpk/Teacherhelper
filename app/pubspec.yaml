@@ -51,6 +51,7 @@ flutter:
   # a font at run time.
   assets:
     - assets/fonts/IBMPlexSansThaiLooped-OFL.txt
+    - assets/images/logo.png
   fonts:
     - family: IBM Plex Sans Thai Looped
       fonts:

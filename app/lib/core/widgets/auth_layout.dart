@@ -13,22 +13,16 @@ class BrandMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
+        // The round logo (transparent outside its blue ring).
+        Image.asset(
+          'assets/images/logo.png',
           width: size,
           height: size,
-          decoration: BoxDecoration(
-            color: scheme.primary,
-            borderRadius: BorderRadius.circular(size * 0.3),
-          ),
-          child: Icon(
-            Icons.auto_awesome_mosaic_outlined,
-            size: size * 0.56,
-            color: scheme.onPrimary,
-          ),
+          filterQuality: FilterQuality.medium,
+          excludeFromSemantics: true,
         ),
         if (showName) ...[
           SizedBox(width: size * 0.32),

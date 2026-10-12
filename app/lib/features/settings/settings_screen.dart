@@ -6,9 +6,10 @@ import '../google_classroom/google_classroom_card.dart';
 import '../google_signin/google_identity_card.dart';
 import 'ai_key_section.dart';
 import 'profile_section.dart';
+import 'theme_mode_section.dart';
 
 /// Teacher settings: the own profile (§29.1), the Google account for sign-in (DESIGN §24.9.5), the
-/// Gemini key (§10.1) and the Google Classroom connection (§18.7).
+/// Gemini key (§10.1), the Google Classroom connection (§18.7) and the theme (§27.1).
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -33,6 +34,8 @@ class SettingsScreen extends ConsumerWidget {
                   const AiKeySection(),
                   const SizedBox(height: 8),
                   const GoogleClassroomCard(),
+                  const SizedBox(height: 8),
+                  const ThemeModeSection(),
                   const SizedBox(height: 8),
                   Card(
                     child: ListTile(
