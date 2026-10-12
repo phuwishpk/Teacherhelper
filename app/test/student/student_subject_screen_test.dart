@@ -21,6 +21,7 @@ Future<void> _pump(
   FakeOverviewRepository? overview,
   FakeGradebookRepository? gradebook,
   List<Override> extra = const [],
+  bool openWork = true,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1;
@@ -43,6 +44,12 @@ Future<void> _pump(
       ),
     ],
   );
+  // The subject opens on "โพสต์" (DESIGN §30.3); these tests are about the rest.
+  final work = find.widgetWithText(Tab, 'งาน');
+  if (openWork && work.evaluate().isNotEmpty) {
+    await tester.tap(work);
+    await tester.pumpAndSettle();
+  }
 }
 
 /// One subject of "วิชาของฉัน" (DESIGN §24.11, §24.13): its work, results,
@@ -53,7 +60,7 @@ void main() {
 
     expect(find.text('ค15101 คณิตศาสตร์ 5'), findsOneWidget);
     expect(find.text('ป.5/1 · 2569 · ครูสมศรี'), findsOneWidget);
-    for (final tab in ['งาน', 'ผล', 'เกรด', 'กราฟ']) {
+    for (final tab in ['โพสต์', 'งาน', 'ผล', 'เกรด', 'กราฟ']) {
       expect(find.widgetWithText(Tab, tab), findsOneWidget);
     }
     expect(find.byKey(const ValueKey('subject_closed_banner')), findsNothing);
@@ -158,6 +165,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('switch_$keyThai')));
     await tester.pumpAndSettle();
     expect(find.text('อื่นๆ (ภาษาไทย)'), findsOneWidget);
+    // The new subject opens on its own "โพสต์" tab.
+    await tester.tap(find.widgetWithText(Tab, 'งาน'));
+    await tester.pumpAndSettle();
     expect(find.text('อ่านจับใจความ'), findsOneWidget);
     expect(find.text('เศษส่วน ชุดที่ 1'), findsNothing);
     expect(find.widgetWithText(Tab, 'เกรด'), findsNothing);

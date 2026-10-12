@@ -1,3 +1,4 @@
+import 'package:eduvision/features/class_posts/class_posts_repository.dart';
 import 'package:eduvision/features/hand_in/hand_in_models.dart';
 import 'package:eduvision/features/hand_in/hand_in_repository.dart';
 import 'package:eduvision/features/results/results_repository.dart';
@@ -6,6 +7,7 @@ import 'package:eduvision/features/student/student_overview.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../class_posts/class_post_fakes.dart';
 import '../gradebook/gradebook_fakes.dart';
 import '../hand_in/hand_in_fakes.dart';
 
@@ -185,7 +187,11 @@ List<Override> studentViewOverrides({
   FakeHandIn? handIn,
   FakeStudentResults? results,
   FakeGradebookRepository? gradebook,
+  FakeClassPosts? classPosts,
 }) => [
+  classPostsRepositoryProvider.overrideWithValue(
+    classPosts ?? FakeClassPosts(),
+  ),
   studentOverviewRepositoryProvider.overrideWithValue(
     overview ?? FakeOverviewRepository(),
   ),

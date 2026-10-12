@@ -94,6 +94,20 @@ void main() {
         '/student/courses/9/grade?classroom=4',
       );
       expect(routeForPush({'type': 'grades_published'}, _student), '/student');
+      // A new announcement (DESIGN §30.3) opens that post.
+      expect(
+        routeForPush({
+          'type': 'class_post',
+          'post_id': '12',
+          'classroom_id': '3',
+        }, _student),
+        '/student/posts/12',
+      );
+      expect(routeForPush({'type': 'class_post'}, _student), '/student');
+      expect(
+        routeForPush({'type': 'class_post', 'post_id': '12'}, _teacher),
+        isNull,
+      );
       expect(
         routeForPush({'type': 'grades_published', 'course_id': '9'}, _teacher),
         isNull,

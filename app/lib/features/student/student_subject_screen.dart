@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../charts/course_charts_screen.dart' show StudentCourseChartsBody;
+import '../class_posts/student_class_feed.dart';
 import '../gradebook/student_grades.dart' show StudentGradeBody;
 import '../hand_in/hand_in_repository.dart';
 import '../hand_in/student_assignments_page.dart' show StudentAssignmentCard;
@@ -83,6 +84,10 @@ class _StudentSubjectScreenState extends ConsumerState<StudentSubjectScreen> {
     final course = g.course;
     final theme = Theme.of(context);
     final tabs = <(String, Widget)>[
+      (
+        'โพสต์',
+        StudentClassFeedBody(courseId: course?.id, classroomId: g.classroom.id),
+      ),
       ('งาน', _WorkTab(tag: tag, now: widget.now)),
       ('ผล', _ResultsTab(tag: tag)),
       if (course != null) ...[

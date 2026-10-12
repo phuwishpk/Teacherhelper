@@ -16,6 +16,7 @@ import '../router/app_router.dart';
 /// | `appeal_resolved`   | student | `submission_id`     | result detail        |
 /// | `retake_requested`  | student | `assignment_id`     | results tab (notice) |
 /// | `grades_published`  | student | `course_id`, `classroom_id` | that classroom's course grade |
+/// | `class_post`        | student | `post_id`, `classroom_id` | that post (§30.3) |
 ///
 /// Only these types are routed; anything else just opens the app. Returns
 /// null when the message is not for this user's role.
@@ -56,6 +57,11 @@ String? routeForPush(Map<String, String> data, User user) {
           classroomId: id('classroom_id'),
         ),
       'grades_published' => AppRoutes.student,
+      // A new announcement in one of their classrooms (DESIGN §30.3).
+      'class_post' when id('post_id') != null => AppRoutes.studentClassPost(
+        id('post_id')!,
+      ),
+      'class_post' => AppRoutes.student,
       _ => null,
     };
   }
