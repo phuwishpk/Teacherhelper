@@ -18,6 +18,7 @@ namespace App\Domain\Notifications;
  *   grades_published   student     course_id, classroom_id (the classroom's grades were published, §23.7, §24.28)
  *   course_request     teacher     request_id, classroom_id (a course waits to be bound to their homeroom, §24.7)
  *   course_request_decided teacher request_id, classroom_id, course_id (approved or declined, §24.7)
+ *   class_post         student     post_id, classroom_id (a new announcement in the classroom, §30.3)
  *
  * The body never carries a score (§9.9: nothing on the lock screen) and the
  * data carries ids only.
@@ -43,6 +44,8 @@ final readonly class PushMessage
     public const COURSE_REQUEST = 'course_request';
 
     public const COURSE_REQUEST_DECIDED = 'course_request_decided';
+
+    public const CLASS_POST = 'class_post';
 
     public const TITLE = 'Krucheck';
 

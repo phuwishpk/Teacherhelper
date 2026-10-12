@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\AttendanceController;
+use App\Http\Controllers\Api\V1\ClassPostController;
+use App\Http\Controllers\Api\V1\ClassPostFileController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomCourseController;
@@ -57,6 +59,7 @@ use App\Http\Controllers\Api\V1\SkillController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
+use App\Http\Controllers\Api\V1\StudentClassFeedController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentGradeController;
@@ -279,6 +282,15 @@ Route::prefix('v1')->group(function () {
                 Route::get('attendance-sessions/{id}', [AttendanceController::class, 'show'])->name('api.attendance-sessions.show');
                 Route::put('attendance-sessions/{id}', [AttendanceController::class, 'update'])->name('api.attendance-sessions.update');
                 Route::delete('attendance-sessions/{id}', [AttendanceController::class, 'destroy'])->name('api.attendance-sessions.destroy');
+                // Class posts (§30): announcements and materials with files and links.
+                Route::get('classrooms/{id}/posts', [ClassPostController::class, 'index'])->name('api.classrooms.posts.index');
+                Route::post('class-posts', [ClassPostController::class, 'store'])->name('api.class-posts.store');
+                Route::get('class-posts/{id}', [ClassPostController::class, 'show'])->name('api.class-posts.show');
+                Route::put('class-posts/{id}', [ClassPostController::class, 'update'])->name('api.class-posts.update');
+                Route::delete('class-posts/{id}', [ClassPostController::class, 'destroy'])->name('api.class-posts.destroy');
+                Route::post('class-post-files', [ClassPostFileController::class, 'store'])->middleware('throttle:class-post-files')->name('api.class-post-files.store');
+                Route::get('class-post-files/usage', [ClassPostFileController::class, 'usage'])->name('api.class-post-files.usage');
+                Route::delete('class-post-files/{id}', [ClassPostFileController::class, 'destroy'])->name('api.class-post-files.destroy');
                 Route::put('assignments/{id}/gradebook-scores', [GradebookScoreController::class, 'update'])->name('api.assignments.gradebook-scores');
                 Route::post('assignments/{id}/gradebook-scores/fill-full', [GradebookScoreController::class, 'fillFull'])->name('api.assignments.gradebook-scores.fill-full');
 
@@ -448,6 +460,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('grades', [StudentGradeController::class, 'index'])->name('api.student.grades.index');
                 // The student's own attendance, per course and classroom (§29.5).
                 Route::get('attendance', StudentAttendanceController::class)->name('api.student.attendance');
+                // The class feed (§30.3): posts, open homework and published results.
+                Route::get('class-feed', [StudentClassFeedController::class, 'index'])->name('api.student.class-feed');
+                Route::get('class-posts/{id}', [StudentClassFeedController::class, 'show'])->name('api.student.class-posts.show');
                 Route::get('courses/{id}/grade', [StudentGradeController::class, 'show'])->name('api.student.courses.grade');
                 Route::get('indicator-progress', [ChartController::class, 'myProgress'])->name('api.student.indicator-progress');
                 // Only the analysis texts the teacher shared, never the teacher's version (§20.5).
@@ -466,6 +481,8 @@ Route::prefix('v1')->group(function () {
             Route::middleware('role:teacher,student')->group(function () {
                 Route::get('responses/{id}/crop', [ResponseController::class, 'crop'])->name('api.responses.crop');
                 Route::get('submission-pages/{id}/image', [SubmissionPageController::class, 'image'])->name('api.submission-pages.image');
+                // A file of a class post (§30.2), through a post the caller sees.
+                Route::get('class-post-files/{id}/file', [ClassPostFileController::class, 'download'])->name('api.class-post-files.file');
                 // On-device model distribution (§9.8).
                 Route::get('ml/models/active', [ModelController::class, 'active'])->name('api.ml.models.active');
                 Route::get('ml/models/{id}/file', [ModelController::class, 'file'])->name('api.ml.models.file');

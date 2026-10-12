@@ -78,6 +78,17 @@ return [
         'retention_days' => max(1, (int) env('DOCUMENT_RETENTION_DAYS', 30)),
     ],
 
+    // Class posts (DESIGN §30.2): files a teacher uploads for their posts.
+    // PHP must allow upload_max_filesize >= max_file_mb. quota_mb is the
+    // total a teacher may keep; a file nobody attached is deleted after
+    // orphan_hours.
+    'class_posts' => [
+        'max_file_mb' => max(1, (int) env('CLASS_POST_MAX_FILE_MB', 10)),
+        'max_attachments' => max(1, (int) env('CLASS_POST_MAX_ATTACHMENTS', 5)),
+        'quota_mb' => max(1, (int) env('CLASS_POST_QUOTA_MB', 2048)),
+        'orphan_hours' => max(1, (int) env('CLASS_POST_ORPHAN_HOURS', 24)),
+    ],
+
     // The cron sync with Google Classroom (DESIGN §19.3): at most
     // max_coursework assignments' submissions per round, and no new work
     // started after budget_seconds (the worker pass is 50 s).

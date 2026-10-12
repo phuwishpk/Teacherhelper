@@ -157,6 +157,15 @@ class AuthorizationMatrixTest extends TestCase
         'api.attendance-sessions.show' => ['GET', 'attendance-sessions/{attendance_session}', 404, 404],
         'api.attendance-sessions.update' => ['PUT', 'attendance-sessions/{attendance_session}', 404, 404],
         'api.attendance-sessions.destroy' => ['DELETE', 'attendance-sessions/{attendance_session}', 404, 404],
+        // Class posts (§30): every teacher of the classroom reads, the author writes.
+        'api.classrooms.posts.index' => ['GET', 'classrooms/{classroom}/posts', 404, 404],
+        'api.class-posts.store' => ['POST', 'class-posts', self::OK, self::OK],
+        'api.class-posts.show' => ['GET', 'class-posts/{class_post}', 404, 404],
+        'api.class-posts.update' => ['PUT', 'class-posts/{class_post}', 404, 404],
+        'api.class-posts.destroy' => ['DELETE', 'class-posts/{class_post}', 404, 404],
+        'api.class-post-files.store' => ['POST', 'class-post-files', self::OK, self::OK],
+        'api.class-post-files.usage' => ['GET', 'class-post-files/usage', self::OK, self::OK],
+        'api.class-post-files.destroy' => ['DELETE', 'class-post-files/{class_post_file}', 404, 404],
         'api.gradebook-items.fill-full' => ['POST', 'gradebook-items/{gradebook_item}/fill-full', 404, 404],
         'api.assignments.gradebook-scores' => ['PUT', 'assignments/{assignment}/gradebook-scores', 404, 404],
         'api.assignments.gradebook-scores.fill-full' => ['POST', 'assignments/{assignment}/gradebook-scores/fill-full', 404, 404],
@@ -329,6 +338,11 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.google-roster.update' => '403 not_homeroom_teacher',
         'api.classrooms.google-sync' => self::OK,
         'api.course-requests.destroy' => 404,
+        // Class posts (§30.1): a published post is read by every teacher of the classroom.
+        'api.classrooms.posts.index' => self::OK,
+        'api.class-posts.show' => self::OK,
+        'api.class-posts.update' => '403 not_post_author',
+        'api.class-posts.destroy' => '403 not_post_author',
     ];
 
     /** What teacher P (request pending) gets where it differs from the same-school column. */
@@ -356,6 +370,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
         // Always the signed-in student's own records (§29.5).
         'api.student.attendance' => ['GET', 'student/attendance', self::OK, self::OK],
+        // The post names student A2 only (§30.1): a classmate does not receive it.
+        'api.student.class-feed' => ['GET', 'student/class-feed', self::OK, self::OK],
+        'api.student.class-posts.show' => ['GET', 'student/class-posts/{class_post}', 404, 404],
         // The signed-in student's own password (§29.10); an empty body is a 422 (counts as reached).
         'api.student.password' => ['PUT', 'student/password', self::OK, self::OK],
         'api.student.courses.grade' => ['GET', 'student/courses/{own_course}/grade', self::OK, 404],
@@ -380,6 +397,8 @@ class AuthorizationMatrixTest extends TestCase
     private const SHARED = [
         'api.responses.crop' => ['GET', 'responses/{response}/crop', 404, 404, 403, 404],
         'api.submission-pages.image' => ['GET', 'submission-pages/{page}/image', 404, 404, 403, 404],
+        // A file is reached through a post that attaches it (§30.2); student A is not a recipient.
+        'api.class-post-files.file' => ['GET', 'class-post-files/{class_post_file}/file', 404, 404, 404, 404],
         'api.ml.models.active' => ['GET', 'ml/models/active', self::OK, self::OK, self::OK, self::OK],
         'api.ml.models.file' => ['GET', 'ml/models/{model}/file', self::OK, self::OK, self::OK, self::OK],
         // Push tokens (§9.9): any app user, never an admin token.
@@ -632,6 +651,8 @@ class AuthorizationMatrixTest extends TestCase
             '{exam_document}' => $this->examDocumentA->id,
             '{gradebook_item}' => $this->gradebookItemA->id,
             '{attendance_session}' => $this->attendanceSessionA->id,
+            '{class_post}' => $this->classPostA->id,
+            '{class_post_file}' => $this->classPostFileA->id,
             '{incoming_request}' => $this->incomingRequest->id,
             '{outgoing_request}' => $this->outgoingRequest->id,
         ]);
