@@ -99,6 +99,14 @@ void main() {
 
     await tester.enterText(
       find.byKey(const ValueKey('password_new')),
+      'ปลาทอง99 ',
+    );
+    await tester.tap(find.byKey(const ValueKey('password_save')));
+    await tester.pumpAndSettle();
+    expect(find.text('ห้ามมีช่องว่างหน้าหรือท้ายรหัสผ่าน'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('password_new')),
       'ปลาทอง99',
     );
     await tester.enterText(find.byKey(const ValueKey('password_again')), 'x');

@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 /// Behind the dots a browser autofill or a stray character is invisible,
 /// which makes "รหัสผ่านไม่ถูกต้อง" look like a broken login; every password
 /// field of the app uses this so the typed text can always be checked.
+/// Validator add-on for the set-password forms: an edge space is a paste
+/// accident (copying from a table brings a trailing space along), and the
+/// login forms trim it away, so a kept password must never have one.
+String? noEdgeWhitespace(String? v) =>
+    v != null && v.trim() != v ? 'ห้ามมีช่องว่างหน้าหรือท้ายรหัสผ่าน' : null;
+
 class PasswordField extends StatefulWidget {
   const PasswordField({
     super.key,

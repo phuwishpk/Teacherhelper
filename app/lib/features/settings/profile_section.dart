@@ -202,7 +202,9 @@ class _PasswordDialogState extends ConsumerState<_PasswordDialog> {
           .read(authRepositoryProvider)
           .changePassword(
             password: _password.text,
-            currentPassword: _current.text.isEmpty ? null : _current.text,
+            currentPassword: _current.text.trim().isEmpty
+                ? null
+                : _current.text.trim(),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -238,7 +240,8 @@ class _PasswordDialogState extends ConsumerState<_PasswordDialog> {
                 labelText: 'รหัสผ่านใหม่',
                 helperText: 'อย่างน้อย 8 ตัว',
                 validator: (v) =>
-                    (v == null || v.length < 8) ? 'อย่างน้อย 8 ตัว' : null,
+                    noEdgeWhitespace(v) ??
+                    ((v == null || v.length < 8) ? 'อย่างน้อย 8 ตัว' : null),
               ),
               const SizedBox(height: 12),
               PasswordField(

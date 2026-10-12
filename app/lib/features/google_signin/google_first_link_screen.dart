@@ -104,7 +104,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
         (repo, ticket) => repo.linkWithPassword(
           linkTicket: ticket,
           username: _username.text.trim(),
-          password: _password.text,
+          password: _password.text.trim(),
         ),
       );
       // The router takes the signed-in student to /student.
