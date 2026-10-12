@@ -171,7 +171,8 @@ class _TeacherLoginFormState extends ConsumerState<_TeacherLoginForm> {
     try {
       await ref
           .read(sessionProvider.notifier)
-          .signIn(email: _email.text.trim(), password: _password.text);
+          // Both trimmed: a pasted credential often ends with a stray space.
+          .signIn(email: _email.text.trim(), password: _password.text.trim());
       // The router sends a teacher home and an admin to /admin-home once
       // the session becomes SignedIn.
     } catch (e) {

@@ -88,7 +88,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
           .read(sessionProvider.notifier)
           .signInStudent(
             username: _username.text.trim(),
-            password: _password.text,
+            password: _password.text.trim(),
           );
       // The router redirects to /student once the session is SignedIn.
     } catch (e) {

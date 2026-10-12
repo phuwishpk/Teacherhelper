@@ -283,9 +283,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   controller: _password,
                   focusNode: _passwordFocus,
                   labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
-                  validator: (v) => (v == null || v.length < 8)
-                      ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
-                      : null,
+                  validator: (v) =>
+                      noEdgeWhitespace(v) ??
+                      ((v == null || v.length < 8)
+                          ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
+                          : null),
                 ),
                 const SizedBox(height: 16),
                 // Checked here only: the API takes one password (DESIGN §9.1).
