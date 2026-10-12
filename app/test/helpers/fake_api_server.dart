@@ -385,6 +385,14 @@ class FakeApiServer {
         );
       case ('GET', ['ml', 'models', 'active']):
         return (404, _error('ยังไม่มีโมเดลที่เปิดใช้', code: 'not_found'));
+      // The storage line of the attachment editors (DESIGN §30.2).
+      case ('GET', ['class-post-files', 'usage']):
+        return (
+          200,
+          {
+            'data': {'used_bytes': 0, 'limit_bytes': 2147483648},
+          },
+        );
       // A server without Google Classroom (no OAuth client): the app hides
       // every Google section (DESIGN §18.6, `configured`).
       case ('GET', ['google', 'status']):

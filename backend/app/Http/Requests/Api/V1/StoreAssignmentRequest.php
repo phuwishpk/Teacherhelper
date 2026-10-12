@@ -69,6 +69,15 @@ class StoreAssignmentRequest extends FormRequest
             // Gradebook (DESIGN §23.3): checked against the course in AssignmentCategories.
             'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'excluded_from_grade' => ['sometimes', 'nullable', 'boolean'],
+            // Post-like parts (DESIGN §30.12): a topic (unit of the course or free text), the text and the files.
+            'unit_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'topic' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'instructions' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'send_to_google' => ['sometimes', 'nullable', 'boolean'],
+            'attachments' => ['sometimes', 'array', 'max:'.(int) config('eduvision.class_posts.max_attachments')],
+            'attachments.*.file_id' => ['sometimes', 'integer'],
+            'attachments.*.url' => ['sometimes', 'string', 'max:2000'],
+            'attachments.*.title' => ['sometimes', 'nullable', 'string', 'max:200'],
         ];
     }
 

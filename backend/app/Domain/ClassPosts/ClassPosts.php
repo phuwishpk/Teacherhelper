@@ -6,6 +6,7 @@ use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Students\StudentClassrooms;
 use App\Events\ClassPostPublished;
 use App\Jobs\TrashDriveFileJob;
+use App\Models\AssignmentAttachment;
 use App\Models\ClassPost;
 use App\Models\ClassPostAttachment;
 use App\Models\ClassPostFile;
@@ -112,7 +113,7 @@ final class ClassPosts
     /**
      * @return array<string, mixed>
      */
-    public static function attachment(ClassPostAttachment $attachment): array
+    public static function attachment(ClassPostAttachment|AssignmentAttachment $attachment): array
     {
         $file = $attachment->file;
 
@@ -199,7 +200,7 @@ final class ClassPosts
         if ($fileIds === []) {
             return;
         }
-        $files = ClassPostFile::query()->whereIn('id', $fileIds)->whereDoesntHave('attachments')->get();
+        $files = ClassPostFile::query()->whereIn('id', $fileIds)->whereDoesntHave('attachments')->whereDoesntHave('assignmentAttachments')->get();
         foreach ($files as $file) {
             self::deleteFile($file);
         }
@@ -213,6 +214,7 @@ final class ClassPosts
     {
         $files = ClassPostFile::query()
             ->whereDoesntHave('attachments')
+            ->whereDoesntHave('assignmentAttachments')
             ->where('created_at', '<', now()->subHours((int) config('eduvision.class_posts.orphan_hours')))
             ->orderBy('id')
             ->limit($limit)

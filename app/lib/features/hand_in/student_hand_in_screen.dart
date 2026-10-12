@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../class_posts/post_files.dart';
 import '../../core/api/api_client.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
@@ -156,6 +157,31 @@ class _HandInFormState extends ConsumerState<_HandInForm> {
               ),
             ),
           ),
+          if ((a.instructions ?? '').isNotEmpty ||
+              a.attachments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Card(
+              key: const ValueKey('hand_in_post_card'),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (a.topic case final t? when t.isNotEmpty) ...[
+                      Text('หัวข้อ: $t', style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                    ],
+                    if (a.instructions case final text? when text.isNotEmpty)
+                      SelectableText(text),
+                    for (final att in a.attachments) ...[
+                      const SizedBox(height: 8),
+                      PostAttachmentTile(attachment: att),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           if (receipt != null)
             _Receipt(receipt: receipt, onDone: () => context.pop())

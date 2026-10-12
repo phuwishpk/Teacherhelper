@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../class_posts/class_post_models.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
@@ -266,6 +267,23 @@ class _AssignmentGoogleSectionState
         Text('โพสต์เป็นงานในคอร์ส ${course.courseName}'),
         const SizedBox(height: 4),
         Text(gradeReturnNote, style: muted),
+        // The automatic post of ready homework (DESIGN §30.12).
+        if (a.googlePost.state == GoogleSendState.queued) ...[
+          const SizedBox(height: 8),
+          Text(
+            'กำลังโพสต์ให้อัตโนมัติ…',
+            key: const ValueKey('google_auto_queued'),
+            style: muted,
+          ),
+        ],
+        if (a.googlePost.state == GoogleSendState.failed) ...[
+          const SizedBox(height: 8),
+          Text(
+            a.googlePost.lastError ?? 'โพสต์อัตโนมัติไม่สำเร็จ',
+            key: const ValueKey('google_auto_failed'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ],
         if (!ready) ...[
           const SizedBox(height: 8),
           Text(
@@ -286,7 +304,11 @@ class _AssignmentGoogleSectionState
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.send_outlined),
-          label: const Text('โพสต์ลง Classroom'),
+          label: Text(
+            a.googlePost.state == GoogleSendState.failed
+                ? 'โพสต์อีกครั้ง'
+                : 'โพสต์ลง Classroom',
+          ),
         ),
       ];
     }

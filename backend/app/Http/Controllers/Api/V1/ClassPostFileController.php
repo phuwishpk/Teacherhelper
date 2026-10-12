@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\ClassPosts\ClassPosts;
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Assignment;
 use App\Models\ClassPostFile;
 use App\Models\User;
 use finfo;
@@ -109,8 +111,8 @@ class ClassPostFileController extends Controller
     public function destroy(Request $request, int $id): Response
     {
         $file = ClassPostFile::query()->where('owner_id', $request->user()->id)->findOrFail($id);
-        if ($file->attachments()->exists()) {
-            throw new ApiException('ไฟล์นี้แนบอยู่กับโพสต์ ลบออกจากโพสต์ก่อน', 'file_in_use', 409);
+        if ($file->inUse()) {
+            throw new ApiException('ไฟล์นี้แนบอยู่กับโพสต์หรือการบ้าน เอาออกจากที่นั่นก่อน', 'file_in_use', 409);
         }
         ClassPosts::deleteFile($file);
 
@@ -128,12 +130,31 @@ class ClassPostFileController extends Controller
         $file = ClassPostFile::query()->findOrFail($id);
         $posts = $user->role === User::ROLE_STUDENT ? ClassPosts::forStudent($user) : ClassPosts::forTeacher($user);
         $visible = (int) $file->owner_id === (int) $user->id
-            || $posts->whereIn('class_posts.id', DB::table('class_post_attachments')->select('class_post_id')->where('class_post_file_id', $file->id))->exists();
+            || $posts->whereIn('class_posts.id', DB::table('class_post_attachments')->select('class_post_id')->where('class_post_file_id', $file->id))->exists()
+            || self::assignmentVisible($user, $file->id);
         if (! $visible || ! Storage::disk('local')->exists($file->path)) {
             abort(404);
         }
 
         return Storage::disk('local')->download($file->path, $file->original_name, ['Content-Type' => $file->mime_type]);
+    }
+
+    /**
+     * The file is attached to an assignment the teacher sees, or to a ready
+     * homework of a classroom the student is in (DESIGN §30.12).
+     */
+    private static function assignmentVisible(User $user, int $fileId): bool
+    {
+        $ids = DB::table('assignment_attachments')->select('assignment_id')->where('class_post_file_id', $fileId);
+        if ($user->role === User::ROLE_STUDENT) {
+            return Assignment::query()
+                ->where('status', Assignment::STATUS_READY)
+                ->whereIn('classroom_id', DB::table('classroom_students')->select('classroom_id')->where('student_id', $user->id))
+                ->whereIn('id', $ids)
+                ->exists();
+        }
+
+        return ClassroomAccess::assignments($user)->whereIn('assignments.id', $ids)->exists();
     }
 
     /**

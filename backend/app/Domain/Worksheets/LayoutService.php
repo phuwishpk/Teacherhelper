@@ -4,6 +4,7 @@ namespace App\Domain\Worksheets;
 
 use App\Domain\AnswerKeys\KeyCompleteness;
 use App\Domain\Assignments\AssignmentLocked;
+use App\Domain\Google\AssignmentGooglePosts;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\Layout;
@@ -74,6 +75,7 @@ class LayoutService
                 $created = true;
             }
 
+            $becameReady = ! $assignment->isReady();
             $assignment->update([
                 'current_layout_version' => $layout->version,
                 'status' => Assignment::STATUS_READY,
@@ -83,6 +85,9 @@ class LayoutService
                     'key_origin' => $assignment->key_origin ?? Assignment::KEY_TEACHER,
                 ]),
             ]);
+            if ($becameReady) {
+                AssignmentGooglePosts::onReady($assignment); // "ส่งไป Google Classroom ด้วย" (DESIGN §30.12)
+            }
 
             return ['layout' => $layout, 'created' => $created];
         });

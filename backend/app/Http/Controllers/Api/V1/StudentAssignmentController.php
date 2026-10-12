@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Exams\ExamGuard;
 use App\Domain\Pages\PageUploads;
 use App\Domain\Pages\WholePageSubmissions;
@@ -62,7 +63,7 @@ class StudentAssignmentController extends Controller
             ->where('kind', Assignment::KIND_HOMEWORK)
             ->when($filters['course_id'] !== null, fn (Builder $q) => $q->where('course_id', $filters['course_id']))
             ->when($filters['classroom_id'] !== null, fn (Builder $q) => $q->where('classroom_id', $filters['classroom_id']))
-            ->with(['classroom:id,name,academic_year,closed_at', 'subject:id,name', 'course:id,code,name'])
+            ->with(['classroom:id,name,academic_year,closed_at', 'subject:id,name', 'course:id,code,name', 'unit:id,title', 'attachments.file'])
             ->orderByRaw('CASE WHEN due_at IS NULL THEN 1 ELSE 0 END')
             ->orderBy('due_at')
             ->orderByDesc('id')
@@ -84,6 +85,10 @@ class StudentAssignmentController extends Controller
                 'course' => StudentClassrooms::course($assignment->course),
                 'classroom' => StudentClassrooms::label($assignment->classroom),
                 'subject_name' => $assignment->subject?->name,
+                // What the teacher wrote and attached (DESIGN §30.12).
+                'topic' => $assignment->topicName(),
+                'instructions' => $assignment->instructions,
+                'attachments' => $assignment->attachments->map(fn ($a) => ClassPosts::attachment($a))->values()->all(),
                 'due_at' => $assignment->due_at?->toIso8601String(),
                 'accept_late' => (bool) $assignment->accept_late,
                 'can_submit' => StudentHandIn::canSubmit($assignment),

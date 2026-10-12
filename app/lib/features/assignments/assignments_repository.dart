@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../worksheets/print_job.dart';
+import '../class_posts/class_post_models.dart';
 import 'assignment.dart';
 import 'question.dart';
 
@@ -28,6 +29,11 @@ abstract class AssignmentsRepository {
     bool scoreOnly = false,
     int? gradebookCategoryId,
     bool excludedFromGrade = false,
+    int? unitId,
+    String? topic,
+    String? instructions,
+    bool sendToGoogle = true,
+    List<PostAttachment> attachments = const [],
   });
   Future<Assignment> update(
     int id, {
@@ -45,6 +51,12 @@ abstract class AssignmentsRepository {
     int? gradebookCategoryId,
     bool clearGradebookCategory = false,
     bool? excludedFromGrade,
+    int? unitId,
+    String? topic,
+    bool clearTopic = false,
+    String? instructions,
+    bool? sendToGoogle,
+    List<PostAttachment>? attachments,
   });
   Future<void> delete(int id);
 
@@ -113,6 +125,11 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     bool scoreOnly = false,
     int? gradebookCategoryId,
     bool excludedFromGrade = false,
+    int? unitId,
+    String? topic,
+    String? instructions,
+    bool sendToGoogle = true,
+    List<PostAttachment> attachments = const [],
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments',
@@ -128,6 +145,12 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'score_only': scoreOnly,
         'gradebook_category_id': ?gradebookCategoryId,
         if (excludedFromGrade) 'excluded_from_grade': true,
+        'unit_id': ?unitId,
+        'topic': ?topic,
+        'instructions': ?instructions,
+        if (!sendToGoogle) 'send_to_google': false,
+        if (attachments.isNotEmpty)
+          'attachments': [for (final a in attachments) a.toJson()],
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -150,6 +173,12 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     int? gradebookCategoryId,
     bool clearGradebookCategory = false,
     bool? excludedFromGrade,
+    int? unitId,
+    String? topic,
+    bool clearTopic = false,
+    String? instructions,
+    bool? sendToGoogle,
+    List<PostAttachment>? attachments,
   }) async {
     final res = await _dio.patch<Object?>(
       '/assignments/$id',
@@ -168,6 +197,13 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'gradebook_category_id': ?gradebookCategoryId,
         if (clearGradebookCategory) 'gradebook_category_id': null,
         'excluded_from_grade': ?excludedFromGrade,
+        'unit_id': ?unitId,
+        'topic': ?topic,
+        if (clearTopic) 'unit_id': null,
+        'instructions': ?instructions,
+        'send_to_google': ?sendToGoogle,
+        if (attachments != null)
+          'attachments': [for (final a in attachments) a.toJson()],
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));

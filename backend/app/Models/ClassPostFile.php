@@ -36,4 +36,16 @@ class ClassPostFile extends Model
     {
         return $this->hasMany(ClassPostAttachment::class);
     }
+
+    /** @return HasMany<AssignmentAttachment, $this> */
+    public function assignmentAttachments(): HasMany
+    {
+        return $this->hasMany(AssignmentAttachment::class);
+    }
+
+    /** A post or an assignment still attaches the file. */
+    public function inUse(): bool
+    {
+        return $this->attachments()->exists() || $this->assignmentAttachments()->exists();
+    }
 }

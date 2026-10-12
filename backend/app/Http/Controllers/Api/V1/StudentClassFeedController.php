@@ -52,7 +52,7 @@ class StudentClassFeedController extends Controller
             ->where('status', Assignment::STATUS_READY)
             ->where('kind', Assignment::KIND_HOMEWORK)
             ->tap($scope)
-            ->with(['classroom:id,name,academic_year,closed_at', 'course:id,code,name'])
+            ->with(['classroom:id,name,academic_year,closed_at', 'course:id,code,name', 'unit:id,title'])
             ->orderByDesc('created_at')->orderByDesc('id')
             ->limit(self::WORK)
             ->get();
@@ -83,7 +83,7 @@ class StudentClassFeedController extends Controller
                 'at' => $assignment->created_at?->toIso8601String(),
                 'classroom' => StudentClassrooms::label($assignment->classroom),
                 'course' => StudentClassrooms::course($assignment->course),
-                'topic' => null,
+                'topic' => $assignment->topicName(),
                 'assignment' => [
                     'id' => $assignment->id,
                     'title' => (string) $assignment->title,

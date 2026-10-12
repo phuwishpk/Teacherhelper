@@ -136,6 +136,12 @@ class Assignment extends Model
         'key_extraction_id',
         'course_id',
         'lesson_plan_id',
+        'unit_id',
+        'topic',
+        'instructions',
+        'send_to_google',
+        'google_post_state',
+        'google_post_error',
         'kind',
         'grading_method',
         'version_count',
@@ -228,6 +234,27 @@ class Assignment extends Model
     public function lessonPlan(): BelongsTo
     {
         return $this->belongsTo(LessonPlan::class);
+    }
+
+    /** The unit whose Classroom topic the courseWork is filed under (DESIGN §30.12). */
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class);
+    }
+
+    /** @return HasMany<AssignmentAttachment, $this> */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(AssignmentAttachment::class)->orderBy('position')->orderBy('id');
+    }
+
+    /** The unit's title, else the free topic (DESIGN §30.12). */
+    public function topicName(): ?string
+    {
+        $name = $this->relationLoaded('unit') ? $this->unit?->title : ($this->unit_id === null ? null : $this->unit()->value('title'));
+        $name ??= $this->topic;
+
+        return $name === null || trim((string) $name) === '' ? null : trim((string) $name);
     }
 
     /** @return BelongsTo<User, $this> */

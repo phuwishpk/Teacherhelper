@@ -4974,7 +4974,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 |---|---|---|
 | 1 | โพสต์ใน Krucheck: ประกาศ เอกสารประกอบ ไฟล์และลิงก์ ฉบับร่าง ตั้งเวลา หลายห้อง รายคน หน้าของนักเรียน แจ้งเตือน (§30.1–§30.3, §30.7, §30.8) | เสร็จ |
 | 2 | ส่งไป Classroom: scope ใหม่ หัวข้อ เอกสารประกอบ ประกาศ อัปโหลดขึ้น Drive สถานะและส่งอีกครั้ง แก้และลบตาม (§30.4, §30.11) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) ⚠️ ยังต้องเพิ่ม scope ในหน้า OAuth consent และลองกับคอร์สจริง |
-| 3 | ยกระดับการบ้าน: ไฟล์แนบ หัวข้อ ลิงก์กลับ ช่องติ๊กส่งตอนเผยแพร่ | |
+| 3 | ยกระดับการบ้าน: ไฟล์แนบ หัวข้อ คำชี้แจง ลิงก์กลับ ช่องติ๊กส่งตอนเผยแพร่ (§30.12) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) |
 | 3ข | งานรายคนและการคิดคะแนน (§30.5) | |
 | 5 | ส่งคะแนนข้อสอบ (§30.6) | |
 | 6 | เลือกไฟล์จาก Drive บนเว็บแอป (ตัดออกได้) | |
@@ -5000,4 +5000,16 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 - API: `POST /class-posts/{id}/google/retry` (เจ้าของโพสต์ ห้องยังเปิด) → 202 `{data: google}` เปิด `send_to_google` ให้ถ้ายังปิด 422 `classroom_not_linked` เมื่อผู้เขียนไม่ได้ผูกห้อง; payload ของโพสต์ (ครู) มี `google: {linked, state (not_sent/queued/sent/failed), last_error, link, sent_at, in_classroom}`
 - scope: `GoogleScopes::REQUIRED` เพิ่ม `classroom.courseworkmaterials` และ `classroom.topics` migration ทำเครื่องหมาย `last_error = scope_missing` ให้บัญชีที่ยังไม่มีสองตัวนี้ (แบบเดียวกับ §19.7) ข้อความเชื่อมใหม่ `GoogleAccount::CLASS_POSTS_RECONNECT_MESSAGE` ⚠️ ต้องเพิ่มสอง scope ในหน้า OAuth consent ของ Google Cloud ก่อนขึ้น production ไม่งั้นการเชื่อมใหม่จะได้ 422 `google_scope_missing`
 - แอป: ช่องติ๊ก "ส่งไป Google Classroom ด้วย" ในฟอร์มเมื่อครูผูกห้องนั้น ป้ายสถานะบนการ์ดของครู ปุ่ม "เปิดใน Classroom" และ "ส่งอีกครั้ง" ไฟล์แนบของสำเนาที่ส่งแล้วแก้ไม่ได้ในฟอร์ม
+
+### 30.12 การบ้านเป็นโพสต์ (ขั้น 3)
+
+สร้าง 13 ต.ค. 2569 การบ้านได้ส่วนที่โพสต์มี เพื่อให้ Classroom และ Krucheck แสดงเหมือนกัน
+
+- `assignments` เพิ่ม `unit_id?` (FK units, nullOnDelete) XOR `topic?` (100), `instructions?` (text ≤ 2,000 ตัว: คำชี้แจงที่นักเรียนอ่านในหน้าส่งงาน และเป็น `description` ของ courseWork), `send_to_google` (ค่าตั้งต้นจริง), `google_post_state?` (queued/failed), `google_post_error?`
+- `assignment_attachments`: `assignment_id`, `kind` (file/link), `class_post_file_id?` (ไฟล์ของครูใน `class_post_files` ใช้ร่วมกับโพสต์ นับโควตาเดียวกัน), `url?`, `title`, `position` ไฟล์ถูกลบจาก host เมื่อไม่มีโพสต์หรือการบ้านใดใช้ (`ClassPosts::deleteUnused`) นักเรียนดาวน์โหลดได้เมื่อการบ้านพร้อมใช้ (`ready`) และอยู่ในห้องของตน ครูได้เมื่อเห็นการบ้านนั้น (`ClassroomAccess::assignments`)
+- API: `POST/PATCH /assignments` รับ `unit_id`, `topic`, `instructions`, `send_to_google`, `attachments[]` (รูปแบบเดียวกับโพสต์ สูงสุด 5) ส่ง `topic` อิสระแทนหน่วยได้ (อย่างใดอย่างหนึ่ง) เปลี่ยนรายวิชาแล้วหน่วยของวิชาเก่าหลุด payload มี `unit`, `topic` (ชื่อหน่วยหรือหัวข้ออิสระ), `instructions`, `send_to_google`, `attachments`, `google_post {state: not_sent|queued|failed|sent, last_error}` ฝั่งนักเรียน `GET /student/assignments` และ `/student/class-feed` ได้ `topic`, `instructions`, `attachments`
+- **ส่งไป Classroom อัตโนมัติ**: ตอนการบ้านเปลี่ยนเป็น `ready` (สร้าง layout หรืออนุมัติเฉลยของ freeform) ถ้า `send_to_google` เป็นจริง ห้องผูกกับคอร์สของครูผู้ดูแลงาน (`ClassroomGoogleLink::forAssignment`) และยังไม่มี courseWork → `google_post_state = queued` และ `PostCourseWorkJob` โพสต์ด้วย `CourseWorkPoster` ในนามครูผู้ดูแล (ผลเหมือนกดโพสต์เอง) Google ล่ม → ลองใหม่ ปฏิเสธ → `failed` พร้อมข้อความ ครูกดโพสต์เองอีกครั้งได้ (ปุ่มเดิม) ติ๊กออกหลัง courseWork มีแล้วไม่ลบงานใน Classroom (งานที่ส่งอ้างถึงมัน) ข้อสอบไม่ส่ง
+- courseWork ที่โพสต์ (ทั้งอัตโนมัติและกดเอง) มี `materials` (ลิงก์ และไฟล์จาก Drive ของครูตาม §30.11), `topicId` ของหน่วยหรือหัวข้ออิสระ (`ClassroomTopics`), และ `description` = คำชี้แจง + บรรทัด "ส่งงานและดูผลรายข้อในแอป Krucheck: `APP_URL/a/{id}`" ข้อความในกล่องโพสต์ (`instructions` ของ `POST /assignments/{id}/google-post`) ถูกบันทึกเป็น `assignments.instructions` ไฟล์แนบของการบ้านที่โพสต์แล้วล็อก (409 `attachments_locked`) เหมือนโพสต์
+- `GET /a/{assignment_id}` (เว็บ ไม่ต้อง login): หน้าเปิดในแอป intent `eduvision://a/{id}` → `/student/assignments/{id}/hand-in` หรือเปิดบนเว็บ; AndroidManifest เพิ่ม host `a`
+- แอป: ฟอร์มการบ้านมีช่องคำชี้แจง ตัวเลือกหัวข้อ (`TopicField`) ไฟล์และลิงก์ (`AttachmentsEditor` ใช้ร่วมกับโพสต์) และช่องติ๊ก "ส่งไป Google Classroom ด้วย" เมื่อครูผูกห้องนั้น หน้ารายละเอียดแสดงคำชี้แจงและไฟล์ ส่วน Google แสดงสถานะโพสต์อัตโนมัติ (กำลังส่ง / ไม่สำเร็จ + โพสต์อีกครั้ง) หน้าส่งงานของนักเรียนแสดงหัวข้อ คำชี้แจง และไฟล์แนบ
 

@@ -413,25 +413,30 @@ abstract final class AppRoutes {
       location.startsWith('$student/practice/') ||
       location.startsWith('$student/courses/');
 
-  /// The app location of a result link from a Classroom announcement
-  /// (DESIGN §19.7): `eduvision://r/{submission_id}` (what the server's
-  /// `/r/{id}` page opens) or a bare `/r/{id}`; null for anything else.
+  /// The app location of a link the server's pages open (DESIGN §19.7,
+  /// §30.12): `eduvision://r/{submission_id}` or `/r/{id}` for a result,
+  /// `eduvision://a/{assignment_id}` or `/a/{id}` for a hand-in; null for
+  /// anything else.
   static String? fromResultLink(Uri uri) {
     final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    final String kind;
     final List<String> rest;
-    if (uri.scheme == 'eduvision' && uri.host == 'r') {
+    if (uri.scheme == 'eduvision' && (uri.host == 'r' || uri.host == 'a')) {
+      kind = uri.host;
       rest = segments;
     } else if ((uri.scheme.isEmpty || uri.scheme == 'eduvision') &&
         uri.host.isEmpty &&
         segments.length == 2 &&
-        segments.first == 'r') {
+        (segments.first == 'r' || segments.first == 'a')) {
+      kind = segments.first;
       rest = segments.sublist(1);
     } else {
       return null;
     }
     if (rest.length != 1) return null;
     final id = int.tryParse(rest.single);
-    return id == null || id <= 0 ? null : studentResult(id);
+    if (id == null || id <= 0) return null;
+    return kind == 'a' ? studentHandIn(id) : studentResult(id);
   }
 
   static bool isPublic(String location) =>

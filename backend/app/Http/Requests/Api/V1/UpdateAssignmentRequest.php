@@ -52,6 +52,15 @@ class UpdateAssignmentRequest extends FormRequest
             'manual_full_marks' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
             'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'excluded_from_grade' => ['sometimes', 'required', 'boolean'],
+            // Post-like parts (DESIGN §30.12): a topic (unit of the course or free text), the text and the files.
+            'unit_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'topic' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'instructions' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'send_to_google' => ['sometimes', 'required', 'boolean'],
+            'attachments' => ['sometimes', 'array', 'max:'.(int) config('eduvision.class_posts.max_attachments')],
+            'attachments.*.file_id' => ['sometimes', 'integer'],
+            'attachments.*.url' => ['sometimes', 'string', 'max:2000'],
+            'attachments.*.title' => ['sometimes', 'nullable', 'string', 'max:200'],
         ];
     }
 

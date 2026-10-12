@@ -10,6 +10,7 @@ import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/courses_providers.dart';
 import 'class_post_models.dart';
+import 'attachments_editor.dart';
 import 'class_posts_repository.dart';
 import 'post_files.dart';
 
@@ -136,10 +137,7 @@ class _PostFormState extends ConsumerState<_PostForm> {
   }
 
   Future<void> _addLink() async {
-    final link = await showDialog<PostAttachment>(
-      context: context,
-      builder: (context) => const _LinkDialog(),
-    );
+    final link = await showAddLinkDialog(context);
     if (link != null && mounted) setState(() => _attachments.add(link));
   }
 
@@ -644,88 +642,6 @@ class _OtherClassrooms extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _LinkDialog extends StatefulWidget {
-  const _LinkDialog();
-
-  @override
-  State<_LinkDialog> createState() => _LinkDialogState();
-}
-
-class _LinkDialogState extends State<_LinkDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _url = TextEditingController();
-  final _title = TextEditingController();
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _title.dispose();
-    super.dispose();
-  }
-
-  void _done() {
-    if (!_formKey.currentState!.validate()) return;
-    final url = _url.text.trim();
-    final title = _title.text.trim();
-    Navigator.of(
-      context,
-    ).pop(PostAttachment(title: title.isEmpty ? url : title, url: url));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('แนบลิงก์'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              key: const ValueKey('link_url'),
-              controller: _url,
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'ลิงก์',
-                hintText: 'https://',
-              ),
-              validator: (v) {
-                final uri = Uri.tryParse((v ?? '').trim());
-                final ok =
-                    uri != null &&
-                    (uri.scheme == 'http' || uri.scheme == 'https') &&
-                    uri.host.isNotEmpty;
-                return ok ? null : 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://';
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              key: const ValueKey('link_title'),
-              controller: _title,
-              maxLength: 200,
-              decoration: const InputDecoration(
-                labelText: 'ชื่อที่แสดง (ไม่บังคับ)',
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ยกเลิก'),
-        ),
-        FilledButton(
-          key: const ValueKey('link_add'),
-          onPressed: _done,
-          child: const Text('แนบ'),
-        ),
-      ],
     );
   }
 }

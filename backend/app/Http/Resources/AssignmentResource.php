@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\ClassPosts\ClassPosts;
+use App\Domain\Google\AssignmentGooglePosts;
 use App\Models\Assignment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -75,6 +77,15 @@ class AssignmentResource extends JsonResource
             // Gradebook (DESIGN §23.3): NULL = "ยังไม่ระบุหมวด" (not counted).
             'gradebook_category_id' => $this->gradebook_category_id,
             'excluded_from_grade' => (bool) $this->excluded_from_grade,
+            // Post-like parts (DESIGN §30.12): the Classroom topic, the text students read, the files.
+            'unit_id' => $this->unit_id,
+            'topic' => $this->relationLoaded('unit') ? $this->resource->topicName() : $this->topic,
+            'instructions' => $this->instructions,
+            'send_to_google' => (bool) $this->send_to_google,
+            'unit' => $this->whenLoaded('unit', fn () => $this->unit === null ? null : ['id' => $this->unit->id, 'title' => $this->unit->title]),
+            'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($a) => ClassPosts::attachment($a))->values()->all()),
+            // The automatic post to Classroom (§30.12): not_sent | queued | failed, or sent once the courseWork exists.
+            'google_post' => $this->when($this->relationLoaded('googleLink'), fn () => AssignmentGooglePosts::payload($this->resource, $this->googleLink)),
             'questions_count' => $this->whenCounted('questions'),
             'submissions_count' => $this->whenCounted('submissions'),
             'missing_ai_key_count' => $this->whenCounted('missing_ai_key_count'),
