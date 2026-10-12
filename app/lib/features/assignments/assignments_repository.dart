@@ -34,6 +34,7 @@ abstract class AssignmentsRepository {
     String? instructions,
     bool sendToGoogle = true,
     List<PostAttachment> attachments = const [],
+    List<int>? studentIds,
   });
   Future<Assignment> update(
     int id, {
@@ -57,6 +58,8 @@ abstract class AssignmentsRepository {
     String? instructions,
     bool? sendToGoogle,
     List<PostAttachment>? attachments,
+    List<int>? studentIds,
+    bool clearStudents = false,
   });
   Future<void> delete(int id);
 
@@ -130,6 +133,7 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     String? instructions,
     bool sendToGoogle = true,
     List<PostAttachment> attachments = const [],
+    List<int>? studentIds,
   }) async {
     final res = await _dio.post<Object?>(
       '/assignments',
@@ -151,6 +155,10 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         if (!sendToGoogle) 'send_to_google': false,
         if (attachments.isNotEmpty)
           'attachments': [for (final a in attachments) a.toJson()],
+        if (studentIds != null) ...{
+          'audience': 'students',
+          'student_ids': studentIds,
+        },
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));
@@ -179,6 +187,8 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     String? instructions,
     bool? sendToGoogle,
     List<PostAttachment>? attachments,
+    List<int>? studentIds,
+    bool clearStudents = false,
   }) async {
     final res = await _dio.patch<Object?>(
       '/assignments/$id',
@@ -204,6 +214,11 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'send_to_google': ?sendToGoogle,
         if (attachments != null)
           'attachments': [for (final a in attachments) a.toJson()],
+        if (studentIds != null) ...{
+          'audience': 'students',
+          'student_ids': studentIds,
+        },
+        if (clearStudents) 'audience': 'all',
       },
     );
     return Assignment.fromJson(unwrapJson(res.data));

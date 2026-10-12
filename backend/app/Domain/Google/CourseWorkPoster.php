@@ -5,6 +5,7 @@ namespace App\Domain\Google;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\ClassroomStudent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -79,7 +80,7 @@ final class CourseWorkPoster
             }
             $topicName = $assignment->topicName();
             $topicId = $topicName === null ? null : ClassroomTopics::idFor($api, $link->course_id, $topicName, $assignment->unit_id);
-            $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input, $materials, $topicId));
+            $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input, $materials, $topicId, self::assignees($assignment)));
             if ($work['id'] === '') {
                 throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'courseWork.create answered without an id');
             }
@@ -105,7 +106,7 @@ final class CourseWorkPoster
      * @param  array{attach_blank_worksheet: bool, instructions?: string|null, due_at?: string|null}  $input
      * @return array<string, mixed>
      */
-    public function courseWork(Assignment $assignment, array $input, array $materials = [], ?string $topicId = null): array
+    public function courseWork(Assignment $assignment, array $input, array $materials = [], ?string $topicId = null, ?array $studentIds = null): array
     {
         $work = [
             'title' => $assignment->title,
@@ -120,6 +121,10 @@ final class CourseWorkPoster
         if ($topicId !== null) {
             $work['topicId'] = $topicId;
         }
+        if ($studentIds !== null) {
+            $work['assigneeMode'] = 'INDIVIDUAL_STUDENTS';
+            $work['individualStudentsOptions'] = ['studentIds' => $studentIds];
+        }
 
         $due = $this->dueAt($assignment, $input['due_at'] ?? null);
         if ($due !== null) {
@@ -128,6 +133,33 @@ final class CourseWorkPoster
         }
 
         return $work;
+    }
+
+    /**
+     * Homework for chosen students (DESIGN §30.13) goes to their Classroom
+     * accounts; null for the whole class. 422 no_google_students when none
+     * of them is paired, rather than reaching everyone by mistake.
+     *
+     * @return list<string>|null
+     */
+    private static function assignees(Assignment $assignment): ?array
+    {
+        if (! $assignment->isForStudents()) {
+            return null;
+        }
+        $ids = ClassroomStudent::query()
+            ->where('classroom_id', $assignment->classroom_id)
+            ->whereIn('student_id', $assignment->recipients()->select('users.id'))
+            ->whereNotNull('google_user_id')
+            ->orderBy('google_user_id')
+            ->pluck('google_user_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+        if ($ids === []) {
+            throw new ApiException('นักเรียนที่ได้รับมอบงานนี้ยังไม่มีใครจับคู่กับบัญชี Google จับคู่ในหน้ารายชื่อ Google ของห้องก่อน', 'no_google_students', 422);
+        }
+
+        return $ids;
     }
 
     private function description(Assignment $assignment, ?string $instructions): string

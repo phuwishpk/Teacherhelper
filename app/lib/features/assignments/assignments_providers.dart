@@ -35,6 +35,7 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
     String? instructions,
     bool sendToGoogle = true,
     List<PostAttachment> attachments = const [],
+    List<int>? studentIds,
   }) async {
     final created = await ref
         .read(assignmentsRepositoryProvider)
@@ -55,6 +56,7 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
           instructions: instructions,
           sendToGoogle: sendToGoogle,
           attachments: attachments,
+          studentIds: studentIds,
         );
     state = AsyncData([created, ...state.value ?? const []]);
     return created;
@@ -112,6 +114,8 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     String? instructions,
     bool? sendToGoogle,
     List<PostAttachment>? attachments,
+    List<int>? studentIds,
+    bool clearStudents = false,
   }) async {
     await ref
         .read(assignmentsRepositoryProvider)
@@ -137,6 +141,8 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
           instructions: instructions,
           sendToGoogle: sendToGoogle,
           attachments: attachments,
+          studentIds: studentIds,
+          clearStudents: clearStudents,
         );
     await refresh();
     ref.invalidate(assignmentsProvider);

@@ -48,6 +48,7 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     String? instructions,
     bool sendToGoogle = true,
     List<PostAttachment> attachments = const [],
+    List<int>? studentIds,
   }) async {
     created.add({
       'title': title,
@@ -56,6 +57,7 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
       'instructions': instructions,
       'send_to_google': sendToGoogle,
       'attachments': [for (final a in attachments) a.toJson()],
+      'student_ids': studentIds,
     });
     return Assignment(
       id: 55,
@@ -89,6 +91,8 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     String? instructions,
     bool? sendToGoogle,
     List<PostAttachment>? attachments,
+    List<int>? studentIds,
+    bool clearStudents = false,
   }) async {
     updated.add({
       'unit_id': unitId,
@@ -99,6 +103,8 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
       'attachments': attachments == null
           ? null
           : [for (final a in attachments) a.toJson()],
+      'student_ids': studentIds,
+      'clear_students': clearStudents,
     });
     return Assignment(id: id, classroomId: 7, subjectId: 1, title: 'x');
   }
@@ -229,6 +235,7 @@ void main() {
     await _submit(tester);
     expect(assignments.created.single, {
       'title': 'แบบฝึกหัดเศษส่วน',
+      'student_ids': null,
       'unit_id': 31,
       'topic': null,
       'instructions': 'ทำข้อ 1-5',
@@ -262,6 +269,22 @@ void main() {
       expect(assignments.created.single['send_to_google'], isTrue);
     },
   );
+
+  testWidgets('"เลือกนักเรียน" sends the chosen students', (tester) async {
+    final assignments = await pump(tester);
+    await _pickRoomAndCourse(tester);
+    await tester.ensureVisible(find.text('เลือกนักเรียน'));
+    await tester.tap(find.text('เลือกนักเรียน'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pick_student_503')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pick_students_done')));
+    await tester.pumpAndSettle();
+    expect(find.text('นักเรียน 1 คน · แก้ไข'), findsOneWidget);
+    await _submit(tester);
+    expect(assignments.created.single['student_ids'], [503]);
+    expect(assignments.created.single['send_to_google'], isTrue);
+  });
 
   testWidgets('files picked are uploaded and attached', (tester) async {
     tester.view.physicalSize = const Size(1080, 3200);

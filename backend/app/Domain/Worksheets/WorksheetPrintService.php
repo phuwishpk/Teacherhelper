@@ -39,7 +39,9 @@ class WorksheetPrintService
             );
         }
 
-        $studentIds = $assignment->classroom->students()->pluck('users.id')->map(fn ($id) => (int) $id)->all();
+        // One sheet per student the work is for (DESIGN §30.13).
+        $students = $assignment->isForStudents() ? $assignment->recipients() : $assignment->classroom->students();
+        $studentIds = $students->pluck('users.id')->map(fn ($id) => (int) $id)->all();
         if ($studentIds === []) {
             throw new ApiException('ห้องนี้ยังไม่มีนักเรียน', 'classroom_empty', 422);
         }

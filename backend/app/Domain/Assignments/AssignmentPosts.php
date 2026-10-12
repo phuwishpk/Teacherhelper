@@ -9,6 +9,7 @@ use App\Models\Assignment;
 use App\Models\ClassPostFile;
 use App\Models\Course;
 use App\Models\Unit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -44,6 +45,54 @@ final class AssignmentPosts
         }
 
         return $text === '' ? null : $text;
+    }
+
+    /**
+     * The chosen students of homework (DESIGN §30.13): members of the
+     * classroom, at least one. Null = the whole classroom.
+     *
+     * @param  array<int, mixed>  $ids
+     * @return list<int>|null
+     */
+    public static function recipients(Assignment $assignment, mixed $audience, mixed $ids): ?array
+    {
+        if ($audience !== Assignment::AUDIENCE_STUDENTS) {
+            return null;
+        }
+        if ($assignment->isExam()) {
+            throw ValidationException::withMessages(['audience' => 'ข้อสอบมอบให้ทั้งห้องเท่านั้น']);
+        }
+        $ids = array_values(array_unique(array_map('intval', is_array($ids) ? $ids : [])));
+        if ($ids === []) {
+            throw ValidationException::withMessages(['student_ids' => 'เลือกนักเรียนอย่างน้อยหนึ่งคน']);
+        }
+        $found = DB::table('classroom_students')->where('classroom_id', $assignment->classroom_id)->whereIn('student_id', $ids)->count();
+        if ($found !== count($ids)) {
+            throw ValidationException::withMessages(['student_ids' => 'เลือกได้เฉพาะนักเรียนของห้องนี้']);
+        }
+        sort($ids);
+
+        return $ids;
+    }
+
+    /**
+     * Writes who the work is for. Refused once the courseWork exists:
+     * Classroom does not change assignees after the fact (409 audience_locked)
+     * unless the list is the same.
+     *
+     * @param  list<int>|null  $studentIds
+     */
+    public static function setRecipients(Assignment $assignment, ?array $studentIds): void
+    {
+        $current = $assignment->isForStudents() ? $assignment->recipients()->orderBy('users.id')->pluck('users.id')->map(fn ($id) => (int) $id)->all() : null;
+        if ($current === $studentIds) {
+            return;
+        }
+        if ($assignment->googleLink()->exists()) {
+            throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว เปลี่ยนผู้รับไม่ได้', 'audience_locked', 409);
+        }
+        $assignment->forceFill(['audience' => $studentIds === null ? Assignment::AUDIENCE_ALL : Assignment::AUDIENCE_STUDENTS])->save();
+        $assignment->recipients()->sync($studentIds ?? []);
     }
 
     /**

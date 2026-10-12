@@ -420,6 +420,11 @@ class _Cell extends StatelessWidget {
       CellState.notDue => label('ยังไม่ถึงกำหนด', faint),
       CellState.pending => label('รอประกาศผล', Colors.orange.shade800),
       CellState.excused => label('ยกเว้น', faint, style: FontStyle.italic),
+      CellState.notAssigned => label(
+        'ไม่ได้รับมอบ',
+        faint,
+        style: FontStyle.italic,
+      ),
       CellState.notCounted => Text(
         score ?? '–',
         style: TextStyle(color: faint),

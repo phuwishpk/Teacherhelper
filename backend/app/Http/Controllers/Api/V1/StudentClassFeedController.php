@@ -45,6 +45,7 @@ class StudentClassFeedController extends Controller
         $rooms = ClassroomStudent::query()->select('classroom_id')->where('student_id', $student->id);
         $scope = fn (Builder $q) => $q
             ->whereIn('classroom_id', $rooms)
+            ->reaching((int) $student->id)
             // Exams are done on paper only (DESIGN §22.1); their results still show.
             ->when($filters['course_id'] !== null, fn (Builder $a) => $a->where('course_id', $filters['course_id']))
             ->when($filters['classroom_id'] !== null, fn (Builder $a) => $a->where('classroom_id', $filters['classroom_id']));

@@ -38,6 +38,9 @@ final class GradebookCalculator
 
     public const EXCUSED = 'excused';
 
+    /** Homework for chosen students the student is not one of (DESIGN §30.13). */
+    public const NOT_ASSIGNED = 'not_assigned';
+
     /**
      * @param  list<GradebookCategorySpec>  $categories  in order
      * @param  list<int>  $cutoffs
@@ -197,7 +200,11 @@ final class GradebookCalculator
             $state === self::MISSING => 0.0,
             default => null,
         };
-        if ($cell->excused) {
+        if ($cell->notAssigned) {
+            $score = null;
+            $state = self::NOT_ASSIGNED;
+            $percent = null;
+        } elseif ($cell->excused) {
             $state = self::EXCUSED;
             $percent = null;
         } elseif (! $counted) {

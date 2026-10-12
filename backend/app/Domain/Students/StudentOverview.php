@@ -60,6 +60,7 @@ final class StudentOverview
             ->whereIn('classroom_id', $roomIds)
             ->where('status', Assignment::STATUS_READY)
             ->where('kind', Assignment::KIND_HOMEWORK)
+            ->reaching((int) $student->id)
             ->whereNotIn('id', $handedIn)
             ->get(['id', 'classroom_id', 'course_id', 'subject_id', 'due_at', 'accept_late']);
         foreach ($todo as $assignment) {

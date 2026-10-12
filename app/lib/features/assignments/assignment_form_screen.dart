@@ -9,6 +9,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../class_posts/attachments_editor.dart';
 import '../class_posts/class_post_models.dart';
+import '../class_posts/students_picker.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/course_picker.dart';
@@ -105,6 +106,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       : null;
   late bool _sendToGoogle = widget.existing?.sendToGoogle ?? true;
   late List<PostAttachment> _attachments = [...?widget.existing?.attachments];
+  late List<int>? _studentIds = widget.existing?.studentIds == null
+      ? null
+      : [...widget.existing!.studentIds!];
   bool _uploading = false;
   bool _busy = false;
 
@@ -193,6 +197,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   ? _sendToGoogle
                   : null,
               attachments: _attachmentsChanged(a) ? _attachments : null,
+              studentIds: _studentsChanged(a) ? _studentIds : null,
+              clearStudents: _studentsChanged(a) && _studentIds == null,
             );
         if (!mounted) return;
         showMessage(context, 'บันทึกแล้ว');
@@ -221,6 +227,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   : null,
               sendToGoogle: _sendToGoogle,
               attachments: _attachments,
+              studentIds: _studentIds,
             );
         if (!mounted) return;
         showMessage(
@@ -236,6 +243,25 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _pickStudents() async {
+    final classroomId = _classroomId;
+    if (classroomId == null) return;
+    final roster = await ref.read(rosterProvider(classroomId).future);
+    if (!mounted) return;
+    final chosen = await showStudentsPicker(
+      context,
+      roster: roster,
+      selected: _studentIds ?? const [],
+    );
+    if (chosen != null && mounted) setState(() => _studentIds = chosen);
+  }
+
+  bool _studentsChanged(Assignment a) {
+    final before = a.studentIds, after = _studentIds;
+    if (before == null || after == null) return before != after;
+    return before.join(',') != after.join(',');
   }
 
   bool _attachmentsChanged(Assignment a) {
@@ -381,6 +407,42 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               onUploading: (v) => setState(() => _uploading = v),
               onError: (m) => setState(() => _error = m),
             ),
+            const SizedBox(height: 16),
+            Text('ส่งถึง', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            SegmentedButton<bool>(
+              key: const ValueKey('assignment_audience'),
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: false, label: Text('ทั้งห้อง')),
+                ButtonSegment(value: true, label: Text('เลือกนักเรียน')),
+              ],
+              selected: {_studentIds != null},
+              onSelectionChanged: _busy || filesLocked || classroomId == null
+                  ? null
+                  : (s) {
+                      if (s.single) {
+                        _pickStudents();
+                      } else {
+                        setState(() => _studentIds = null);
+                      }
+                    },
+            ),
+            if (_studentIds case final ids?)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  key: const ValueKey('assignment_students'),
+                  onPressed: _busy || filesLocked ? null : _pickStudents,
+                  icon: const Icon(Icons.group_outlined),
+                  label: Text('นักเรียน ${ids.length} คน · แก้ไข'),
+                ),
+              ),
+            if (filesLocked)
+              Text(
+                'โพสต์ลง Google Classroom แล้ว เปลี่ยนผู้รับไม่ได้',
+                style: theme.textTheme.bodySmall,
+              ),
             if (linkedCourse != null)
               CheckboxListTile(
                 key: const ValueKey('assignment_send_google'),

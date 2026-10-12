@@ -9,6 +9,7 @@ use App\Models\ClassPostFile;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomGoogleTopic;
+use App\Models\ClassroomStudent;
 use App\Models\Course;
 use App\Models\GoogleAccount;
 use App\Models\Question;
@@ -149,6 +150,31 @@ class AssignmentAutoPostTest extends TestCase
         $this->asUser($this->teacher)->patchJson("/api/v1/assignments/{$off->id}", ['send_to_google' => true])->assertOk()->assertJsonPath('data.google_post.state', 'sent');
         $this->assertCount(1, $this->sentTo('/courseWork', 'POST'));
         $this->assertArrayNotHasKey('topicId', $this->sentTo('/courseWork', 'POST')[0]->data(), 'no unit, no topic');
+    }
+
+    public function test_homework_for_chosen_students_reaches_only_their_classroom_accounts(): void
+    {
+        $this->fake();
+        $paired = User::query()->where('role', 'student')->firstOrFail();
+        $unpaired = $this->enrollStudent($this->classroom, 2, 'นักเรียน 2')['student'];
+        ClassroomStudent::query()->where('student_id', $paired->id)->update(['google_user_id' => 'g-1']);
+
+        $assignment = $this->homework(['audience' => 'students', 'student_ids' => [$paired->id, $unpaired->id]]);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$assignment->id}/layout")->assertCreated();
+        $body = $this->sentTo('/courseWork', 'POST')[0]->data();
+        $this->assertSame('INDIVIDUAL_STUDENTS', $body['assigneeMode']);
+        $this->assertSame(['studentIds' => ['g-1']], $body['individualStudentsOptions']);
+        // Posted: who it is for cannot change any more.
+        $this->asUser($this->teacher)->patchJson("/api/v1/assignments/{$assignment->id}", ['audience' => 'all'])->assertStatus(409)->assertJsonPath('code', 'audience_locked');
+        $this->asUser($this->teacher)->patchJson("/api/v1/assignments/{$assignment->id}", ['student_ids' => [$paired->id, $unpaired->id]])->assertOk();
+
+        // Nobody paired: not posted to the whole class by mistake.
+        $only = $this->homework(['audience' => 'students', 'student_ids' => [$unpaired->id]]);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$only->id}/layout")->assertCreated();
+        $this->assertCount(1, $this->sentTo('/courseWork', 'POST'));
+        $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$only->id}")->assertOk()
+            ->assertJsonPath('data.google_post.state', 'failed')
+            ->assertJsonPath('data.google_post.last_error', 'นักเรียนที่ได้รับมอบงานนี้ยังไม่มีใครจับคู่กับบัญชี Google จับคู่ในหน้ารายชื่อ Google ของห้องก่อน');
     }
 
     public function test_a_refusal_is_kept_on_the_assignment_and_a_post_by_hand_clears_it(): void

@@ -253,7 +253,10 @@ enum CellState {
   notDue('not_due'),
   pending('pending'),
   notCounted('not_counted'),
-  excused('excused');
+  excused('excused'),
+
+  /// Homework for chosen students this student is not one of (DESIGN §30.13).
+  notAssigned('not_assigned');
 
   const CellState(this.apiValue);
 
@@ -860,6 +863,7 @@ String cellStateLabel(CellState state, ColumnType type) => switch (state) {
   CellState.notDue => 'ยังไม่ถึงกำหนด',
   CellState.pending => 'รอประกาศผล',
   CellState.excused => 'ยกเว้น',
+  CellState.notAssigned => 'ไม่ได้รับมอบ',
   CellState.notCounted => 'ไม่นับ',
   CellState.scored => '',
 };
