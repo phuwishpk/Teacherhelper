@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:eduvision/features/class_posts/class_post_form_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:eduvision/features/class_posts/drive_picker.dart';
+import 'package:eduvision/features/class_posts/attachments_editor.dart';
 import 'package:eduvision/features/class_posts/class_post_models.dart';
 import 'package:eduvision/features/class_posts/class_posts_repository.dart';
 import 'package:eduvision/features/class_posts/class_posts_screen.dart';
@@ -749,6 +752,57 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  testWidgets('"เลือกจาก Google Drive" adds the picked file as a link', (
+    tester,
+  ) async {
+    var list = <PostAttachment>[];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          classPostsRepositoryProvider.overrideWithValue(FakeClassPosts()),
+          drivePickerProvider.overrideWithValue(
+            () async => const PostAttachment(
+              title: 'ใบงาน.pdf',
+              url: 'https://drive.google.com/file/d/abc/view',
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => AttachmentsEditor(
+                attachments: list,
+                onChanged: (v) => setState(() => list = v),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('post_attach_drive')));
+    await tester.pumpAndSettle();
+    expect(list.single.url, 'https://drive.google.com/file/d/abc/view');
+    expect(find.text('ใบงาน.pdf'), findsOneWidget);
+  });
+
+  testWidgets('without a picker there is no Drive button', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          classPostsRepositoryProvider.overrideWithValue(FakeClassPosts()),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: AttachmentsEditor(attachments: const [], onChanged: (_) {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('post_attach_drive')), findsNothing);
   });
 
   test('a post reads the API payload of a teacher and of a student', () {

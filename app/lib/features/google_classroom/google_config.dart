@@ -34,6 +34,17 @@ const googleServerScopes = [
   topicsScope,
 ];
 
+/// The Google Picker of the web app (DESIGN §30.15): the OAuth client id of
+/// the web app, a browser API key with the Picker API, and the project
+/// number. Empty = no "เลือกจาก Google Drive" button.
+const googlePickerClientId = String.fromEnvironment('GOOGLE_PICKER_CLIENT_ID');
+const googlePickerApiKey = String.fromEnvironment('GOOGLE_PICKER_API_KEY');
+const googlePickerAppId = String.fromEnvironment('GOOGLE_PICKER_APP_ID');
+const bool googlePickerConfigured =
+    googlePickerClientId != '' &&
+    googlePickerApiKey != '' &&
+    googlePickerAppId != '';
+
 /// The Classroom copies of class posts (DESIGN §30.4, §30 step 2): the
 /// materials and the topics they are filed under. An account connected
 /// before they were added connects again.

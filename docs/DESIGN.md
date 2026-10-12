@@ -4977,7 +4977,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 | 3 | ยกระดับการบ้าน: ไฟล์แนบ หัวข้อ คำชี้แจง ลิงก์กลับ ช่องติ๊กส่งตอนเผยแพร่ (§30.12) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) |
 | 3ข | งานรายคนและการคิดคะแนน (§30.5, §30.13) | เสร็จ |
 | 5 | ส่งคะแนนข้อสอบ (§30.6, §30.14) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) ⚠️ ต้องลองกับคอร์สจริงว่าใส่คะแนนให้งานที่นักเรียนไม่ได้กดส่งได้ |
-| 6 | เลือกไฟล์จาก Drive บนเว็บแอป (ตัดออกได้) | |
+| 6 | เลือกไฟล์จาก Drive บนเว็บแอป (§30.15) | เสร็จในโค้ด ⚠️ ต้องตั้งค่า API key/client id ของ Picker และลองในเบราว์เซอร์จริง |
 
 ### 30.10 แอป (ขั้น 1)
 
@@ -5031,4 +5031,12 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 - `POST /assignments/{id}/google-exam-scores` (ครูผู้ดูแลข้อสอบ ห้องยังเปิด ข้อสอบเท่านั้น 422 `homework_kind_unsupported`) → 202 `{queued, course_work_id}`: ครั้งแรกสร้าง courseWork เปล่าชื่อเดียวกับข้อสอบ (description "คะแนนสอบ … จาก Krucheck", `maxPoints` = คะแนนเต็ม: ผลรวม `max_points` ของข้อสอบที่ตรวจในแอป หรือ `manual_full_marks` ไม่มีกำหนดส่ง) เก็บใน `assignment_google_links` แล้ว `PushExamScoresJob` ใส่คะแนนให้ทุกคนที่มีคะแนน: ข้อสอบตรวจในแอป = ผลรวมที่ประกาศแล้ว (`effectiveTotal`) และคิวประกาศผลรายคน (§19.7) ตามไป; ข้อสอบกรอกคะแนนเอง = คะแนนใน `gradebook_entries` (ยกเว้นข้ามไป) ไม่มีประกาศรายคน 409 `no_results` เมื่อยังไม่มีคะแนน 422 `classroom_not_linked` เมื่อห้องไม่ได้ผูก กดส่งซ้ำได้ (ส่งคะแนนปัจจุบันทับ)
 - การใส่คะแนนใช้ `ClassroomGradePusher::pushGrade(assignment, student, score)` ตัวเดียวกับการบ้าน (หา submission ของนักเรียนใน courseWork ใส่ `assignedGrade` แล้วส่งคืน ผลลงใน `classroom_submission_imports` เป็น `graded`/`grade_failed`) นักเรียนที่ไม่ได้จับคู่บัญชี Google ถูกข้าม ⚠️ ยังต้องยืนยันกับคอร์สจริงว่า Classroom ยอมรับคะแนนของงานที่นักเรียนไม่ได้กดส่ง (สถานะ CREATED) ถ้าไม่ยอม ให้บอกครูว่านักเรียนต้องกด "ทำเครื่องหมายว่าเสร็จ" ก่อน
 - `GET /assignments/{id}/google-exam-scores` → `{posted, link, linked, scored, graded, failed, unpaired, last_error}` สำหรับการ์ด "คะแนนใน Google Classroom" บนหน้าผลสอบของแอป (ปุ่ม "ส่งคะแนนไป Classroom" / "ส่งอีกครั้ง", สรุปจำนวน, ปุ่มเปิดใน Classroom)
+
+### 30.15 เลือกไฟล์จาก Google Drive บนเว็บแอป (ขั้น 6)
+
+สร้าง 13 ต.ค. 2569 ตาม §30.2 "เลือกจาก Drive เก็บแค่ลิงก์"
+
+- เฉพาะเว็บแอป: ปุ่ม "เลือกจาก Google Drive" ในส่วนไฟล์และลิงก์ของโพสต์และการบ้าน เปิด Google Picker ผ่าน `window.kruPickDrive` ใน `app/web/index.html` (โหลด `apis.google.com/js/api.js` และ Google Identity Services) ครูให้สิทธิ์ `drive.file` ในเบราว์เซอร์ตอนกด เลือกไฟล์แล้วได้กลับมาเป็น**ลิงก์แนบ** (`https://drive.google.com/...`) ไม่คัดลอกไฟล์เข้า host และใน Classroom เป็น material แบบลิงก์
+- ตั้งค่าตอน build ด้วย `--dart-define`: `GOOGLE_PICKER_CLIENT_ID` (OAuth client ของเว็บแอป ตัวเดียวกับ sign-in ได้), `GOOGLE_PICKER_API_KEY` (API key ที่เปิด Google Picker API และจำกัดโดเมน), `GOOGLE_PICKER_APP_ID` (project number) ขาดตัวใดตัวหนึ่ง = ไม่มีปุ่ม (`googlePickerConfigured`) Android ไม่มีปุ่ม (`drive_picker_stub.dart`)
+- ยังไม่ได้ลองกับ Google จริง (ต้องมี API key และโดเมนที่อนุญาต)
 

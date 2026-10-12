@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import 'class_post_models.dart';
 import 'class_posts_repository.dart';
+import 'drive_picker.dart';
 import 'post_files.dart';
 
 /// "ไฟล์และลิงก์" of a post or an assignment (DESIGN §30.2, §30.12): the
@@ -69,6 +70,17 @@ class _AttachmentsEditorState extends ConsumerState<AttachmentsEditor> {
     }
   }
 
+  Future<void> _pickDrive(Future<PostAttachment?> Function() pick) async {
+    try {
+      final picked = await pick();
+      if (picked != null && mounted) {
+        widget.onChanged([...widget.attachments, picked]);
+      }
+    } catch (e) {
+      widget.onError?.call('เปิดตัวเลือกไฟล์ของ Google Drive ไม่ได้: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -122,6 +134,13 @@ class _AttachmentsEditorState extends ConsumerState<AttachmentsEditor> {
                 icon: const Icon(Icons.link),
                 label: const Text('แนบลิงก์'),
               ),
+              if (ref.watch(drivePickerProvider) case final pick?)
+                OutlinedButton.icon(
+                  key: const ValueKey('post_attach_drive'),
+                  onPressed: busy ? null : () => _pickDrive(pick),
+                  icon: const Icon(Icons.add_to_drive),
+                  label: const Text('เลือกจาก Google Drive'),
+                ),
             ],
           ),
           const SizedBox(height: 8),
