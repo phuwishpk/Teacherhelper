@@ -7,6 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/password_field.dart';
 import '../auth/student_login_form.dart' show studentLoginErrorMessage;
 import '../auth/student_qr_scan_screen.dart' show cardErrorMessage;
 import 'google_signin_config.dart';
@@ -237,11 +238,10 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                key: const ValueKey('link_password'),
+              PasswordField(
+                fieldKey: const ValueKey('link_password'),
                 controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'รหัสผ่าน'),
+                labelText: 'รหัสผ่าน',
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'กรอกรหัสผ่าน' : null,
                 onFieldSubmitted: (_) {

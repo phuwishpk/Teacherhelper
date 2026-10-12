@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/widgets/auth_layout.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
@@ -202,11 +203,10 @@ class _TeacherLoginFormState extends ConsumerState<_TeacherLoginForm> {
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 16),
-          TextFormField(
+          PasswordField(
             controller: _password,
-            obscureText: true,
+            labelText: 'รหัสผ่าน',
             autofillHints: const [AutofillHints.password],
-            decoration: const InputDecoration(labelText: 'รหัสผ่าน'),
             validator: (v) => (v == null || v.isEmpty) ? 'กรอกรหัสผ่าน' : null,
             onFieldSubmitted: (_) => _submit(),
           ),
