@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/password_field.dart';
 import '../auth/sign_out_action.dart';
 
 /// `/student/password` (DESIGN §29.10): the student sets their own
@@ -92,27 +93,21 @@ class _StudentPasswordScreenState extends ConsumerState<StudentPasswordScreen> {
             ],
             const SizedBox(height: 16),
             if (!_forced) ...[
-              TextFormField(
-                key: const ValueKey('password_current'),
+              PasswordField(
+                fieldKey: const ValueKey('password_current'),
                 controller: _current,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'รหัสผ่านปัจจุบัน',
-                ),
+                labelText: 'รหัสผ่านปัจจุบัน',
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'กรอกรหัสผ่านปัจจุบัน' : null,
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 16),
             ],
-            TextFormField(
-              key: const ValueKey('password_new'),
+            PasswordField(
+              fieldKey: const ValueKey('password_new'),
               controller: _password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'รหัสผ่านใหม่',
-                helperText: 'อย่างน้อย 6 ตัว และห้ามใช้ 123456',
-              ),
+              labelText: 'รหัสผ่านใหม่',
+              helperText: 'อย่างน้อย 6 ตัว และห้ามใช้ 123456',
               validator: (v) {
                 if (v == null || v.length < 6) return 'อย่างน้อย 6 ตัว';
                 if (v == '123456') return 'ห้ามใช้ 123456';
@@ -121,13 +116,10 @@ class _StudentPasswordScreenState extends ConsumerState<StudentPasswordScreen> {
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              key: const ValueKey('password_again'),
+            PasswordField(
+              fieldKey: const ValueKey('password_again'),
               controller: _again,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'พิมพ์รหัสผ่านใหม่อีกครั้ง',
-              ),
+              labelText: 'พิมพ์รหัสผ่านใหม่อีกครั้ง',
               validator: (v) =>
                   v != _password.text ? 'รหัสผ่านสองช่องไม่ตรงกัน' : null,
               onFieldSubmitted: (_) => _submit(),
