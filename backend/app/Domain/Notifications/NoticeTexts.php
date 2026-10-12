@@ -71,6 +71,14 @@ final class NoticeTexts
         return $courseCode !== '' ? "ประกาศเกรด {$courseCode} แล้ว" : 'ประกาศเกรดแล้ว';
     }
 
+    /** To the students of a new announcement (§30.3): the classroom, never the text. */
+    public static function classPost(string $classroomName): string
+    {
+        $classroomName = trim($classroomName);
+
+        return $classroomName !== '' ? "มีประกาศใหม่ในห้อง {$classroomName}" : 'มีประกาศใหม่จากครู';
+    }
+
     /** To the teacher once per drop of the Google grant (§19.3). */
     public static function googleReconnectNeeded(): string
     {

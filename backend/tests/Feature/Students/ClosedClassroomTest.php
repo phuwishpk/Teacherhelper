@@ -107,6 +107,9 @@ class ClosedClassroomTest extends TestCase
         'api.students.pin' => 403,
         'api.students.login-card' => 403,
         'api.students.google-identity.destroy' => 403,
+        // A teacher's uploads (§30.2) belong to the teacher until a post attaches them.
+        'api.class-post-files.store' => null,
+        'api.class-post-files.destroy' => null,
         // Google sign-in (§24.9): accounts, not classrooms.
         'api.auth.google' => null,
         'api.auth.google.web-url' => null,
@@ -340,6 +343,7 @@ class ClosedClassroomTest extends TestCase
             'appeals' => $this->appealA2->id,
             'gradebook-items' => $this->gradebookItemA->id,
             'attendance-sessions' => $this->attendanceSessionA->id,
+            'class-posts' => $this->classPostA->id,
             'analyses' => $this->analysisA->id,
             'google-submissions' => $this->importA->id,
             'grade-conflicts' => $this->conflictA->id,
@@ -362,6 +366,7 @@ class ClosedClassroomTest extends TestCase
             'api/v1/courses/{id}/classrooms' => ['classroom_ids' => []],
             'api/v1/courses/{id}/gradebook-items' => ['classroom_ids' => [$classroomId], 'category_id' => $this->gradebookItemA->category_id, 'name' => 'งานเก็บ', 'max_points' => 10],
             'api/v1/courses/{id}/attendance-sessions' => ['classroom_id' => $classroomId, 'held_on' => '2026-10-02'],
+            'api/v1/class-posts' => ['classroom_ids' => [$classroomId], 'kind' => 'announcement', 'state' => 'published', 'body' => 'ประกาศ'],
             'api/v1/courses/{id}/gradebook/special-grades', 'api/v1/courses/{id}/gradebook/publish' => ['classroom_id' => $classroomId, 'student_id' => $this->studentA->id, 'special' => 'r'],
             'api/v1/students/{id}/analysis/run' => ['classroom_id' => $classroomId],
             'api/v1/classrooms/{id}/course-requests' => ['course_id' => $this->courseA->id],

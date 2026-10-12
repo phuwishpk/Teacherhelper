@@ -10,6 +10,9 @@ use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceSession;
+use App\Models\ClassPost;
+use App\Models\ClassPostAttachment;
+use App\Models\ClassPostFile;
 use App\Models\Classroom;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomSubmissionImport;
@@ -176,6 +179,11 @@ trait SecurityWorld
     /** A checked period of course A in classroom A (DESIGN §29.5), both students present. */
     protected AttendanceSession $attendanceSessionA;
 
+    /** Published by teacher A in classroom A for student A2 only, with one file (§30). */
+    protected ClassPost $classPostA;
+
+    protected ClassPostFile $classPostFileA;
+
     /** Published grades of classroom A in course A: rows of student A and A2 (§23.7). */
     protected GradebookPublication $publicationA;
 
@@ -273,6 +281,17 @@ trait SecurityWorld
         foreach ([$this->studentA, $this->studentA2] as $student) {
             AttendanceRecord::create(['attendance_session_id' => $this->attendanceSessionA->id, 'student_id' => $student->id, 'status' => AttendanceRecord::PRESENT, 'updated_by' => $this->teacherA->id]);
         }
+        Storage::disk('local')->put('class-posts/security/a.pdf', "%PDF-1.4\n%%EOF\n");
+        $this->classPostFileA = ClassPostFile::create([
+            'owner_id' => $this->teacherA->id, 'path' => 'class-posts/security/a.pdf', 'original_name' => 'a.pdf',
+            'mime_type' => 'application/pdf', 'size_bytes' => 15, 'sha256' => str_repeat('a', 64),
+        ]);
+        $this->classPostA = ClassPost::create([
+            'classroom_id' => $this->classroomA->id, 'author_id' => $this->teacherA->id, 'kind' => ClassPost::KIND_ANNOUNCEMENT, 'body' => 'ประกาศ',
+            'audience' => ClassPost::AUDIENCE_STUDENTS, 'state' => ClassPost::STATE_PUBLISHED, 'published_at' => now(),
+        ]);
+        $this->classPostA->recipients()->sync([$this->studentA2->id]);
+        ClassPostAttachment::create(['class_post_id' => $this->classPostA->id, 'kind' => ClassPostAttachment::KIND_FILE, 'class_post_file_id' => $this->classPostFileA->id, 'title' => 'a.pdf', 'position' => 0]);
         $this->publicationA = GradebookPublication::create([
             'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'categories' => [['id' => $categoryA->id, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'drop_lowest' => 0]],
             'cutoffs' => [80, 75, 70, 65, 60, 55, 50], 'published_by' => $this->teacherA->id, 'published_at' => now(),

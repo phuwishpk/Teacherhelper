@@ -2,12 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\ClassPosts\ClassPosts;
 use App\Jobs\BuildAnalysisBatchesJob;
 use App\Jobs\ClassroomSyncJob;
 use App\Jobs\PollAnalysisBatchJob;
 use App\Jobs\QueueHeartbeatJob;
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -38,6 +40,10 @@ class QueueWorkCommand extends Command
         // Phase 9 (DESIGN §20.8): the nightly Batch API round and its polls.
         $this->safely('analysis_build', fn () => BuildAnalysisBatchesJob::dispatchIfDue());
         $this->safely('analysis_poll', fn () => PollAnalysisBatchJob::dispatchDue());
+        // Class posts (DESIGN §30.1, §30.2): publish the scheduled ones that are due,
+        // and once an hour delete uploads nobody attached.
+        $this->safely('class_posts_due', fn () => ClassPosts::publishDue());
+        $this->safely('class_posts_orphans', fn () => Cache::add('class-posts:orphans', 1, 3600) ? ClassPosts::purgeOrphans() : 0);
 
         return $this->call('queue:work', [
             '--queue' => 'grading,default,pdf',
