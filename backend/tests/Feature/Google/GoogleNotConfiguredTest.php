@@ -58,6 +58,8 @@ class GoogleNotConfiguredTest extends TestCase
 
         $routes = $this->googleRoutes();
         $this->assertSame([
+            'api.assignments.google-exam-scores.send',
+            'api.assignments.google-exam-scores.show',
             'api.assignments.google-feedback',
             'api.assignments.google-feedback.retry',
             'api.assignments.google-grades.retry',

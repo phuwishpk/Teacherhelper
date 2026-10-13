@@ -7,12 +7,16 @@ import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../google_classroom/assignment_google_section.dart'
+    show openInClassroom;
+import '../google_classroom/google_providers.dart';
 import '../review/review_providers.dart';
 import '../review/review_repository.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
 import 'exam_scan_repository.dart';
 import 'exam_version_picker_screen.dart';
+import 'exams_repository.dart';
 
 /// `GET /exams/{id}/sheet-status` while the results screen is open.
 final examSheetStatusProvider = FutureProvider.autoDispose
@@ -199,6 +203,10 @@ class _ExamResultsScreenState extends ConsumerState<ExamResultsScreen> {
                     onPublish: () => _publish(s, exam),
                   ),
                   const SizedBox(height: 8),
+                  if (ref.watch(googleClassroomEnabledProvider)) ...[
+                    _GoogleScoresCard(examId: _id),
+                    const SizedBox(height: 8),
+                  ],
                   if (s.students.isEmpty)
                     const EmptyView(
                       icon: Icons.groups_outlined,
@@ -387,6 +395,110 @@ class _StudentTile extends StatelessWidget {
                 '${formatPoints(s.score!)}/${formatPoints(maxScore)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+      ),
+    );
+  }
+}
+
+/// "คะแนนใน Google Classroom" (DESIGN §30.14): send the scores by hand
+/// after the results are out; the holder courseWork is made on the first
+/// send.
+class _GoogleScoresCard extends ConsumerStatefulWidget {
+  const _GoogleScoresCard({required this.examId});
+
+  final int examId;
+
+  @override
+  ConsumerState<_GoogleScoresCard> createState() => _GoogleScoresCardState();
+}
+
+class _GoogleScoresCardState extends ConsumerState<_GoogleScoresCard> {
+  bool _sending = false;
+
+  Future<void> _send() async {
+    setState(() => _sending = true);
+    try {
+      await ref.read(examsRepositoryProvider).sendGoogleScores(widget.examId);
+      ref.invalidate(examGoogleScoresProvider(widget.examId));
+      if (mounted) showMessage(context, 'กำลังส่งคะแนนไป Google Classroom');
+    } catch (e) {
+      if (mounted) showMessage(context, apiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final scores = ref.watch(examGoogleScoresProvider(widget.examId)).value;
+    if (scores == null) return const SizedBox.shrink();
+    final canSend = scores.linked && scores.scored > 0 && !_sending;
+    final summary = scores.posted
+        ? [
+            'ส่งแล้ว ${scores.graded} จาก ${scores.scored} คน',
+            if (scores.failed > 0) 'ไม่สำเร็จ ${scores.failed} คน',
+            if (scores.unpaired > 0)
+              'ยังไม่จับคู่บัญชี Google ${scores.unpaired} คน',
+          ].join(' · ')
+        : !scores.linked
+        ? 'ห้องนี้ยังไม่ได้ผูกกับ Google Classroom'
+        : scores.scored == 0
+        ? 'ส่งได้เมื่อประกาศผลหรือกรอกคะแนนแล้ว'
+        : 'ยังไม่ได้ส่ง ระบบจะสร้างงานชื่อเดียวกับข้อสอบใน Classroom เพื่อรับคะแนน';
+    return Card(
+      key: const ValueKey('exam_google_scores'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'คะแนนใน Google Classroom',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              summary,
+              key: const ValueKey('exam_google_summary'),
+              style: muted,
+            ),
+            if (scores.lastError case final error?) ...[
+              const SizedBox(height: 4),
+              Text(error, style: TextStyle(color: theme.colorScheme.error)),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  key: const ValueKey('exam_google_send'),
+                  onPressed: canSend ? _send : null,
+                  icon: _sending
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_outlined),
+                  label: Text(
+                    scores.posted ? 'ส่งคะแนนอีกครั้ง' : 'ส่งคะแนนไป Classroom',
+                  ),
+                ),
+                if (scores.link case final link?)
+                  OutlinedButton.icon(
+                    key: const ValueKey('exam_google_open'),
+                    onPressed: () => openInClassroom(context, ref, link),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('เปิดใน Classroom'),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4976,7 +4976,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 | 2 | ส่งไป Classroom: scope ใหม่ หัวข้อ เอกสารประกอบ ประกาศ อัปโหลดขึ้น Drive สถานะและส่งอีกครั้ง แก้และลบตาม (§30.4, §30.11) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) ⚠️ ยังต้องเพิ่ม scope ในหน้า OAuth consent และลองกับคอร์สจริง |
 | 3 | ยกระดับการบ้าน: ไฟล์แนบ หัวข้อ คำชี้แจง ลิงก์กลับ ช่องติ๊กส่งตอนเผยแพร่ (§30.12) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) |
 | 3ข | งานรายคนและการคิดคะแนน (§30.5, §30.13) | เสร็จ |
-| 5 | ส่งคะแนนข้อสอบ (§30.6) | |
+| 5 | ส่งคะแนนข้อสอบ (§30.6, §30.14) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) ⚠️ ต้องลองกับคอร์สจริงว่าใส่คะแนนให้งานที่นักเรียนไม่ได้กดส่งได้ |
 | 6 | เลือกไฟล์จาก Drive บนเว็บแอป (ตัดออกได้) | |
 
 ### 30.10 แอป (ขั้น 1)
@@ -5023,4 +5023,12 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 - **ใบงาน**: พิมพ์เฉพาะผู้รับ (`WorksheetPrintService`) หน้าอัปโหลดของครูแสดงและนับเฉพาะผู้รับ
 - **Classroom**: courseWork ส่งแบบ `INDIVIDUAL_STUDENTS` ด้วย `google_user_id` ของผู้รับที่จับคู่แล้ว ไม่มีใครจับคู่ → โพสต์ไม่สำเร็จ 422 `no_google_students` (ไม่ส่งให้ทั้งห้องแทน)
 - คิวตรวจและกราฟของงานทำงานจากงานที่ส่งอยู่แล้ว จึงไม่ต้องเปลี่ยน; ระดับทักษะรายคน (§20.4) นับจากคำตอบที่ตรวจแล้วเท่านั้น คนที่ไม่ได้รับมอบจึงไม่มีข้อมูลของงานนั้น ไม่ใช่ตก
+
+### 30.14 ส่งคะแนนข้อสอบไป Classroom (ขั้น 5)
+
+สร้าง 13 ต.ค. 2569 ตาม §30.6
+
+- `POST /assignments/{id}/google-exam-scores` (ครูผู้ดูแลข้อสอบ ห้องยังเปิด ข้อสอบเท่านั้น 422 `homework_kind_unsupported`) → 202 `{queued, course_work_id}`: ครั้งแรกสร้าง courseWork เปล่าชื่อเดียวกับข้อสอบ (description "คะแนนสอบ … จาก Krucheck", `maxPoints` = คะแนนเต็ม: ผลรวม `max_points` ของข้อสอบที่ตรวจในแอป หรือ `manual_full_marks` ไม่มีกำหนดส่ง) เก็บใน `assignment_google_links` แล้ว `PushExamScoresJob` ใส่คะแนนให้ทุกคนที่มีคะแนน: ข้อสอบตรวจในแอป = ผลรวมที่ประกาศแล้ว (`effectiveTotal`) และคิวประกาศผลรายคน (§19.7) ตามไป; ข้อสอบกรอกคะแนนเอง = คะแนนใน `gradebook_entries` (ยกเว้นข้ามไป) ไม่มีประกาศรายคน 409 `no_results` เมื่อยังไม่มีคะแนน 422 `classroom_not_linked` เมื่อห้องไม่ได้ผูก กดส่งซ้ำได้ (ส่งคะแนนปัจจุบันทับ)
+- การใส่คะแนนใช้ `ClassroomGradePusher::pushGrade(assignment, student, score)` ตัวเดียวกับการบ้าน (หา submission ของนักเรียนใน courseWork ใส่ `assignedGrade` แล้วส่งคืน ผลลงใน `classroom_submission_imports` เป็น `graded`/`grade_failed`) นักเรียนที่ไม่ได้จับคู่บัญชี Google ถูกข้าม ⚠️ ยังต้องยืนยันกับคอร์สจริงว่า Classroom ยอมรับคะแนนของงานที่นักเรียนไม่ได้กดส่ง (สถานะ CREATED) ถ้าไม่ยอม ให้บอกครูว่านักเรียนต้องกด "ทำเครื่องหมายว่าเสร็จ" ก่อน
+- `GET /assignments/{id}/google-exam-scores` → `{posted, link, linked, scored, graded, failed, unpaired, last_error}` สำหรับการ์ด "คะแนนใน Google Classroom" บนหน้าผลสอบของแอป (ปุ่ม "ส่งคะแนนไป Classroom" / "ส่งอีกครั้ง", สรุปจำนวน, ปุ่มเปิดใน Classroom)
 

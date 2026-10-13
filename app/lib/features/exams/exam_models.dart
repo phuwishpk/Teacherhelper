@@ -1140,3 +1140,45 @@ class ExamQuestionDraft {
     if (approve && !create) 'approve': true,
   };
 }
+
+/// The exam's scores in Google Classroom (`GET /assignments/{id}/google-exam-scores`,
+/// DESIGN §30.14).
+class ExamGoogleScores {
+  const ExamGoogleScores({
+    this.posted = false,
+    this.link,
+    this.linked = false,
+    this.scored = 0,
+    this.graded = 0,
+    this.failed = 0,
+    this.unpaired = 0,
+    this.lastError,
+  });
+
+  factory ExamGoogleScores.fromJson(Map<String, dynamic> json) =>
+      ExamGoogleScores(
+        posted: json['posted'] == true,
+        link: json['link'] as String?,
+        linked: json['linked'] == true,
+        scored: (json['scored'] as num?)?.toInt() ?? 0,
+        graded: (json['graded'] as num?)?.toInt() ?? 0,
+        failed: (json['failed'] as num?)?.toInt() ?? 0,
+        unpaired: (json['unpaired'] as num?)?.toInt() ?? 0,
+        lastError: json['last_error'] as String?,
+      );
+
+  /// The holder courseWork exists.
+  final bool posted;
+  final String? link;
+
+  /// The classroom is linked to a Classroom course of the teacher.
+  final bool linked;
+
+  /// Students with a score, those whose score is in Classroom, those whose
+  /// send failed, and those not paired with a Google account.
+  final int scored;
+  final int graded;
+  final int failed;
+  final int unpaired;
+  final String? lastError;
+}

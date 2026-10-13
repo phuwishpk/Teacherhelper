@@ -291,6 +291,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.google-grades.retry' => ['POST', 'assignments/{assignment}/google-grades/retry', 404, 404],
         'api.assignments.google-feedback' => ['GET', 'assignments/{assignment}/google-feedback', 404, 404],
         'api.assignments.google-feedback.retry' => ['POST', 'assignments/{assignment}/google-feedback/retry', 404, 404],
+        'api.assignments.google-exam-scores.show' => ['GET', 'assignments/{assignment}/google-exam-scores', 404, 404],
+        'api.assignments.google-exam-scores.send' => ['POST', 'assignments/{assignment}/google-exam-scores', 404, 404],
         'api.class-posts.google.retry' => ['POST', 'class-posts/{class_post}/google/retry', 404, 404],
         'api.google-submissions.return' => ['POST', 'google-submissions/{import}/return', 404, 404],
         'api.google-submissions.accept-late' => ['POST', 'google-submissions/{import}/accept-late', 404, 404],

@@ -52,6 +52,12 @@ abstract class ExamsRepository {
   Future<ExamDetail> approveKey(int examId);
 
   Future<ExamVersions> versions(int examId);
+
+  /// `GET /assignments/{id}/google-exam-scores` (DESIGN §30.14).
+  Future<ExamGoogleScores> googleScores(int examId);
+
+  /// `POST /assignments/{id}/google-exam-scores`: the scores into Classroom.
+  Future<void> sendGoogleScores(int examId);
   Future<ExamVersions> reshuffle(int examId);
   Future<ExamDetail> unlockStructure(int examId);
 
@@ -70,6 +76,20 @@ class ApiExamsRepository implements ExamsRepository {
   ApiExamsRepository(this._dio);
 
   final Dio _dio;
+
+  @override
+  Future<ExamGoogleScores> googleScores(int examId) async {
+    final res = await _dio.get<Object?>(
+      '/assignments/$examId/google-exam-scores',
+    );
+    return ExamGoogleScores.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<void> sendGoogleScores(int examId) => _dio.post<Object?>(
+    '/assignments/$examId/google-exam-scores',
+    options: Options(receiveTimeout: const Duration(seconds: 60)),
+  );
 
   @override
   Future<Assignment> create(ExamSettingsDraft draft) async {

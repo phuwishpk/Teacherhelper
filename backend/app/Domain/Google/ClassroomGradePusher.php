@@ -56,8 +56,25 @@ final class ClassroomGradePusher
     {
         $submission = Submission::query()->with('assignment.classroom', 'assignment.googleLink')->find($submissionId);
         $assignment = $submission?->assignment;
-        $posted = $assignment?->googleLink;
-        if ($submission === null || ! $submission->isPublished() || $posted === null) {
+        if ($submission === null || ! $submission->isPublished() || $assignment?->googleLink === null) {
+            return self::SKIPPED;
+        }
+
+        return $this->pushGrade($assignment, (int) $submission->student_id, (float) $submission->effectiveTotal());
+    }
+
+    /**
+     * One student's score into the assignment's courseWork (the published
+     * total of a hand-in, or an exam score, DESIGN §30.14).
+     *
+     * @return self::GRADED|self::SKIPPED|self::FAILED
+     *
+     * @throws GoogleApiException only transient ones (unavailable)
+     */
+    public function pushGrade(Assignment $assignment, int $studentId, float $grade): string
+    {
+        $posted = $assignment->relationLoaded('googleLink') ? $assignment->googleLink : $assignment->googleLink()->first();
+        if ($posted === null) {
             return self::SKIPPED;
         }
         if ($posted->isFromClassroomWeb()) {
@@ -66,10 +83,10 @@ final class ClassroomGradePusher
             return self::SKIPPED;
         }
 
-        $import = self::importOf($assignment, $submission->student_id);
+        $import = self::importOf($assignment, $studentId);
         $googleUserId = ClassroomStudent::query()
             ->where('classroom_id', $assignment->classroom_id)
-            ->where('student_id', $submission->student_id)
+            ->where('student_id', $studentId)
             ->value('google_user_id');
         if ($import === null && $googleUserId === null) {
             return self::SKIPPED; // not in Classroom (or not matched yet)
@@ -77,29 +94,28 @@ final class ClassroomGradePusher
         if ($import !== null && $import->google_user_id !== $googleUserId) {
             // Someone else's hand-in carries this student's scan: never write
             // this student's score onto the classmate's Classroom submission.
-            Log::warning('google.grade_account_mismatch', ['submission_id' => $submission->id, 'import_id' => $import->id]);
+            Log::warning('google.grade_account_mismatch', ['assignment_id' => $assignment->id, 'student_id' => $studentId, 'import_id' => $import->id]);
 
-            return $this->fail($import, $submission, $googleUserId === null
+            return $this->fail($import, $assignment->id, $studentId, $googleUserId === null
                 ? 'นักเรียนคนนี้ยังไม่ได้จับคู่กับบัญชี Google ที่ส่งงานนี้ จับคู่นักเรียนที่หน้าห้องเรียนแล้วกดส่งคะแนนอีกครั้ง'
                 : 'บัญชี Google ของงานที่ส่งไม่ตรงกับนักเรียนคนนี้ ตรวจสอบป้าย identity_mismatch ในคิวตรวจทาน คะแนนของเจ้าของบัญชีจะส่งเมื่อเผยแพร่งานของเขา');
         }
 
         $link = ClassroomGoogleLink::forAssignment($assignment);
         if ($link === null) {
-            return $this->fail($import, $submission, 'ห้องเรียนไม่ได้ผูกกับ Google Classroom แล้ว ผูกคอร์สเดิมอีกครั้งแล้วกดส่งคะแนนอีกครั้ง');
+            return $this->fail($import, $assignment->id, $studentId, 'ห้องเรียนไม่ได้ผูกกับ Google Classroom แล้ว ผูกคอร์สเดิมอีกครั้งแล้วกดส่งคะแนนอีกครั้ง');
         }
         $account = GoogleAccount::query()->find($posted->posted_by);
         if ($account === null || $account->needsReconnect()) {
-            return $this->fail($import, $submission, 'บัญชี Google ของครูที่โพสต์งานนี้ไม่ได้เชื่อมอยู่ เชื่อมใหม่แล้วกดส่งคะแนนอีกครั้ง');
+            return $this->fail($import, $assignment->id, $studentId, 'บัญชี Google ของครูที่โพสต์งานนี้ไม่ได้เชื่อมอยู่ เชื่อมใหม่แล้วกดส่งคะแนนอีกครั้ง');
         }
 
         $api = GoogleApi::forAccount($account, $this->tokens);
-        $grade = (float) $submission->effectiveTotal();
 
         try {
-            $import ??= $this->findOnClassroom($api, $assignment, $link->course_id, $posted->course_work_id, (string) $googleUserId, $submission->student_id);
+            $import ??= $this->findOnClassroom($api, $assignment, $link->course_id, $posted->course_work_id, (string) $googleUserId, $studentId);
             if ($import === null) {
-                Log::info('google.grade_skipped', ['submission_id' => $submission->id, 'reason' => 'no_classroom_submission']);
+                Log::info('google.grade_skipped', ['assignment_id' => $assignment->id, 'student_id' => $studentId, 'reason' => 'no_classroom_submission']);
 
                 return self::SKIPPED;
             }
@@ -127,9 +143,9 @@ final class ClassroomGradePusher
             if ($e->isTransient()) {
                 throw $e;
             }
-            Log::warning('google.grade_failed', ['submission_id' => $submission->id, 'kind' => $e->kind, 'message' => $e->getMessage()]);
+            Log::warning('google.grade_failed', ['assignment_id' => $assignment->id, 'student_id' => $studentId, 'kind' => $e->kind, 'message' => $e->getMessage()]);
 
-            return $this->fail($import, $submission, GoogleErrors::shortText($e));
+            return $this->fail($import, $assignment->id, $studentId, GoogleErrors::shortText($e));
         }
 
         $import->state = ClassroomSubmissionImport::STATE_GRADED;
@@ -139,7 +155,7 @@ final class ClassroomGradePusher
         $import->classroom_grade = $grade;
         $import->last_error = $note;
         $import->save();
-        Log::info('google.grade_pushed', ['submission_id' => $submission->id, 'import_id' => $import->id]);
+        Log::info('google.grade_pushed', ['assignment_id' => $assignment->id, 'student_id' => $studentId, 'import_id' => $import->id]);
 
         return self::GRADED;
     }
@@ -154,7 +170,13 @@ final class ClassroomGradePusher
         if ($submission?->assignment === null) {
             return;
         }
-        $this->fail(self::importOf($submission->assignment, $submission->student_id), $submission, $reason);
+        $this->fail(self::importOf($submission->assignment, $submission->student_id), $submission->assignment->id, (int) $submission->student_id, $reason);
+    }
+
+    /** The same, for a score pushed without a hand-in (exam scores, DESIGN §30.14). */
+    public function markGradeFailed(Assignment $assignment, int $studentId, string $reason): void
+    {
+        $this->fail(self::importOf($assignment, $studentId), $assignment->id, $studentId, $reason);
     }
 
     /**
@@ -208,14 +230,14 @@ final class ClassroomGradePusher
         }
     }
 
-    private function fail(?ClassroomSubmissionImport $import, Submission $submission, string $reason): string
+    private function fail(?ClassroomSubmissionImport $import, int $assignmentId, int $studentId, string $reason): string
     {
         if ($import !== null) {
             $import->state = ClassroomSubmissionImport::STATE_GRADE_FAILED;
             $import->last_error = mb_substr($reason, 0, 255);
             $import->save();
         }
-        Log::warning('google.grade_not_pushed', ['submission_id' => $submission->id, 'import_id' => $import?->id]);
+        Log::warning('google.grade_not_pushed', ['assignment_id' => $assignmentId, 'student_id' => $studentId, 'import_id' => $import?->id]);
 
         return self::FAILED;
     }

@@ -9,9 +9,9 @@ use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\AttendanceController;
+use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassPostController;
 use App\Http\Controllers\Api\V1\ClassPostFileController;
-use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomCourseController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\CourseRequestController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExamController;
+use App\Http\Controllers\Api\V1\ExamGoogleController;
 use App\Http\Controllers\Api\V1\ExamImageController;
 use App\Http\Controllers\Api\V1\ExamImportController;
 use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
@@ -421,6 +422,8 @@ Route::prefix('v1')->group(function () {
                     // Private announcements of published results (§19.7): the job calls Google.
                     Route::get('assignments/{id}/google-feedback', [AssignmentGoogleController::class, 'feedback'])->name('api.assignments.google-feedback');
                     Route::post('assignments/{id}/google-feedback/retry', [AssignmentGoogleController::class, 'retryFeedback'])->name('api.assignments.google-feedback.retry');
+                    // Exam scores in Classroom (§30.14): the state needs no Google call.
+                    Route::get('assignments/{id}/google-exam-scores', [ExamGoogleController::class, 'show'])->name('api.assignments.google-exam-scores.show');
                     // The Classroom copy of a class post, sent again (§30.4).
                     Route::post('class-posts/{id}/google/retry', [ClassPostController::class, 'googleRetry'])->name('api.class-posts.google.retry');
                     Route::middleware('throttle:google')->group(function () {
@@ -438,6 +441,7 @@ Route::prefix('v1')->group(function () {
                         Route::get('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'roster'])->name('api.classrooms.google-roster.show');
                         Route::put('classrooms/{id}/google-roster', [ClassroomGoogleController::class, 'saveRoster'])->name('api.classrooms.google-roster.update');
                         Route::post('assignments/{id}/google-post', [AssignmentGoogleController::class, 'post'])->name('api.assignments.google-post');
+                        Route::post('assignments/{id}/google-exam-scores', [ExamGoogleController::class, 'send'])->name('api.assignments.google-exam-scores.send');
                         Route::get('assignments/{id}/google-submissions', [AssignmentGoogleController::class, 'submissions'])->name('api.assignments.google-submissions');
                         Route::post('assignments/{id}/google-grades/retry', [AssignmentGoogleController::class, 'retryGrades'])->name('api.assignments.google-grades.retry');
                         Route::post('google-submissions/{id}/return', [GoogleSubmissionController::class, 'returnForRetake'])->name('api.google-submissions.return');
