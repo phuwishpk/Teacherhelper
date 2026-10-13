@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Console;
 
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
 
 /**
  * eduvision:reset-demo runs migrate:fresh, whose VACUUM cannot run inside the
- * transaction RefreshDatabase opens, so this test migrates by hand and wipes
- * again at the end to leave the in-memory database empty for the next class.
+ * transaction RefreshDatabase opens, so this test migrates by hand. It wipes
+ * the schema at the end and tells RefreshDatabase to migrate again, because
+ * on MariaDB (CI) RefreshDatabase migrates once per process and every later
+ * test would otherwise find the tables gone.
  */
 class ResetDemoCommandTest extends TestCase
 {
@@ -20,6 +23,7 @@ class ResetDemoCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->artisan('db:wipe');
+        RefreshDatabaseState::$migrated = false;
         parent::tearDown();
     }
 
