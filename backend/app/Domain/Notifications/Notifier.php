@@ -4,6 +4,7 @@ namespace App\Domain\Notifications;
 
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassPost;
 use App\Models\ClassroomCourseRequest;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GradebookPublication;
@@ -53,6 +54,12 @@ interface Notifier
      * each student in the publication, never the grade.
      */
     public function gradesPublished(GradebookPublication $publication): void;
+
+    /**
+     * A teacher published an announcement in a classroom (DESIGN §30.3): tell
+     * its students (everyone, or the chosen ones), never the text.
+     */
+    public function classPostPublished(ClassPost $post): void;
 
     /**
      * The teacher's Google grant stopped working (invalid_grant, a scope

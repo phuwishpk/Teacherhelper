@@ -3,12 +3,14 @@ import 'package:eduvision/core/auth/auth_repository.dart';
 import 'package:eduvision/core/auth/session.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/core/auth/user.dart';
+import 'package:eduvision/core/router/app_router.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/one_time_pins_view.dart';
 import 'package:eduvision/features/student/student_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../helpers/fake_http_adapter.dart';
 import '../helpers/pump_screen.dart';
@@ -64,6 +66,12 @@ void main() {
         authRepositoryProvider.overrideWithValue(auth),
         tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
       ],
+      extraRoutes: [
+        GoRoute(
+          path: AppRoutes.student,
+          builder: (_, _) => const Text('student-home-stub'),
+        ),
+      ],
     );
     return (auth: auth, container: container);
   }
@@ -91,6 +99,14 @@ void main() {
 
     await tester.enterText(
       find.byKey(const ValueKey('password_new')),
+      'ปลาทอง99 ',
+    );
+    await tester.tap(find.byKey(const ValueKey('password_save')));
+    await tester.pumpAndSettle();
+    expect(find.text('ห้ามมีช่องว่างหน้าหรือท้ายรหัสผ่าน'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('password_new')),
       'ปลาทอง99',
     );
     await tester.enterText(find.byKey(const ValueKey('password_again')), 'x');
@@ -110,6 +126,8 @@ void main() {
     ]);
     final session = r.container.read(sessionProvider) as SignedIn;
     expect(session.user.mustChangePassword, isFalse);
+    // The forced change ends on the student home, not on this screen.
+    expect(find.text('student-home-stub'), findsOneWidget);
   });
 
   testWidgets('a later change asks for the current password', (tester) async {

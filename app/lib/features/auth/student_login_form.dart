@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/password_field.dart';
 
 /// Thai message for a failed username + password login.
 ///
@@ -87,7 +88,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
           .read(sessionProvider.notifier)
           .signInStudent(
             username: _username.text.trim(),
-            password: _password.text,
+            password: _password.text.trim(),
           );
       // The router redirects to /student once the session is SignedIn.
     } catch (e) {
@@ -192,16 +193,12 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                key: const ValueKey('student_password'),
+              PasswordField(
+                fieldKey: const ValueKey('student_password'),
                 controller: _password,
-                obscureText: true,
+                labelText: 'รหัสผ่าน',
+                helperText: 'เข้าครั้งแรกใช้ 123456 แล้วตั้งรหัสผ่านของตัวเอง',
                 autofillHints: const [AutofillHints.password],
-                decoration: const InputDecoration(
-                  labelText: 'รหัสผ่าน',
-                  helperText:
-                      'เข้าครั้งแรกใช้ 123456 แล้วตั้งรหัสผ่านของตัวเอง',
-                ),
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'กรอกรหัสผ่าน' : null,
                 onFieldSubmitted: (_) => _submit(),

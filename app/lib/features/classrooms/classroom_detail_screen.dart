@@ -308,6 +308,13 @@ class _ActionsRow extends ConsumerWidget {
             icon: const Icon(Icons.download_for_offline_outlined),
             label: const Text('เตรียมสแกนออฟไลน์'),
           ),
+        // Announcements and materials (DESIGN §30.1); a closed room still reads them.
+        FilledButton.tonalIcon(
+          key: const ValueKey('classroom_posts'),
+          onPressed: () => context.push(AppRoutes.classPosts(classroom.id)),
+          icon: const Icon(Icons.campaign_outlined),
+          label: const Text('โพสต์'),
+        ),
         if (open)
           OutlinedButton.icon(
             onPressed: () => context.push(

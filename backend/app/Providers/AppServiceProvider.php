@@ -159,6 +159,8 @@ class AppServiceProvider extends ServiceProvider
         // "ตรวจใหม่ทั้งห้อง" (§21.13): one request may queue a Gemini read of every hand-in.
         RateLimiter::for('regrade', fn (Request $request) => self::perUser($request, 5));
         RateLimiter::for('documents', fn (Request $request) => self::perUser($request, 20));
+        // Uploads for class posts (DESIGN §30.2).
+        RateLimiter::for('class-post-files', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('appeal', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('practice-attempt', fn (Request $request) => self::perUser($request, 60));
         // Whole-page hand-ins (§19.6): each stores up to 5 pages and may queue Gemini reads.

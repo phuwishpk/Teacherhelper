@@ -76,14 +76,6 @@ class AuthLayout extends StatelessWidget {
                 children: [
                   if (showBrand) ...[
                     const Center(child: BrandMark(size: 44)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'ผู้ช่วยตรวจการบ้านและข้อสอบสำหรับครู',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
                     const SizedBox(height: 24),
                   ],
                   Material(

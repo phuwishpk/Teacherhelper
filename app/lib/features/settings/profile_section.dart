@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/password_field.dart';
 
 /// The teacher's own profile on the settings page (DESIGN §29.1): name and
 /// school name ("แก้ไข"), and the password.
@@ -201,7 +202,9 @@ class _PasswordDialogState extends ConsumerState<_PasswordDialog> {
           .read(authRepositoryProvider)
           .changePassword(
             password: _password.text,
-            currentPassword: _current.text.isEmpty ? null : _current.text,
+            currentPassword: _current.text.trim().isEmpty
+                ? null
+                : _current.text.trim(),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -222,37 +225,29 @@ class _PasswordDialogState extends ConsumerState<_PasswordDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(
-                key: const ValueKey('teacher_password_current'),
+              PasswordField(
+                fieldKey: const ValueKey('teacher_password_current'),
                 controller: _current,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'รหัสผ่านปัจจุบัน',
-                  helperText:
-                      'เว้นว่างได้ถ้าสมัครด้วย Google และยังไม่เคยตั้งรหัสผ่าน',
-                  helperMaxLines: 2,
-                ),
+                labelText: 'รหัสผ่านปัจจุบัน',
+                helperText:
+                    'เว้นว่างได้ถ้าสมัครด้วย Google และยังไม่เคยตั้งรหัสผ่าน',
+                helperMaxLines: 2,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                key: const ValueKey('teacher_password_new'),
+              PasswordField(
+                fieldKey: const ValueKey('teacher_password_new'),
                 controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'รหัสผ่านใหม่',
-                  helperText: 'อย่างน้อย 8 ตัว',
-                ),
+                labelText: 'รหัสผ่านใหม่',
+                helperText: 'อย่างน้อย 8 ตัว',
                 validator: (v) =>
-                    (v == null || v.length < 8) ? 'อย่างน้อย 8 ตัว' : null,
+                    noEdgeWhitespace(v) ??
+                    ((v == null || v.length < 8) ? 'อย่างน้อย 8 ตัว' : null),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                key: const ValueKey('teacher_password_again'),
+              PasswordField(
+                fieldKey: const ValueKey('teacher_password_again'),
                 controller: _again,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'พิมพ์รหัสผ่านใหม่อีกครั้ง',
-                ),
+                labelText: 'พิมพ์รหัสผ่านใหม่อีกครั้ง',
                 validator: (v) =>
                     v != _password.text ? 'รหัสผ่านสองช่องไม่ตรงกัน' : null,
               ),

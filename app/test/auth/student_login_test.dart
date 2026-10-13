@@ -61,7 +61,7 @@ Future<void> _fill(WidgetTester tester) async {
   );
   await tester.enterText(
     find.byKey(const ValueKey('student_password')),
-    'ปลาทอง99',
+    'ปลาทอง99 ', // a pasted trailing space is trimmed away
   );
   await _tapLogin(tester);
   await tester.pumpAndSettle();

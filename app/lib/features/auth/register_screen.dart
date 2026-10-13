@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/auth_layout.dart';
+import '../../core/widgets/password_field.dart';
 import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_flow.dart';
 import '../google_signin/google_signin_models.dart';
@@ -278,26 +279,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       : null,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                PasswordField(
                   controller: _password,
                   focusNode: _passwordFocus,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
-                  ),
-                  validator: (v) => (v == null || v.length < 8)
-                      ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
-                      : null,
+                  labelText: 'รหัสผ่าน (อย่างน้อย 8 ตัว)',
+                  validator: (v) =>
+                      noEdgeWhitespace(v) ??
+                      ((v == null || v.length < 8)
+                          ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
+                          : null),
                 ),
                 const SizedBox(height: 16),
                 // Checked here only: the API takes one password (DESIGN §9.1).
-                TextFormField(
-                  key: const ValueKey('register_password_confirm'),
+                PasswordField(
+                  fieldKey: const ValueKey('register_password_confirm'),
                   controller: _passwordConfirm,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'ยืนยันรหัสผ่าน',
-                  ),
+                  labelText: 'ยืนยันรหัสผ่าน',
                   validator: (v) =>
                       v != _password.text ? 'รหัสผ่านไม่ตรงกัน' : null,
                 ),

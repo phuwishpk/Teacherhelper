@@ -2,9 +2,11 @@
 
 namespace App\Domain\Notifications;
 
+use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Appeal;
 use App\Models\Assignment;
+use App\Models\ClassPost;
 use App\Models\ClassroomCourseRequest;
 use App\Models\ClassroomSubmissionImport;
 use App\Models\GradebookPublication;
@@ -101,6 +103,19 @@ abstract class PushNotifier implements Notifier
             PushMessage::GRADES_PUBLISHED,
             NoticeTexts::gradesPublished((string) $publication->course?->code),
             ['course_id' => $publication->course_id, 'classroom_id' => $publication->classroom_id],
+        ));
+    }
+
+    public function classPostPublished(ClassPost $post): void
+    {
+        $studentIds = ClassPosts::recipientIds($post);
+        if ($studentIds === []) {
+            return;
+        }
+        $this->push($studentIds, new PushMessage(
+            PushMessage::CLASS_POST,
+            NoticeTexts::classPost((string) $post->classroom?->name),
+            ['post_id' => $post->id, 'classroom_id' => $post->classroom_id],
         ));
     }
 
