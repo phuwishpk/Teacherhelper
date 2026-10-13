@@ -51,6 +51,7 @@ import '../../features/attendance/attendance_screen.dart';
 import '../../features/attendance/attendance_session_screen.dart';
 import '../../features/attendance/my_attendance_screen.dart';
 import '../../features/class_posts/class_post_form_screen.dart';
+import '../../features/auth/impersonate_screen.dart';
 import '../../features/student/join_classroom_screen.dart';
 import '../../features/timetable/student_timetable_screen.dart';
 import '../../features/timetable/timetable_screen.dart';
@@ -125,7 +126,9 @@ abstract final class AppRoutes {
   /// The web flow's returns, kept while the session restores (see
   /// [routerProvider]).
   static bool isGoogleReturn(String location) =>
-      location == googleLoginReturn || location == googleLinkResult;
+      location == impersonate ||
+      location == googleLoginReturn ||
+      location == googleLinkResult;
 
   /// Admin: one screen that opens the web panel (DESIGN §7.4).
   static const adminHome = '/admin-home';
@@ -256,6 +259,9 @@ abstract final class AppRoutes {
   /// behind the join link `/app/#/join/<code>` (public), and typing a code.
   static String join(String code) => '/join/$code';
   static const studentJoin = '/student/join';
+
+  /// The panel's "เข้าใช้แทน" lands here with its ticket (DESIGN §29.14).
+  static const impersonate = '/impersonate';
   static bool isJoinLink(String location) => location.startsWith('/join/');
 
   static const assignmentNew = '/assignments/new';
@@ -456,6 +462,7 @@ abstract final class AppRoutes {
       location == register ||
       location == studentLogin ||
       location == studentQr ||
+      location == impersonate ||
       isJoinLink(location);
 }
 
@@ -503,7 +510,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         // signed-in one; anything else is stale.
         final usable = session is SignedIn
             ? path == AppRoutes.googleLinkResult
-            : path == AppRoutes.googleLoginReturn;
+            : path == AppRoutes.googleLoginReturn ||
+                  path == AppRoutes.impersonate;
         if (usable && location != path) return google;
         pendingGoogle = null;
         if (usable) return null;
@@ -647,6 +655,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentJoin,
         builder: (context, state) => const JoinClassroomScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.impersonate,
+        builder: (context, state) =>
+            ImpersonateScreen(ticket: state.uri.queryParameters['ticket']),
       ),
       GoRoute(
         path: '/student/posts/:postId',

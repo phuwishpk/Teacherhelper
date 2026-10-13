@@ -117,6 +117,7 @@ class ClosedClassroomTest extends TestCase
         'api.auth.google.link-with-password' => null,
         'api.auth.google.link-with-qr' => null,
         'api.auth.google.join' => null,
+        'api.auth.impersonate.ticket' => null,
         // Joining a closed classroom is its own 409 join_closed (ClassJoinTest).
         'api.student.join.store' => null,
         // Accepting an invitation to a closed classroom is refused by CoTeachers (CoTeachingTest).

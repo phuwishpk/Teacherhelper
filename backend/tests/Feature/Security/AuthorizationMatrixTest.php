@@ -52,6 +52,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.auth.google.link-with-password', 'api.auth.google.link-with-qr',
         // Joining with a class code (§29.13.3), exercised by ClassJoinTest.
         'api.join.show', 'api.auth.google.join',
+        // The panel's impersonation ticket (§29.14), exercised by ImpersonationTest.
+        'api.auth.impersonate.ticket',
     ];
 
     private const OK = 'ok';

@@ -11,6 +11,7 @@ import '../mastery/mastery_page.dart';
 import '../practice/practice_page.dart';
 import '../results/results_page.dart';
 import 'my_subjects_page.dart';
+import '../../core/widgets/impersonation_banner.dart';
 
 class _Destination {
   const _Destination(this.label, this.icon, this.selectedIcon);
@@ -87,7 +88,9 @@ class _StudentShellState extends ConsumerState<StudentShell> {
           onPressed: () => confirmSignOut(context, ref),
         ),
       ],
-      body: IndexedStack(index: _index, children: pages),
+      body: withImpersonationBanner(
+        IndexedStack(index: _index, children: pages),
+      ),
     );
   }
 }

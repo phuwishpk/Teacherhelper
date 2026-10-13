@@ -100,6 +100,8 @@ final class StudentMerger
         'timetable_cancellations.created_by' => self::UNRELATED,
         'classroom_teachers.teacher_id' => self::UNRELATED, // co-teachers (§29.13.4)
         'classroom_teachers.invited_by' => self::UNRELATED,
+        'audit_logs.actor_id' => self::UNRELATED, // admins only (§29.14)
+        'audit_logs.target_user_id' => self::UNRELATED, // a student impersonated keeps that history
         'class_posts.author_id' => self::UNRELATED,
         'class_post_files.owner_id' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,

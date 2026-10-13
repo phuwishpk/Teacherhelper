@@ -10,6 +10,7 @@ class User {
     this.schoolName,
     this.username,
     this.mustChangePassword = false,
+    this.impersonatedBy,
   });
 
   final int id;
@@ -31,6 +32,10 @@ class User {
   /// change-password screen until it is replaced.
   final bool mustChangePassword;
 
+  /// The name of the admin behind this session, when the panel's
+  /// "เข้าใช้แทน" opened it (DESIGN §29.14); null for an ordinary sign-in.
+  final String? impersonatedBy;
+
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
 
@@ -48,6 +53,7 @@ class User {
     'status': status,
     'username': username,
     'must_change_password': mustChangePassword,
+    'impersonated_by': impersonatedBy == null ? null : {'name': impersonatedBy},
     'school': schoolId == null && schoolName == null
         ? null
         : {'id': schoolId, 'name': schoolName},
@@ -67,6 +73,7 @@ class User {
       schoolName: school?['name'] as String?,
       username: json['username'] as String?,
       mustChangePassword: json['must_change_password'] as bool? ?? false,
+      impersonatedBy: (json['impersonated_by'] as Map?)?['name'] as String?,
     );
   }
 }

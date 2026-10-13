@@ -16,6 +16,7 @@ import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 import 'teacher_attention.dart';
+import '../../core/widgets/impersonation_banner.dart';
 
 /// Teacher-side navigation shell ([AdaptiveShell], DESIGN §27.3): a bottom
 /// NavigationBar on phones, a NavigationRail from tablet width up (the
@@ -157,7 +158,9 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
           onPressed: () => confirmSignOut(context, ref),
         ),
       ],
-      body: IndexedStack(index: _index, children: pages),
+      body: withImpersonationBanner(
+        IndexedStack(index: _index, children: pages),
+      ),
       floatingActionButton: tabFab,
       headerActions: headerActions,
     );

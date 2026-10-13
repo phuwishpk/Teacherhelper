@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Domain\Auth\Impersonations;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Classroom;
 use App\Models\User;
@@ -45,6 +46,12 @@ class UserPolicy
     public function approve(User $user, User $target): bool
     {
         return $this->view($user, $target) && $target->isTeacher() && ! $target->isActive();
+    }
+
+    /** Filament "เข้าใช้แทน" (DESIGN §29.14): an active teacher or student, never another admin. */
+    public function impersonate(User $user, User $target): bool
+    {
+        return $this->isAdmin($user) && Impersonations::allowed($user, $target);
     }
 
     /** Filament "disable": an active teacher loses access (tokens revoked). */

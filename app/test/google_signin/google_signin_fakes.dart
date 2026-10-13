@@ -241,6 +241,10 @@ class FakeMeAuth implements AuthRepository {
       throw UnimplementedError();
 
   @override
+  Future<String> redeemImpersonation(String ticket) =>
+      throw UnimplementedError();
+
+  @override
   Future<String> loginStudent({
     required String username,
     required String password,

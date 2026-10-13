@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Auth\Impersonations;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -27,6 +28,8 @@ class UserResource extends JsonResource
             'must_change_password' => $this->isStudent() && (bool) $this->credential?->must_change_password,
             'role' => $this->role,
             'status' => $this->status,
+            // The admin behind this session, when the panel's "เข้าใช้แทน" opened it (DESIGN §29.14).
+            'impersonated_by' => Impersonations::adminFor($this->resource),
             // Teachers only: the id of their workspace and the school name they typed
             // (DESIGN §29.13.2); the workspace row itself is never shown.
             'school' => $this->isTeacher() && $this->school_id !== null ? [

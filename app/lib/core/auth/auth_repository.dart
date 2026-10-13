@@ -22,6 +22,10 @@ abstract class AuthRepository {
   /// Returns the plain-text Sanctum token.
   Future<String> login({required String email, required String password});
 
+  /// `POST /auth/impersonate/ticket`: the panel's "เข้าใช้แทน" ticket for the
+  /// user's token (DESIGN §29.14).
+  Future<String> redeemImpersonation(String ticket);
+
   /// Student login with the token from a login card (`EVL1.{token}`).
   Future<String> loginStudentQr(String qrToken);
 
@@ -81,6 +85,15 @@ class ApiAuthRepository implements AuthRepository {
         'google_link_ticket': ?googleLinkTicket,
       },
     );
+  }
+
+  @override
+  Future<String> redeemImpersonation(String ticket) async {
+    final res = await _dio.post<Object?>(
+      '/auth/impersonate/ticket',
+      data: {'ticket': ticket},
+    );
+    return unwrapJson(res.data)['token'] as String;
   }
 
   @override
