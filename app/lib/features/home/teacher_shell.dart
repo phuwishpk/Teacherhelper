@@ -148,6 +148,12 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
             onPressed: () => context.push(AppRoutes.uploadQueue),
           ),
         ShellAction(
+          key: const ValueKey('help_button'),
+          tooltip: 'คู่มือการใช้งาน',
+          icon: Icons.help_outline,
+          onPressed: () => context.push(AppRoutes.help),
+        ),
+        ShellAction(
           tooltip: 'ตั้งค่า',
           icon: Icons.settings_outlined,
           onPressed: () => context.push(AppRoutes.settings),

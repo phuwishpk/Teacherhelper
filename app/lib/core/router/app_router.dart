@@ -81,6 +81,8 @@ import '../../features/review/review_detail_screen.dart';
 import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
+import '../../features/help/help_content.dart';
+import '../../features/help/help_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/student/student_account_screen.dart';
 import '../../features/student/student_password_screen.dart';
@@ -138,6 +140,10 @@ abstract final class AppRoutes {
 
   /// Student shell.
   static const student = '/student';
+
+  /// The in-app guide of each role (help_content.dart).
+  static const help = '/help';
+  static const studentHelp = '/student/help';
 
   static const classroomNew = '/classrooms/new';
   static String classroom(int id) => '/classrooms/$id';
@@ -415,6 +421,7 @@ abstract final class AppRoutes {
   static bool isStudentArea(String location) =>
       location == student ||
       location == studentAccount ||
+      location == studentHelp ||
       location == studentPassword ||
       location == myGrades ||
       location == myAttendance ||
@@ -630,6 +637,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentAccount,
         builder: (context, state) => const StudentAccountScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentHelp,
+        builder: (context, state) =>
+            const HelpScreen(role: HelpRole.student),
       ),
       GoRoute(
         path: AppRoutes.studentPassword,
@@ -1157,6 +1169,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.help,
+        builder: (context, state) => const HelpScreen(role: HelpRole.teacher),
       ),
       GoRoute(
         path: AppRoutes.appeals,
