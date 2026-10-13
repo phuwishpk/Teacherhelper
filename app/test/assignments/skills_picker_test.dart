@@ -114,6 +114,10 @@ void main() {
   testWidgets('unticking a preselected skill removes it; cancel returns null', (
     tester,
   ) async {
+    // Tall enough for the third row under the search and "เพิ่มทั้งหมด".
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final repo = _Repo();
     List<Skill>? result = const [];
     await tester.pumpWidget(
@@ -158,6 +162,45 @@ void main() {
 
     expect(find.text('ค้นหาไม่ได้ชั่วคราว'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNothing);
+  });
+
+  testWidgets('"เพิ่มทั้งหมด" ticks every indicator the search shows', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _Repo();
+    List<Skill>? result;
+    await tester.pumpWidget(
+      _host(repo, (r) => result = r, selected: const [_fraction]),
+    );
+    await tester.tap(find.text('เลือกทักษะ'));
+    await tester.pumpAndSettle();
+
+    // The whole subject and grade minus the one already ticked.
+    const key = ValueKey('skills_picker_add_all');
+    expect(find.text('เพิ่มทั้งหมด (2)'), findsOneWidget);
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+    expect(find.text('ใช้ 3 รายการ'), findsOneWidget);
+    expect(find.text('เพิ่มทั้งหมด (0)'), findsOneWidget);
+    expect(tester.widget<TextButton>(find.byKey(key)).onPressed, isNull);
+
+    // With a search, only what it shows is added.
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'ค 1.2 ป.5/1'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'ค 1.2');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('เพิ่มที่แสดงทั้งหมด (1)'), findsOneWidget);
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+    expect(find.text('เพิ่มที่แสดงทั้งหมด (0)'), findsOneWidget);
+
+    await tester.tap(find.text('ใช้ 3 รายการ'));
+    await tester.pumpAndSettle();
+    expect(result?.map((s) => s.id), [1, 2, 3]);
   });
 
   testWidgets('"เพิ่มตัวชี้วัดของโรงเรียน" adds a missing one and ticks it', (
