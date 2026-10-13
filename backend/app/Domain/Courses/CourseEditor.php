@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class CourseEditor
 {
-    private const COURSE_FIELDS = ['code', 'name', 'subject_id', 'grade_level', 'semester', 'academic_year', 'hours', 'description'];
+    private const COURSE_FIELDS = ['code', 'name', 'subject_id', 'grade_level', 'semester', 'academic_year', 'hours', 'description', 'term_starts_on', 'term_ends_on'];
 
     private const UNIT_FIELDS = ['title', 'hours', 'description'];
 

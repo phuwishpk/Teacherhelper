@@ -82,6 +82,12 @@ class MySubjectsPage extends ConsumerWidget {
                       style: theme.textTheme.titleMedium,
                     ),
                     TextButton.icon(
+                      key: const ValueKey('subjects_timetable'),
+                      onPressed: () => context.push(AppRoutes.studentTimetable),
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      label: const Text('ตารางเรียน'),
+                    ),
+                    TextButton.icon(
                       key: const ValueKey('subjects_attendance'),
                       onPressed: () => context.push(AppRoutes.myAttendance),
                       icon: const Icon(Icons.how_to_reg_outlined),

@@ -122,6 +122,18 @@ class DashboardPage extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.courses),
               ),
             ),
+            Card(
+              child: ListTile(
+                key: const ValueKey('dashboard_timetable'),
+                leading: const Icon(Icons.calendar_month_outlined),
+                title: const Text('ตารางสอน'),
+                subtitle: const Text(
+                  'คาบของทุกรายวิชาในสัปดาห์ แตะคาบเพื่อเช็คชื่อ',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(AppRoutes.timetable),
+              ),
+            ),
             const SizedBox(height: 24),
             Text('ภาพรวม', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),

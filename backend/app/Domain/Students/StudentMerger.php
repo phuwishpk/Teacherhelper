@@ -96,6 +96,8 @@ final class StudentMerger
         'attendance_sessions.created_by' => self::UNRELATED,
         'class_post_recipients.student_id' => self::MOVE, // posts naming D now name K
         'assignment_recipients.student_id' => self::MOVE, // homework given to D is given to K
+        'timetable_slots.created_by' => self::UNRELATED, // the teacher who put the period in the timetable
+        'timetable_cancellations.created_by' => self::UNRELATED,
         'class_posts.author_id' => self::UNRELATED,
         'class_post_files.owner_id' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,
