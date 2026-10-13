@@ -9,6 +9,7 @@ use App\Models\Response;
 use App\Models\Skill;
 use App\Models\SkillObservation;
 use App\Models\Submission;
+use App\Models\TimetableSlot;
 use App\Models\User;
 use Database\Seeders\AdminSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -93,6 +94,16 @@ class SeedersTest extends TestCase
         $classroom = Classroom::query()->where('teacher_id', $teacher->id)->firstOrFail();
         $this->assertSame($teacher->school_id, $classroom->school_id);
         $this->assertSame(count(DemoSeeder::STUDENTS), $classroom->students()->count());
+        // Each teacher in a workspace of their own (§29.13.1); the colleague co-teaches (§29.13.4).
+        $colleague = User::query()->where('email', 'teacher+co@example.com')->firstOrFail();
+        $this->assertNotSame($teacher->school_id, $colleague->school_id);
+        $this->assertDatabaseHas('classroom_teachers', ['classroom_id' => $classroom->id, 'teacher_id' => $colleague->id, 'status' => 'accepted']);
+        $this->asUser($colleague)->getJson('/api/v1/classrooms')->assertOk()->assertJsonCount(2, 'data');
+        $this->assertSame(2, Classroom::query()->count());
+        // Student 1 sits in both teachers' rooms (§29.2); the week has three periods (§29.12).
+        $first = $classroom->students()->wherePivot('student_number', 1)->firstOrFail();
+        $this->assertSame(2, $first->classrooms()->count());
+        $this->assertSame(3, TimetableSlot::query()->count());
 
         // The app's own logins work with the seeded values.
         $this->postJson('/api/v1/auth/teacher/login', ['email' => 'teacher@example.com', 'password' => 'teacher-secret-1'])
@@ -105,7 +116,8 @@ class SeedersTest extends TestCase
         config(['eduvision.demo.teacher_password' => 'teacher-secret-2', 'eduvision.demo.student_pin' => '135790']);
         $this->seed(DemoSeeder::class);
 
-        $this->assertSame(1, Classroom::query()->count());
+        $this->assertSame(2, Classroom::query()->count());
+        $this->assertSame(3, TimetableSlot::query()->count(), 'nothing twice');
         $this->assertSame(count(DemoSeeder::STUDENTS), User::query()->where('role', 'student')->count());
         $this->assertTrue(Hash::check('teacher-secret-2', $teacher->fresh()->password));
         $this->postJson('/api/v1/auth/student/login', $this->cred(['class_code' => $classroom->class_code, 'student_number' => 3, 'pin' => '246810']))

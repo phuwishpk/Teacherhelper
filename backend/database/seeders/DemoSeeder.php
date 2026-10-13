@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Domain\Classrooms\ClassCodeGenerator;
+use App\Domain\Classrooms\ClassroomJoiner;
 use App\Domain\Classrooms\StudentEnroller;
 use App\Domain\Gradebook\GradebookPublisher;
 use App\Domain\Gradebook\GradebookScores;
@@ -11,16 +12,19 @@ use App\Domain\Grading\ReviewPriority;
 use App\Domain\Review\Publisher;
 use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\StudentUsernames;
+use App\Domain\Teachers\Workspaces;
 use App\Models\Assignment;
+use App\Models\ClassPost;
 use App\Models\Classroom;
+use App\Models\ClassroomTeacher;
 use App\Models\Course;
 use App\Models\GradebookCategory;
 use App\Models\Question;
 use App\Models\Response;
-use App\Models\School;
 use App\Models\Skill;
 use App\Models\Subject;
 use App\Models\Submission;
+use App\Models\TimetableSlot;
 use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Console\View\Components\Warn;
@@ -30,17 +34,21 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A ready-to-try set of accounts: the school and the system admin
- * (SchoolSeeder, AdminSeeder), one approved teacher and one classroom with
- * ten fictional students who share one PIN, plus a course with content to
- * look at: one homework with published results, one waiting in the review
- * queue, a final exam graded by hand and a gradebook with published grades.
- * The answers are rows written here, not scans: they carry no picture.
+ * A ready-to-try standalone world (DESIGN §29.13.5): the system admin
+ * (AdminSeeder), two approved teachers in workspaces of their own, one
+ * classroom with ten fictional students who share one password, plus a
+ * course with content to look at: one homework with published results, one
+ * waiting in the review queue, a final exam graded by hand and a gradebook
+ * with published grades. The second teacher co-teaches that classroom with
+ * a science course and a timetable period, and owns a room of their own
+ * where student 1 also sits. The answers are rows written here, not scans:
+ * they carry no picture.
  *
  *   php artisan db:seed --class=DemoSeeder --force
  *
- * The teacher's login and the students' PIN come from DEMO_TEACHER_EMAIL,
- * DEMO_TEACHER_PASSWORD and DEMO_STUDENT_PIN in .env (config/eduvision.php):
+ * The teachers' login and the students' password come from DEMO_TEACHER_EMAIL,
+ * DEMO_TEACHER2_EMAIL (default: the first with `+co`), DEMO_TEACHER_PASSWORD
+ * and DEMO_STUDENT_PIN in .env (config/eduvision.php):
  * this repo is public, so no password lives in the code. When one of them is
  * missing the seeder creates no teacher and no student and prints a WARN
  * line. Re-running resets the teacher's password and the students' PIN to the
@@ -52,6 +60,15 @@ class DemoSeeder extends Seeder
     public const CLASSROOM_NAME = 'ป.5/1 (ตัวอย่าง)';
 
     public const TEACHER_NAME = 'ครูตัวอย่าง';
+
+    public const TEACHER2_NAME = 'ครูวิทย์ตัวอย่าง';
+
+    public const CLASSROOM2_NAME = 'ป.6/1 (ตัวอย่าง)';
+
+    public const COURSE2_CODE = 'ว15101';
+
+    /** The school name both demo teachers type (their workspaces are separate rows). */
+    public const SCHOOL_NAME = 'โรงเรียนสาธิต Krucheck';
 
     /** Fictional names, in the order of their student numbers. */
     public const STUDENTS = [
@@ -80,7 +97,7 @@ class DemoSeeder extends Seeder
 
     public function run(StudentEnroller $enroller, Publisher $publisher): void
     {
-        $this->call([SchoolSeeder::class, AdminSeeder::class]);
+        $this->call(AdminSeeder::class);
 
         $email = trim((string) config('eduvision.demo.teacher_email'));
         $password = (string) config('eduvision.demo.teacher_password');
@@ -96,27 +113,18 @@ class DemoSeeder extends Seeder
 
             return;
         }
+        $email2 = trim((string) config('eduvision.demo.teacher2_email'));
+        if ($email2 === '') {
+            $email2 = (string) preg_replace('/@/', '+co@', $email, 1);
+        }
 
-        $school = School::query()
-            ->where('teacher_join_code', config('eduvision.seed_teacher_join_code'))
-            ->firstOrFail();
-
-        $classroom = DB::transaction(function () use ($school, $email, $password, $pin, $enroller) {
-            $teacher = User::query()->updateOrCreate(
-                ['email' => $email],
-                [
-                    'school_id' => $school->id,
-                    'role' => User::ROLE_TEACHER,
-                    'name' => self::TEACHER_NAME,
-                    'password' => $password, // hashed by the model cast
-                    'status' => User::STATUS_ACTIVE,
-                ],
-            );
+        $classroom = DB::transaction(function () use ($email, $password, $pin, $enroller) {
+            $teacher = $this->teacher($email, self::TEACHER_NAME, $password);
 
             $classroom = Classroom::query()->firstOrCreate(
                 ['teacher_id' => $teacher->id, 'name' => self::CLASSROOM_NAME],
                 [
-                    'school_id' => $school->id,
+                    'school_id' => $teacher->school_id,
                     'grade_level' => 5,
                     'academic_year' => self::academicYear(),
                     'class_code' => ClassCodeGenerator::unique(),
@@ -151,11 +159,112 @@ class DemoSeeder extends Seeder
 
         $teacher = User::query()->findOrFail($classroom->teacher_id);
         $created = $this->content($teacher, $classroom, $publisher);
+        $colleague = $this->teacher($email2, self::TEACHER2_NAME, $password);
+        $this->coTeaching($teacher, $colleague, $classroom);
 
         $count = $classroom->students()->count();
-        $this->command?->info("DemoSeeder: teacher {$email} ready");
+        $this->command?->info("DemoSeeder: teacher {$email} ready; co-teacher {$email2} (same password) teaches ".self::COURSE2_CODE." in {$classroom->name} and owns ".self::CLASSROOM2_NAME);
         $this->command?->info('DemoSeeder: course '.self::COURSE_CODE.($created ? ' created with homework, an exam and published grades' : ' already there, content left as it is'));
-        $this->command?->info("DemoSeeder: classroom {$classroom->name}, class code {$classroom->class_code}, students 1-{$count} (password = DEMO_STUDENT_PIN), usernames: ".$classroom->students()->pluck('username')->implode(', '));
+        $this->command?->info("DemoSeeder: classroom {$classroom->name}, class code {$classroom->class_code}, join link ".ClassroomJoiner::url($classroom).", students 1-{$count} (password = DEMO_STUDENT_PIN), usernames: ".$classroom->students()->pluck('username')->implode(', '));
+    }
+
+    /**
+     * An approved teacher in a workspace of their own (DESIGN §29.13.1); a
+     * re-run resets the name, the password and the status.
+     */
+    private function teacher(string $email, string $name, string $password): User
+    {
+        $teacher = User::query()->where('email', $email)->first();
+        if ($teacher === null) {
+            $school = Workspaces::create($name, self::SCHOOL_NAME);
+
+            return User::create([
+                'school_id' => $school->id,
+                'school_name' => self::SCHOOL_NAME,
+                'role' => User::ROLE_TEACHER,
+                'name' => $name,
+                'email' => $email,
+                'password' => $password, // hashed by the model cast
+                'status' => User::STATUS_ACTIVE,
+            ]);
+        }
+        $teacher->forceFill(['name' => $name, 'password' => $password, 'status' => User::STATUS_ACTIVE])->save();
+
+        return $teacher;
+    }
+
+    /**
+     * Co-teaching (DESIGN §29.13.4) and a pupil in two teachers' rooms
+     * (§29.2), once: the colleague accepted an invitation to the demo
+     * classroom, teaches science there with a timetable period and owns a
+     * room where student 1 also sits; the maths course gets its term dates
+     * and two periods, and the classroom a welcome post (§30).
+     */
+    private function coTeaching(User $teacher, User $colleague, Classroom $classroom): void
+    {
+        ClassroomTeacher::query()->firstOrCreate(
+            ['classroom_id' => $classroom->id, 'email' => mb_strtolower((string) $colleague->email)],
+            ['teacher_id' => $colleague->id, 'invited_by' => $teacher->id, 'status' => ClassroomTeacher::STATUS_ACCEPTED, 'decided_at' => now()],
+        );
+        $science = Subject::query()->firstOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
+        $course2 = Course::query()->firstOrCreate(
+            ['created_by' => $colleague->id, 'code' => self::COURSE2_CODE],
+            [
+                'school_id' => $colleague->school_id,
+                'subject_id' => $science->id,
+                'name' => 'วิทยาศาสตร์ ป.5',
+                'grade_level' => 5,
+                'semester' => 1,
+                'academic_year' => $classroom->academic_year,
+            ],
+        );
+        $classroom->courses()->syncWithoutDetaching([$course2->id]);
+        TimetableSlot::query()->firstOrCreate(
+            ['course_id' => $course2->id, 'classroom_id' => $classroom->id, 'weekday' => 2, 'period_no' => 3],
+            ['starts_at' => '10:30', 'ends_at' => '11:20', 'created_by' => $colleague->id],
+        );
+
+        $own = Classroom::query()->firstOrCreate(
+            ['teacher_id' => $colleague->id, 'name' => self::CLASSROOM2_NAME],
+            [
+                'school_id' => $colleague->school_id,
+                'grade_level' => 6,
+                'academic_year' => $classroom->academic_year,
+                'class_code' => ClassCodeGenerator::unique(),
+            ],
+        );
+        $first = $classroom->students()->orderBy('classroom_students.student_number')->first();
+        if ($first !== null && ! $own->students()->whereKey($first->id)->exists()) {
+            $own->students()->attach($first->id, ['student_number' => 1]);
+        }
+
+        $math = Course::query()->where('created_by', $teacher->id)->where('code', self::COURSE_CODE)->first();
+        if ($math === null) {
+            return;
+        }
+        if ($math->term_starts_on === null) {
+            $year = $classroom->academic_year - 543;
+            $math->forceFill(['term_starts_on' => sprintf('%d-05-16', $year), 'term_ends_on' => sprintf('%d-10-10', $year)])->save();
+        }
+        foreach ([[1, 1, '08:30', '09:20'], [3, 2, '09:20', '10:10']] as [$weekday, $period, $start, $end]) {
+            TimetableSlot::query()->firstOrCreate(
+                ['course_id' => $math->id, 'classroom_id' => $classroom->id, 'weekday' => $weekday, 'period_no' => $period],
+                ['starts_at' => $start, 'ends_at' => $end, 'created_by' => $teacher->id],
+            );
+        }
+        ClassPost::query()->firstOrCreate(
+            ['classroom_id' => $classroom->id, 'title' => 'ยินดีต้อนรับสู่ Krucheck'],
+            [
+                'author_id' => $teacher->id,
+                'course_id' => $math->id,
+                'kind' => ClassPost::KIND_ANNOUNCEMENT,
+                'body' => 'ห้องนี้ใช้ Krucheck ส่งการบ้านและดูผล นักเรียนเข้าห้องด้วยรหัสห้องหรือ QR ที่ครูให้ แล้วดูงานที่ต้องส่งในหน้าวิชาของฉัน',
+                'audience' => ClassPost::AUDIENCE_ALL,
+                'state' => ClassPost::STATE_PUBLISHED,
+                'published_at' => now(),
+                'send_to_google' => false,
+            ],
+        );
     }
 
     /**

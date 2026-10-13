@@ -24,12 +24,16 @@ return [
     'admin_email' => env('ADMIN_EMAIL'),
     'admin_password' => env('ADMIN_PASSWORD'),
 
-    // Demo accounts created by DemoSeeder (`db:seed --class=DemoSeeder`): one
-    // approved teacher and one classroom of fictional students who share
-    // student_pin (6 digits). Any value empty = the seeder creates neither.
+    // Demo accounts created by DemoSeeder (`db:seed --class=DemoSeeder`, DESIGN
+    // §29.13.5): two approved teachers in workspaces of their own (the second
+    // co-teaches the first one's classroom), a classroom of fictional students
+    // who share student_pin (6 digits). teacher_email, teacher_password or
+    // student_pin empty = the seeder creates none of them; teacher2_email empty =
+    // the first e-mail with `+co` before the @.
     'demo' => [
         'teacher_email' => env('DEMO_TEACHER_EMAIL'),
         'teacher_password' => env('DEMO_TEACHER_PASSWORD'),
+        'teacher2_email' => env('DEMO_TEACHER2_EMAIL'),
         'student_pin' => env('DEMO_STUDENT_PIN'),
     ],
 
