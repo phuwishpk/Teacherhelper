@@ -7,8 +7,12 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../class_posts/attachments_editor.dart';
+import '../class_posts/class_post_models.dart';
+import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/course_picker.dart';
+import '../courses/topic_field.dart';
 import '../gradebook/gradebook_category_field.dart';
 import 'assignment.dart';
 import 'assignments_providers.dart';
@@ -91,6 +95,17 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   /// moved to another course) gets the course's homework default.
   bool _categoryTouched = false;
   late bool _excluded = widget.existing?.excludedFromGrade ?? false;
+  // Post-like parts (DESIGN §30.12).
+  late final _instructions = TextEditingController(
+    text: widget.existing?.instructions ?? '',
+  );
+  late int? _unitId = widget.existing?.unitId;
+  late String? _topic = widget.existing?.unitId == null
+      ? widget.existing?.topic
+      : null;
+  late bool _sendToGoogle = widget.existing?.sendToGoogle ?? true;
+  late List<PostAttachment> _attachments = [...?widget.existing?.attachments];
+  bool _uploading = false;
   bool _busy = false;
 
   /// The server refuses a mode change once a layout was built or work was
@@ -105,6 +120,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   @override
   void dispose() {
     _title.dispose();
+    _instructions.dispose();
     super.dispose();
   }
 
@@ -159,6 +175,24 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               excludedFromGrade: _excluded != a.excludedFromGrade
                   ? _excluded
                   : null,
+              instructions: _instructions.text.trim() != (a.instructions ?? '')
+                  ? _instructions.text.trim()
+                  : null,
+              unitId: _unitId != null && _unitId != a.unitId ? _unitId : null,
+              topic:
+                  _unitId == null &&
+                      (_topic ?? '').isNotEmpty &&
+                      _topic != a.topic
+                  ? _topic
+                  : null,
+              clearTopic:
+                  _unitId == null &&
+                  (_topic ?? '').isEmpty &&
+                  (a.unitId != null || a.topic != null),
+              sendToGoogle: _sendToGoogle != a.sendToGoogle
+                  ? _sendToGoogle
+                  : null,
+              attachments: _attachmentsChanged(a) ? _attachments : null,
             );
         if (!mounted) return;
         showMessage(context, 'บันทึกแล้ว');
@@ -178,6 +212,15 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               scoreOnly: _scoreOnly,
               gradebookCategoryId: _categoryTouched ? _categoryId : null,
               excludedFromGrade: _excluded,
+              instructions: _instructions.text.trim().isEmpty
+                  ? null
+                  : _instructions.text.trim(),
+              unitId: _unitId,
+              topic: _unitId == null && (_topic ?? '').isNotEmpty
+                  ? _topic
+                  : null,
+              sendToGoogle: _sendToGoogle,
+              attachments: _attachments,
             );
         if (!mounted) return;
         showMessage(
@@ -195,6 +238,12 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     }
   }
 
+  bool _attachmentsChanged(Assignment a) {
+    String sig(List<PostAttachment> list) =>
+        [for (final x in list) '${x.file?.id ?? x.url}'].join('|');
+    return sig(_attachments) != sig(a.attachments);
+  }
+
   @override
   Widget build(BuildContext context) {
     final editing = widget.existing != null;
@@ -202,6 +251,12 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     final theme = Theme.of(context);
     final classroomId = _classroomId;
     final courseId = _courseId;
+    // The teacher's own Classroom link of the chosen room: the switch shows then.
+    String? linkedCourse;
+    for (final c in classrooms.value ?? const <Classroom>[]) {
+      if (c.id == classroomId) linkedCourse = c.googleLink?.courseName;
+    }
+    final filesLocked = widget.existing?.googleLink != null;
 
     return Scaffold(
       appBar: AppBar(title: Text(editing ? 'แก้ไขการบ้าน' : 'สร้างการบ้าน')),
@@ -217,6 +272,20 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'กรอกชื่อการบ้าน' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              key: const ValueKey('assignment_instructions'),
+              controller: _instructions,
+              minLines: 2,
+              maxLines: 6,
+              maxLength: 2000,
+              decoration: const InputDecoration(
+                labelText: 'คำชี้แจงถึงนักเรียน (ไม่บังคับ)',
+                alignLabelWithHint: true,
+                helperText:
+                    'นักเรียนเห็นในหน้าส่งงาน และเป็นคำอธิบายงานใน Google Classroom',
+              ),
             ),
             const SizedBox(height: 16),
             if (!editing) ...[
@@ -272,6 +341,18 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 onChanged: (v) => setState(() => _lessonPlanId = v),
               ),
               const SizedBox(height: 16),
+              TopicField(
+                key: ValueKey('assignment_topic_$courseId'),
+                courseId: courseId,
+                unitId: _unitId,
+                topic: _topic,
+                enabled: !_busy,
+                onChanged: (unitId, topic) => setState(() {
+                  _unitId = unitId;
+                  _topic = topic;
+                }),
+              ),
+              const SizedBox(height: 16),
               GradebookCategoryField(
                 courseId: courseId,
                 value: _categoryId,
@@ -290,6 +371,33 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               ),
               const SizedBox(height: 8),
             ],
+            Text('ไฟล์และลิงก์', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            AttachmentsEditor(
+              attachments: _attachments,
+              locked: filesLocked,
+              enabled: !_busy,
+              onChanged: (list) => setState(() => _attachments = list),
+              onUploading: (v) => setState(() => _uploading = v),
+              onError: (m) => setState(() => _error = m),
+            ),
+            if (linkedCourse != null)
+              CheckboxListTile(
+                key: const ValueKey('assignment_send_google'),
+                value: _sendToGoogle,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('ส่งไป Google Classroom ด้วย'),
+                subtitle: Text(
+                  widget.existing?.googleLink != null
+                      ? 'โพสต์ในคอร์ส $linkedCourse แล้ว'
+                      : 'โพสต์เป็นงานในคอร์ส $linkedCourse ทันทีที่การบ้านพร้อมใช้',
+                ),
+                onChanged: _busy || widget.existing?.googleLink != null
+                    ? null
+                    : (v) => setState(() => _sendToGoogle = v ?? true),
+              ),
+            const SizedBox(height: 16),
             Text('รูปแบบการบ้าน', style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             SegmentedButton<AssignmentMode>(
@@ -373,7 +481,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _busy ? null : _submit,
+              onPressed: _busy || _uploading ? null : _submit,
               child: Text(editing ? 'บันทึก' : 'สร้างการบ้าน'),
             ),
           ],

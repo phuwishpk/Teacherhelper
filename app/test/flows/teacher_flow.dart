@@ -294,6 +294,10 @@ Future<int> createAssignment(
   });
   final courseId = app.server.courses.single['id'] as int;
   expect(find.text('$courseCode คณิตศาสตร์ 5'), findsOneWidget);
+  // The form grew (DESIGN §30.12): let the "created" snackbar go before the
+  // submit button is scrolled to the bottom edge, where it would cover it.
+  await tester.pump(const Duration(seconds: 5));
+  await tester.pumpAndSettle();
   await _tapVisible(tester, find.widgetWithText(FilledButton, 'สร้างการบ้าน'));
 
   final id = app.server.assignments.single['id'] as int;

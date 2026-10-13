@@ -2,6 +2,7 @@
 
 use App\Domain\Web\WebApp;
 use App\Http\Controllers\AdminHandoffLinkController;
+use App\Http\Controllers\AssignmentLinkController;
 use App\Http\Controllers\GoogleOAuthCallbackController;
 use App\Http\Controllers\GoogleSignInCallbackController;
 use App\Http\Controllers\ResultLinkController;
@@ -41,6 +42,13 @@ Route::get('r/{submission_id}', ResultLinkController::class)
     ->where('submission_id', '[0-9]{1,18}')
     ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
     ->name('results.open-in-app');
+
+// The link in a courseWork description (DESIGN §30.12): a Thai page that
+// opens the hand-in of that assignment in the app or on the web.
+Route::get('a/{assignment_id}', AssignmentLinkController::class)
+    ->where('assignment_id', '[0-9]{1,18}')
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
+    ->name('assignments.open-in-app');
 
 // The one-time link of POST /api/v1/auth/admin-handoff (DESIGN §7.4): signs
 // an admin who logged in on the app into the Filament panel's web session.

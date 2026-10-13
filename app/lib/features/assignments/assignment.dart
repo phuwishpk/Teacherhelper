@@ -1,3 +1,4 @@
+import '../class_posts/class_post_models.dart';
 import 'question.dart';
 
 enum Strictness {
@@ -90,6 +91,12 @@ class Assignment {
     this.gradebookCategoryId,
     this.excludedFromGrade = false,
     this.canManage = true,
+    this.unitId,
+    this.topic,
+    this.instructions,
+    this.sendToGoogle = true,
+    this.attachments = const [],
+    this.googlePost = const AssignmentGooglePost(),
   });
 
   static const kindHomework = 'homework';
@@ -214,6 +221,18 @@ class Assignment {
   /// nothing can be changed. Absent = the teacher's own work.
   final bool canManage;
 
+  // Post-like parts (DESIGN §30.12).
+  final int? unitId;
+
+  /// The unit's title, else the free topic.
+  final String? topic;
+  final String? instructions;
+
+  /// "ส่งไป Google Classroom ด้วย" when the assignment becomes ready.
+  final bool sendToGoogle;
+  final List<PostAttachment> attachments;
+  final AssignmentGooglePost googlePost;
+
   bool get isExam => kind == kindExam;
 
   bool get isManualExam => isExam && gradingMethod == 'manual';
@@ -265,6 +284,14 @@ class Assignment {
     gradebookCategoryId: gradebookCategoryId,
     excludedFromGrade: excludedFromGrade,
     canManage: canManage,
+    unitId: unitId,
+    topic: topic,
+    instructions: instructions,
+    sendToGoogle: sendToGoogle,
+    attachments: attachments,
+    googlePost: link != null
+        ? const AssignmentGooglePost(state: GoogleSendState.sent)
+        : googlePost,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -337,8 +364,39 @@ class Assignment {
       gradebookCategoryId: (json['gradebook_category_id'] as num?)?.toInt(),
       excludedFromGrade: json['excluded_from_grade'] == true,
       canManage: json['can_manage'] != false,
+      unitId: (json['unit_id'] as num?)?.toInt(),
+      topic: json['topic'] as String?,
+      instructions: json['instructions'] as String?,
+      sendToGoogle: json['send_to_google'] != false,
+      attachments: [
+        for (final a in json['attachments'] as List? ?? const [])
+          PostAttachment.fromJson(a as Map<String, dynamic>),
+      ],
+      googlePost: json['google_post'] is Map<String, dynamic>
+          ? AssignmentGooglePost.fromJson(
+              json['google_post'] as Map<String, dynamic>,
+            )
+          : const AssignmentGooglePost(),
     );
   }
+}
+
+/// The automatic post to Classroom of ready homework (DESIGN §30.12):
+/// `google_post` of the payload.
+class AssignmentGooglePost {
+  const AssignmentGooglePost({
+    this.state = GoogleSendState.notSent,
+    this.lastError,
+  });
+
+  factory AssignmentGooglePost.fromJson(Map<String, dynamic> json) =>
+      AssignmentGooglePost(
+        state: GoogleSendState.parse(json['state']),
+        lastError: json['last_error'] as String?,
+      );
+
+  final GoogleSendState state;
+  final String? lastError;
 }
 
 /// The Classroom `courseWork` of an assignment (DESIGN §18.2, §19.3):

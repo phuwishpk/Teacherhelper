@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Assignments\AssignmentPosts;
+use App\Domain\ClassPosts\AttachmentInput;
+use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Exams\ExamImages;
 use App\Domain\Exams\ExamSettings;
+use App\Domain\Google\AssignmentGooglePosts;
 use App\Domain\Gradebook\AssignmentCategories;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -17,6 +21,7 @@ use App\Http\Resources\AssignmentResource;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\GradebookEntry;
+use App\Models\Unit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +47,7 @@ class AssignmentController extends Controller
         Gate::authorize('viewAny', Assignment::class);
 
         $query = self::ownQuery($request)
-            ->with(['classroom', 'subject', 'googleLink', 'course', 'lessonPlan'])
+            ->with(['classroom', 'subject', 'googleLink', 'course', 'lessonPlan', 'unit'])
             // submissions_count: students who handed in anything (§19.6 "อัปโหลดรูปเพื่อตรวจ").
             ->withCount(['questions', 'submissions'])
             ->orderByDesc('id');
@@ -84,6 +89,8 @@ class AssignmentController extends Controller
         }
 
         $categoryId = AssignmentCategories::forNew($course->id, $exam, $request->has('gradebook_category_id'), $request->validated('gradebook_category_id'));
+        [$unitId, $topic] = AssignmentPosts::topic($course, $request->validated('unit_id'), $request->validated('topic'));
+        $attachments = AttachmentInput::parse($teacher, $request->validated('attachments') ?? []);
 
         $assignment = Assignment::create([
             'school_id' => $classroom->school_id,
@@ -109,7 +116,12 @@ class AssignmentController extends Controller
             'student_code_digits' => $codeSheets ? (int) $request->validated('student_code_digits') : null,
             'gradebook_category_id' => $categoryId,
             'excluded_from_grade' => (bool) ($request->validated('excluded_from_grade') ?? false),
+            'unit_id' => $unitId,
+            'topic' => $topic,
+            'instructions' => AssignmentPosts::text($request->validated('instructions')),
+            'send_to_google' => (bool) ($request->validated('send_to_google') ?? true),
         ]);
+        AttachmentInput::write($assignment->attachments(), $attachments);
         if ($grading === Assignment::GRADING_MANUAL) {
             // No key gate for an exam graded by hand: ready from the start (DESIGN §22.1).
             $assignment->status = Assignment::STATUS_READY;
@@ -147,10 +159,27 @@ class AssignmentController extends Controller
 
         $data = $request->validated();
         $teacher = $request->user();
-        DB::transaction(function () use ($assignment, $data, $teacher) {
+        $attachments = array_key_exists('attachments', $data) ? AttachmentInput::parse($teacher, $data['attachments'] ?? []) : null;
+        DB::transaction(function () use ($assignment, $data, $teacher, $attachments) {
             $assignment = Assignment::query()->lockForUpdate()->findOrFail($assignment->id);
             if (array_key_exists('course_id', $data)) {
                 AssignmentCourses::assign($assignment, AssignmentCourses::courseFor($teacher, $assignment->classroom_id, $data['course_id']));
+                // A unit of the old course cannot stay.
+                if ($assignment->unit_id !== null && Unit::query()->whereKey($assignment->unit_id)->where('course_id', $assignment->course_id)->doesntExist()) {
+                    $assignment->unit_id = null;
+                }
+            }
+            if (array_key_exists('unit_id', $data)) {
+                [$assignment->unit_id, $assignment->topic] = AssignmentPosts::topic($assignment->course()->first(), $data['unit_id'], $data['topic'] ?? null);
+            } elseif (array_key_exists('topic', $data)) {
+                // A free topic replaces the unit (one or the other, DESIGN §30.12).
+                [$assignment->unit_id, $assignment->topic] = AssignmentPosts::topic(null, null, $data['topic']);
+            }
+            if (array_key_exists('instructions', $data)) {
+                $assignment->instructions = AssignmentPosts::text($data['instructions']);
+            }
+            if (array_key_exists('send_to_google', $data)) {
+                $assignment->send_to_google = (bool) $data['send_to_google'];
             }
             if (array_key_exists('lesson_plan_id', $data)) {
                 if ($data['lesson_plan_id'] !== null && $assignment->course_id === null) {
@@ -207,6 +236,14 @@ class AssignmentController extends Controller
                 }
             }
             $assignment->save();
+            if ($attachments !== null) {
+                AssignmentPosts::replaceAttachments($assignment, $attachments);
+            }
+            if (array_key_exists('send_to_google', $data)) {
+                // Switched on for ready homework: post it now; off: forget a queued or failed post
+                // (a courseWork that exists stays, its submissions refer to it).
+                $data['send_to_google'] ? AssignmentGooglePosts::onReady($assignment) : AssignmentGooglePosts::clear($assignment);
+            }
         });
 
         return new AssignmentResource(self::loadDetail($assignment->refresh()));
@@ -241,7 +278,9 @@ class AssignmentController extends Controller
                 // The courseWork lives on in Classroom and its submissions refer to this row (§18.4).
                 throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_posted', 409);
             }
+            $fileIds = AttachmentInput::fileIds($assignment->attachments()->get());
             $assignment->delete();
+            ClassPosts::deleteUnused($fileIds);
             if ($assignment->isExam()) {
                 ExamImages::deleteExam($assignment);
             }
@@ -264,7 +303,7 @@ class AssignmentController extends Controller
 
     public static function loadDetail(Assignment $assignment): Assignment
     {
-        return $assignment->load(['classroom', 'subject', 'course', 'lessonPlan', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
+        return $assignment->load(['classroom', 'subject', 'course', 'lessonPlan', 'unit', 'attachments.file', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
             ->loadCount(['questions', 'responses as missing_ai_key_count' => fn ($q) => $q->awaitingAiKey()]);
     }
 

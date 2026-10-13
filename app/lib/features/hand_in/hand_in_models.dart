@@ -1,3 +1,4 @@
+import '../class_posts/class_post_models.dart';
 import '../assignments/answer_key_models.dart';
 import '../student/student_labels.dart';
 
@@ -30,6 +31,9 @@ class StudentAssignment {
     this.submittedAt,
     this.late = false,
     this.status = notSubmitted,
+    this.topic,
+    this.instructions,
+    this.attachments = const [],
   });
 
   static const notSubmitted = 'not_submitted';
@@ -70,6 +74,11 @@ class StudentAssignment {
   /// `not_submitted`, `submitted` or `published`.
   final String status;
 
+  /// What the teacher wrote and attached (DESIGN §30.12).
+  final String? topic;
+  final String? instructions;
+  final List<PostAttachment> attachments;
+
   bool get isSubmitted => status != notSubmitted;
   bool get isPublished => status == published;
 
@@ -92,6 +101,12 @@ class StudentAssignment {
       submittedAt: _time(json['submitted_at']),
       late: json['late'] == true,
       status: json['status'] as String? ?? notSubmitted,
+      topic: json['topic'] as String?,
+      instructions: json['instructions'] as String?,
+      attachments: [
+        for (final a in json['attachments'] as List? ?? const [])
+          PostAttachment.fromJson(a as Map<String, dynamic>),
+      ],
     );
   }
 }

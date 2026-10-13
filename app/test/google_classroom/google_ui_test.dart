@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:eduvision/core/auth/user.dart';
 import 'package:eduvision/core/push/push_routes.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
+import 'package:eduvision/features/class_posts/class_post_models.dart';
 import 'package:eduvision/features/assignments/assignments_providers.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
@@ -384,6 +385,46 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('google_fetch_submissions')));
       await tester.pumpAndSettle();
       expect(find.text('submissions-screen'), findsOneWidget);
+    });
+
+    testWidgets('the automatic post shows its state and offers a retry', (
+      tester,
+    ) async {
+      await pumpSection(
+        tester,
+        Assignment(
+          id: 12,
+          classroomId: 7,
+          subjectId: 1,
+          title: 'เศษส่วน',
+          status: 'ready',
+          currentLayoutVersion: 1,
+          googlePost: const AssignmentGooglePost(
+            state: GoogleSendState.failed,
+            lastError: 'ต้องเชื่อมบัญชี Google ใหม่',
+          ),
+        ),
+      );
+      expect(find.byKey(const ValueKey('google_auto_failed')), findsOneWidget);
+      expect(find.text('ต้องเชื่อมบัญชี Google ใหม่'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'โพสต์อีกครั้ง'),
+        findsOneWidget,
+      );
+
+      await pumpSection(
+        tester,
+        Assignment(
+          id: 12,
+          classroomId: 7,
+          subjectId: 1,
+          title: 'เศษส่วน',
+          status: 'ready',
+          currentLayoutVersion: 1,
+          googlePost: const AssignmentGooglePost(state: GoogleSendState.queued),
+        ),
+      );
+      expect(find.byKey(const ValueKey('google_auto_queued')), findsOneWidget);
     });
 
     testWidgets('a draft cannot be posted', (tester) async {

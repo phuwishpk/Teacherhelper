@@ -2,6 +2,8 @@
 
 namespace App\Domain\ClassPosts;
 
+use App\Domain\Google\ClassroomMaterials;
+use App\Domain\Google\ClassroomTopics;
 use App\Domain\Google\GoogleAccessTokens;
 use App\Domain\Google\GoogleApi;
 use App\Domain\Google\GoogleApiException;
@@ -13,11 +15,9 @@ use App\Models\ClassPostAttachment;
 use App\Models\ClassPostFile;
 use App\Models\ClassPostGooglePost;
 use App\Models\ClassroomGoogleLink;
-use App\Models\ClassroomGoogleTopic;
 use App\Models\ClassroomStudent;
 use App\Models\GoogleAccount;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * The Google Classroom copy of a class post (DESIGN §30.4): an announcement
@@ -149,14 +149,14 @@ final class ClassPostGoogle
         $api = GoogleApi::forAccount($account, $this->tokens);
         $topicId = null;
         try {
-            $materials = $this->materials($api, $post);
+            $materials = ClassroomMaterials::of($api, $post->attachments);
             if ($materials === null) {
                 return $this->fail($row, 'ไฟล์แนบของโพสต์หายไปจากเซิร์ฟเวอร์ ลบโพสต์แล้วสร้างใหม่');
             }
             if ($post->kind === ClassPost::KIND_MATERIAL) {
                 $topicName = $post->unit?->title ?? $post->topic;
                 if ($topicName !== null && trim($topicName) !== '') {
-                    $topicId = $this->topicId($api, $row->course_id, trim($topicName), $post->unit_id);
+                    $topicId = ClassroomTopics::idFor($api, $row->course_id, $topicName, $post->unit_id);
                 }
             }
             if ($row->isInClassroom()) {
@@ -173,8 +173,7 @@ final class ClassPostGoogle
                 throw $e;
             }
             if ($e->kind === GoogleApiException::NOT_FOUND && $topicId !== null) {
-                // The topic was deleted on the Classroom website: forget it so the next send makes it again.
-                ClassroomGoogleTopic::query()->where('course_id', $row->course_id)->where('topic_id', $topicId)->delete();
+                ClassroomTopics::forget($row->course_id, $topicId);
             }
             Log::warning('google.class_post_failed', ['post_id' => $post->id, 'kind' => $e->kind, 'message' => $e->getMessage()]);
 
@@ -238,11 +237,7 @@ final class ClassPostGoogle
      */
     public static function attachmentsChanged(ClassPost $post, array $attachments): bool
     {
-        $current = $post->attachments()->with('file')->get()
-            ->map(fn (ClassPostAttachment $a) => $a->kind.':'.($a->class_post_file_id ?? $a->url))->all();
-        $next = array_map(fn (array $a) => $a['kind'].':'.($a['file']?->id ?? $a['url']), $attachments);
-
-        return $current !== $next;
+        return AttachmentInput::signature($post->attachments()->get()) !== AttachmentInput::rowsSignature($attachments);
     }
 
     public static function errorText(GoogleApiException $e): string
@@ -256,72 +251,6 @@ final class ClassPostGoogle
             GoogleApiException::NOT_CONFIGURED, GoogleApiException::API_DISABLED => GoogleErrors::shortText($e),
             default => mb_substr('Google ไม่รับโพสต์นี้'.($e->googleMessage !== null && $e->googleMessage !== '' ? ': '.$e->googleMessage : ''), 0, 250),
         };
-    }
-
-    /**
-     * The Classroom materials of the post: links as they are, files from the
-     * author's Drive (uploaded on the first send). Null when a file's bytes
-     * are gone from the server.
-     *
-     * @return list<array<string, mixed>>|null
-     */
-    private function materials(GoogleApi $api, ClassPost $post): ?array
-    {
-        $materials = [];
-        foreach ($post->attachments as $attachment) {
-            if ($attachment->kind === ClassPostAttachment::KIND_LINK) {
-                $materials[] = ['link' => ['url' => (string) $attachment->url]];
-
-                continue;
-            }
-            $file = $attachment->file;
-            if ($file === null) {
-                continue;
-            }
-            if ($file->drive_file_id === null) {
-                $bytes = Storage::disk('local')->get($file->path);
-                if ($bytes === null) {
-                    return null;
-                }
-                $file->drive_file_id = $api->uploadDriveFile($file->original_name, $file->mime_type, $bytes);
-                $file->save();
-            }
-            $materials[] = ['driveFile' => ['driveFile' => ['id' => $file->drive_file_id], 'shareMode' => 'VIEW']];
-        }
-
-        return $materials;
-    }
-
-    /**
-     * The topic of a material: the one remembered for the unit or the name,
-     * else the course's topic of that name, else a new one.
-     */
-    private function topicId(GoogleApi $api, string $courseId, string $name, ?int $unitId): string
-    {
-        $name = mb_substr($name, 0, 100);
-        $row = $unitId === null ? null : ClassroomGoogleTopic::query()->where('course_id', $courseId)->where('unit_id', $unitId)->first();
-        $row ??= ClassroomGoogleTopic::query()->where('course_id', $courseId)->where('name', $name)->first();
-        if ($row !== null) {
-            if ($unitId !== null && $row->unit_id === null) {
-                $row->forceFill(['unit_id' => $unitId])->save();
-            }
-
-            return $row->topic_id;
-        }
-        $topicId = null;
-        foreach ($api->topics($courseId) as $topic) {
-            if ($topic['name'] === $name && $topic['id'] !== '') {
-                $topicId = $topic['id'];
-                break;
-            }
-        }
-        $topicId ??= $api->createTopic($courseId, $name);
-        ClassroomGoogleTopic::query()->updateOrCreate(
-            ['course_id' => $courseId, 'topic_id' => mb_substr($topicId, 0, 64)],
-            ['name' => $name, 'unit_id' => $unitId],
-        );
-
-        return $topicId;
     }
 
     private function patch(GoogleApi $api, ClassPostGooglePost $row, ClassPost $post, ?string $topicId): void

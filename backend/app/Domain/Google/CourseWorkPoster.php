@@ -65,9 +65,21 @@ final class CourseWorkPoster
         // The course of the teacher who manages the work (DESIGN §24.10).
         $link = GoogleRoster::linkOfAssignment($assignment);
         $this->accounts->accountOf($teacher);
+        // The note of the post dialog is the assignment's text from now on: Krucheck and Classroom read the same (§30.12).
+        $note = trim((string) ($input['instructions'] ?? ''));
+        if ($note !== '' && $note !== (string) $assignment->instructions) {
+            $assignment->forceFill(['instructions' => $note])->save();
+        }
+        $assignment->loadMissing('unit');
 
         return $this->accounts->call($teacher, function (GoogleApi $api) use ($teacher, $assignment, $link, $input) {
-            $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input));
+            $materials = ClassroomMaterials::of($api, $assignment->attachments()->with('file')->get());
+            if ($materials === null) {
+                throw new ApiException('ไฟล์แนบของการบ้านหายไปจากเซิร์ฟเวอร์ แนบใหม่แล้วโพสต์อีกครั้ง', 'attachment_missing', 409);
+            }
+            $topicName = $assignment->topicName();
+            $topicId = $topicName === null ? null : ClassroomTopics::idFor($api, $link->course_id, $topicName, $assignment->unit_id);
+            $work = $api->createCourseWork($link->course_id, $this->courseWork($assignment, $input, $materials, $topicId));
             if ($work['id'] === '') {
                 throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'courseWork.create answered without an id');
             }
@@ -80,6 +92,7 @@ final class CourseWorkPoster
                 'posted_by' => $teacher->id,
                 'posted_at' => now(),
             ]);
+            AssignmentGooglePosts::clear($assignment);
             Log::info('google.posted', ['assignment_id' => $assignment->id, 'course_work_id' => $work['id']]);
 
             return $posted;
@@ -92,15 +105,21 @@ final class CourseWorkPoster
      * @param  array{attach_blank_worksheet: bool, instructions?: string|null, due_at?: string|null}  $input
      * @return array<string, mixed>
      */
-    public function courseWork(Assignment $assignment, array $input): array
+    public function courseWork(Assignment $assignment, array $input, array $materials = [], ?string $topicId = null): array
     {
         $work = [
             'title' => $assignment->title,
-            'description' => $this->description($input['instructions'] ?? null),
+            'description' => $this->description($assignment, $input['instructions'] ?? $assignment->instructions),
             'workType' => 'ASSIGNMENT',
             'state' => 'PUBLISHED',
             'maxPoints' => (float) $assignment->questions()->sum('max_points'),
         ];
+        if ($materials !== []) {
+            $work['materials'] = $materials;
+        }
+        if ($topicId !== null) {
+            $work['topicId'] = $topicId;
+        }
 
         $due = $this->dueAt($assignment, $input['due_at'] ?? null);
         if ($due !== null) {
@@ -111,7 +130,7 @@ final class CourseWorkPoster
         return $work;
     }
 
-    private function description(?string $instructions): string
+    private function description(Assignment $assignment, ?string $instructions): string
     {
         $lines = [self::INSTRUCTIONS];
         $maxPages = (int) config('eduvision.submissions.max_pages');
@@ -123,6 +142,7 @@ final class CourseWorkPoster
             $lines[] = $instructions;
         }
         $lines[] = '';
+        $lines[] = 'ส่งงานและดูผลรายข้อในแอป Krucheck: '.AssignmentLinks::url($assignment->id);
         $appLink = trim((string) config('services.google.app_link'));
         $lines[] = 'คะแนนจะแสดงที่นี่เมื่อครูตรวจเสร็จ ดูคำอธิบายรายข้อได้ในแอป Krucheck'.($appLink !== '' ? " {$appLink}" : '');
 

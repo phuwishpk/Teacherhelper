@@ -12,6 +12,7 @@ import '../exams/exam_screen.dart';
 import '../google_classroom/assignment_google_section.dart';
 import '../hand_in/teacher_upload_screen.dart';
 import '../worksheets/print_flow.dart';
+import '../class_posts/post_files.dart';
 import 'assignment.dart';
 import 'assignments_page.dart';
 import 'assignments_providers.dart';
@@ -184,6 +185,8 @@ class AssignmentDetailScreen extends ConsumerWidget {
                             ),
                           if (a.lessonPlanTitle != null)
                             Text('แผน: ${a.lessonPlanTitle}'),
+                          if (a.topic case final t? when t.isNotEmpty)
+                            Text('หัวข้อ: $t'),
                           Text('ตรวจแบบ${a.strictness.label}'),
                           if (a.dueAt != null)
                             Text('ส่ง ${formatThaiDate(a.dueAt!)}'),
@@ -304,6 +307,34 @@ class AssignmentDetailScreen extends ConsumerWidget {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () =>
                             context.push(AppRoutes.assignmentAnalytics(a.id)),
+                      ),
+                    ),
+                  ],
+                  if ((a.instructions ?? '').isNotEmpty ||
+                      a.attachments.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      key: const ValueKey('assignment_post_card'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'คำชี้แจงและไฟล์แนบ',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            if (a.instructions case final text?
+                                when text.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              SelectableText(text),
+                            ],
+                            for (final att in a.attachments) ...[
+                              const SizedBox(height: 8),
+                              PostAttachmentTile(attachment: att),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ],

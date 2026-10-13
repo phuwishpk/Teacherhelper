@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\ClassPosts\AttachmentInput;
 use App\Domain\ClassPosts\ClassPostGoogle;
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
@@ -9,8 +10,6 @@ use App\Domain\Classrooms\ClosedClassrooms;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\ClassPost;
-use App\Models\ClassPostAttachment;
-use App\Models\ClassPostFile;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\Unit;
@@ -92,7 +91,7 @@ class ClassPostController extends Controller
         $course = self::course($teacher, $classrooms, $data['course_id'] ?? null);
         [$unitId, $topic] = self::topic($course, $data['unit_id'] ?? null, $data['topic'] ?? null);
         $content = self::content($data['kind'], $data['title'] ?? null, $data['body'] ?? null);
-        $attachments = self::attachments($teacher, $data['attachments'] ?? []);
+        $attachments = AttachmentInput::parse($teacher, $data['attachments'] ?? []);
         self::assertNotEmpty($data['kind'], $content['body'], $attachments);
         $studentIds = $audience === ClassPost::AUDIENCE_STUDENTS ? self::students($classrooms[0], $data['student_ids'] ?? []) : [];
         [$state, $scheduledAt] = self::schedule($data['state'], $data['scheduled_at'] ?? null);
@@ -116,7 +115,7 @@ class ClassPostController extends Controller
                     'batch_id' => $batchId,
                     'send_to_google' => (bool) ($data['send_to_google'] ?? true),
                 ]);
-                self::writeAttachments($post, $attachments);
+                AttachmentInput::write($post->attachments(), $attachments);
                 $post->recipients()->sync($studentIds);
                 if ($state === ClassPost::STATE_PUBLISHED) {
                     ClassPosts::publish($post);
@@ -170,7 +169,7 @@ class ClassPostController extends Controller
             array_key_exists('title', $data) ? $data['title'] : $post->title,
             array_key_exists('body', $data) ? $data['body'] : $post->body,
         );
-        $attachments = array_key_exists('attachments', $data) ? self::attachments($teacher, $data['attachments'] ?? []) : null;
+        $attachments = array_key_exists('attachments', $data) ? AttachmentInput::parse($teacher, $data['attachments'] ?? []) : null;
         if ($attachments !== null && ($post->googlePost()->first()?->isInClassroom() ?? false) && ClassPostGoogle::attachmentsChanged($post, $attachments)) {
             // Classroom does not patch materials (DESIGN §30.4): the files of a sent copy stay as they are.
             throw new ApiException('โพสต์นี้ส่งไป Google Classroom แล้ว แก้ไฟล์แนบไม่ได้ ลบโพสต์แล้วสร้างใหม่ถ้าต้องเปลี่ยนไฟล์', 'attachments_locked', 409);
@@ -198,7 +197,7 @@ class ClassPostController extends Controller
             if ($attachments !== null) {
                 $removed = $post->attachments()->whereNotNull('class_post_file_id')->pluck('class_post_file_id')->map(fn ($id) => (int) $id)->all();
                 $post->attachments()->delete();
-                self::writeAttachments($post, $attachments);
+                AttachmentInput::write($post->attachments(), $attachments);
             }
             $count = $post->attachments()->count();
             self::assertNotEmpty($post->kind, $content['body'], array_fill(0, $count, null));
@@ -415,60 +414,6 @@ class ClassPostController extends Controller
     {
         if ($kind === ClassPost::KIND_ANNOUNCEMENT && $body === null && $attachments === []) {
             throw self::invalid('body', 'พิมพ์ข้อความหรือแนบไฟล์อย่างน้อยหนึ่งอย่าง');
-        }
-    }
-
-    /**
-     * @param  array<int, mixed>  $input
-     * @return list<array{kind: string, file: ClassPostFile|null, url: string|null, title: string}>
-     */
-    private static function attachments(User $teacher, array $input): array
-    {
-        $rows = [];
-        $seen = [];
-        // The validator returns the items grouped by rule, not in the order sent.
-        ksort($input);
-        foreach (array_values($input) as $i => $item) {
-            $item = is_array($item) ? $item : [];
-            $hasFile = isset($item['file_id']);
-            $url = isset($item['url']) ? trim((string) $item['url']) : '';
-            if ($hasFile === ($url !== '')) {
-                throw self::invalid("attachments.{$i}", 'ไฟล์แนบแต่ละรายการต้องเป็นไฟล์หรือลิงก์อย่างใดอย่างหนึ่ง');
-            }
-            if ($hasFile) {
-                $file = ClassPostFile::query()->where('owner_id', $teacher->id)->find((int) $item['file_id']);
-                if ($file === null || isset($seen[$file->id])) {
-                    throw self::invalid("attachments.{$i}.file_id", 'ไม่พบไฟล์ที่แนบ หรือแนบไฟล์เดียวกันซ้ำ');
-                }
-                $seen[$file->id] = true;
-                $rows[] = ['kind' => ClassPostAttachment::KIND_FILE, 'file' => $file, 'url' => null, 'title' => self::text($item['title'] ?? null) ?? (string) $file->original_name];
-
-                continue;
-            }
-            $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
-            if (! in_array($scheme, ['http', 'https'], true) || filter_var($url, FILTER_VALIDATE_URL) === false) {
-                throw self::invalid("attachments.{$i}.url", 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://');
-            }
-            $rows[] = ['kind' => ClassPostAttachment::KIND_LINK, 'file' => null, 'url' => $url, 'title' => self::text($item['title'] ?? null) ?? Str::limit($url, 197)];
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param  list<array{kind: string, file: ClassPostFile|null, url: string|null, title: string}>  $attachments
-     */
-    private static function writeAttachments(ClassPost $post, array $attachments): void
-    {
-        foreach ($attachments as $position => $row) {
-            ClassPostAttachment::create([
-                'class_post_id' => $post->id,
-                'kind' => $row['kind'],
-                'class_post_file_id' => $row['file']?->id,
-                'url' => $row['url'],
-                'title' => $row['title'],
-                'position' => $position,
-            ]);
         }
     }
 

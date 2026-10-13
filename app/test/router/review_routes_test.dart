@@ -197,6 +197,10 @@ void main() {
       expect(of('eduvision://r/0'), isNull);
       expect(of('eduvision://r/70/extra'), isNull);
       expect(of('eduvision://x/70'), isNull);
+      // The link of a courseWork description (DESIGN §30.12).
+      expect(of('eduvision://a/12'), '/student/assignments/12/hand-in');
+      expect(of('/a/12'), '/student/assignments/12/hand-in');
+      expect(of('eduvision://a/0'), isNull);
       expect(of('https://example.com/r/70'), isNull);
       expect(of('/student/results/70'), isNull);
     });

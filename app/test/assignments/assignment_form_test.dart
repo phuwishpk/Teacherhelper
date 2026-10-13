@@ -1,4 +1,5 @@
 import 'package:eduvision/features/assignments/assignment.dart';
+import 'package:eduvision/features/class_posts/class_post_models.dart';
 import 'package:eduvision/features/assignments/assignment_form_screen.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/assignments/question.dart';
@@ -39,6 +40,9 @@ class _FakeClassrooms extends Fake implements ClassroomsRepository {
 class _FakeAssignments extends Fake implements AssignmentsRepository {
   final created = <Map<String, Object?>>[];
 
+  /// The post-like fields of every create and update (DESIGN §30.12).
+  final posts = <Map<String, Object?>>[];
+
   /// The gradebook fields of every create and update (DESIGN §23.3).
   final gradebook = <Map<String, Object?>>[];
 
@@ -63,7 +67,19 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     bool scoreOnly = false,
     int? gradebookCategoryId,
     bool excludedFromGrade = false,
+    int? unitId,
+    String? topic,
+    String? instructions,
+    bool sendToGoogle = true,
+    List<PostAttachment> attachments = const [],
   }) async {
+    posts.add({
+      'unit_id': unitId,
+      'topic': topic,
+      'instructions': instructions,
+      'send_to_google': sendToGoogle,
+      'attachments': [for (final a in attachments) a.toJson()],
+    });
     gradebook.add({
       'gradebook_category_id': gradebookCategoryId,
       'excluded_from_grade': excludedFromGrade,
@@ -111,7 +127,23 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     int? gradebookCategoryId,
     bool clearGradebookCategory = false,
     bool? excludedFromGrade,
+    int? unitId,
+    String? topic,
+    bool clearTopic = false,
+    String? instructions,
+    bool? sendToGoogle,
+    List<PostAttachment>? attachments,
   }) async {
+    posts.add({
+      'unit_id': unitId,
+      'topic': topic,
+      'clear_topic': clearTopic,
+      'instructions': instructions,
+      'send_to_google': sendToGoogle,
+      'attachments': attachments == null
+          ? null
+          : [for (final a in attachments) a.toJson()],
+    });
     gradebook.add({
       'gradebook_category_id': gradebookCategoryId,
       'clear_gradebook_category': clearGradebookCategory,

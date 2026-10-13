@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
+import '../class_posts/class_post_models.dart';
 import 'assignment.dart';
 import 'assignments_repository.dart';
 import 'question.dart';
@@ -29,6 +30,11 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
     bool scoreOnly = false,
     int? gradebookCategoryId,
     bool excludedFromGrade = false,
+    int? unitId,
+    String? topic,
+    String? instructions,
+    bool sendToGoogle = true,
+    List<PostAttachment> attachments = const [],
   }) async {
     final created = await ref
         .read(assignmentsRepositoryProvider)
@@ -44,6 +50,11 @@ class AssignmentsNotifier extends AsyncNotifier<List<Assignment>> {
           scoreOnly: scoreOnly,
           gradebookCategoryId: gradebookCategoryId,
           excludedFromGrade: excludedFromGrade,
+          unitId: unitId,
+          topic: topic,
+          instructions: instructions,
+          sendToGoogle: sendToGoogle,
+          attachments: attachments,
         );
     state = AsyncData([created, ...state.value ?? const []]);
     return created;
@@ -95,6 +106,12 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
     int? gradebookCategoryId,
     bool clearGradebookCategory = false,
     bool? excludedFromGrade,
+    int? unitId,
+    String? topic,
+    bool clearTopic = false,
+    String? instructions,
+    bool? sendToGoogle,
+    List<PostAttachment>? attachments,
   }) async {
     await ref
         .read(assignmentsRepositoryProvider)
@@ -114,6 +131,12 @@ class AssignmentDetailNotifier extends AsyncNotifier<Assignment> {
           gradebookCategoryId: gradebookCategoryId,
           clearGradebookCategory: clearGradebookCategory,
           excludedFromGrade: excludedFromGrade,
+          unitId: unitId,
+          topic: topic,
+          clearTopic: clearTopic,
+          instructions: instructions,
+          sendToGoogle: sendToGoogle,
+          attachments: attachments,
         );
     await refresh();
     ref.invalidate(assignmentsProvider);

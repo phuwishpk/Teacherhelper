@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:eduvision/features/assignments/answer_key_models.dart';
 import 'package:eduvision/features/assignments/key_document_sources.dart';
+import 'package:eduvision/features/class_posts/class_post_models.dart';
 import 'package:eduvision/features/hand_in/hand_in_models.dart';
 import 'package:eduvision/features/hand_in/hand_in_repository.dart';
 import 'package:eduvision/features/hand_in/student_assignments_page.dart';
@@ -299,5 +300,47 @@ void main() {
       );
       expect(find.text('ไม่พบการบ้านนี้'), findsOneWidget);
     });
+  });
+
+  testWidgets('the hand-in page shows the topic, the text and the files', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final assignment = StudentAssignment(
+      id: 9,
+      title: 'แบบฝึกหัดเศษส่วน',
+      topic: 'เศษส่วน',
+      instructions: 'อ่านหน้า 12 แล้วทำข้อ 1-5',
+      attachments: const [
+        PostAttachment(title: 'วิดีโอ', url: 'https://youtu.be/abc'),
+        PostAttachment(
+          title: 'ใบงาน.pdf',
+          file: PostFile(
+            id: 5,
+            name: 'ใบงาน.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048,
+            downloadUrl: '/api/v1/class-post-files/5/file',
+          ),
+        ),
+      ],
+    );
+    await pumpScreen(
+      tester,
+      StudentHandInScreen(assignmentId: 9, initial: assignment),
+      overrides: [
+        handInRepositoryProvider.overrideWithValue(
+          FakeHandIn(assignments: [assignment]),
+        ),
+      ],
+    );
+    expect(find.byKey(const ValueKey('hand_in_post_card')), findsOneWidget);
+    expect(find.text('หัวข้อ: เศษส่วน'), findsOneWidget);
+    expect(find.text('อ่านหน้า 12 แล้วทำข้อ 1-5'), findsOneWidget);
+    expect(find.text('วิดีโอ'), findsOneWidget);
+    expect(find.text('ใบงาน.pdf'), findsOneWidget);
+    expect(find.text('2 KB'), findsOneWidget);
   });
 }

@@ -63,7 +63,8 @@ class AssignmentGoogleTest extends TestCase
         ClassroomStudent::query()->where('student_id', $this->students[1]->id)->update(['google_user_id' => 'g-1']);
         ClassroomStudent::query()->where('student_id', $this->students[2]->id)->update(['google_user_id' => 'g-2']);
 
-        $this->assignment = Assignment::factory()->for_classroom($this->classroom)->create(['title' => 'เศษส่วน ชุดที่ 3']);
+        // Posted by hand in these tests; the automatic post of §30.12 is AssignmentAutoPostTest.
+        $this->assignment = Assignment::factory()->for_classroom($this->classroom)->create(['title' => 'เศษส่วน ชุดที่ 3', 'send_to_google' => false]);
         Question::factory()->create(['assignment_id' => $this->assignment->id]);
         Question::factory()->short()->create(['assignment_id' => $this->assignment->id]);
         $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->assignment->id}/layout")->assertCreated();
@@ -168,7 +169,7 @@ class AssignmentGoogleTest extends TestCase
     {
         // DESIGN §19.5: no layout; `draft` until the key is approved, then `ready`.
         $this->fakeGoogle([$this->courseWorkUrl() => Http::response(['id' => self::COURSE_WORK_ID, 'alternateLink' => 'https://classroom.google.com/x'])]);
-        $freeform = Assignment::factory()->for_classroom($this->classroom)->freeform()->create(['title' => 'แบบฝึกหัดในหนังสือ หน้า 12']);
+        $freeform = Assignment::factory()->for_classroom($this->classroom)->freeform()->create(['title' => 'แบบฝึกหัดในหนังสือ หน้า 12', 'send_to_google' => false]);
         Question::factory()->create(['assignment_id' => $freeform->id]);
         $url = "/api/v1/assignments/{$freeform->id}/google-post";
 

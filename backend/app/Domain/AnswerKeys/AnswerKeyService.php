@@ -15,6 +15,7 @@ use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\RubricDraftRequest;
 use App\Domain\Gemini\TeacherGuidance;
+use App\Domain\Google\AssignmentGooglePosts;
 use App\Exceptions\ApiException;
 use App\Jobs\DraftAnswerKeyJob;
 use App\Jobs\ExtractDocumentJob;
@@ -306,10 +307,14 @@ final class AnswerKeyService
             $locked->key_approved_by = $teacher->id;
             $locked->key_origin ??= Assignment::KEY_TEACHER;
             // Freeform assignments and app exams are `ready` exactly while the key is approved.
-            if (($locked->isFreeform() || $locked->isExam()) && $locked->isDraft()) {
+            $becameReady = ($locked->isFreeform() || $locked->isExam()) && $locked->isDraft();
+            if ($becameReady) {
                 $locked->status = Assignment::STATUS_READY;
             }
             $locked->save();
+            if ($becameReady && ! $locked->isExam()) {
+                AssignmentGooglePosts::onReady($locked); // "ส่งไป Google Classroom ด้วย" (DESIGN §30.12)
+            }
 
             return $locked;
         });
