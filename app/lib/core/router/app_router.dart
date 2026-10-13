@@ -52,6 +52,8 @@ import '../../features/attendance/attendance_screen.dart';
 import '../../features/attendance/attendance_session_screen.dart';
 import '../../features/attendance/my_attendance_screen.dart';
 import '../../features/class_posts/class_post_form_screen.dart';
+import '../../features/timetable/student_timetable_screen.dart';
+import '../../features/timetable/timetable_screen.dart';
 import '../../features/class_posts/class_posts_screen.dart';
 import '../../features/class_posts/student_class_feed.dart';
 import '../../features/gradebook/gradebook_screen.dart';
@@ -252,6 +254,10 @@ abstract final class AppRoutes {
   /// Student: their own attendance in every course.
   static const myAttendance = '/student/attendance';
 
+  /// The weekly timetable (DESIGN §29.12), the teacher's and the student's.
+  static const timetable = '/timetable';
+  static const studentTimetable = '/student/timetable';
+
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
   static String assignmentEdit(int id) => '/assignments/$id/edit';
@@ -406,6 +412,7 @@ abstract final class AppRoutes {
       location == studentPassword ||
       location == myGrades ||
       location == myAttendance ||
+      location == studentTimetable ||
       location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/posts/') ||
@@ -618,6 +625,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MyAttendanceScreen(),
       ),
       GoRoute(
+        path: AppRoutes.studentTimetable,
+        builder: (context, state) => const StudentTimetableScreen(),
+      ),
+      GoRoute(
         path: '/student/posts/:postId',
         builder: (context, state) =>
             StudentClassPostScreen(postId: _id(state, 'postId')),
@@ -803,6 +814,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.courses,
         builder: (context, state) => const CoursesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.timetable,
+        builder: (context, state) => const TimetableScreen(),
       ),
       GoRoute(
         path: AppRoutes.courseRequests,

@@ -45,6 +45,8 @@ use App\Models\StudentAnalysis;
 use App\Models\Subject;
 use App\Models\Submission;
 use App\Models\SubmissionPage;
+use App\Models\TimetableCancellation;
+use App\Models\TimetableSlot;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorksheetPrint;
@@ -184,6 +186,10 @@ trait SecurityWorld
 
     protected ClassPostFile $classPostFileA;
 
+    protected TimetableSlot $timetableSlotA;
+
+    protected TimetableCancellation $timetableCancellationA;
+
     /** Published grades of classroom A in course A: rows of student A and A2 (§23.7). */
     protected GradebookPublication $publicationA;
 
@@ -292,6 +298,8 @@ trait SecurityWorld
         ]);
         $this->classPostA->recipients()->sync([$this->studentA2->id]);
         ClassPostAttachment::create(['class_post_id' => $this->classPostA->id, 'kind' => ClassPostAttachment::KIND_FILE, 'class_post_file_id' => $this->classPostFileA->id, 'title' => 'a.pdf', 'position' => 0]);
+        $this->timetableSlotA = TimetableSlot::create(['course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'weekday' => 1, 'period_no' => 1, 'created_by' => $this->teacherA->id]);
+        $this->timetableCancellationA = TimetableCancellation::create(['timetable_slot_id' => $this->timetableSlotA->id, 'held_on' => '2026-10-19', 'created_by' => $this->teacherA->id]);
         $this->publicationA = GradebookPublication::create([
             'course_id' => $this->courseA->id, 'classroom_id' => $this->classroomA->id, 'categories' => [['id' => $categoryA->id, 'name' => 'คะแนนเก็บ', 'weight' => 100, 'drop_lowest' => 0]],
             'cutoffs' => [80, 75, 70, 65, 60, 55, 50], 'published_by' => $this->teacherA->id, 'published_at' => now(),

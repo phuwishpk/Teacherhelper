@@ -72,11 +72,13 @@ use App\Http\Controllers\Api\V1\StudentPinController;
 use App\Http\Controllers\Api\V1\StudentPracticeController;
 use App\Http\Controllers\Api\V1\StudentResultController;
 use App\Http\Controllers\Api\V1\StudentRetakeController;
+use App\Http\Controllers\Api\V1\StudentTimetableController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\SubmissionPageController;
 use App\Http\Controllers\Api\V1\TeacherAttentionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
+use App\Http\Controllers\Api\V1\TimetableController;
 use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
 use Illuminate\Support\Facades\Route;
@@ -283,6 +285,13 @@ Route::prefix('v1')->group(function () {
                 Route::get('attendance-sessions/{id}', [AttendanceController::class, 'show'])->name('api.attendance-sessions.show');
                 Route::put('attendance-sessions/{id}', [AttendanceController::class, 'update'])->name('api.attendance-sessions.update');
                 Route::delete('attendance-sessions/{id}', [AttendanceController::class, 'destroy'])->name('api.attendance-sessions.destroy');
+                // The weekly timetable (§29.12): own slots, busy blocks of shared rooms, cancelled dates.
+                Route::get('timetable', [TimetableController::class, 'index'])->name('api.timetable.index');
+                Route::post('courses/{id}/timetable-slots', [TimetableController::class, 'store'])->name('api.courses.timetable-slots.store');
+                Route::put('timetable-slots/{id}', [TimetableController::class, 'update'])->name('api.timetable-slots.update');
+                Route::delete('timetable-slots/{id}', [TimetableController::class, 'destroy'])->name('api.timetable-slots.destroy');
+                Route::post('timetable-slots/{id}/cancellations', [TimetableController::class, 'cancel'])->name('api.timetable-slots.cancellations.store');
+                Route::delete('timetable-cancellations/{id}', [TimetableController::class, 'uncancel'])->name('api.timetable-cancellations.destroy');
                 // Class posts (§30): announcements and materials with files and links.
                 Route::get('classrooms/{id}/posts', [ClassPostController::class, 'index'])->name('api.classrooms.posts.index');
                 Route::post('class-posts', [ClassPostController::class, 'store'])->name('api.class-posts.store');
@@ -466,6 +475,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('grades', [StudentGradeController::class, 'index'])->name('api.student.grades.index');
                 // The student's own attendance, per course and classroom (§29.5).
                 Route::get('attendance', StudentAttendanceController::class)->name('api.student.attendance');
+                // The student's timetable (§29.12).
+                Route::get('timetable', StudentTimetableController::class)->name('api.student.timetable');
                 // The class feed (§30.3): posts, open homework and published results.
                 Route::get('class-feed', [StudentClassFeedController::class, 'index'])->name('api.student.class-feed');
                 Route::get('class-posts/{id}', [StudentClassFeedController::class, 'show'])->name('api.student.class-posts.show');

@@ -39,6 +39,8 @@ final class ClosedClassrooms
         'analyses' => 'analysis',
         'google-submissions' => 'import',
         'grade-conflicts' => 'conflict',
+        'timetable-slots' => 'timetable_slot',
+        'timetable-cancellations' => 'timetable_cancellation',
     ];
 
     /** @throws ApiException 409 classroom_closed */
@@ -114,6 +116,10 @@ final class ClosedClassrooms
             'import' => DB::table('classroom_submission_imports')
                 ->join('assignments', 'assignments.id', '=', 'classroom_submission_imports.assignment_id')
                 ->where('classroom_submission_imports.id', $id)->select('assignments.classroom_id'),
+            'timetable_slot' => DB::table('timetable_slots')->where('id', $id)->select('classroom_id'),
+            'timetable_cancellation' => DB::table('timetable_cancellations')
+                ->join('timetable_slots', 'timetable_slots.id', '=', 'timetable_cancellations.timetable_slot_id')
+                ->where('timetable_cancellations.id', $id)->select('timetable_slots.classroom_id'),
             'conflict' => DB::table('grade_conflicts')
                 ->join('submissions', 'submissions.id', '=', 'grade_conflicts.submission_id')
                 ->join('assignments', 'assignments.id', '=', 'submissions.assignment_id')

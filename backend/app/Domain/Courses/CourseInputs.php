@@ -41,6 +41,9 @@ final class CourseInputs
             'academic_year' => [...$required, 'integer', 'min:2500', 'max:2700'],
             'hours' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:2000'],
             'description' => ['sometimes', 'nullable', 'string', 'max:'.self::MAX_TEXT],
+            // The term the timetable covers (DESIGN §29.12).
+            'term_starts_on' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'term_ends_on' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:term_starts_on'],
         ];
     }
 

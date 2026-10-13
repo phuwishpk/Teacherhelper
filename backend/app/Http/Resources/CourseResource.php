@@ -57,6 +57,8 @@ final class CourseResource
             'semester' => $course->semester,
             'academic_year' => $course->academic_year,
             'hours' => $course->hours,
+            'term_starts_on' => $course->term_starts_on?->toDateString(),
+            'term_ends_on' => $course->term_ends_on?->toDateString(),
             'description' => $course->description,
             'classroom_ids' => $classrooms->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'classrooms' => $classrooms->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->all(),

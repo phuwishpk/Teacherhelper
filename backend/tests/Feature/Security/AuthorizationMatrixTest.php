@@ -157,6 +157,13 @@ class AuthorizationMatrixTest extends TestCase
         'api.attendance-sessions.show' => ['GET', 'attendance-sessions/{attendance_session}', 404, 404],
         'api.attendance-sessions.update' => ['PUT', 'attendance-sessions/{attendance_session}', 404, 404],
         'api.attendance-sessions.destroy' => ['DELETE', 'attendance-sessions/{attendance_session}', 404, 404],
+        // The timetable (§29.12): own slots; a subject teacher sees the shared room's busy blocks only.
+        'api.timetable.index' => ['GET', 'timetable', self::OK, self::OK],
+        'api.courses.timetable-slots.store' => ['POST', 'courses/{own_course}/timetable-slots', 404, 404],
+        'api.timetable-slots.update' => ['PUT', 'timetable-slots/{timetable_slot}', 404, 404],
+        'api.timetable-slots.destroy' => ['DELETE', 'timetable-slots/{timetable_slot}', 404, 404],
+        'api.timetable-slots.cancellations.store' => ['POST', 'timetable-slots/{timetable_slot}/cancellations', 404, 404],
+        'api.timetable-cancellations.destroy' => ['DELETE', 'timetable-cancellations/{timetable_cancellation}', 404, 404],
         // Class posts (§30): every teacher of the classroom reads, the author writes.
         'api.classrooms.posts.index' => ['GET', 'classrooms/{classroom}/posts', 404, 404],
         'api.class-posts.store' => ['POST', 'class-posts', self::OK, self::OK],
@@ -374,6 +381,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.student.grades.index' => ['GET', 'student/grades', self::OK, self::OK],
         // Always the signed-in student's own records (§29.5).
         'api.student.attendance' => ['GET', 'student/attendance', self::OK, self::OK],
+        'api.student.timetable' => ['GET', 'student/timetable', self::OK, self::OK],
         // The post names student A2 only (§30.1): a classmate does not receive it.
         'api.student.class-feed' => ['GET', 'student/class-feed', self::OK, self::OK],
         'api.student.class-posts.show' => ['GET', 'student/class-posts/{class_post}', 404, 404],
@@ -656,6 +664,8 @@ class AuthorizationMatrixTest extends TestCase
             '{gradebook_item}' => $this->gradebookItemA->id,
             '{attendance_session}' => $this->attendanceSessionA->id,
             '{class_post}' => $this->classPostA->id,
+            '{timetable_slot}' => $this->timetableSlotA->id,
+            '{timetable_cancellation}' => $this->timetableCancellationA->id,
             '{class_post_file}' => $this->classPostFileA->id,
             '{incoming_request}' => $this->incomingRequest->id,
             '{outgoing_request}' => $this->outgoingRequest->id,
