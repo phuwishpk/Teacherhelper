@@ -131,10 +131,10 @@ class AuthHardeningTest extends TestCase
     public function test_registration_is_throttled_like_login(): void
     {
         for ($i = 0; $i < 10; $i++) {
-            $this->postJson('/api/v1/auth/teacher/register', ['school_id' => 999999, 'name' => 'x', 'email' => "t{$i}@example.com", 'password' => 'secret1234'])
+            $this->postJson('/api/v1/auth/teacher/register', ['name' => 'x', 'email' => "not-an-email-{$i}", 'password' => 'secret1234'])
                 ->assertStatus(422);
         }
-        $this->postJson('/api/v1/auth/teacher/register', ['school_id' => 999999, 'name' => 'x', 'email' => 't99@example.com', 'password' => 'secret1234'])
+        $this->postJson('/api/v1/auth/teacher/register', ['name' => 'x', 'email' => 'not-an-email-99', 'password' => 'secret1234'])
             ->assertStatus(429);
     }
 
@@ -173,7 +173,7 @@ class AuthHardeningTest extends TestCase
         }
 
         $this->assertSame(
-            ['admin-handoff', 'ai-key', 'analysis-now', 'answer-key', 'appeal', 'class-post-files', 'course-extract', 'documents', 'exam-images', 'exam-import', 'explanation', 'google', 'google-signin', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'regrade', 'school-list', 'student-auth', 'student-submission', 'teacher-auth'],
+            ['admin-handoff', 'ai-key', 'analysis-now', 'answer-key', 'appeal', 'class-post-files', 'course-extract', 'documents', 'exam-images', 'exam-import', 'explanation', 'google', 'google-signin', 'indicator-suggest', 'page-upload', 'practice-attempt', 'practice-generate', 'regrade', 'student-auth', 'student-submission', 'teacher-auth'],
             collect($throttled)->keys()->sort()->values()->all(),
         );
     }

@@ -100,8 +100,6 @@ class GoogleRegistration {
 
 /// 404 `google_not_linked`: the Google account belongs to nobody yet.
 ///
-/// - [needsSchool] (staff tab, several schools, #71): pick the school and
-///   sign in again with its id; the account is then created at once.
 /// - [registration] set (staff tab, unknown e-mail, the school approves
 ///   teachers itself): offer the teacher registration or the password login.
 /// - only [linkTicket] (student tab): the first confirmation with PIN or QR.
@@ -112,13 +110,11 @@ class GoogleNotLinked {
     required this.message,
     this.linkTicket,
     this.registration,
-    this.needsSchool = false,
   });
 
   final String message;
   final String? linkTicket;
   final GoogleRegistration? registration;
-  final bool needsSchool;
 
   bool get canConfirmAsStudent => linkTicket != null && registration == null;
 
@@ -144,7 +140,6 @@ class GoogleNotLinked {
               email: (reg['email'] as String?) ?? '',
             )
           : null,
-      needsSchool: body['needs_school'] == true,
     );
   }
 }

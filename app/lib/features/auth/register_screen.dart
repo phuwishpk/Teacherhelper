@@ -11,23 +11,14 @@ import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_flow.dart';
 import '../google_signin/google_signin_models.dart';
 
-/// The schools of the sign-up form (GET /auth/schools). Not retried by
-/// Riverpod: the form shows its own "ลองอีกครั้ง".
-final registrationSchoolsProvider =
-    FutureProvider.autoDispose<List<SchoolOption>>(
-      (ref) => ref.watch(authRepositoryProvider).schools(),
-      retry: (_, _) => null,
-    );
-
-/// "สมัครใช้งาน (ครู)" (DESIGN §9.1). No school code since 2 Oct 2569: the
-/// teacher types their own school name (optional, DESIGN §29.11), with
-/// several schools in the system they also pick one, and an admin approves
-/// the account before it can log in. Opened from a Google
-/// sign-in that found no account ([google], DESIGN §24.9.5), or after
-/// "สมัครด้วย Google" on this page, the name and e-mail start from the
-/// Google account and the account is linked as it is created. That form
-/// is only for a school that approves its teachers itself: elsewhere
-/// "สมัครด้วย Google" signs the new teacher in at once (#71).
+/// "สมัครใช้งาน (ครู)" (DESIGN §9.1, §29.13.2). There is no school to pick:
+/// every teacher gets a workspace of their own, types their school name
+/// (optional, DESIGN §29.11) and waits for an admin to approve the account.
+/// Opened from a Google sign-in whose e-mail another account holds
+/// ([google], DESIGN §24.9.5), or after "สมัครด้วย Google" on this page, the
+/// name and e-mail start from the Google account and the account is linked
+/// as it is created; any other Google account signs the new teacher in at
+/// once (§29.1).
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key, this.google});
 
@@ -39,7 +30,6 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  int? _schoolId;
   final _schoolName = TextEditingController();
   late final _name = TextEditingController(text: widget.google?.name);
   late final _email = TextEditingController(text: widget.google?.email);
@@ -85,13 +75,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // One school: that one. Several: the dropdown (validated above). The list
-    // failed to load: none, and the server uses its only school or answers
-    // 422 school_required.
-    final schools = ref.read(registrationSchoolsProvider).value;
-    final schoolId = schools != null && schools.length == 1
-        ? schools.single.id
-        : _schoolId;
     setState(() {
       _busy = true;
       _error = null;
@@ -100,7 +83,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       await ref
           .read(authRepositoryProvider)
           .register(
-            schoolId: schoolId,
             schoolName: _schoolName.text.trim().isEmpty
                 ? null
                 : _schoolName.text.trim(),
@@ -110,14 +92,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             googleLinkTicket: _linkTicket,
           );
       if (!mounted) return;
-      // New accounts are `pending` until a school admin approves them
-      // (DESIGN §7.4), so login only works after that.
+      // New accounts are `pending` until an admin approves them (DESIGN
+      // §7.4), so login only works after that.
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('สมัครสำเร็จ'),
           content: Text(
-            'บัญชีของคุณอยู่ระหว่างรอผู้ดูแลโรงเรียนอนุมัติ '
+            'บัญชีของคุณอยู่ระหว่างรอผู้ดูแลระบบอนุมัติ '
             'เมื่ออนุมัติแล้วจึงจะเข้าสู่ระบบได้'
             '${_linkTicket == null ? '' : ' ทั้งด้วยรหัสผ่านและปุ่ม "เข้าสู่ระบบด้วย Google"'}',
           ),
@@ -140,10 +122,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _error =
               '${googleSignInErrorMessage(e)} '
               'หรือกดสมัครอีกครั้งเพื่อสมัครโดยไม่เชื่อม Google (เชื่อมภายหลังในหน้าตั้งค่าได้)';
-        } else if (code == 'school_required') {
-          // A school was added since the form opened: show the dropdown.
-          ref.invalidate(registrationSchoolsProvider);
-          _error = apiErrorMessage(e);
         } else if (isGoogleSignInCode(code)) {
           _error = googleSignInErrorMessage(e);
         } else {
@@ -155,63 +133,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  /// What the form shows about the `schools` rows: nothing while there is
-  /// just one (the teacher's own school name is typed below).
-  Widget? _school(AsyncValue<List<SchoolOption>> schools) {
-    final errorColor = Theme.of(context).colorScheme.error;
-    return switch (schools) {
-      AsyncData(:final value) when value.length > 1 =>
-        DropdownButtonFormField<int>(
-          key: const ValueKey('register_school'),
-          initialValue: _schoolId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'โรงเรียนในระบบ'),
-          items: [
-            for (final school in value)
-              DropdownMenuItem(
-                value: school.id,
-                child: Text(school.name, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (v) => setState(() => _schoolId = v),
-          validator: (v) => v == null ? 'กรุณาเลือกโรงเรียน' : null,
-        ),
-      AsyncData(:final value) when value.length == 1 => null,
-      AsyncData() => Text(
-        'ยังไม่มีโรงเรียนในระบบ กรุณาติดต่อผู้ดูแลระบบ',
-        style: TextStyle(color: errorColor),
-      ),
-      AsyncError(:final error) => Row(
-        children: [
-          Expanded(
-            child: Text(
-              'โหลดรายชื่อโรงเรียนไม่สำเร็จ: ${apiErrorMessage(error)}',
-              style: TextStyle(color: errorColor),
-            ),
-          ),
-          TextButton(
-            onPressed: () => ref.invalidate(registrationSchoolsProvider),
-            child: const Text('ลองอีกครั้ง'),
-          ),
-        ],
-      ),
-      _ => const Row(
-        children: [
-          SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 12),
-          Flexible(child: Text('กำลังโหลดรายชื่อโรงเรียน…')),
-        ],
-      ),
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
-    final schools = ref.watch(registrationSchoolsProvider);
-    final school = _school(schools);
     return Scaffold(
       body: SafeArea(
         child: AuthLayout(
@@ -244,7 +167,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'เมื่อผู้ดูแลโรงเรียนอนุมัติแล้ว เข้าสู่ระบบได้ทั้งด้วยบัญชี Google นี้และรหัสผ่าน',
+                    'เมื่อผู้ดูแลระบบอนุมัติแล้ว เข้าสู่ระบบได้ทั้งด้วยบัญชี Google นี้และรหัสผ่าน',
                     key: const ValueKey('register_google_helper'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -252,7 +175,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                if (school != null) ...[school, const SizedBox(height: 16)],
                 TextFormField(
                   key: const ValueKey('register_school_name'),
                   controller: _schoolName,
@@ -309,7 +231,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _busy || schools.isLoading ? null : _submit,
+                  onPressed: _busy ? null : _submit,
                   child: const Text('สมัครใช้งาน'),
                 ),
                 TextButton(

@@ -3,6 +3,7 @@
 namespace App\Domain\Auth\Google;
 
 use App\Domain\Students\StudentAuthenticator;
+use App\Domain\Teachers\Workspaces;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Jobs\ClassroomSyncJob;
@@ -15,16 +16,14 @@ use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\NewAccessToken;
 
 /**
- * Google sign-in for every role (DESIGN §24.9): signing in with a linked
- * Google account, the automatic links (a teacher's matching e-mail, a
- * student's Classroom roster entry), the explicit links and unlinking.
- * An unknown staff account becomes an active teacher at once when the
- * school allows it (`teacher_google_auto_approve`, #71); otherwise, and
- * always for a student, it gets 404 google_not_linked with a link ticket.
- *
- * Every path checks the allowed domains of the user's school and, for a
- * student, the school's switch. Each outcome is logged as `google_signin`
- * with the event, the result and the user id only (no e-mail, no token).
+ * Google sign-in for every role (DESIGN §24.9, §29.13.2): signing in with a
+ * linked Google account, the automatic links (a teacher's matching e-mail,
+ * a student's Classroom roster entry), the explicit links and unlinking.
+ * An unknown staff account becomes an active teacher with a workspace of
+ * its own at once (§29.1); an unknown student gets 404 google_not_linked
+ * with a link ticket. There are no per-school domain or student switches
+ * any more. Each outcome is logged as `google_signin` with the event, the
+ * result and the user id only (no e-mail, no token).
  */
 final class GoogleSignIn
 {
@@ -40,13 +39,12 @@ final class GoogleSignIn
     /**
      * POST /auth/google (and the browser flow's ticket): a token for the user
      * linked to $google, or the first sign-in of §24.9.3 steps 3-4.
-     * $schoolId is the school an unknown teacher picked (staff only).
      *
      * @return array{token: NewAccessToken, user: User}
      *
-     * @throws ApiException 404 google_not_linked, 403 account_not_active / google_domain_not_allowed / student_google_disabled
+     * @throws ApiException 404 google_not_linked, 403 account_not_active
      */
-    public function signIn(VerifiedGoogleIdentity $google, string $intent, ?string $deviceName = null, ?int $schoolId = null): array
+    public function signIn(VerifiedGoogleIdentity $google, string $intent, ?string $deviceName = null): array
     {
         $identity = UserGoogleIdentity::query()->with('user.school')->where('google_sub', $google->sub)->first();
         if ($identity !== null && $identity->user !== null) {
@@ -55,7 +53,7 @@ final class GoogleSignIn
 
         return $intent === self::INTENT_STUDENT
             ? $this->firstStudentSignIn($google, $deviceName)
-            : $this->firstStaffSignIn($google, $deviceName, $schoolId);
+            : $this->firstStaffSignIn($google, $deviceName);
     }
 
     /**
@@ -79,10 +77,10 @@ final class GoogleSignIn
     }
 
     /**
-     * Links $google to $user after every check of §24.9.5: the school's
-     * domains and student switch, the Google account not linked to anyone
-     * else (409 google_already_linked) and the user without another one
-     * (409 google_identity_exists). Linking the same account again is a no-op.
+     * Links $google to $user after the checks of §24.9.5: the Google account
+     * not linked to anyone else (409 google_already_linked) and the user
+     * without another one (409 google_identity_exists). Linking the same
+     * account again is a no-op.
      *
      * @throws ApiException
      */
@@ -126,8 +124,6 @@ final class GoogleSignIn
      */
     public function assertCanLink(User $user, VerifiedGoogleIdentity $google): ?UserGoogleIdentity
     {
-        self::assertAllowed($user, $google);
-
         $bySub = UserGoogleIdentity::query()->where('google_sub', $google->sub)->first();
         if ($bySub !== null) {
             if ((int) $bySub->user_id === (int) $user->id) {
@@ -171,34 +167,6 @@ final class GoogleSignIn
         return $count;
     }
 
-    /**
-     * The school's rules for $user and $google (§24.9.2): the student switch
-     * (403 student_google_disabled) and the allowed domains (403
-     * google_domain_not_allowed). A system admin (no school) is not limited.
-     *
-     * @throws ApiException
-     */
-    public static function assertAllowed(User $user, VerifiedGoogleIdentity $google): void
-    {
-        $school = $user->school;
-        if ($user->isStudent() && ! ($school?->student_google_signin ?? false)) {
-            self::log('check', 'student_google_disabled', $user->id);
-
-            throw GoogleSignInErrors::studentDisabled();
-        }
-        if ($school !== null && ! $school->allowsGoogleDomain($google->domain())) {
-            self::log('check', 'google_domain_not_allowed', $user->id);
-
-            throw GoogleSignInErrors::domainNotAllowed();
-        }
-    }
-
-    /** Whether $user may link a Google account at all (GET /me/google-identity `can_link`). */
-    public static function canLink(User $user): bool
-    {
-        return ! $user->isStudent() || (bool) ($user->school?->student_google_signin ?? false);
-    }
-
     /** Token of the user's role, exactly like the password, PIN and QR logins (§7.4). */
     public function issueToken(User $user, ?string $deviceName): NewAccessToken
     {
@@ -226,8 +194,8 @@ final class GoogleSignIn
 
     /**
      * Step 2 of §24.9.3: the user must be active (not pending, disabled or
-     * merged) and pass the school's rules; then the stored profile follows
-     * Google and the role's token is issued.
+     * merged); then the stored profile follows Google and the role's token
+     * is issued.
      *
      * @return array{token: NewAccessToken, user: User}
      */
@@ -239,7 +207,6 @@ final class GoogleSignIn
 
             throw GoogleSignInErrors::accountNotActive($user->isMerged() ? User::STATUS_DISABLED : $user->status);
         }
-        self::assertAllowed($user, $google);
 
         $identity->forceFill([
             'email' => $google->email,
@@ -255,13 +222,12 @@ final class GoogleSignIn
     /**
      * §24.9.3 step 3: a teacher whose e-mail is the verified one is linked
      * automatically; an admin never is (#61). An unknown account becomes an
-     * active teacher of the school when that school allows it (#71, see
-     * googleSignUp()); anybody else gets a link ticket with the
-     * registration prefill (the pending registration of #70).
+     * active teacher at once (§29.13.2, googleSignUp()); an e-mail another
+     * user holds gets a link ticket with the registration prefill instead.
      *
      * @return array{token: NewAccessToken, user: User}
      */
-    private function firstStaffSignIn(VerifiedGoogleIdentity $google, ?string $deviceName, ?int $schoolId): array
+    private function firstStaffSignIn(VerifiedGoogleIdentity $google, ?string $deviceName): array
     {
         $staff = User::query()
             ->with('school')
@@ -277,7 +243,6 @@ final class GoogleSignIn
         }
 
         if ($staff !== null) {
-            self::assertAllowed($staff, $google);
             if (UserGoogleIdentity::query()->where('user_id', $staff->id)->exists()) {
                 self::log('login', 'google_not_linked', $staff->id, 'other_identity');
 
@@ -288,44 +253,20 @@ final class GoogleSignIn
             return $this->complete($identity->setRelation('user', $staff), $google, $deviceName);
         }
 
-        return $this->googleSignUp($google, $deviceName, $schoolId);
+        return $this->googleSignUp($google, $deviceName);
     }
 
     /**
-     * §24.9.3 step 3b (#71): the Google account is unknown and no teacher or
-     * admin has its e-mail. The school is $schoolId, else the only school;
-     * with several schools and no choice the app asks (404 with
-     * `needs_school`). A school with `teacher_google_auto_approve` creates an
-     * active teacher (name and e-mail from Google, no password, approved_by
-     * null), links the account (`google_signup`) and signs in after its
-     * domain check (403 google_domain_not_allowed). Otherwise, or when
-     * another user already has the e-mail, the pending registration of #70.
+     * §29.13.2: the Google account is unknown and no teacher or admin has
+     * its e-mail, so it becomes an active teacher at once (name and e-mail
+     * from Google, no password, approved_by null) with a workspace of its
+     * own, linked as `google_signup`. When another user already has the
+     * e-mail (users.email is unique) the pending registration of #70.
      *
      * @return array{token: NewAccessToken, user: User}
      */
-    private function googleSignUp(VerifiedGoogleIdentity $google, ?string $deviceName, ?int $schoolId): array
+    private function googleSignUp(VerifiedGoogleIdentity $google, ?string $deviceName): array
     {
-        $school = $schoolId !== null ? School::query()->find($schoolId) : null;
-        if ($school === null) {
-            $only = School::query()->limit(2)->get();
-            if ($only->count() > 1 && $this->anySchoolAutoApproves($google)) {
-                self::log('login', 'google_not_linked', null, 'needs_school');
-
-                throw $this->registration($google, ['needs_school' => true]);
-            }
-            $school = $only->count() === 1 ? $only->first() : null;
-        }
-
-        if ($school === null || ! $school->teacher_google_auto_approve) {
-            self::log('login', 'google_not_linked', null, 'unknown_staff');
-
-            throw $this->registration($google);
-        }
-        if (! $school->allowsGoogleDomain($google->domain())) {
-            self::log('signup', 'google_domain_not_allowed');
-
-            throw GoogleSignInErrors::domainNotAllowed();
-        }
         if (User::query()->whereRaw('LOWER(email) = ?', [$google->email])->exists()) {
             // A student (or a merged account) has the e-mail: users.email is unique.
             self::log('signup', 'email_taken');
@@ -334,11 +275,13 @@ final class GoogleSignIn
         }
 
         try {
-            $identity = DB::transaction(function () use ($google, $school) {
+            $identity = DB::transaction(function () use ($google) {
+                $name = self::signUpName($google);
+                $school = Workspaces::create($name, null);
                 $user = User::create([
                     'school_id' => $school->id,
                     'role' => User::ROLE_TEACHER,
-                    'name' => self::signUpName($google),
+                    'name' => $name,
                     'email' => $google->email,
                     'password' => null,
                     'status' => User::STATUS_ACTIVE,
@@ -361,31 +304,14 @@ final class GoogleSignIn
         return $this->complete($identity, $google, $deviceName);
     }
 
-    /** Whether choosing a school could create the account at all (else the plain registration). */
-    private function anySchoolAutoApproves(VerifiedGoogleIdentity $google): bool
-    {
-        return School::query()
-            ->where('teacher_google_auto_approve', true)
-            ->get(['id', 'google_signin_domains'])
-            ->contains(fn (School $school) => $school->allowsGoogleDomain($google->domain()));
-    }
-
-    /**
-     * 404 google_not_linked for an unknown teacher: a link ticket and the
-     * registration prefill, plus `needs_school` when the app must ask.
-     *
-     * @param  array<string, mixed>  $extra
-     */
-    private function registration(VerifiedGoogleIdentity $google, array $extra = []): ApiException
+    /** 404 google_not_linked for an unknown teacher whose e-mail is taken: a link ticket and the registration prefill. */
+    private function registration(VerifiedGoogleIdentity $google): ApiException
     {
         return GoogleSignInErrors::notLinked(
-            ($extra['needs_school'] ?? false)
-                ? 'เลือกโรงเรียนของคุณ แล้วเข้าสู่ระบบด้วย Google อีกครั้ง'
-                : 'ยังไม่มีบัญชี Krucheck ที่เชื่อมกับบัญชี Google นี้ สมัครใช้งานครู หรือเข้าสู่ระบบด้วยรหัสผ่านแล้วเชื่อมบัญชี Google ในหน้าตั้งค่า',
+            'ยังไม่มีบัญชี Krucheck ที่เชื่อมกับบัญชี Google นี้ สมัครใช้งานครู หรือเข้าสู่ระบบด้วยรหัสผ่านแล้วเชื่อมบัญชี Google ในหน้าตั้งค่า',
             [
                 'link_ticket' => $this->tickets->issueLink($google),
                 'registration' => ['name' => $google->name, 'email' => $google->email],
-                ...$extra,
             ],
         );
     }
@@ -415,7 +341,6 @@ final class GoogleSignIn
     {
         $student = $this->rosterStudent($google);
         if ($student !== null) {
-            self::assertAllowed($student, $google);
             $identity = $this->link($student, $google, UserGoogleIdentity::VIA_CLASSROOM_ROSTER, null);
 
             return $this->complete($identity->setRelation('user', $student), $google, $deviceName);

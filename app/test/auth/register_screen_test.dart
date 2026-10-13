@@ -10,36 +10,13 @@ import 'package:go_router/go_router.dart';
 
 import '../helpers/pump_screen.dart';
 
-const _one = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck')];
-const _two = [
-  SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck'),
-  SchoolOption(id: 9, name: 'โรงเรียนวัดใหม่'),
-];
-
 class _FakeAuth extends Fake implements AuthRepository {
-  _FakeAuth({this.schoolList = _one});
-
-  List<SchoolOption> schoolList;
-  Object? schoolsError;
-  int schoolLoads = 0;
   final calls = <Map<String, Object?>>[];
   final tickets = <String?>[];
   Object? error;
 
   @override
-  Future<List<SchoolOption>> schools() async {
-    schoolLoads++;
-    if (schoolsError != null) {
-      final e = schoolsError!;
-      schoolsError = null;
-      throw e;
-    }
-    return schoolList;
-  }
-
-  @override
   Future<void> register({
-    int? schoolId,
     String? schoolName,
     required String name,
     required String email,
@@ -53,7 +30,6 @@ class _FakeAuth extends Fake implements AuthRepository {
       throw e;
     }
     calls.add({
-      'school_id': schoolId,
       'school_name': schoolName,
       'name': name,
       'email': email,
@@ -65,13 +41,17 @@ class _FakeAuth extends Fake implements AuthRepository {
 Finder get _confirmField =>
     find.byKey(const ValueKey('register_password_confirm'));
 
-Future<_FakeAuth> _pump(WidgetTester tester, _FakeAuth auth) async {
+Future<_FakeAuth> _pump(
+  WidgetTester tester,
+  _FakeAuth auth, {
+  GoogleRegistration? google,
+}) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await pumpScreen(
     tester,
-    const RegisterScreen(),
+    RegisterScreen(google: google),
     overrides: [
       authRepositoryProvider.overrideWithValue(auth),
       tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
@@ -104,13 +84,15 @@ Future<void> _submit(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// DESIGN §29.13.2: no school to pick, only the teacher's own school name.
 void main() {
-  testWidgets('has no school code field and validates locally first', (
+  testWidgets('has no school fields and validates locally first', (
     tester,
   ) async {
     final auth = await _pump(tester, _FakeAuth());
     expect(find.textContaining('รหัสโรงเรียน'), findsNothing);
-    expect(find.textContaining('school_code'), findsNothing);
+    expect(find.textContaining('โรงเรียนในระบบ'), findsNothing);
+    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
     expect(find.byType(TextFormField), findsNWidgets(5));
 
     await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
@@ -122,11 +104,9 @@ void main() {
   });
 
   testWidgets(
-    'one school: its name is not shown, the typed school name is sent, then the pending-approval message',
+    'the typed school name is sent, then the pending-approval message',
     (tester) async {
       final auth = await _pump(tester, _FakeAuth());
-      expect(find.text('โรงเรียนสาธิต Krucheck'), findsNothing);
-      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('register_school_name')),
@@ -137,7 +117,6 @@ void main() {
 
       expect(auth.calls, [
         {
-          'school_id': 7,
           'school_name': 'โรงเรียนบ้านหนองบัว',
           'name': 'ครูสมศรี ใจดี',
           'email': 'somsri@example.com',
@@ -146,9 +125,9 @@ void main() {
       ]);
       expect(find.text('สมัครสำเร็จ'), findsOneWidget);
       expect(
-        find.textContaining('รอผู้ดูแลโรงเรียนอนุมัติ'),
+        find.textContaining('รอผู้ดูแลระบบอนุมัติ'),
         findsOneWidget,
-        reason: 'new accounts are pending until a school admin approves',
+        reason: 'new accounts are pending until an admin approves',
       );
 
       await tester.tap(find.text('รับทราบ'));
@@ -156,6 +135,14 @@ void main() {
       expect(find.text('login-stub'), findsOneWidget);
     },
   );
+
+  testWidgets('an empty school name is left out', (tester) async {
+    final auth = await _pump(tester, _FakeAuth());
+    await _fillTeacher(tester);
+    await _submit(tester);
+    expect(auth.calls.single['school_name'], isNull);
+    expect(find.text('สมัครสำเร็จ'), findsOneWidget);
+  });
 
   testWidgets('the repeated password must match before anything is sent', (
     tester,
@@ -173,72 +160,6 @@ void main() {
     expect(auth.calls.single['password'], 'secret-pass-1');
   });
 
-  testWidgets('several schools: a required dropdown, the pick is sent', (
-    tester,
-  ) async {
-    final auth = await _pump(tester, _FakeAuth(schoolList: _two));
-    expect(find.byKey(const ValueKey('register_school')), findsOneWidget);
-    expect(find.byKey(const ValueKey('register_school_name')), findsOneWidget);
-
-    await _fillTeacher(tester);
-    await _submit(tester);
-    expect(find.text('กรุณาเลือกโรงเรียน'), findsOneWidget);
-    expect(auth.calls, isEmpty);
-
-    await tester.tap(find.byKey(const ValueKey('register_school')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('โรงเรียนวัดใหม่').last);
-    await tester.pumpAndSettle();
-    await _submit(tester);
-
-    expect(auth.calls.single['school_id'], 9);
-    expect(
-      auth.calls.single['school_name'],
-      isNull,
-      reason: 'an empty school name is left out',
-    );
-    expect(find.text('สมัครสำเร็จ'), findsOneWidget);
-  });
-
-  testWidgets('a failed school list can be retried; sign-up still works', (
-    tester,
-  ) async {
-    final auth = _FakeAuth()..schoolsError = _apiError(500, 'server_error');
-    await _pump(tester, auth);
-    expect(find.textContaining('โหลดรายชื่อโรงเรียนไม่สำเร็จ'), findsOneWidget);
-
-    await tester.tap(find.text('ลองอีกครั้ง'));
-    await tester.pumpAndSettle();
-    expect(auth.schoolLoads, 2);
-    expect(find.textContaining('โหลดรายชื่อโรงเรียนไม่สำเร็จ'), findsNothing);
-  });
-
-  testWidgets('without a list the server picks; school_required reloads it', (
-    tester,
-  ) async {
-    final auth = _FakeAuth()..schoolsError = _apiError(500, 'server_error');
-    await _pump(tester, auth);
-    await _fillTeacher(tester);
-    auth
-      ..schoolList = _two
-      ..error = _apiError(
-        422,
-        'school_required',
-        message: 'กรุณาเลือกโรงเรียน',
-      );
-    await _submit(tester);
-
-    expect(auth.tickets, [null], reason: 'sent without a school_id');
-    expect(find.text('กรุณาเลือกโรงเรียน'), findsOneWidget);
-    expect(auth.schoolLoads, 2);
-    expect(find.byKey(const ValueKey('register_school')), findsOneWidget);
-  });
-
-  testWidgets('no school at all is explained', (tester) async {
-    await _pump(tester, _FakeAuth(schoolList: const []));
-    expect(find.textContaining('ยังไม่มีโรงเรียนในระบบ'), findsOneWidget);
-  });
-
   group('from a Google sign-in (DESIGN §24.9.5)', () {
     const google = GoogleRegistration(
       linkTicket: 'tkt',
@@ -247,25 +168,7 @@ void main() {
     );
 
     Future<_FakeAuth> pumpGoogle(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(800, 1600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final auth = _FakeAuth(schoolList: _two);
-      await pumpScreen(
-        tester,
-        const RegisterScreen(google: google),
-        overrides: [
-          authRepositoryProvider.overrideWithValue(auth),
-          tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
-        ],
-        extraRoutes: [
-          GoRoute(path: '/login', builder: (_, _) => const Text('login-stub')),
-        ],
-      );
-      await tester.tap(find.byKey(const ValueKey('register_school')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('โรงเรียนวัดใหม่').last);
-      await tester.pumpAndSettle();
+      final auth = await _pump(tester, _FakeAuth(), google: google);
       await tester.enterText(
         find.widgetWithText(TextFormField, 'รหัสผ่าน (อย่างน้อย 8 ตัว)'),
         'secret-pass-1',
@@ -283,7 +186,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(auth.tickets, ['tkt']);
-      expect(auth.calls.single['school_id'], 9);
       expect(auth.calls.single['name'], 'ครูใหม่ ใจดี');
       expect(auth.calls.single['email'], 'new@school.ac.th');
       expect(
@@ -307,16 +209,6 @@ void main() {
       expect(auth.tickets, ['tkt', null]);
       expect(find.text('สมัครสำเร็จ'), findsOneWidget);
     });
-
-    testWidgets('a domain the school does not allow is explained', (
-      tester,
-    ) async {
-      final auth = await pumpGoogle(tester);
-      auth.error = _apiError(403, 'google_domain_not_allowed');
-      await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('โดเมนนี้'), findsOneWidget);
-    });
   });
 }
 
@@ -324,6 +216,7 @@ DioException _apiError(int status, String code, {String message = 'x'}) {
   final options = RequestOptions(path: '/auth/teacher/register');
   return DioException(
     requestOptions: options,
+    type: DioExceptionType.badResponse,
     response: Response(
       requestOptions: options,
       statusCode: status,

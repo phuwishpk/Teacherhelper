@@ -7,12 +7,12 @@ use App\Domain\Auth\Google\GoogleSignInConfig;
 use App\Domain\Auth\Google\GoogleSignInErrors;
 use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Domain\Auth\Google\VerifiedGoogleIdentity;
+use App\Domain\Teachers\Workspaces;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\TeacherLoginRequest;
 use App\Http\Requests\Api\V1\TeacherRegisterRequest;
 use App\Http\Resources\UserResource;
-use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
 use Illuminate\Http\JsonResponse;
@@ -32,30 +32,29 @@ class TeacherAuthController extends Controller
     /**
      * POST /api/v1/auth/teacher/register -> 201 {user}
      *
-     * The school comes from resolveSchool() (school_id, the legacy school_code,
-     * or the only school). The account is created `pending` (DESIGN §9.1) and
-     * can log in only after an admin approves it in Filament (UserResource
-     * "approve"), which sets status=active + approved_by. Since 2 Oct 2569 that
-     * approval is the only gate: no school code is needed to sign up.
-     * school_name? is the teacher's own school name (DESIGN §29.11).
+     * DESIGN §29.13.2: the teacher gets a workspace of their own (a `schools`
+     * row nobody picks or sees, Workspaces::create) and a `pending` account
+     * that can log in only after an admin approves it in Filament
+     * (UserResource "approve", status=active + approved_by). school_name? is
+     * the teacher's own school name (§29.11); school_id and school_code of
+     * older app builds are ignored.
      *
      * google_link_ticket (DESIGN §24.9.5): the Google account of a 404
-     * google_not_linked is linked as the account is created (`registration`),
-     * after the school's domain check; it signs in once an admin approves.
-     * 422 link_ticket_invalid, 403 google_domain_not_allowed, 409 google_already_linked.
+     * google_not_linked is linked as the account is created (`registration`)
+     * and signs in once an admin approves. 422 link_ticket_invalid, 409
+     * google_already_linked.
      */
     public function register(TeacherRegisterRequest $request, GoogleSignInTickets $tickets, GoogleSignIn $signIn): JsonResponse
     {
         $data = $request->validated();
 
-        $school = self::resolveSchool($data);
-
         $ticket = $data['google_link_ticket'] ?? null;
-        $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket, $school);
+        $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket);
 
         $schoolName = trim((string) ($data['school_name'] ?? ''));
 
-        $user = DB::transaction(function () use ($data, $school, $schoolName, $google, $ticket, $tickets, $signIn) {
+        $user = DB::transaction(function () use ($data, $schoolName, $google, $ticket, $tickets, $signIn) {
+            $school = Workspaces::create($data['name'], $schoolName);
             $user = User::create([
                 'school_id' => $school->id,
                 'school_name' => $schoolName === '' ? null : $schoolName,
@@ -64,87 +63,29 @@ class TeacherAuthController extends Controller
                 'email' => $data['email'],
                 'password' => $data['password'],
                 'status' => User::STATUS_PENDING,
-            ]);
+            ])->setRelation('school', $school);
             if ($google !== null) {
                 if ($tickets->consumeLink($ticket) === null) {
                     throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
                 }
-                $signIn->link($user->setRelation('school', $school), $google, UserGoogleIdentity::VIA_REGISTRATION, $user);
+                $signIn->link($user, $google, UserGoogleIdentity::VIA_REGISTRATION, $user);
             }
 
             return $user;
         });
 
         return response()->json([
-            'user' => new UserResource($user->setRelation('school', $school)),
+            'user' => new UserResource($user),
         ], 201);
     }
 
     /**
-     * GET /api/v1/auth/schools -> 200 {data: [{id, name}]}
-     *
-     * Public: the app's sign-up form shows a "โรงเรียน" dropdown when there is
-     * more than one school. Names only; the join codes never leave the panel.
-     */
-    public function schools(): JsonResponse
-    {
-        $schools = School::query()->orderBy('name')->orderBy('id')->get(['id', 'name']);
-
-        return response()->json([
-            'data' => $schools->map(fn (School $school) => ['id' => $school->id, 'name' => $school->name])->values(),
-        ]);
-    }
-
-    /**
-     * The school a new teacher joins: school_id when given (validated to
-     * exist), else school_code from an older app build (422
-     * school_code_invalid when it matches nothing), else the only school.
-     * With no or several schools and neither field: 422 school_required.
-     *
-     * @param  array<string, mixed>  $data
-     *
-     * @throws ApiException
-     */
-    private static function resolveSchool(array $data): School
-    {
-        if (isset($data['school_id'])) {
-            return School::query()->findOrFail((int) $data['school_id']);
-        }
-
-        if (isset($data['school_code']) && $data['school_code'] !== '') {
-            $school = School::query()->where('teacher_join_code', $data['school_code'])->first();
-            if ($school === null) {
-                throw new ApiException(
-                    'รหัสโรงเรียนไม่ถูกต้อง',
-                    'school_code_invalid',
-                    422,
-                    ['school_code' => ['รหัสโรงเรียนไม่ถูกต้อง']],
-                );
-            }
-
-            return $school;
-        }
-
-        $only = School::query()->limit(2)->get();
-        if ($only->count() === 1) {
-            return $only->first();
-        }
-
-        throw new ApiException(
-            'กรุณาเลือกโรงเรียน',
-            'school_required',
-            422,
-            ['school_id' => ['กรุณาเลือกโรงเรียน']],
-        );
-    }
-
-    /**
      * The Google account behind a registration's link ticket, checked
-     * against the school's domains and existing links (nothing spent yet).
+     * against existing links (nothing spent yet).
      *
      * @throws ApiException
      */
-    private static function registrationIdentity(GoogleSignInTickets $tickets, string $ticket, School $school): VerifiedGoogleIdentity
+    private static function registrationIdentity(GoogleSignInTickets $tickets, string $ticket): VerifiedGoogleIdentity
     {
         if (! GoogleSignInConfig::enabled()) {
             throw GoogleSignInErrors::notConfigured();
@@ -152,11 +93,6 @@ class TeacherAuthController extends Controller
         $google = $tickets->peekLink($ticket);
         if ($google === null) {
             throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
-        }
-        if (! $school->allowsGoogleDomain($google->domain())) {
-            GoogleSignIn::log('register', 'google_domain_not_allowed');
-
-            throw GoogleSignInErrors::domainNotAllowed();
         }
         if (UserGoogleIdentity::query()->where('google_sub', $google->sub)->exists()) {
             GoogleSignIn::log('register', 'google_already_linked');

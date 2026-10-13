@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
-import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../google_classroom/google_auth.dart' show GoogleAuthCanceled;
@@ -18,9 +17,8 @@ import 'google_signin_repository.dart';
 ///
 /// On Android: the account picker, `POST /auth/google`, then the session
 /// reads `/me` and the router takes the user home. A new teacher is signed
-/// up by that same request when the school allows it (#71); with several
-/// schools the teacher picks one first ([pickGoogleSignUpSchool]). On the
-/// web: Google's account chooser in the same tab; the app comes back on
+/// up by that same request (#71, DESIGN §29.13.2). On the web: Google's
+/// account chooser in the same tab; the app comes back on
 /// `/login/google?ticket=` ([GoogleLoginReturnScreen]).
 ///
 /// Returns a Thai message to show under the button, or null (signed in,
@@ -53,10 +51,7 @@ Future<String?> runGoogleSignIn(
 }
 
 /// The Android sign-in shared by the login and register pages: the account
-/// picker and `POST /auth/google`. A 404 with `needs_school` (#71) asks for
-/// the school and sends the same ID token again with its id; a token that
-/// grew too old meanwhile (422 `google_token_invalid`) is asked from Google
-/// once more. Closing the school list counts as cancelling.
+/// picker and `POST /auth/google`.
 Future<void> _nativeSignIn(
   BuildContext context,
   WidgetRef ref,
@@ -64,97 +59,10 @@ Future<void> _nativeSignIn(
 ) async {
   final gateway = ref.read(googleSignInGatewayProvider);
   final repo = ref.read(googleSignInRepositoryProvider);
-  final session = ref.read(sessionProvider.notifier);
   final idToken = await gateway.idToken();
-  try {
-    await session.signInWithToken(
-      repo.signIn(idToken: idToken, intent: intent),
-    );
-  } catch (e) {
-    if (GoogleNotLinked.of(e)?.needsSchool != true || !context.mounted) {
-      rethrow;
-    }
-    final schoolId = await pickGoogleSignUpSchool(context, ref);
-    if (schoolId == null) throw const GoogleAuthCanceled();
-    try {
-      await session.signInWithToken(
-        repo.signIn(idToken: idToken, intent: intent, schoolId: schoolId),
-      );
-    } catch (e) {
-      if (apiErrorCode(e) != 'google_token_invalid') rethrow;
-      final fresh = await gateway.idToken();
-      await session.signInWithToken(
-        repo.signIn(idToken: fresh, intent: intent, schoolId: schoolId),
-      );
-    }
-  }
-}
-
-/// The school a new teacher signs up with after a 404 with `needs_school`
-/// (DESIGN §24.9.3, #71): the list of `GET /auth/schools` in a dialog, or
-/// the only school without asking. Null when the teacher closes the list
-/// (or there is no school at all). A failed list load throws.
-Future<int?> pickGoogleSignUpSchool(BuildContext context, WidgetRef ref) async {
-  final schools = await ref.read(authRepositoryProvider).schools();
-  if (schools.length == 1) return schools.single.id;
-  if (schools.isEmpty || !context.mounted) return null;
-  return showDialog<int>(
-    context: context,
-    builder: (context) => _SchoolPickerDialog(schools: schools),
-  );
-}
-
-class _SchoolPickerDialog extends StatelessWidget {
-  const _SchoolPickerDialog({required this.schools});
-
-  final List<SchoolOption> schools;
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleDialog(
-      key: const ValueKey('google_school_picker'),
-      title: const Text('เลือกโรงเรียนของคุณ'),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-          child: Text(
-            'บัญชีครูใหม่จะอยู่ในโรงเรียนที่เลือก',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        for (final school in schools)
-          SimpleDialogOption(
-            key: ValueKey('google_school_${school.id}'),
-            onPressed: () => Navigator.of(context).pop(school.id),
-            child: Text(school.name),
-          ),
-      ],
-    );
-  }
-}
-
-/// The web flow again after a 404 with `needs_school`, with the picked
-/// [schoolId] carried through the server's state to the ticket. [signUp]
-/// keeps the register page's mark so a school that approves teachers
-/// itself still comes back to that page. Returns a Thai message, or null
-/// when Google's page opened.
-Future<String?> restartGoogleWebSignIn(
-  WidgetRef ref, {
-  required int schoolId,
-  required bool signUp,
-}) async {
-  try {
-    if (signUp) await _markGoogleSignUp(ref, DateTime.now());
-    final url = await ref
-        .read(googleSignInRepositoryProvider)
-        .webUrl(link: false, intent: GoogleIntent.staff, schoolId: schoolId);
-    if (await ref.read(sameTabUrlOpenerProvider)(url)) return null;
-    if (signUp) await _markGoogleSignUp(ref, null);
-    return _chooserNotOpened;
-  } catch (e) {
-    if (signUp) await _markGoogleSignUp(ref, null);
-    return googleSignInErrorMessage(e);
-  }
+  await ref
+      .read(sessionProvider.notifier)
+      .signInWithToken(repo.signIn(idToken: idToken, intent: intent));
 }
 
 const _chooserNotOpened = 'เปิดหน้าเลือกบัญชี Google ไม่ได้ ลองอีกครั้ง';
@@ -199,10 +107,9 @@ typedef GoogleSignUpOutcome = ({
 /// "สมัครด้วย Google" of the register page (DESIGN §24.9.5): the staff
 /// flow of [runGoogleSignIn] without the "ยังไม่มีบัญชี" dialog.
 ///
-/// On Android a linked account signs in, and so does a new teacher whose
-/// school approves Google sign-ups itself (#71, after the school list when
-/// there are several); the router takes the teacher home. Only when the
-/// school wants its admin to approve does an unknown account return its
+/// On Android a linked account signs in, and so does a new teacher (#71,
+/// DESIGN §29.13.2); the router takes the teacher home. Only when another
+/// account already holds the Google e-mail does the server return a
 /// [GoogleRegistration] for this page. On the web the mark of
 /// [takeGoogleSignUpMark] is written before leaving for Google's page, so
 /// [GoogleLoginReturnScreen] comes back here in that case.
@@ -242,9 +149,8 @@ Future<GoogleSignUpOutcome> runGoogleSignUp(
 /// What to do after a failed Google sign-in (also of the web flow's
 /// ticket). A 404 `google_not_linked`:
 ///
-/// - with `needs_school`: the server's message (the school was not picked);
-/// - with a registration (staff tab, the school approves new teachers
-///   itself): asks "สมัครใช้งานครู" (the register page prefilled with the
+/// - with a registration (staff tab, the Google e-mail is held by another
+///   account): asks "สมัครใช้งานครู" (the register page prefilled with the
 ///   Google name and e-mail) or the password login;
 /// - with only a link ticket (student tab): opens "ยืนยันตัวตนครั้งแรก";
 /// - otherwise the server's message.
@@ -257,8 +163,6 @@ Future<String?> handleGoogleSignInError(
 ) async {
   final notLinked = GoogleNotLinked.of(error);
   if (notLinked == null) return googleSignInErrorMessage(error);
-  // The school list was not answered (the flows ask before this).
-  if (notLinked.needsSchool) return notLinked.message;
 
   if (notLinked.registration case final registration?) {
     final register = await showDialog<bool>(
@@ -396,7 +300,7 @@ class _GoogleSignInSectionState extends ConsumerState<GoogleSignInSection> {
         Text(
           widget.intent == GoogleIntent.student
               ? 'ใช้ได้เมื่อเชื่อมบัญชี Google แล้ว ครั้งแรกต้องยืนยันด้วยรหัสผ่านหรือบัตร QR'
-              : 'ครูที่ยังไม่มีบัญชีเข้าใช้งานได้ทันทีถ้าโรงเรียนเปิดให้ ครูที่มีบัญชีแล้วใช้อีเมลเดียวกันหรือเชื่อมไว้ในหน้าตั้งค่า',
+              : 'ครูที่ยังไม่มีบัญชีเข้าใช้งานได้ทันที ครูที่มีบัญชีแล้วใช้อีเมลเดียวกันหรือเชื่อมไว้ในหน้าตั้งค่า',
           style: muted,
         ),
         const SizedBox(height: 4),
@@ -497,7 +401,7 @@ class _GoogleSignUpSectionState extends ConsumerState<GoogleSignUpSection> {
         const SizedBox(height: 8),
         Text(
           'เข้าใช้งานได้ทันทีด้วยชื่อและอีเมลจากบัญชี Google '
-          'ถ้าโรงเรียนให้ผู้ดูแลอนุมัติก่อน จะกลับมาที่ฟอร์มนี้พร้อมข้อมูลจาก Google',
+          'ถ้าอีเมลนี้มีบัญชีอยู่แล้ว จะกลับมาที่ฟอร์มนี้พร้อมข้อมูลจาก Google',
           style: muted,
         ),
         const SizedBox(height: 4),

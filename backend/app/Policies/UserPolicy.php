@@ -19,14 +19,10 @@ class UserPolicy
         return $this->isAdmin($user);
     }
 
-    /**
-     * An admin of a school (school_id set) sees and edits only the accounts
-     * of that school (DESIGN §24.2, #70); a system admin (school_id null)
-     * all of them, system admins included.
-     */
+    /** Every active admin sees and edits every account (one admin level, DESIGN §29.13.1). */
     public function view(User $user, User $target): bool
     {
-        return $this->isAdmin($user) && self::sameSchool($user, $target);
+        return $this->isAdmin($user);
     }
 
     public function create(User $user): bool
@@ -75,25 +71,22 @@ class UserPolicy
 
     /**
      * Filament "ยกเลิกการเชื่อม Google" of a student (DESIGN §24.9.5): an
-     * active admin of the student's school, or a system admin. Teachers use
-     * DELETE /students/{id}/google-identity (editStudent).
+     * active admin. Teachers use DELETE /students/{id}/google-identity (editStudent).
      */
     public function unlinkGoogle(User $user, User $student): bool
     {
-        return $this->isAdmin($user) && $student->isStudent()
-            && ($user->school_id === null || $user->school_id === $student->school_id);
+        return $this->isAdmin($user) && $student->isStudent();
     }
 
     /**
-     * Merge $merge into $keep (DESIGN §24.5): an admin of their school (or a
-     * system admin), or a teacher who is the homeroom teacher of a classroom
-     * (open or closed) of each of the two accounts. A subject teacher cannot,
-     * because merging edits student data (#65).
+     * Merge $merge into $keep (DESIGN §24.5): an admin, or a teacher who is
+     * the homeroom teacher of a classroom (open or closed) of each of the two
+     * accounts. A subject teacher cannot, because merging edits student data (#65).
      */
     public function mergeStudents(User $user, User $keep, User $merge): bool
     {
         if ($user->isAdmin()) {
-            return $user->isActive() && ($user->school_id === null || ($user->school_id === $keep->school_id && $user->school_id === $merge->school_id));
+            return $user->isActive();
         }
 
         return self::isHomeroomOf($user, $keep, false) && self::isHomeroomOf($user, $merge, false);
@@ -142,12 +135,6 @@ class UserPolicy
             ->when($openOnly, fn ($q) => $q->whereNull('closed_at'))
             ->whereHas('students', fn ($q) => $q->whereKey($student->id))
             ->exists();
-    }
-
-    /** A system admin reaches every account; an admin of a school only that school's. */
-    private static function sameSchool(User $admin, User $target): bool
-    {
-        return $admin->school_id === null || $admin->school_id === $target->school_id;
     }
 
     private function isAdmin(User $user): bool

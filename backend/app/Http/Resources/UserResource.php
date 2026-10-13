@@ -27,11 +27,12 @@ class UserResource extends JsonResource
             'must_change_password' => $this->isStudent() && (bool) $this->credential?->must_change_password,
             'role' => $this->role,
             'status' => $this->status,
-            'school' => $this->school === null ? null : [
-                'id' => $this->school->id,
-                // The teacher's own text wins over the school row (DESIGN §29.1).
-                'name' => $this->school_name ?? $this->school->name,
-            ],
+            // Teachers only: the id of their workspace and the school name they typed
+            // (DESIGN §29.13.2); the workspace row itself is never shown.
+            'school' => $this->isTeacher() && $this->school_id !== null ? [
+                'id' => $this->school_id,
+                'name' => $this->school_name,
+            ] : null,
         ];
     }
 }

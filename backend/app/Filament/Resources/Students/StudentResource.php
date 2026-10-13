@@ -58,8 +58,7 @@ class StudentResource extends Resource
                     ->label('Google')
                     ->state(fn (User $record) => $record->googleIdentity !== null)
                     ->boolean(),
-                TextColumn::make('school.name')->label('โรงเรียน')->sortable()
-                    ->visible(fn () => self::admin()?->school_id === null),
+                TextColumn::make('school.name')->label('พื้นที่ของครู')->sortable(),
                 TextColumn::make('status')
                     ->label('สถานะ')
                     ->badge()
@@ -85,8 +84,7 @@ class StudentResource extends Resource
                         'merged' => $query->whereNotNull('merged_into_id'),
                         default => $query,
                     }),
-                SelectFilter::make('school_id')->label('โรงเรียน')->relationship('school', 'name')
-                    ->visible(fn () => self::admin()?->school_id === null),
+                SelectFilter::make('school_id')->label('พื้นที่ของครู')->relationship('school', 'name'),
             ])
             ->recordActions([
                 Action::make('unlinkGoogle')
@@ -132,12 +130,9 @@ class StudentResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $schoolId = self::admin()?->school_id;
-
         return parent::getEloquentQuery()
             ->where('role', User::ROLE_STUDENT)
-            ->with(['school', 'classrooms', 'mergedInto', 'googleIdentity'])
-            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
+            ->with(['school', 'classrooms', 'mergedInto', 'googleIdentity']);
     }
 
     /** Students are created and edited by their homeroom teachers in the app. */

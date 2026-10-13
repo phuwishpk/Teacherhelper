@@ -31,7 +31,6 @@ class StudentAccountScreen extends ConsumerWidget {
                 subtitle: Text(
                   [
                     if (user.username case final u?) 'ชื่อผู้ใช้: $u',
-                    ?user.schoolName,
                   ].join('\n'),
                 ),
               ),

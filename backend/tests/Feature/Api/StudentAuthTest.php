@@ -215,7 +215,7 @@ class StudentAuthTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/me')
             ->assertOk()
             ->assertJsonPath('data.role', 'student')
-            ->assertJsonPath('data.school.id', $this->teacher->school_id);
+            ->assertJsonPath('data.school', null); // students have no school of their own (DESIGN §29.13.2)
 
         $this->forgetGuards();
         $this->withToken($token)->getJson('/api/v1/classrooms')

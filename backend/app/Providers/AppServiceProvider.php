@@ -101,10 +101,6 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by((string) $request->ip());
         });
 
-        // GET /auth/schools (the sign-up form's school list): public and cheap,
-        // its own per-IP bucket so opening the form never spends a login try.
-        RateLimiter::for('school-list', fn (Request $request) => Limit::perMinute(30)->by((string) $request->ip()));
-
         // Student login (DESIGN §7.4): a whole class scans its QR cards from one
         // school NAT address within a minute, so the per-IP limit is wide. QR
         // tokens are 256-bit random, so the IP limit is only abuse protection;

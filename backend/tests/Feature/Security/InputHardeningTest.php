@@ -85,9 +85,9 @@ class InputHardeningTest extends TestCase
     }
 
     /**
-     * school_id picks the school (since 2 Oct 2569 teachers choose it and an
-     * admin's approval is the gate), but role, status and id are never taken
-     * from the body: the account is always a pending teacher.
+     * school_id is ignored (every teacher gets a workspace of their own,
+     * DESIGN §29.13.1) and role, status and id are never taken from the body:
+     * the account is always a pending teacher.
      */
     public function test_registration_ignores_role_and_status(): void
     {
@@ -97,7 +97,8 @@ class InputHardeningTest extends TestCase
             'role' => 'admin', 'status' => 'active', 'approved_by' => $this->teacher->id, 'id' => 1,
         ])->assertCreated()->json('user');
 
-        $this->assertSame(['teacher', 'pending', $school->id], [$user['role'], $user['status'], $user['school']['id']]);
+        $this->assertSame(['teacher', 'pending'], [$user['role'], $user['status']]);
+        $this->assertNotSame($school->id, $user['school']['id'], 'a workspace of their own, not the one sent');
         $this->assertNull(User::query()->where('email', 'new@example.com')->value('approved_by'));
         $this->assertSame(['teacher', 'pending'], User::query()->where('email', 'new@example.com')->get(['role', 'status'])->map(fn ($u) => [$u->role, $u->status])->first());
     }

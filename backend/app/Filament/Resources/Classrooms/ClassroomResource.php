@@ -63,8 +63,7 @@ class ClassroomResource extends Resource
                 TextColumn::make('name')->label('ห้อง')->searchable()->sortable(),
                 TextColumn::make('academic_year')->label('ปีการศึกษา')->sortable(),
                 TextColumn::make('teacher.name')->label('ครูประจำชั้น')->searchable(),
-                TextColumn::make('school.name')->label('โรงเรียน')->sortable()
-                    ->visible(fn () => self::admin()?->school_id === null),
+                TextColumn::make('school.name')->label('พื้นที่ของครู')->sortable(),
                 TextColumn::make('students_count')->label('นักเรียน')->counts('students')->sortable(),
                 TextColumn::make('subject_teachers')
                     ->label('ครูประจำวิชา')
@@ -88,8 +87,7 @@ class ClassroomResource extends Resource
                         'closed' => $query->whereNotNull('closed_at'),
                         default => $query,
                     }),
-                SelectFilter::make('school_id')->label('โรงเรียน')->relationship('school', 'name')
-                    ->visible(fn () => self::admin()?->school_id === null),
+                SelectFilter::make('school_id')->label('พื้นที่ของครู')->relationship('school', 'name'),
             ])
             ->recordActions([
                 Action::make('assignCourse')
@@ -264,11 +262,8 @@ class ClassroomResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $schoolId = self::admin()?->school_id;
-
         return parent::getEloquentQuery()
-            ->with(['school', 'teacher', 'courses.creator:id,name'])
-            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
+            ->with(['school', 'teacher', 'courses.creator:id,name']);
     }
 
     public static function getViewAnyAuthorizationResponse(): Response

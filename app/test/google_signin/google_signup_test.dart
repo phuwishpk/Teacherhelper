@@ -30,22 +30,15 @@ final _password = find.widgetWithText(
   'รหัสผ่าน (อย่างน้อย 8 ตัว)',
 );
 
-const _schools = [SchoolOption(id: 7, name: 'โรงเรียนสาธิต Krucheck')];
-
-/// `/me` plus the school list and the registration of the register page.
+/// `/me` plus the registration of the register page.
 class _Auth extends FakeMeAuth {
-  _Auth({this.list = _schools}) : super(teacherUser);
+  _Auth() : super(teacherUser);
 
-  final List<SchoolOption> list;
   final tickets = <String?>[];
   final emails = <String>[];
 
   @override
-  Future<List<SchoolOption>> schools() async => list;
-
-  @override
   Future<void> register({
-    int? schoolId,
     String? schoolName,
     required String name,
     required String email,
@@ -211,28 +204,13 @@ void main() {
     testWidgets('a new teacher is signed in at once, no form (#71)', (
       tester,
     ) async {
-      final auth = _Auth(
-        list: const [
-          ..._schools,
-          SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
-        ],
-      );
-      final repo = FakeGoogleSignInRepository()
-        ..signInErrors.addAll([staffNeedsSchool(), null]);
-      final h = await _pump(tester, repo: repo, auth: auth);
-      // The dialog keeps the button's spinner running: pump, do not settle.
+      final auth = _Auth();
+      final h = await _pump(tester, auth: auth);
       await tester.ensureVisible(_button);
       await tester.tap(_button);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(
-        find.byKey(const ValueKey('google_school_picker')),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const ValueKey('google_school_9')));
       await tester.pumpAndSettle();
 
-      expect(h.repo.signInSchools, [null, 9]);
+      expect(h.repo.signIns, hasLength(1));
       expect(h.container.read(sessionProvider), isA<SignedIn>());
       expect(auth.tickets, isEmpty, reason: 'no registration request');
       expect(_banner, findsNothing);
@@ -400,35 +378,6 @@ void main() {
       expect(_banner, findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'new@school.ac.th'), findsOne);
       expect(storage.googleSignUpStartedAt, isNull);
-    });
-
-    testWidgets('a new teacher picks the school and the mark is kept', (
-      tester,
-    ) async {
-      final repo = FakeGoogleSignInRepository()
-        ..ticketError = staffNeedsSchool();
-      final storage = await pumpReturn(
-        tester,
-        mark: DateTime.now(),
-        repo: repo,
-        auth: _Auth(
-          list: const [
-            ..._schools,
-            SchoolOption(id: 9, name: 'โรงเรียนบ้านหนองบัว'),
-          ],
-        ),
-      );
-      await tester.tap(find.byKey(const ValueKey('google_school_7')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(repo.webUrlSchools, [7]);
-      expect(
-        storage.googleSignUpStartedAt,
-        isNotNull,
-        reason: 'a school that approves teachers itself comes back here',
-      );
-      expect(_dialog, findsNothing);
     });
 
     testWidgets('without the mark asks like the login page', (tester) async {
