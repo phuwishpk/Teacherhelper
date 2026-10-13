@@ -50,6 +50,9 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
     for (final s in widget.initial) s.id: s,
   };
   List<Skill> _results = const [];
+  // The search that produced _results: an empty one shows the whole
+  // subject and grade, so "เพิ่มทั้งหมด" means exactly that.
+  String _shownQuery = '';
   bool _loading = false;
   String? _error;
   Timer? _debounce;
@@ -77,21 +80,40 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
       _loading = true;
       _error = null;
     });
+    final q = _query.text.trim();
     try {
       final results = await ref
           .read(assignmentsRepositoryProvider)
           .searchSkills(
             subjectId: widget.subjectId,
             grade: widget.grade,
-            q: _query.text.trim(),
+            q: q,
             level: kAssessableLevels,
           );
-      if (mounted) setState(() => _results = results);
+      if (mounted) {
+        setState(() {
+          _results = results;
+          _shownQuery = q;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Ticks every indicator the current search shows (DESIGN §29.4: the
+  /// whole subject and grade when the search box is empty).
+  int get _unselectedShown =>
+      _results.where((s) => !_selected.containsKey(s.id)).length;
+
+  void _addAll() {
+    setState(() {
+      for (final s in _results) {
+        _selected[s.id] = s;
+      }
+    });
   }
 
   Future<void> _addIndicator() async {
@@ -125,7 +147,20 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
               ),
               onChanged: _onChanged,
             ),
-            const SizedBox(height: 8),
+            // Below the search so the dialog's button bar keeps its width.
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('skills_picker_add_all'),
+                onPressed: _unselectedShown == 0 ? null : _addAll,
+                icon: const Icon(Icons.done_all, size: 18),
+                label: Text(
+                  _shownQuery.isEmpty
+                      ? 'เพิ่มทั้งหมด ($_unselectedShown)'
+                      : 'เพิ่มที่แสดงทั้งหมด ($_unselectedShown)',
+                ),
+              ),
+            ),
             if (_selected.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
