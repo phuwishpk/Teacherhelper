@@ -134,7 +134,7 @@ void _expectMessageOnce(String text) {
 /// The unified login page opens on the student tab: switch to the
 /// teacher / admin one.
 Future<void> openTeacherTab(WidgetTester tester) async {
-  await tester.tap(find.text('ครู / ผู้ดูแลระบบ'));
+  await tester.tap(find.text('ครู'));
   await tester.pumpAndSettle();
 }
 
