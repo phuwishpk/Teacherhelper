@@ -617,7 +617,7 @@ DESIGN §7.6: ต้องย้าย nameserver ของ `phuwish.com` ทั
 | docroot ของ subdomain ชี้นอกโฟลเดอร์เดิมได้หรือไม่ (§4.3 ข้อ 3) | | |
 | Composer extension สแกนเจอและติดตั้งได้หรือไม่ / ใช้ vendor.zip | | |
 | Deploy ซ้ำแล้ว `.env`/`vendor`/`storage` ยังอยู่หรือไม่ (§3) | | |
-| รูปแบบ path/arguments ของ Scheduled Task ที่ใช้ได้จริง | | |
+| รูปแบบ path/arguments ของ Scheduled Task ที่ใช้ได้จริง | Task type "Run a PHP script", Script path = `Teacherhelper.phuwish.com/backend/artisan` (สัมพัทธ์กับ home ของ subscription โฟลเดอร์ชื่อเดียวกับ subdomain) ช่อง arguments = คำสั่ง artisan เช่น `eduvision:queue-work`, `eduvision:post-deploy`; มี task แยกต่อคำสั่งที่ใช้บ่อยแทนการแก้ arguments | 13 ต.ค. 2569 |
 | timezone ของ cron (task 02:00 รันเวลาไทยจริงไหม) | | |
 | มี `Strict-Transport-Security` ใน response หรือไม่ | | |
 | เวลาสร้าง PDF ใบงาน 40 คนบน hosting (DESIGN §16.2) | | |
