@@ -2,16 +2,15 @@
 
 namespace Tests\Feature\Google;
 
-use App\Jobs\SyncClassroomRosterJob;
 use App\Models\Classroom;
 use App\Models\ClassroomCourseRequest;
 use App\Models\ClassroomGoogleLink;
 use App\Models\ClassroomStudent;
+use App\Models\ClassroomTeacher;
 use App\Models\StudentCredential;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -238,60 +237,41 @@ class ClassroomImportExistingTest extends TestCase
         $this->assertSame('g-1', ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_id', $students[1]->id)->value('google_user_id'));
     }
 
-    public function test_another_teacher_gets_a_course_request_that_links_the_course_when_approved(): void
+    public function test_a_colleague_links_their_own_course_only_once_invited(): void
     {
         $this->matchedStudents($this->room, 3);
         ClassroomGoogleLink::create(['classroom_id' => $this->room->id, 'course_id' => self::COURSE_ID, 'course_name' => 'คณิตศาสตร์', 'owner_user_id' => $this->homeroom->id, 'linked_at' => now()]);
         $this->rosters[self::COURSE_ID] = self::accounts(3);
         $this->rosters[self::SUBJECT_COURSE] = [...self::accounts(2, self::SUBJECT_COURSE), self::courseStudent('g-outsider', 'คนนอก ห้อง')];
         $science = $this->makeCourse($this->subjectTeacher, [], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5']);
-        // Teacher S's matches are cleared so the approval's sync has something to do.
-        ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_number', 2)->update(['google_user_id' => null]);
 
-        $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', ['classroom_id' => $this->room->id])
-            ->assertStatus(422)->assertJsonStructure(['errors' => ['app_course_id']]);
-        $requestId = $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', [
-            'classroom_id' => $this->room->id, 'app_course_id' => $science->id,
-        ])->assertStatus(202)->assertJsonPath('data.status', 'requested')->json('data.request_id');
-
-        $request = ClassroomCourseRequest::query()->findOrFail($requestId);
-        $this->assertSame([ClassroomCourseRequest::ORIGIN_CLASSROOM_IMPORT, 'pending', self::SUBJECT_COURSE, 'วิทยาศาสตร์'], [$request->origin, $request->status, $request->google_course_id, $request->google_course_name]);
-        $this->assertNull(ClassroomGoogleLink::of($this->room->id, $this->subjectTeacher->id));
+        // Not invited: the classroom is not theirs to see (DESIGN §29.13.4).
         $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', [
             'classroom_id' => $this->room->id, 'app_course_id' => $science->id,
-        ])->assertStatus(409)->assertJsonPath('code', 'request_pending');
-        $this->asUser($this->homeroom)->getJson('/api/v1/course-requests?box=incoming')->assertOk()
-            ->assertJsonPath('data.0.origin', 'classroom_import')->assertJsonPath('data.0.google_course_name', 'วิทยาศาสตร์');
+        ])->assertNotFound();
 
+        // Invited and accepted: their own course is bound and the Google course linked at once (a match-only sync).
+        ClassroomTeacher::create([
+            'classroom_id' => $this->room->id, 'email' => mb_strtolower((string) $this->subjectTeacher->email), 'teacher_id' => $this->subjectTeacher->id,
+            'invited_by' => $this->homeroom->id, 'status' => ClassroomTeacher::STATUS_ACCEPTED, 'decided_at' => now(),
+        ]);
+        $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', ['classroom_id' => $this->room->id])
+            ->assertStatus(422)->assertJsonStructure(['errors' => ['app_course_id']]);
+        ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_number', 2)->update(['google_user_id' => null]);
         $users = User::query()->count();
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$requestId}/approve")->assertOk()->assertJsonPath('data.status', 'approved');
+
+        $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', [
+            'classroom_id' => $this->room->id, 'app_course_id' => $science->id,
+        ])->assertOk()->assertJsonPath('data.status', 'linked');
 
         $link = ClassroomGoogleLink::of($this->room->id, $this->subjectTeacher->id);
         $this->assertNotNull($link);
         $this->assertSame([self::SUBJECT_COURSE, $science->id], [$link->course_id, $link->app_course_id]);
-        $this->assertTrue($this->room->courses()->whereKey($science->id)->exists());
-        // The queued sync (sync driver) matched student 2 again and added nobody.
-        $this->assertNotNull($link->fresh()->roster_synced_at);
+        $this->assertTrue($this->room->courses()->whereKey($science->id)->exists(), 'the own course is bound');
         $this->assertSame('g-2', ClassroomStudent::query()->where('classroom_id', $this->room->id)->where('student_number', 2)->value('google_user_id'));
-        $this->assertSame($users, User::query()->count());
+        $this->assertSame($users, User::query()->count(), 'a co-teacher\'s sync only matches');
         $this->assertSame(3, $this->room->students()->count());
-    }
-
-    public function test_approving_after_the_course_was_linked_elsewhere_still_binds_the_course(): void
-    {
-        Queue::fake([SyncClassroomRosterJob::class]);
-        $science = $this->makeCourse($this->subjectTeacher, [], ['code' => 'ว15101']);
-        $requestId = $this->asUser($this->subjectTeacher)->postJson('/api/v1/google/courses/'.self::SUBJECT_COURSE.'/link-existing', [
-            'classroom_id' => $this->room->id, 'app_course_id' => $science->id,
-        ])->assertStatus(202)->json('data.request_id');
-        $elsewhere = $this->makeClassroom($this->subjectTeacher);
-        ClassroomGoogleLink::create(['classroom_id' => $elsewhere->id, 'course_id' => self::SUBJECT_COURSE, 'course_name' => 'x', 'owner_user_id' => $this->subjectTeacher->id, 'linked_at' => now()]);
-
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$requestId}/approve")->assertOk()->assertJsonPath('data.status', 'approved');
-
-        $this->assertTrue($this->room->courses()->whereKey($science->id)->exists());
-        $this->assertNull(ClassroomGoogleLink::of($this->room->id, $this->subjectTeacher->id));
-        Queue::assertNotPushed(SyncClassroomRosterJob::class);
+        $this->assertSame(0, ClassroomCourseRequest::query()->count(), 'no request is made any more');
     }
 
     public function test_a_subject_teacher_already_teaching_the_classroom_links_at_once_and_only_matches(): void

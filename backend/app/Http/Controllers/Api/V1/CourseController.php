@@ -95,9 +95,9 @@ class CourseController extends Controller
     /**
      * PUT /api/v1/courses/{id}/classrooms {classroom_ids[]}: the teacher's
      * own classrooms (homerooms) only; a classroom whose assignments use the
-     * course stays (409 course_in_use). Bindings to other teachers'
-     * classrooms (subject teacher, DESIGN §24.7) are kept: they change only
-     * through course requests and DELETE /classrooms/{id}/courses/{course_id}.
+     * course stays (409 course_in_use). The teacher binds and unbinds the
+     * classrooms they teach: their own and the ones they co-teach (DESIGN
+     * §29.13.4); any other binding is kept.
      */
     public function classrooms(Request $request, int $id): JsonResponse
     {
@@ -105,11 +105,11 @@ class CourseController extends Controller
         Gate::authorize('update', $course);
         $ids = CourseInputs::classroomIds($request->user(), $request->input('classroom_ids'));
         $current = $course->classrooms()->pluck('classrooms.id')->map(fn ($id) => (int) $id)->all();
-        $homerooms = ClassroomAccess::homeroomClassrooms($request->user())->whereIn('classrooms.id', $current === [] ? [0] : $current)
+        $editable = ClassroomAccess::bindableClassrooms($request->user())->whereIn('classrooms.id', $current === [] ? [0] : $current)
             ->pluck('classrooms.id')->map(fn ($id) => (int) $id)->all();
-        $kept = array_values(array_diff($current, $homerooms));
+        $kept = array_values(array_diff($current, $editable));
         // Binding or unbinding a closed classroom is a write on it (§24.6).
-        ClosedClassrooms::assertAllOpen([...array_diff($ids, $homerooms), ...array_diff($homerooms, $ids)]);
+        ClosedClassrooms::assertAllOpen([...array_diff($ids, $editable), ...array_diff($editable, $ids)]);
         $this->editor->setClassrooms($course, array_values(array_unique([...$ids, ...$kept])));
 
         return self::detail($course);

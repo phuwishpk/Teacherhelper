@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\DB;
  *
  * - homeroom: the classroom's owner (classrooms.teacher_id);
  * - subject: the creator of a course bound to the classroom (course_classroom)
- *   who is not its homeroom teacher;
+ *   who is not its homeroom teacher, or a co-teacher who accepted the owner's
+ *   invitation (classroom_teachers, DESIGN §29.13.4). Teachers come from
+ *   different workspaces, so nothing here looks at schools (§29.13);
  * - null: neither (the classroom is invisible: 404).
  *
  * A homeroom teacher who binds their own course has both roles; courseIds
@@ -47,14 +49,13 @@ final class ClassroomAccess
 
     public static function for(User $user, Classroom $classroom): ?self
     {
-        if (! self::isSchoolTeacher($user) || (int) $classroom->school_id !== (int) $user->school_id) {
+        if (! self::isSchoolTeacher($user)) {
             return null;
         }
         $courseIds = DB::table('course_classroom')
             ->join('courses', 'courses.id', '=', 'course_classroom.course_id')
             ->where('course_classroom.classroom_id', $classroom->id)
             ->where('courses.created_by', $user->id)
-            ->where('courses.school_id', $user->school_id)
             ->orderBy('courses.id')
             ->pluck('courses.id')
             ->map(fn ($id) => (int) $id)
@@ -63,7 +64,9 @@ final class ClassroomAccess
             return new self(self::HOMEROOM, $courseIds);
         }
 
-        return $courseIds === [] ? null : new self(self::SUBJECT, $courseIds);
+        return $courseIds !== [] || CoTeachers::coTeaches($user, $classroom)
+            ? new self(self::SUBJECT, $courseIds)
+            : null;
     }
 
     public function isHomeroom(): bool
@@ -80,8 +83,7 @@ final class ClassroomAccess
     public static function homeroomOf(User $user, Classroom $classroom): bool
     {
         return self::isSchoolTeacher($user)
-            && (int) $classroom->teacher_id === (int) $user->id
-            && (int) $classroom->school_id === (int) $user->school_id;
+            && (int) $classroom->teacher_id === (int) $user->id;
     }
 
     /**
@@ -92,10 +94,25 @@ final class ClassroomAccess
     public static function classrooms(User $teacher): Builder
     {
         return Classroom::query()
-            ->where('classrooms.school_id', $teacher->school_id)
             ->where(fn (Builder $q) => $q
                 ->where('classrooms.teacher_id', $teacher->id)
-                ->orWhereIn('classrooms.id', self::subjectClassroomIds($teacher)));
+                ->orWhereIn('classrooms.id', self::subjectClassroomIds($teacher))
+                ->orWhereIn('classrooms.id', CoTeachers::coTeacherClassroomIds($teacher)));
+    }
+
+    /**
+     * Classrooms the teacher binds their courses to (DESIGN §29.13.4): their
+     * own, and the ones they co-teach by invitation. A classroom reached only
+     * through an older binding is not among them, so that binding is kept.
+     *
+     * @return Builder<Classroom>
+     */
+    public static function bindableClassrooms(User $teacher): Builder
+    {
+        return Classroom::query()
+            ->where(fn (Builder $q) => $q
+                ->where('classrooms.teacher_id', $teacher->id)
+                ->orWhereIn('classrooms.id', CoTeachers::coTeacherClassroomIds($teacher)));
     }
 
     /**
@@ -106,7 +123,6 @@ final class ClassroomAccess
     public static function homeroomClassrooms(User $teacher): Builder
     {
         return Classroom::query()
-            ->where('classrooms.school_id', $teacher->school_id)
             ->where('classrooms.teacher_id', $teacher->id);
     }
 
@@ -116,8 +132,7 @@ final class ClassroomAccess
         return DB::table('course_classroom')
             ->select('course_classroom.classroom_id')
             ->join('courses', 'courses.id', '=', 'course_classroom.course_id')
-            ->where('courses.created_by', $teacher->id)
-            ->where('courses.school_id', $teacher->school_id);
+            ->where('courses.created_by', $teacher->id);
     }
 
     /**
@@ -129,7 +144,6 @@ final class ClassroomAccess
     public static function assignments(User $teacher): Builder
     {
         return Assignment::query()
-            ->where('assignments.school_id', $teacher->school_id)
             ->where(fn (Builder $q) => $q
                 ->whereIn('assignments.classroom_id', self::homeroomClassrooms($teacher)->select('classrooms.id'))
                 ->orWhere(fn (Builder $q) => self::managedBy($q, $teacher)));
@@ -143,7 +157,6 @@ final class ClassroomAccess
     public static function managedAssignments(User $teacher): Builder
     {
         return Assignment::query()
-            ->where('assignments.school_id', $teacher->school_id)
             ->where(fn (Builder $q) => $q
                 ->where(fn (Builder $q) => $q
                     ->whereNull('assignments.course_id')
@@ -154,7 +167,7 @@ final class ClassroomAccess
     /** The teacher manages the assignment: see the class comment. */
     public static function manages(User $user, Assignment $assignment): bool
     {
-        if (! self::isSchoolTeacher($user) || (int) $assignment->school_id !== (int) $user->school_id) {
+        if (! self::isSchoolTeacher($user)) {
             return false;
         }
         if ($assignment->course_id === null) {
@@ -167,7 +180,6 @@ final class ClassroomAccess
             ->join('course_classroom', 'course_classroom.course_id', '=', 'courses.id')
             ->where('courses.id', $assignment->course_id)
             ->where('courses.created_by', $user->id)
-            ->where('courses.school_id', $user->school_id)
             ->where('course_classroom.classroom_id', $assignment->classroom_id)
             ->exists();
     }
@@ -176,7 +188,7 @@ final class ClassroomAccess
     public static function seesResults(User $user, Assignment $assignment): bool
     {
         $classroom = $assignment->classroom;
-        if ($classroom !== null && (int) $assignment->school_id === (int) $user->school_id && self::homeroomOf($user, $classroom)) {
+        if ($classroom !== null && self::homeroomOf($user, $classroom)) {
             return true;
         }
 
@@ -227,7 +239,7 @@ final class ClassroomAccess
      */
     public static function forStudent(User $teacher, User $student): ?array
     {
-        if (! self::isSchoolTeacher($teacher) || ! $student->isStudent() || (int) $student->school_id !== (int) $teacher->school_id) {
+        if (! self::isSchoolTeacher($teacher) || ! $student->isStudent()) {
             return null;
         }
         $rooms = DB::table('classroom_students')->where('student_id', $student->id)->select('classroom_id');
@@ -236,7 +248,6 @@ final class ClassroomAccess
             ->join('courses', 'courses.id', '=', 'course_classroom.course_id')
             ->whereIn('course_classroom.classroom_id', $rooms)
             ->where('courses.created_by', $teacher->id)
-            ->where('courses.school_id', $teacher->school_id)
             ->distinct()
             ->orderBy('courses.id')
             ->pluck('courses.id')
@@ -270,8 +281,7 @@ final class ClassroomAccess
     private static function managedBy(Builder $query, User $teacher): void
     {
         $query->whereIn('assignments.course_id', DB::table('courses')->select('id')
-            ->where('created_by', $teacher->id)
-            ->where('school_id', $teacher->school_id))
+            ->where('created_by', $teacher->id))
             ->whereExists(fn (QueryBuilder $q) => $q->select(DB::raw(1))
                 ->from('course_classroom')
                 ->whereColumn('course_classroom.course_id', 'assignments.course_id')

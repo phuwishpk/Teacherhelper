@@ -264,14 +264,6 @@ class CourseDetailScreen extends ConsumerWidget {
                       label: const Text('กราฟและความคืบหน้า'),
                     ),
                     OutlinedButton.icon(
-                      key: const ValueKey('course_request_classroom'),
-                      onPressed: () => context.push(
-                        AppRoutes.courseRequestNew(courseId: c.id),
-                      ),
-                      icon: const Icon(Icons.group_add_outlined),
-                      label: const Text('ขอสอนห้องของครูท่านอื่น'),
-                    ),
-                    OutlinedButton.icon(
                       key: const ValueKey('course_import_plans'),
                       onPressed: () => _importPlans(context, ref, c),
                       icon: const Icon(Icons.auto_awesome_outlined),

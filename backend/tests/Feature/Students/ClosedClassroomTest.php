@@ -119,6 +119,9 @@ class ClosedClassroomTest extends TestCase
         'api.auth.google.join' => null,
         // Joining a closed classroom is its own 409 join_closed (ClassJoinTest).
         'api.student.join.store' => null,
+        // Accepting an invitation to a closed classroom is refused by CoTeachers (CoTeachingTest).
+        'api.classroom-invitations.accept' => null,
+        'api.classroom-invitations.decline' => null,
         'api.me.google-identity.store' => null,
         'api.me.google-identity.ticket' => null,
         'api.me.google-identity.destroy' => null,
@@ -356,7 +359,7 @@ class ClosedClassroomTest extends TestCase
             'courses' => $this->courseA->id,
             default => 0,
         };
-        $path = '/'.strtr($uri, ['{id}' => $id, '{student_id}' => $this->studentA->id, '{course_id}' => $this->courseA->id]);
+        $path = '/'.strtr($uri, ['{id}' => $id, '{student_id}' => $this->studentA->id, '{course_id}' => $this->courseA->id, '{row_id}' => $this->classroomTeacherA->id]);
 
         if ($uri === 'api/v1/scans') {
             return $request->post($path, $this->scanBody(), ['Accept' => 'application/json']);

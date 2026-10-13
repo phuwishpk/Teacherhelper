@@ -20,6 +20,7 @@ import 'classroom.dart';
 import 'classroom_lifecycle.dart';
 import 'classrooms_providers.dart';
 import 'classrooms_repository.dart';
+import 'co_teachers_section.dart';
 import 'duplicate_candidates_card.dart';
 import 'join_qr_dialog.dart';
 import 'one_time_pins_view.dart';
@@ -101,6 +102,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
                   'รายชื่อนักเรียน',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
+                if (c.isHomeroom) CoTeachersSection(classroom: c),
                 const SizedBox(height: 8),
                 AsyncView(
                   value: roster,

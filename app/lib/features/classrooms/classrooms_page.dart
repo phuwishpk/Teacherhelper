@@ -11,7 +11,7 @@ import '../google_classroom/google_providers.dart';
 import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import 'classroom.dart';
 import 'classrooms_providers.dart';
-import 'request_classroom_screen.dart';
+import 'invitations_card.dart';
 
 /// "ห้องเรียน" tab of the teacher shell. It is a body only: the shell's
 /// Scaffold shows [ClassroomsFab] for it, so the root ScaffoldMessenger has
@@ -39,7 +39,7 @@ class ClassroomsPage extends ConsumerWidget {
                   icon: Icons.groups_outlined,
                   title: 'ยังไม่มีห้องเรียน',
                   message:
-                      'สร้างห้องเรียน เพิ่มรายชื่อนักเรียน แล้วพิมพ์บัตร QR สำหรับเข้าสู่ระบบ',
+                      'สร้างห้องเรียน เพิ่มรายชื่อนักเรียน แล้วให้นักเรียนเข้าห้องด้วยรหัสห้องหรือ QR',
                 ),
               ),
               ContentColumn(
@@ -119,9 +119,9 @@ class ClassroomCard extends StatelessWidget {
   }
 }
 
-/// Shared homerooms (DESIGN §24.7, §24.13) above the list: ask to teach
-/// in another teacher's room, and the requests with a badge counting the
-/// ones that wait for this teacher's decision.
+/// Above the list: the invitations to co-teach (DESIGN §29.13.4) and the
+/// course requests of §24.7 that still exist, with a badge counting the ones
+/// that wait for this teacher's decision.
 class SharedHomeroomBar extends ConsumerWidget {
   const SharedHomeroomBar({super.key});
 
@@ -131,17 +131,16 @@ class SharedHomeroomBar extends ConsumerWidget {
         ref.watch(teacherAttentionProvider).value?.courseRequestsPending ?? 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CourseRequestsButton(pending: pending),
-          TextButton.icon(
-            key: const ValueKey('request_other_classroom'),
-            onPressed: () => context.push(AppRoutes.courseRequestNew()),
-            icon: const Icon(Icons.group_add_outlined),
-            label: const Text('ขอสอนห้องของครูท่านอื่น'),
-          ),
+          const InvitationsCard(),
+          if (pending > 0)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [CourseRequestsButton(pending: pending)],
+            ),
         ],
       ),
     );
@@ -261,4 +260,25 @@ class ClassroomsFab extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// "คำขอผูกรายวิชา" with the number of requests waiting for the teacher
+/// (a badge), from the classroom list.
+class CourseRequestsButton extends StatelessWidget {
+  const CourseRequestsButton({super.key, required this.pending});
+
+  final int pending;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    key: const ValueKey('open_course_requests'),
+    onPressed: () => context.push(AppRoutes.courseRequests),
+    icon: Badge.count(
+      key: const ValueKey('course_requests_badge'),
+      count: pending,
+      isLabelVisible: pending > 0,
+      child: const Icon(Icons.inbox_outlined),
+    ),
+    label: const Text('คำขอผูกรายวิชา'),
+  );
 }

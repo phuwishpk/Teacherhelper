@@ -47,116 +47,88 @@ void main() {
     'created_at': '2026-10-01T03:00:00+00:00',
   };
 
-  test('the directory, the request and its answers (DESIGN §24.20)', () async {
-    final adapter = FakeHttpAdapter((options) async {
-      final path = options.uri.path;
-      if (path.endsWith('/classrooms/directory')) {
-        return jsonResponse(200, {
-          'data': [
-            {
-              'id': 7,
-              'name': 'ป.5/2',
-              'grade_level': 5,
-              'academic_year': 2569,
-              'homeroom_teacher': {'id': 3, 'name': 'ครูมาลี'},
-              'students_count': 31,
-              'my_role': null,
-            },
-            {
-              'id': 8,
-              'name': 'ป.5/3',
-              'grade_level': 5,
-              'academic_year': 2569,
-              'homeroom_teacher': {'id': 9, 'name': 'ครูสมศักดิ์'},
-              'students_count': 0,
-              'my_role': 'homeroom',
-            },
-          ],
-        });
-      }
-      if (path.endsWith('/classrooms/8/course-requests')) {
-        return jsonResponse(200, {
-          'data': {'bound': true, 'classroom_id': 8, 'course_id': 40},
-        });
-      }
-      if (path.endsWith('/course-requests') && options.method == 'POST') {
-        return jsonResponse(201, {'data': requestJson()});
-      }
-      if (path.endsWith('/course-requests') && options.method == 'GET') {
-        return jsonResponse(200, {
-          'data': [requestJson(), requestJson(id: 30, status: 'declined')],
-        });
-      }
-      if (path.endsWith('/approve')) {
-        return jsonResponse(200, {'data': requestJson(status: 'approved')});
-      }
-      if (path.endsWith('/decline')) {
-        return jsonResponse(200, {'data': requestJson(status: 'declined')});
-      }
-      return jsonResponse(204, null);
-    });
-    final repo = ApiCourseRequestsRepository(fakeDio(adapter));
+  test(
+    'the requests that still exist and their answers (DESIGN §24.20)',
+    () async {
+      final adapter = FakeHttpAdapter((options) async {
+        final path = options.uri.path;
+        if (path.endsWith('/classrooms/directory')) {
+          return jsonResponse(200, {
+            'data': [
+              {
+                'id': 7,
+                'name': 'ป.5/2',
+                'grade_level': 5,
+                'academic_year': 2569,
+                'homeroom_teacher': {'id': 3, 'name': 'ครูมาลี'},
+                'students_count': 31,
+                'my_role': null,
+              },
+              {
+                'id': 8,
+                'name': 'ป.5/3',
+                'grade_level': 5,
+                'academic_year': 2569,
+                'homeroom_teacher': {'id': 9, 'name': 'ครูสมศักดิ์'},
+                'students_count': 0,
+                'my_role': 'homeroom',
+              },
+            ],
+          });
+        }
+        if (path.endsWith('/classrooms/8/course-requests')) {
+          return jsonResponse(200, {
+            'data': {'bound': true, 'classroom_id': 8, 'course_id': 40},
+          });
+        }
+        if (path.endsWith('/course-requests') && options.method == 'POST') {
+          return jsonResponse(201, {'data': requestJson()});
+        }
+        if (path.endsWith('/course-requests') && options.method == 'GET') {
+          return jsonResponse(200, {
+            'data': [requestJson(), requestJson(id: 30, status: 'declined')],
+          });
+        }
+        if (path.endsWith('/approve')) {
+          return jsonResponse(200, {'data': requestJson(status: 'approved')});
+        }
+        if (path.endsWith('/decline')) {
+          return jsonResponse(200, {'data': requestJson(status: 'declined')});
+        }
+        return jsonResponse(204, null);
+      });
+      final repo = ApiCourseRequestsRepository(fakeDio(adapter));
 
-    final rooms = await repo.directory(q: ' ป.5 ');
-    expect(adapter.requests.last.uri.path, '/api/v1/classrooms/directory');
-    expect(adapter.requests.last.uri.queryParameters, {'q': 'ป.5'});
-    expect(rooms.first.homeroomTeacher?.name, 'ครูมาลี');
-    expect(rooms.first.studentCount, 31);
-    expect(rooms.first.myRole, isNull);
-    expect(rooms.last.isMine, isTrue);
+      final incoming = await repo.list(CourseRequestBox.incoming);
+      expect(adapter.requests.last.uri.queryParameters, {'box': 'incoming'});
+      expect(incoming.last.status, CourseRequestStatus.declined);
+      expect(incoming.last.declineReason, 'มีครูสอนแล้ว');
+      await repo.list(CourseRequestBox.outgoing);
+      expect(adapter.requests.last.uri.queryParameters, {'box': 'outgoing'});
 
-    await repo.directory();
-    expect(adapter.requests.last.uri.queryParameters, isEmpty);
+      final approved = await repo.approve(31);
+      expect(adapter.requests.last.method, 'POST');
+      expect(
+        adapter.requests.last.uri.path,
+        '/api/v1/course-requests/31/approve',
+      );
+      expect(approved.status, CourseRequestStatus.approved);
+      expect(approved.decidedAt, isNotNull);
 
-    final sent = await repo.request(7, courseId: 40, message: '  ขอสอน ');
-    expect(
-      adapter.requests.last.uri.path,
-      '/api/v1/classrooms/7/course-requests',
-    );
-    expect(adapter.requests.last.data, {'course_id': 40, 'message': 'ขอสอน'});
-    expect(sent.bound, isFalse);
-    final r = sent.request!;
-    expect(r.isPending, isTrue);
-    expect(r.course?.title, 'ว15101 วิทยาศาสตร์ 5');
-    expect(r.requester?.name, 'ครูสมศักดิ์');
-    expect(r.classroom?.homeroomTeacher?.name, 'ครูมาลี');
-    expect(r.message, 'ขอสอนวิทย์ค่ะ');
-    expect(r.createdAt, DateTime.utc(2026, 10, 1, 3));
-    expect(r.gradeMismatch, isTrue);
+      await repo.decline(31, reason: ' เต็มแล้ว ');
+      expect(
+        adapter.requests.last.uri.path,
+        '/api/v1/course-requests/31/decline',
+      );
+      expect(adapter.requests.last.data, {'reason': 'เต็มแล้ว'});
+      await repo.decline(31);
+      expect(adapter.requests.last.data, isEmpty);
 
-    final bound = await repo.request(8, courseId: 40, message: ' ');
-    expect(adapter.requests.last.data, {'course_id': 40});
-    expect(bound.bound, isTrue);
-
-    final incoming = await repo.list(CourseRequestBox.incoming);
-    expect(adapter.requests.last.uri.queryParameters, {'box': 'incoming'});
-    expect(incoming.last.status, CourseRequestStatus.declined);
-    expect(incoming.last.declineReason, 'มีครูสอนแล้ว');
-    await repo.list(CourseRequestBox.outgoing);
-    expect(adapter.requests.last.uri.queryParameters, {'box': 'outgoing'});
-
-    final approved = await repo.approve(31);
-    expect(adapter.requests.last.method, 'POST');
-    expect(
-      adapter.requests.last.uri.path,
-      '/api/v1/course-requests/31/approve',
-    );
-    expect(approved.status, CourseRequestStatus.approved);
-    expect(approved.decidedAt, isNotNull);
-
-    await repo.decline(31, reason: ' เต็มแล้ว ');
-    expect(
-      adapter.requests.last.uri.path,
-      '/api/v1/course-requests/31/decline',
-    );
-    expect(adapter.requests.last.data, {'reason': 'เต็มแล้ว'});
-    await repo.decline(31);
-    expect(adapter.requests.last.data, isEmpty);
-
-    await repo.cancel(31);
-    expect(adapter.requests.last.method, 'DELETE');
-    expect(adapter.requests.last.uri.path, '/api/v1/course-requests/31');
-  });
+      await repo.cancel(31);
+      expect(adapter.requests.last.method, 'DELETE');
+      expect(adapter.requests.last.uri.path, '/api/v1/course-requests/31');
+    },
+  );
 
   test('courses taught in a room and unbinding (DESIGN §24.12 B)', () async {
     final adapter = FakeHttpAdapter((options) async {
@@ -235,10 +207,6 @@ void main() {
     expect(c.withGoogleLink(null).homeroomTeacher?.id, 3);
     expect(TeacherRef.maybe(null), isNull);
     expect(TeacherRef.maybe('x'), isNull);
-
-    final room = DirectoryClassroom.of(c);
-    expect(room.myRole, ClassroomRole.subject);
-    expect(room.isMine, isFalse);
   });
 
   test('course_requests_pending on the attention card', () {

@@ -82,12 +82,17 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.students.update' => ['PATCH', 'classrooms/{classroom}/students/{student}', 404, 404],
         'api.classrooms.students.destroy' => ['DELETE', 'classrooms/{classroom}/students/{student}', 404, 404],
         'api.school-students.index' => ['GET', 'school-students', self::OK, self::OK],
-        // Shared homerooms (§24.7): any teacher of the school browses open classrooms and asks
-        // (422 with the empty body); requests are seen by their requester and the homeroom teacher.
-        'api.classrooms.directory' => ['GET', 'classrooms/directory', self::OK, self::OK],
+        // Courses taught in a classroom (§24.7 step 5) and co-teaching by invitation (§29.13.4):
+        // the owner invites and removes; the invitee alone sees and answers their invitation.
         'api.classrooms.courses.index' => ['GET', 'classrooms/{classroom}/courses', 404, 404],
         'api.classrooms.courses.destroy' => ['DELETE', 'classrooms/{classroom}/courses/{own_course}', 404, 404],
-        'api.classrooms.course-requests.store' => ['POST', 'classrooms/{classroom}/course-requests', self::OK, 404],
+        'api.classrooms.teachers.index' => ['GET', 'classrooms/{classroom}/teachers', 404, 404],
+        'api.classrooms.teachers.store' => ['POST', 'classrooms/{classroom}/teachers', 404, 404],
+        'api.classrooms.teachers.destroy' => ['DELETE', 'classrooms/{classroom}/teachers/{classroom_teacher}', 404, 404],
+        'api.classroom-invitations.index' => ['GET', 'classroom-invitations', self::OK, self::OK],
+        'api.classroom-invitations.accept' => ['POST', 'classroom-invitations/{invitation}/accept', 404, 404],
+        'api.classroom-invitations.decline' => ['POST', 'classroom-invitations/{invitation}/decline', 404, 404],
+        // Course requests of §24.7 are no longer made; the old rows are still listed and decided.
         'api.course-requests.index' => ['GET', 'course-requests', self::OK, self::OK],
         'api.course-requests.approve' => ['POST', 'course-requests/{incoming_request}/approve', 404, 404],
         'api.course-requests.decline' => ['POST', 'course-requests/{incoming_request}/decline', 404, 404],
@@ -334,6 +339,9 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.students.update' => '403 not_homeroom_teacher',
         'api.classrooms.students.destroy' => '403 not_homeroom_teacher',
         'api.classrooms.courses.index' => self::OK,
+        'api.classrooms.teachers.index' => '403 not_homeroom_teacher',
+        'api.classrooms.teachers.store' => '403 not_homeroom_teacher',
+        'api.classrooms.teachers.destroy' => '403 not_homeroom_teacher',
         'api.classrooms.mastery' => self::OK,
         'api.classrooms.indicator-pass-rate' => self::OK,
         'api.students.mastery' => self::OK,
@@ -635,6 +643,8 @@ class AuthorizationMatrixTest extends TestCase
         $path = '/api/v1/'.strtr($uri, [
             '{classroom}' => $this->classroomA->id,
             '{join_code}' => $this->classroomA->class_code,
+            '{classroom_teacher}' => $this->classroomTeacherA->id,
+            '{invitation}' => $this->invitationA->id,
             '{student}' => $this->studentA->id,
             '{card_print}' => $this->cardPrintA->id,
             '{assignment}' => $this->assignmentA->id,

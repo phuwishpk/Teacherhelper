@@ -313,7 +313,7 @@ final class ClassroomImporter
      */
     public function linkExisting(User $teacher, string $courseId, int $classroomId, ?int $appCourseId): array
     {
-        $classroom = Classroom::query()->where('school_id', $teacher->school_id)->findOrFail($classroomId);
+        $classroom = ClassroomAccess::classrooms($teacher)->findOrFail($classroomId);
         ClosedClassrooms::assertOpen($classroom);
         self::assertNotLinked($courseId);
         $homeroom = ClassroomAccess::homeroomOf($teacher, $classroom);
@@ -330,16 +330,8 @@ final class ClassroomImporter
             throw ValidationException::withMessages(['course_id' => ['ไม่พบคอร์สนี้ในคอร์สที่คุณสอนอยู่ (ACTIVE) ใน Google Classroom']]);
         }
 
-        $bound = $appCourse !== null && CourseRequests::bound($classroom->id, $appCourse->id);
-        if (! $homeroom && ! $bound) {
-            /** @var Course $appCourse */
-            $request = $this->courseRequests->requestImport($teacher, $classroom, $appCourse, $course);
-            Log::info('google.link_existing_requested', ['classroom_id' => $classroom->id, 'request_id' => $request->id]);
-
-            return ['status' => 'requested', 'request' => $request];
-        }
-
-        if ($homeroom && $appCourse !== null && ! $bound) {
+        // The teacher reaches the classroom as its owner or co-teacher (DESIGN §29.13.4): the own course is bound at once.
+        if ($appCourse !== null && ! CourseRequests::bound($classroom->id, $appCourse->id)) {
             $this->courseRequests->bindOwn($teacher, $classroom, $appCourse);
         }
         $link = self::underCourseLock($course['course_id'], function () use ($classroom, $teacher, $course, $appCourse) {

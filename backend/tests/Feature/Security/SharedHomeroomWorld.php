@@ -6,6 +6,7 @@ use App\Domain\Scans\ScanFiles;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\ClassroomCourseRequest;
+use App\Models\ClassroomTeacher;
 use App\Models\Course;
 use App\Models\ExamSection;
 use App\Models\Question;
@@ -62,6 +63,9 @@ trait SharedHomeroomWorld
     /** Teacher A -> classroom A2 with course A, pending (teacher A's outgoing box). */
     protected ClassroomCourseRequest $outgoingRequest;
 
+    /** Teacher A2 invites teacher A to co-teach classroom A2 (pending, §29.13.4). */
+    protected ClassroomTeacher $invitationA;
+
     protected function makeSharedHomeroomWorld(): void
     {
         $this->teacherS = $this->makeTeacher($this->schoolA, ['name' => 'ครูประจำวิชา']);
@@ -78,6 +82,9 @@ trait SharedHomeroomWorld
         ]);
         $this->outgoingRequest = ClassroomCourseRequest::create([
             'classroom_id' => $this->classroomA2->id, 'course_id' => $this->courseA->id, 'requested_by' => $this->teacherA->id,
+        ]);
+        $this->invitationA = ClassroomTeacher::create([
+            'classroom_id' => $this->classroomA2->id, 'email' => mb_strtolower((string) $this->teacherA->email), 'invited_by' => $this->teacherA2->id,
         ]);
 
         $this->assignmentS = Assignment::factory()->for_classroom($this->classroomA)->create([

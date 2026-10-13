@@ -25,7 +25,6 @@ import '../../features/classrooms/classroom_form_screen.dart';
 import '../../features/classrooms/course_requests.dart';
 import '../../features/classrooms/course_requests_screen.dart';
 import '../../features/classrooms/merge_students_screen.dart';
-import '../../features/classrooms/request_classroom_screen.dart';
 import '../../features/classrooms/students_bulk_add_screen.dart';
 import '../../features/classrooms/students_from_classroom_screen.dart';
 import '../../features/courses/course_detail_screen.dart';
@@ -206,12 +205,6 @@ abstract final class AppRoutes {
   /// the teacher's homerooms, or ([outgoing]) the teacher's own.
   static const courseRequests = '/course-requests';
   static const courseRequestsOutgoing = '/course-requests?box=outgoing';
-
-  /// "ขอสอนในห้องของครูท่านอื่น": the school's open classrooms, with
-  /// [courseId] preselected when opened from a course.
-  static String courseRequestNew({int? courseId}) => courseId == null
-      ? '/course-requests/new'
-      : '/course-requests/new?course=$courseId';
 
   /// The gradebook of a course (DESIGN §23.9), opened on [classroomId] and
   /// scrolled to [column] (`a{assignment id}` or `i{item id}`) when given.
@@ -853,14 +846,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               ? CourseRequestBox.outgoing
               : CourseRequestBox.incoming,
         ),
-        routes: [
-          GoRoute(
-            path: 'new',
-            builder: (context, state) => RequestClassroomScreen(
-              courseId: int.tryParse(state.uri.queryParameters['course'] ?? ''),
-            ),
-          ),
-        ],
       ),
       // Before '/courses/:id', which would take "new" as an id.
       GoRoute(

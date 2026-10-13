@@ -34,13 +34,6 @@ class _CourseRequestsScreenState extends State<CourseRequestsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('คำขอผูกรายวิชา')),
-      floatingActionButtonLocation: const ContentFabLocation(),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'course_request_new',
-        onPressed: () => context.push(AppRoutes.courseRequestNew()),
-        icon: const Icon(Icons.add),
-        label: const Text('ขอสอนห้องของครูท่านอื่น'),
-      ),
       body: Column(
         children: [
           ContentColumn(

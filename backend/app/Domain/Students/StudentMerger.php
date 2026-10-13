@@ -98,6 +98,8 @@ final class StudentMerger
         'assignment_recipients.student_id' => self::MOVE, // homework given to D is given to K
         'timetable_slots.created_by' => self::UNRELATED, // the teacher who put the period in the timetable
         'timetable_cancellations.created_by' => self::UNRELATED,
+        'classroom_teachers.teacher_id' => self::UNRELATED, // co-teachers (§29.13.4)
+        'classroom_teachers.invited_by' => self::UNRELATED,
         'class_posts.author_id' => self::UNRELATED,
         'class_post_files.owner_id' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,
