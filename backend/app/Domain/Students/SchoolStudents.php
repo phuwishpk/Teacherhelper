@@ -30,12 +30,12 @@ final class SchoolStudents
      *
      * @return list<array<string, mixed>>
      */
-    public function search(int $schoolId, string $query): array
+    public function search(int|User $scope, string $query): array
     {
         $code = StudentCode::normalize($query);
         $tokens = NameNormalizer::tokens($query);
 
-        $candidates = self::activeStudents($schoolId)
+        $candidates = self::activeStudents($scope)
             ->where(function ($q) use ($tokens, $code) {
                 if ($tokens !== []) {
                     $q->where(function ($names) use ($tokens) {
@@ -73,9 +73,9 @@ final class SchoolStudents
      * @param  list<int>|null  $involving  only pairs with at least one of these students (null: all)
      * @return list<array{a: array<string, mixed>, b: array<string, mixed>, reasons: list<string>}>
      */
-    public function duplicateCandidates(int $schoolId, ?array $involving = null): array
+    public function duplicateCandidates(int|User $scope, ?array $involving = null): array
     {
-        $students = self::activeStudents($schoolId)->get(['id', 'name', 'student_code'])->keyBy('id');
+        $students = self::activeStudents($scope)->get(['id', 'name', 'student_code'])->keyBy('id');
         $links = DB::table('classroom_students')
             ->whereIn('student_id', $students->keys())
             ->where(fn ($q) => $q->whereNotNull('google_user_id')->orWhereNotNull('google_email'))
@@ -179,13 +179,20 @@ final class SchoolStudents
         })->values()->all();
     }
 
-    /** @return Builder<User> */
-    private static function activeStudents(int $schoolId)
+    /**
+     * Active, unmerged students of one workspace (the panel) or those a
+     * teacher may see (the API, StudentVisibility, DESIGN §29.13.3).
+     *
+     * @return Builder<User>
+     */
+    private static function activeStudents(int|User $scope)
     {
-        return User::query()
-            ->where('school_id', $schoolId)
-            ->where('role', User::ROLE_STUDENT)
-            ->where('status', User::STATUS_ACTIVE)
-            ->whereNull('merged_into_id');
+        $query = $scope instanceof User
+            ? StudentVisibility::query($scope)
+            : User::query()->where('school_id', $scope)->where('role', User::ROLE_STUDENT);
+
+        return $query
+            ->where('users.status', User::STATUS_ACTIVE)
+            ->whereNull('users.merged_into_id');
     }
 }

@@ -81,14 +81,15 @@ class ClassroomStudentController extends Controller
      * {enrolled: [{student_id, student_number, name, student_code, status,
      * pin, existing}], skipped: [{student_id, name, reason:
      * already_enrolled|not_active}]}} ("นำนักเรียนจากห้องเดิม", DESIGN §24.6,
-     * RosterCopier). The source is any classroom of the school (404 otherwise);
+     * RosterCopier). The source is any classroom the teacher teaches (404 otherwise);
      * 422 for an id not in it, the classroom itself, or numbers above 255.
      */
     public function fromClassroom(StudentsFromClassroomRequest $request, RosterCopier $copier, int $id): JsonResponse
     {
         $classroom = $this->ownClassroom($request, $id);
         Gate::authorize('manageStudents', $classroom);
-        $source = Classroom::query()->where('school_id', $classroom->school_id)->findOrFail((int) $request->validated('source_classroom_id'));
+        // Any classroom the teacher teaches (DESIGN §29.13.3), closed ones included.
+        $source = ClassroomAccess::classrooms($request->user())->findOrFail((int) $request->validated('source_classroom_id'));
 
         $result = $copier->copy($classroom, $source, $request->studentIds(), (string) $request->validated('numbering'), (string) $request->validated('pin'));
 

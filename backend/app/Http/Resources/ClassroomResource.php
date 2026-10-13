@@ -45,6 +45,8 @@ class ClassroomResource extends JsonResource
                 ])->values()->all()),
             // DESIGN §20.5: new analysis texts reach students without approval.
             'auto_share_analysis' => (bool) $this->auto_share_analysis,
+            // DESIGN §29.13.3: pupils may join with the class code or its QR.
+            'join_open' => (bool) $this->join_open,
             // DESIGN §24.6: closed = "ห้องเก่า", read-only.
             'closed_at' => $this->closed_at?->toIso8601String(),
             // DESIGN §24.8: homeroom | subject (an own course is bound to another teacher's classroom).

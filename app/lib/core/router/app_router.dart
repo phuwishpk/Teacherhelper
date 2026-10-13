@@ -52,6 +52,7 @@ import '../../features/attendance/attendance_screen.dart';
 import '../../features/attendance/attendance_session_screen.dart';
 import '../../features/attendance/my_attendance_screen.dart';
 import '../../features/class_posts/class_post_form_screen.dart';
+import '../../features/student/join_classroom_screen.dart';
 import '../../features/timetable/student_timetable_screen.dart';
 import '../../features/timetable/timetable_screen.dart';
 import '../../features/class_posts/class_posts_screen.dart';
@@ -258,6 +259,12 @@ abstract final class AppRoutes {
   static const timetable = '/timetable';
   static const studentTimetable = '/student/timetable';
 
+  /// Joining a classroom with its class code (DESIGN §29.13.3): the page
+  /// behind the join link `/app/#/join/<code>` (public), and typing a code.
+  static String join(String code) => '/join/$code';
+  static const studentJoin = '/student/join';
+  static bool isJoinLink(String location) => location.startsWith('/join/');
+
   static const assignmentNew = '/assignments/new';
   static String assignment(int id) => '/assignments/$id';
   static String assignmentEdit(int id) => '/assignments/$id/edit';
@@ -413,6 +420,8 @@ abstract final class AppRoutes {
       location == myGrades ||
       location == myAttendance ||
       location == studentTimetable ||
+      location == studentJoin ||
+      isJoinLink(location) ||
       location == studentSubjectPath ||
       location.startsWith('$student/results/') ||
       location.startsWith('$student/posts/') ||
@@ -453,7 +462,8 @@ abstract final class AppRoutes {
       location == googleFirstLinkQr ||
       location == register ||
       location == studentLogin ||
-      location == studentQr;
+      location == studentQr ||
+      isJoinLink(location);
 }
 
 String _qrLinkError(Object error) =>
@@ -471,6 +481,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   // A result link that waits for the student to sign in.
   String? pendingResult;
 
+  // A join link (DESIGN §29.13.3) that waits for the pupil to sign in.
+  String? pendingJoin;
+
   // A return of the Google web flow (DESIGN §24.9.4) that arrived while
   // the session was still restoring: the app starts on it, but the splash
   // would otherwise swallow its ticket or status.
@@ -486,6 +499,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final link = AppRoutes.fromResultLink(state.uri);
       if (link != null) pendingResult = link;
       final location = link ?? state.matchedLocation;
+      if (AppRoutes.isJoinLink(location)) pendingJoin = location;
       if (AppRoutes.isGoogleReturn(location)) {
         pendingGoogle = state.uri.toString();
       }
@@ -515,13 +529,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         // An admin's token opens nothing but the panel handoff.
         SignedIn(:final user) when user.isAdmin => () {
           pendingResult = null;
+          pendingJoin = null;
           return location == AppRoutes.adminHome ? null : AppRoutes.adminHome;
         }(),
         SignedIn(:final user) when user.isStudent => () {
-          final pending = pendingResult;
+          final pending = pendingResult ?? pendingJoin;
           if (pending != null) {
             if (pending != location) return pending;
             pendingResult = null;
+            pendingJoin = null;
           }
           // On the initial password nothing else opens (DESIGN §29.10).
           if (user.mustChangePassword) {
@@ -533,7 +549,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         }(),
         SignedIn() => () {
           pendingResult = null;
-          return (public ||
+          pendingJoin = null;
+          // A teacher may open a join link: the page says it is for pupils.
+          return ((public && !AppRoutes.isJoinLink(location)) ||
                   location == AppRoutes.splash ||
                   location == AppRoutes.adminHome ||
                   inStudentArea)
@@ -627,6 +645,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentTimetable,
         builder: (context, state) => const StudentTimetableScreen(),
+      ),
+      GoRoute(
+        path: '/join/:code',
+        builder: (context, state) =>
+            JoinClassroomScreen(code: state.pathParameters['code']),
+      ),
+      GoRoute(
+        path: AppRoutes.studentJoin,
+        builder: (context, state) => const JoinClassroomScreen(),
       ),
       GoRoute(
         path: '/student/posts/:postId',

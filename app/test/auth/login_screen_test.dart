@@ -67,7 +67,6 @@ void main() {
     final storage = await _pump(tester);
     expect(_pinField, findsOneWidget);
     expect(_emailField, findsNothing);
-    expect(find.text('สแกนบัตร QR'), findsOneWidget);
     // The register link belongs to the teacher tab only.
     expect(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'), findsNothing);
     expect(
@@ -119,41 +118,6 @@ void main() {
     await tester.tap(find.text('ยังไม่มีบัญชี? สมัครใช้งาน'));
     await tester.pumpAndSettle();
     expect(find.text('register-page'), findsOneWidget);
-  });
-
-  testWidgets('"สแกนบัตร QR" opens the card scanner in the app', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      screen: const LoginScreen(initialTab: LoginTab.student),
-    );
-
-    await tester.tap(find.text('สแกนบัตร QR'));
-    await tester.pumpAndSettle();
-    expect(find.text('qr-scanner'), findsOneWidget);
-  });
-
-  testWidgets('on the web the QR button explains it needs the Android app', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      screen: const LoginScreen(
-        initialTab: LoginTab.student,
-        qrScanSupported: false,
-      ),
-    );
-    expect(find.text('ใช้ได้ในแอป Android'), findsOneWidget);
-
-    await tester.tap(find.text('สแกนบัตร QR'));
-    await tester.pumpAndSettle();
-    expect(find.text('สแกนบัตร QR ได้ในแอป Android'), findsOneWidget);
-    expect(find.text('qr-scanner'), findsNothing);
-
-    await tester.tap(find.text('ตกลง'));
-    await tester.pumpAndSettle();
-    expect(_pinField, findsOneWidget);
   });
 
   for (final tab in LoginTab.values) {

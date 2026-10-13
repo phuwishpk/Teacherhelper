@@ -31,6 +31,6 @@ class SchoolStudentController extends Controller
             'q.max' => 'คำค้นยาวเกินไป',
         ]);
 
-        return response()->json(['data' => $this->students->search((int) $request->user()->school_id, trim($data['q']))]);
+        return response()->json(['data' => $this->students->search($request->user(), trim($data['q']))]);
     }
 }

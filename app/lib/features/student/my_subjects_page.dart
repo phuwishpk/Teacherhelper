@@ -39,13 +39,19 @@ class MySubjectsPage extends ConsumerWidget {
                     child: LatestPostsCard(),
                   ),
                 if (o.classrooms.isEmpty)
-                  const EmptyView(
-                    key: ValueKey('subjects_no_classroom'),
+                  EmptyView(
+                    key: const ValueKey('subjects_no_classroom'),
                     icon: Icons.meeting_room_outlined,
                     title: 'ยังไม่ได้อยู่ในห้องเรียน',
                     message:
-                        'เมื่อครูเพิ่มเราเข้าห้องเรียนแล้ว '
-                        'รายวิชาของห้องจะขึ้นที่นี่',
+                        'ขอรหัสห้องจากครู แล้วกรอกที่นี่ หรือสแกน QR ของห้อง '
+                        'เมื่อครูเพิ่มเราเข้าห้องแล้ว รายวิชาของห้องก็ขึ้นที่นี่เหมือนกัน',
+                    action: FilledButton.icon(
+                      key: const ValueKey('subjects_join_empty'),
+                      onPressed: () => context.push(AppRoutes.studentJoin),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text('เข้าห้องด้วยรหัส'),
+                    ),
                   )
                 else
                   EmptyView(
@@ -80,6 +86,12 @@ class MySubjectsPage extends ConsumerWidget {
                       todo > 0 ? 'ต้องส่งอีก $todo งาน' : 'ไม่มีงานค้าง',
                       key: const ValueKey('subjects_todo_total'),
                       style: theme.textTheme.titleMedium,
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('subjects_join'),
+                      onPressed: () => context.push(AppRoutes.studentJoin),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text('เข้าห้องด้วยรหัส'),
                     ),
                     TextButton.icon(
                       key: const ValueKey('subjects_timetable'),

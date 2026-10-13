@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Students\LoginCardPrintService;
+use App\Domain\Students\StudentVisibility;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\LoginCardPrintResource;
 use App\Models\Classroom;
 use App\Models\LoginCardPrint;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -64,11 +64,8 @@ class LoginCardController extends Controller
     /** POST /api/v1/students/{id}/login-card -> 202 {data: print}; the old card stops working once rendered */
     public function storeForStudent(Request $request, int $id): JsonResponse
     {
-        // Another school's student is a 404, like StudentPinController.
-        $student = User::query()
-            ->where('role', User::ROLE_STUDENT)
-            ->where('school_id', $request->user()->school_id)
-            ->findOrFail($id);
+        // A student the teacher may see is a 404 otherwise, like StudentPinController.
+        $student = StudentVisibility::query($request->user())->findOrFail($id);
         Gate::authorize('manageStudentCredentials', $student);
 
         $print = $this->prints->queueForStudent($student, $request->user());

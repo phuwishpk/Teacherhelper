@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Students\SchoolStudents;
 use App\Domain\Students\StudentCode;
+use App\Domain\Students\StudentVisibility;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Classroom;
@@ -84,22 +85,19 @@ class StudentController extends Controller
         Gate::authorize('viewAny', Classroom::class);
         $teacher = $request->user();
         $mine = DB::table('classroom_students')
-            ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id)->where('school_id', $teacher->school_id))
+            ->whereIn('classroom_id', Classroom::query()->select('id')->where('teacher_id', $teacher->id))
             ->distinct()
             ->pluck('student_id')
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        return response()->json(['data' => $mine === [] ? [] : $this->students->duplicateCandidates((int) $teacher->school_id, $mine)]);
+        return response()->json(['data' => $mine === [] ? [] : $this->students->duplicateCandidates($teacher, $mine)]);
     }
 
-    /** A student account of the teacher's school (merged ones included), else 404. */
+    /** A student account the teacher may see (StudentVisibility, merged ones included), else 404. */
     public static function schoolStudent(Request $request, int $id): User
     {
-        return User::query()
-            ->where('role', User::ROLE_STUDENT)
-            ->where('school_id', $request->user()->school_id)
-            ->findOrFail($id);
+        return StudentVisibility::query($request->user())->findOrFail($id);
     }
 
     public static function notHomeroom(): ApiException

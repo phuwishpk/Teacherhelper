@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\V1\GradeConflictController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IndicatorSuggestionController;
+use App\Http\Controllers\Api\V1\JoinController;
 use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\LearningResourceController;
 use App\Http\Controllers\Api\V1\LessonPlanController;
@@ -64,6 +65,7 @@ use App\Http\Controllers\Api\V1\StudentClassFeedController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentCourseController;
 use App\Http\Controllers\Api\V1\StudentGradeController;
+use App\Http\Controllers\Api\V1\StudentJoinController;
 use App\Http\Controllers\Api\V1\StudentMasteryController;
 use App\Http\Controllers\Api\V1\StudentMergeController;
 use App\Http\Controllers\Api\V1\StudentOverviewController;
@@ -101,6 +103,9 @@ Route::prefix('v1')->group(function () {
     // a whole class logs in from one school NAT address at once. Every
     // `throttle:<name>` below is a named limiter in AppServiceProvider with its
     // own bucket (never a bare throttle:N,M, which shares one per user).
+    // The page behind a class code or join QR, before the pupil signs in (DESIGN §29.13.3).
+    Route::get('join/{code}', [JoinController::class, 'show'])->where('code', '[A-Za-z0-9]{1,12}')
+        ->middleware('throttle:join')->name('api.join.show');
     Route::prefix('auth')->group(function () {
         Route::middleware('throttle:teacher-auth')->group(function () {
             Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
@@ -123,6 +128,8 @@ Route::prefix('v1')->group(function () {
             Route::middleware('throttle:student-auth')->group(function () {
                 Route::post('google/link-with-password', [GoogleSignInController::class, 'linkWithPassword'])->name('api.auth.google.link-with-password');
                 Route::post('google/link-with-qr', [GoogleSignInController::class, 'linkWithQr'])->name('api.auth.google.link-with-qr');
+                // An unknown Google account with a class code becomes a student (DESIGN §29.13.3).
+                Route::post('google/join', [GoogleSignInController::class, 'join'])->name('api.auth.google.join');
             });
         });
     });
@@ -171,6 +178,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('classrooms/{id}', [ClassroomController::class, 'show'])->name('api.classrooms.show');
                 Route::patch('classrooms/{id}', [ClassroomController::class, 'update'])->name('api.classrooms.update');
                 // "ห้องเก่า" (§24.6): close, reopen, and delete while empty.
+                Route::get('classrooms/{id}/join-qr', [ClassroomController::class, 'joinQr'])->name('api.classrooms.join-qr');
                 Route::post('classrooms/{id}/close', [ClassroomController::class, 'close'])->name('api.classrooms.close');
                 Route::post('classrooms/{id}/reopen', [ClassroomController::class, 'reopen'])->name('api.classrooms.reopen');
                 Route::delete('classrooms/{id}', [ClassroomController::class, 'destroy'])->name('api.classrooms.destroy');
@@ -473,6 +481,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('attendance', StudentAttendanceController::class)->name('api.student.attendance');
                 // The student's timetable (§29.12).
                 Route::get('timetable', StudentTimetableController::class)->name('api.student.timetable');
+                // Joining a classroom with its class code (DESIGN §29.13.3).
+                Route::get('join/{code}', [StudentJoinController::class, 'show'])->where('code', '[A-Za-z0-9]{1,12}')->name('api.student.join.show');
+                Route::post('join', [StudentJoinController::class, 'store'])->name('api.student.join.store');
                 // The class feed (§30.3): posts, open homework and published results.
                 Route::get('class-feed', [StudentClassFeedController::class, 'index'])->name('api.student.class-feed');
                 Route::get('class-posts/{id}', [StudentClassFeedController::class, 'show'])->name('api.student.class-posts.show');

@@ -114,6 +114,9 @@ class FakeSchoolClassrooms extends Fake implements ClassroomsRepository {
   final previews = <(int, int)>[];
   final merges = <(int, int)>[];
   final studentUpdates = <(int, String, String?)>[];
+
+  /// (classroom id, join_open) of every update (DESIGN §29.13.3).
+  final updates = <(int, bool?)>[];
   final numberUpdates = <(int, int, int)>[];
 
   @override
@@ -138,6 +141,51 @@ class FakeSchoolClassrooms extends Fake implements ClassroomsRepository {
     studentCount: c.studentCount,
     closedAt: closedAt,
     myRole: c.myRole,
+  );
+
+  @override
+  Future<Classroom> update(
+    int id, {
+    String? name,
+    int? gradeLevel,
+    int? academicYear,
+    bool? joinOpen,
+  }) async {
+    updates.add((id, joinOpen));
+    final c = [...open, ...closed].firstWhere((c) => c.id == id);
+    final updated = Classroom(
+      id: c.id,
+      name: name ?? c.name,
+      gradeLevel: gradeLevel ?? c.gradeLevel,
+      academicYear: academicYear ?? c.academicYear,
+      classCode: c.classCode,
+      studentCount: c.studentCount,
+      googleLink: c.googleLink,
+      closedAt: c.closedAt,
+      myRole: c.myRole,
+      homeroomTeacher: c.homeroomTeacher,
+      joinOpen: joinOpen ?? c.joinOpen,
+    );
+    open = [
+      for (final o in open)
+        if (o.id == id) updated else o,
+    ];
+    return updated;
+  }
+
+  @override
+  Future<JoinQr> joinQr(int id) async => JoinQr(
+    code: 'K7Q3M2',
+    url: 'https://krucheck.example/app/#/join/K7Q3M2',
+    matrix: const [
+      '1111111',
+      '1000001',
+      '1011101',
+      '1011101',
+      '1011101',
+      '1000001',
+      '1111111',
+    ],
   );
 
   @override

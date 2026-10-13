@@ -50,6 +50,8 @@ class AuthorizationMatrixTest extends TestCase
         // Google sign-in (§24.9), exercised by GoogleSignInTest.
         'api.auth.google.config', 'api.auth.google', 'api.auth.google.web-url', 'api.auth.google.ticket',
         'api.auth.google.link-with-password', 'api.auth.google.link-with-qr',
+        // Joining with a class code (§29.13.3), exercised by ClassJoinTest.
+        'api.join.show', 'api.auth.google.join',
     ];
 
     private const OK = 'ok';
@@ -66,6 +68,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.classrooms.store' => ['POST', 'classrooms', self::OK, self::OK],
         'api.classrooms.show' => ['GET', 'classrooms/{classroom}', 404, 404],
         'api.classrooms.update' => ['PATCH', 'classrooms/{classroom}', 404, 404],
+        'api.classrooms.join-qr' => ['GET', 'classrooms/{classroom}/join-qr', 404, 404],
         'api.classrooms.students.store' => ['POST', 'classrooms/{classroom}/students', 404, 404],
         'api.classrooms.students.from-classroom' => ['POST', 'classrooms/{classroom}/students/from-classroom', 404, 404],
         'api.classrooms.roster' => ['GET', 'classrooms/{classroom}/roster', 404, 404],
@@ -319,6 +322,7 @@ class AuthorizationMatrixTest extends TestCase
     private const SUBJECT = [
         'api.classrooms.show' => self::OK,
         'api.classrooms.update' => '403 not_homeroom_teacher',
+        'api.classrooms.join-qr' => '403 not_homeroom_teacher',
         'api.classrooms.students.store' => '403 not_homeroom_teacher',
         'api.classrooms.students.from-classroom' => '403 not_homeroom_teacher',
         'api.classrooms.roster' => self::OK,
@@ -382,6 +386,9 @@ class AuthorizationMatrixTest extends TestCase
         // Always the signed-in student's own records (§29.5).
         'api.student.attendance' => ['GET', 'student/attendance', self::OK, self::OK],
         'api.student.timetable' => ['GET', 'student/timetable', self::OK, self::OK],
+        // Any pupil may look at a classroom behind a code (§29.13.3); an empty body is a 422 (counts as reached).
+        'api.student.join.show' => ['GET', 'student/join/{join_code}', self::OK, self::OK],
+        'api.student.join.store' => ['POST', 'student/join', self::OK, self::OK],
         // The post names student A2 only (§30.1): a classmate does not receive it.
         'api.student.class-feed' => ['GET', 'student/class-feed', self::OK, self::OK],
         'api.student.class-posts.show' => ['GET', 'student/class-posts/{class_post}', 404, 404],
@@ -627,6 +634,7 @@ class AuthorizationMatrixTest extends TestCase
         $request = $user === null ? $this->withoutToken() : $this->withToken($this->tokenFor($user));
         $path = '/api/v1/'.strtr($uri, [
             '{classroom}' => $this->classroomA->id,
+            '{join_code}' => $this->classroomA->class_code,
             '{student}' => $this->studentA->id,
             '{card_print}' => $this->cardPrintA->id,
             '{assignment}' => $this->assignmentA->id,

@@ -31,8 +31,8 @@ class StudentsFromClassroomTest extends TestCase
     {
         parent::setUp();
         $this->teacher = $this->makeTeacher();
-        // Last year's classroom belongs to another teacher and is closed already.
-        $this->lastYear = $this->makeClassroom($this->makeTeacher($this->teacher->school), ['name' => 'ป.4/1', 'academic_year' => 2568]);
+        // Last year's classroom of the same teacher, closed already (DESIGN §29.13.3: any classroom the teacher teaches).
+        $this->lastYear = $this->makeClassroom($this->teacher, ['name' => 'ป.4/1', 'academic_year' => 2568]);
         foreach ([3 => 'ด.ญ. ขวัญ ใจดี', 7 => 'ด.ช. กล้า หาญ', 9 => 'ด.ช. อนุ ชา'] as $n => $name) {
             $this->students[$n] = $this->enrollStudent($this->lastYear, $n, $name)['student'];
         }
@@ -127,7 +127,7 @@ class StudentsFromClassroomTest extends TestCase
         $this->copy(['source_classroom_id' => $this->newRoom->id])
             ->assertStatus(422)->assertJsonStructure(['errors' => ['source_classroom_id']]);
         $this->copy(['numbering' => 'random'])->assertStatus(422)->assertJsonStructure(['errors' => ['numbering']]);
-        // A classroom of another school is not found.
+        // Another teacher's classroom is not found.
         $this->copy(['source_classroom_id' => $this->makeClassroom($this->makeTeacher())->id])->assertNotFound();
         $this->assertSame([], $this->numbers(), 'nothing was enrolled');
 

@@ -288,12 +288,11 @@ class StudentMergerTest extends TestCase
         $this->mergeOk($k, $d);
         $this->postJson('/api/v1/students/merge', ['keep_id' => $k->id, 'merge_id' => $d->id])->assertStatus(422)->assertJsonPath('code', 'merge_invalid');
         $this->postJson('/api/v1/students/merge', ['keep_id' => $d->id, 'merge_id' => $k->id])->assertStatus(422)->assertJsonPath('code', 'merge_invalid');
-        // Another school's student is not visible at all.
+        // Another teacher's pupil is not visible at all (StudentVisibility, DESIGN §29.13.3).
         $stranger = $this->enrollStudent($this->makeClassroom($this->makeTeacher()), 1)['student'];
         $this->postJson('/api/v1/students/merge', ['keep_id' => $k->id, 'merge_id' => $stranger->id])->assertNotFound();
-        // A teacher (and a student) is not a student account.
+        // A teacher is not a student account.
         $this->assertSame('merge_invalid', $this->invalidCode(fn () => StudentMerger::assertValid($k, $this->teacher)));
-        $this->assertSame('merge_invalid', $this->invalidCode(fn () => StudentMerger::assertValid($k, $stranger)));
     }
 
     public function test_only_the_homeroom_teacher_of_both_accounts_merges(): void

@@ -11,6 +11,7 @@ import 'google_signin_flow.dart';
 import 'google_signin_models.dart';
 import 'google_signin_providers.dart';
 import 'google_signin_repository.dart';
+import '../student/join_repository.dart';
 
 /// `/login/google?ticket=…` or `?error=…` (DESIGN §24.9.4, §24.22): where
 /// the server's callback sends the web preview back after Google's account
@@ -61,16 +62,44 @@ class _GoogleLoginReturnScreenState
 
   Future<void> _redeem(String ticket, {required bool signUp}) async {
     String? message;
+    // A pupil who started on a join page (DESIGN §29.13.3) goes back to it.
+    final storage = ref.read(tokenStorageProvider);
+    final joinCode = await storage.readPendingJoinCode();
+    if (joinCode != null) await storage.writePendingJoinCode(null);
+    if (!mounted) return;
     try {
       await ref
           .read(sessionProvider.notifier)
           .signInWithToken(
             ref.read(googleSignInRepositoryProvider).redeemTicket(ticket),
           );
-      return; // The router takes the user home.
+      if (joinCode != null && mounted) context.go(AppRoutes.join(joinCode));
+      return; // Else the router takes the user home.
     } catch (e) {
       if (!mounted) return;
       final notLinked = GoogleNotLinked.of(e);
+      final linkTicket = notLinked?.linkTicket;
+      if (joinCode != null && linkTicket != null) {
+        // Unknown to Krucheck, but holding a class code: a new student account.
+        try {
+          await ref
+              .read(sessionProvider.notifier)
+              .signInWithToken(
+                ref
+                    .read(joinRepositoryProvider)
+                    .googleJoin(linkTicket: linkTicket, code: joinCode),
+              );
+          if (mounted) context.go(AppRoutes.join(joinCode));
+          return;
+        } catch (e2) {
+          if (!mounted) return;
+          setState(() {
+            _busy = false;
+            _message = googleSignInErrorMessage(e2);
+          });
+          return;
+        }
+      }
       final registration = signUp ? notLinked?.registration : null;
       if (registration != null) {
         context.go(AppRoutes.register, extra: registration);

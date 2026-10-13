@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Auth\Google\GoogleSignIn;
 use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\StudentVisibility;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -30,12 +30,9 @@ class StudentPinController extends Controller
 
     public function store(Request $request, int $id): JsonResponse
     {
-        // Scoped to the caller's school first: another school's student is a
-        // 404 (not a 403 that would confirm the id exists); a colleague's is 403.
-        $student = User::query()
-            ->where('role', User::ROLE_STUDENT)
-            ->where('school_id', $request->user()->school_id)
-            ->findOrFail($id);
+        // A student the teacher may see (StudentVisibility, DESIGN §29.13.3): anybody else's is
+        // a 404 (not a 403 that would confirm the id exists); a colleague's is 403.
+        $student = StudentVisibility::query($request->user())->findOrFail($id);
         Gate::authorize('manageStudentCredentials', $student);
         $keepGoogle = $request->validate(['keep_google' => ['sometimes', 'boolean']])['keep_google'] ?? false;
 

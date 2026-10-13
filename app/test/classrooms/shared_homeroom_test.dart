@@ -531,7 +531,7 @@ void main() {
       expect(find.byType(FloatingActionButton), findsNothing);
       expect(find.byTooltip('แก้ไข'), findsNothing);
       expect(find.byKey(const ValueKey('classroom_menu')), findsNothing);
-      for (final label in ['พิมพ์บัตร QR', 'วิเคราะห์รายคน']) {
+      for (final label in ['แสดง QR เข้าห้อง', 'วิเคราะห์รายคน']) {
         expect(find.text(label), findsNothing, reason: label);
       }
       // Since build 4 a subject teacher links their own course (§24.24).
