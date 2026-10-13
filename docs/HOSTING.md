@@ -112,7 +112,7 @@ Websites & Domains > `teacherhelper.phuwish.com` > **PHP Settings**
 | Repository type | Remote Git repository |
 | URL | `https://github.com/phuwishpk/Teacherhelper.git` (repo public ใช้ HTTPS ไม่ต้องใส่ deploy key) |
 | Branch / Deployment path ("Change branch and path") | `main` / `/eduvision` |
-| Deployment mode | **Automatic** ตั้งแต่ 14 ต.ค. 2569 (§5) คู่กับ webhook ใน GitHub; ช่วงติดตั้งครั้งแรกใช้ **Manual** (กด "Pull Updates" แล้ว "Deploy" เอง) ก่อนก็ได้ |
+| Deployment mode | **Automatic** ตั้งแต่ 14 ต.ค. 2569 (§5) คู่กับ webhook ใน GitHub และ branch = **`deploy`** (ไม่ใช่ `main`); ช่วงติดตั้งครั้งแรกใช้ **Manual** ก่อนก็ได้ |
 | Enable additional deploy actions | **ปิด** (คำสั่งใน chroot ของ Git extension ไม่มี `php`; ใช้ Scheduled Task แทน) |
 
 ตรวจสอบ: Files เห็น `eduvision/backend/artisan`, `eduvision/backend/public/index.php` และ `eduvision/docs/DESIGN.md`
@@ -403,45 +403,44 @@ curl -s "${H[@]}" -X POST $B/api/v1/auth/teacher/register -d '{"name":"ครู
 
 ## 5. Deploy ครั้งถัดไป (อัปเดตโค้ด)
 
-ตั้งแต่ 14 ต.ค. 2569 การ deploy เป็นอัตโนมัติ: **push ขึ้น `main` แล้วจบ** ทั้ง backend และเว็บแอป ไม่ต้องกด Pull Updates ไม่ต้องอัปโหลด zip และไม่ต้อง Run Now ใดๆ
+ตั้งแต่ 14 ต.ค. 2569 การ deploy เป็นอัตโนมัติ: **push ขึ้น `main` แล้วจบ** ทั้ง backend, vendor และเว็บแอป ไม่ต้องกด Pull Updates ไม่ต้องอัปโหลด zip ไม่ต้องกด Composer Install และไม่ต้อง Run Now ใดๆ
 
 ### 5.1 เกิดอะไรขึ้นเมื่อ push ขึ้น main
 
-| สิ่งที่เปลี่ยน | ใครทำให้ | ใช้เวลาราว |
+| ขั้น | ใครทำ | ใช้เวลาราว |
 |---|---|---|
-| โค้ด `backend/` | GitHub ส่ง webhook → Plesk Git (Automatic) ดึง `main` ลง deployment path | ไม่กี่วินาที |
-| migration ใหม่ และ cache config/route/view/Filament | Scheduled Task `eduvision-auto-deploy` (`eduvision:post-deploy --when-changed` ทุก 5 นาที §4.7) เห็นว่าโค้ดเปลี่ยนจึง `migrate --force` แล้ว `optimize:clear` → `optimize` → `filament:optimize` | ไม่เกิน 5 นาที |
-| เว็บแอป `app/` | GitHub Actions `web-build` (`.github/workflows/web-build.yml`) build Flutter web ด้วย `tools/build-web.sh` แล้ว push ผลลัพธ์เป็น commit เดียวขึ้น branch `web-build` → Plesk Git repository ที่สอง (Automatic) ดึง branch นั้นลง `backend/public/app/` | 4–6 นาที |
+| 1. CI (`backend`, `app`) รัน test | GitHub Actions | 3–5 นาที |
+| 2. workflow **`deploy`** (`.github/workflows/deploy.yml`) ประกอบ "ต้นไม้ที่ server ใช้": `backend/` จาก main + `backend/vendor/` จาก `composer install --no-dev` บน PHP 8.3 + `backend/public/app/` จาก `tools/build-web.sh` แล้ว push เป็น orphan commit เดียวขึ้น branch **`deploy`** (มีไฟล์ `DEPLOY-COMMIT.txt` บอก commit ของ main) | GitHub Actions | 5–7 นาที |
+| 3. Plesk Git (repository เดียว, branch `deploy`, Automatic) ได้ webhook แล้วดึงลง deployment path | Plesk | ไม่กี่วินาที |
+| 4. Scheduled Task `eduvision-auto-deploy` (`eduvision:post-deploy --when-changed` ทุก 5 นาที §4.7) เห็นว่าโค้ดเปลี่ยน จึง `migrate --force` แล้ว `optimize:clear` → `optimize` → `filament:optimize` | Plesk | ไม่เกิน 5 นาที |
 
-ระหว่างที่โค้ดใหม่มาแล้วแต่ task ยังไม่ถึงรอบ (ไม่เกิน 5 นาที) request ที่ต้องใช้ migration ใหม่อาจได้ 500 ถ้าต้องการหลีกเลี่ยง ให้ merge นอกเวลาที่ครูใช้งาน หรือกด Run Now ที่ task `eduvision-auto-deploy` ทันทีหลัง push
+รวมราว 10–15 นาทีจาก push ถึงใช้งานได้ ระหว่างขั้น 3 กับ 4 request ที่ต้องใช้ migration ใหม่อาจได้ 500 สั้นๆ ถ้าต้องการหลีกเลี่ยง ให้ merge นอกเวลาที่ครูใช้งาน หรือกด Run Now ที่ task `eduvision-auto-deploy` ทันทีที่ branch `deploy` อัปเดต
 
-**ยังต้องทำมือ 2 กรณี**
+`main` ไม่มีไฟล์ build และ `deploy` ไม่เคยถูก merge กลับ ห้ามแก้โค้ดบน branch `deploy` เอง (ถูกเขียนทับทุก build) ไฟล์บน server ที่ไม่อยู่ใน git (`backend/.env`, `storage/`) ไม่ถูกแตะ
 
-1. commit ที่แก้ `composer.lock` (เพิ่ม/อัปเกรด package PHP): Git extension รัน Composer ไม่ได้ ต้องทำ §4.3 ซ้ำ (สลับ docroot → Composer Install → สลับกลับ) `post-deploy` ตรวจให้: ถ้า `vendor/` ไม่ตรงกับ `composer.lock` จะพิมพ์คำเตือนใน output ของ task และเขียน `deploy.vendor_outdated` ลง log ของวันนั้น แต่ยังทำ migrate และ cache ต่อ
-2. ตัวแปรใหม่ใน `backend/.env.example`: เพิ่มใน `.env` เอง (ไม่อยู่ใน git โดยตั้งใจ) ตัวแปรที่ไม่ตั้งจะใช้ค่าตั้งต้นในโค้ด หลังแก้ `.env` กด Run Now `eduvision-auto-deploy` หรือ `eduvision:post-deploy` เพื่อ cache ค่าใหม่
+**ยังต้องทำมือกรณีเดียว**: ตัวแปรลับใน `backend/.env` (key, รหัส DB, Google secret) แก้ในไฟล์เองใน Plesk เพราะ repo เป็น public ตัวแปรใหม่ที่มีค่าตั้งต้นในโค้ดไม่ต้องเพิ่ม หลังแก้ `.env` กด Run Now `eduvision:post-deploy` (task `eduvision-maintenance`) เพื่อ cache ค่าใหม่
 
 ### 5.2 ตั้งค่าครั้งเดียว
 
 1. **CI กัน main**: GitHub > Settings > Rules > ruleset ของ `main` เพิ่ม "Require status checks to pass" เลือก job ของ workflow `backend` และ `app` เพื่อไม่ให้โค้ดที่ test แดง deploy เอง
-2. **backend อัตโนมัติ**: Websites & Domains > Git > repository เดิม > Deployment mode = **Automatic** > คัดลอก **webhook URL** ไปที่ GitHub > repo > Settings > Webhooks > Add webhook (Payload URL = ค่านั้น, Content type = `application/json`, event = Just the push event) GitHub จะแสดงเครื่องหมายถูกเมื่อ Plesk ตอบรับ
-3. **task auto-deploy**: Scheduled Tasks > Add Task ตาม §4.7 แถว `eduvision-auto-deploy` (Run a PHP script, path เดียวกับ task อื่น, arguments `eduvision:post-deploy --when-changed`, PHP 8.3, Cron style `*/5 * * * *`, Notify = Errors only)
-4. **เว็บแอปอัตโนมัติ**: รัน workflow `web-build` ครั้งแรกจาก GitHub > Actions > web-build > Run workflow เพื่อให้มี branch `web-build` แล้วใน Plesk > Git > **Add Repository**: URL เดิม, branch `web-build`, deployment path `Teacherhelper.phuwish.com/backend/public/app` (สร้างโฟลเดอร์ว่างไว้ก่อน ลบ `app/` ที่อัปโหลดด้วยมือทิ้ง), Deployment mode = Automatic, เอา webhook URL อันที่สองไปเพิ่มใน GitHub Webhooks อีกรายการ
-5. ตรวจ: push commit เล็กๆ ขึ้น main แล้วภายใน 6 นาที `curl -s https://teacherhelper.phuwish.com/app/build-commit.txt` ต้องเป็น commit นั้น และ `/api/v1/health` เป็น `ok`
-
-ถ้า Hostatom ไม่รับ webhook จากภายนอก (GitHub แสดงกากบาทที่ webhook) ให้คง Deployment mode เป็น Automatic ไว้ก็ได้ แล้วกด **Pull Updates** เองเมื่อ push; ส่วน task และ workflow ยังทำงานตามเดิม
+2. **สร้าง branch `deploy` ครั้งแรก**: GitHub > Actions > **deploy** > Run workflow (branch main) รอจนเขียว แล้วดูว่ามี branch `deploy` ใน repo
+3. **ชี้ Plesk ไปที่ branch `deploy`**: Websites & Domains > Git > repository เดิม > **Change branch and path** → branch `deploy` (path เดิม) > OK > Deployment mode = **Automatic** > กด **Pull Updates** แล้ว **Deploy** หนึ่งครั้ง (ครั้งแรกใหญ่กว่าเดิมเพราะมี vendor ราว 60–100 MB)
+4. **webhook**: คัดลอก Webhook URL จากหน้า Git ไปที่ GitHub > Settings > Webhooks > Add webhook (Payload URL = ค่านั้น, Content type `application/json`, Just the push event) ถ้า GitHub ขึ้นเครื่องหมายถูกคือ Hostatom รับได้ ถ้าขึ้นกากบาท (hosting บล็อก) ยังต้องกด Pull Updates เองหลัง build เสร็จ แต่ขั้นอื่นอัตโนมัติ
+5. **task auto-deploy**: Scheduled Tasks > Add Task ตาม §4.7 แถว `eduvision-auto-deploy` (Run a PHP script, path เดียวกับ task อื่น, arguments `eduvision:post-deploy --when-changed`, PHP 8.3, Cron style `*/5 * * * *`, Notify = Errors only) แล้ว Run Now หนึ่งครั้ง
+6. ตรวจ: `curl -s https://teacherhelper.phuwish.com/app/build-commit.txt` ต้องเป็น commit ล่าสุดของ main, `/api/v1/health` เป็น `ok`, เปิด `/admin` หนึ่งหน้า
+7. โฟลเดอร์ `backend/public/app/` ที่เคยอัปโหลดเองและ `vendor/` ที่ Composer extension ติดตั้งไว้ ถูก git ของ Plesk เขียนทับ ไม่ต้องลบก่อน
 
 ### 5.3 ทำมือ (สำรอง) เมื่ออัตโนมัติใช้ไม่ได้
 
-1. Websites & Domains > Git > **Pull Updates** → **Deploy**
-2. ถ้า commit นั้นแก้ `composer.lock`: ทำ §4.3 ซ้ำ หรืออัปโหลด `vendor.zip` ใหม่
-3. `eduvision-maintenance` Run Now: `eduvision:post-deploy` (= `migrate --force` แล้ว `optimize:clear` → `optimize` → `filament:optimize` ดู output) ถ้า output มี error ของ migration ให้หยุด อย่ารันซ้ำ แล้วส่ง output มาดู
+1. ดูว่า workflow `deploy` เขียวและ branch `deploy` มี `DEPLOY-COMMIT.txt` ตรงกับ main ถ้า workflow แดง อ่าน log ใน Actions (มักเป็น composer หรือ flutter build ล้ม) แก้ที่ main แล้ว push ใหม่
+2. Websites & Domains > Git > **Pull Updates** → **Deploy**
+3. `eduvision-maintenance` Run Now: `eduvision:post-deploy` ถ้า output มี error ของ migration ให้หยุด อย่ารันซ้ำ แล้วส่ง output มาดู
 4. `curl -s https://teacherhelper.phuwish.com/api/v1/health | jq .` และเปิด `/admin` หนึ่งหน้า
-5. ถ้าแอปเวอร์ชันใหม่ต้องการ API ใหม่ ให้ deploy server **ก่อน** แจก APK
-6. ถ้า commit นั้นแก้ `app/` และ workflow ใช้ไม่ได้: build และอัปโหลดเว็บแอปเอง (§4.9 ข้อ 1–3) **หลัง**ข้อ 1–4 และตรวจว่า Deploy ไม่ได้ลบ `backend/public/app/`
+5. ถ้าแอป Android เวอร์ชันใหม่ต้องการ API ใหม่ ให้รอ server อัปเดตก่อนแจก APK
 
-ถ้าต้องการปิดระบบชั่วคราวระหว่าง deploy: Run Now `down --retry=60` ก่อน และ `up` หลัง (API จะตอบ `503 service_unavailable` ระหว่างนั้น)
+ถ้าต้องการปิดระบบชั่วคราว: Run Now `down --retry=60` ก่อน และ `up` หลัง (API ตอบ `503 service_unavailable` ระหว่างนั้น)
 
-Rollback: Git > "Change branch and path" ชี้ commit/branch ก่อนหน้า → Deploy → Run Now `eduvision:post-deploy` (migration ไม่ย้อนกลับเอง ถ้า migration ใหม่ทำลายข้อมูล ให้กู้จาก backup แทน ดู §9) สำหรับเว็บแอป `web-build` มี commit เดียวเสมอ ให้ revert ใน `main` แล้วปล่อยให้ build ใหม่
+Rollback: `git revert` commit ที่มีปัญหาบน `main` แล้ว push ระบบจะ build และ deploy ของเดิมให้เอง (migration ไม่ย้อนกลับเอง ถ้า migration ใหม่ทำลายข้อมูล ให้กู้จาก backup ดู §9) ทางด่วน: Git > Change branch and path ชี้ commit ก่อนหน้าของ `deploy` ไม่ได้ เพราะ branch มี commit เดียวเสมอ
 
 ---
 
