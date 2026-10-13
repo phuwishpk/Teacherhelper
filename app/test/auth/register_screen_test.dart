@@ -62,6 +62,9 @@ class _FakeAuth extends Fake implements AuthRepository {
   }
 }
 
+Finder get _confirmField =>
+    find.byKey(const ValueKey('register_password_confirm'));
+
 Future<_FakeAuth> _pump(WidgetTester tester, _FakeAuth auth) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
@@ -93,6 +96,7 @@ Future<void> _fillTeacher(WidgetTester tester) async {
     find.widgetWithText(TextFormField, 'รหัสผ่าน (อย่างน้อย 8 ตัว)'),
     'secret-pass-1',
   );
+  await tester.enterText(_confirmField, 'secret-pass-1');
 }
 
 Future<void> _submit(WidgetTester tester) async {
@@ -107,7 +111,7 @@ void main() {
     final auth = await _pump(tester, _FakeAuth());
     expect(find.textContaining('รหัสโรงเรียน'), findsNothing);
     expect(find.textContaining('school_code'), findsNothing);
-    expect(find.byType(TextFormField), findsNWidgets(4));
+    expect(find.byType(TextFormField), findsNWidgets(5));
 
     await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
     await tester.pump();
@@ -152,6 +156,22 @@ void main() {
       expect(find.text('login-stub'), findsOneWidget);
     },
   );
+
+  testWidgets('the repeated password must match before anything is sent', (
+    tester,
+  ) async {
+    final auth = await _pump(tester, _FakeAuth());
+    await _fillTeacher(tester);
+    await tester.enterText(_confirmField, 'secret-pass-2');
+    await _submit(tester);
+    expect(find.text('รหัสผ่านไม่ตรงกัน'), findsOneWidget);
+    expect(auth.calls, isEmpty);
+
+    await tester.enterText(_confirmField, 'secret-pass-1');
+    await _submit(tester);
+    expect(find.text('สมัครสำเร็จ'), findsOneWidget);
+    expect(auth.calls.single['password'], 'secret-pass-1');
+  });
 
   testWidgets('several schools: a required dropdown, the pick is sent', (
     tester,
@@ -250,6 +270,7 @@ void main() {
         find.widgetWithText(TextFormField, 'รหัสผ่าน (อย่างน้อย 8 ตัว)'),
         'secret-pass-1',
       );
+      await tester.enterText(_confirmField, 'secret-pass-1');
       return auth;
     }
 

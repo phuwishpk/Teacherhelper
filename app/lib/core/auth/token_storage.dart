@@ -29,6 +29,11 @@ abstract class TokenStorage {
   Future<String?> readLoginTab();
   Future<void> writeLoginTab(String tab);
 
+  /// The theme picked on this device (`light`, `dark` or `system`); survives
+  /// [clear] like the login tab.
+  Future<String?> readThemeMode();
+  Future<void> writeThemeMode(String mode);
+
   /// When the web preview left the register page for Google's account
   /// chooser ("สมัครด้วย Google", DESIGN §24.9.5), so the return on
   /// `/login/google` opens the register page instead of asking. Null clears
@@ -48,6 +53,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _userKey = 'auth_user';
   static const _ownerKey = 'local_data_owner';
   static const _loginTabKey = 'login_tab';
+  static const _themeModeKey = 'theme_mode';
   static const _googleSignUpKey = 'google_signup_started_at';
   final FlutterSecureStorage _storage;
 
@@ -90,6 +96,13 @@ class SecureTokenStorage implements TokenStorage {
       _storage.write(key: _loginTabKey, value: tab);
 
   @override
+  Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
+
+  @override
+  Future<void> writeThemeMode(String mode) =>
+      _storage.write(key: _themeModeKey, value: mode);
+
+  @override
   Future<DateTime?> readGoogleSignUpStartedAt() async =>
       DateTime.tryParse(await _storage.read(key: _googleSignUpKey) ?? '');
 
@@ -114,6 +127,7 @@ class InMemoryTokenStorage implements TokenStorage {
     this.user,
     this.dataOwner,
     this.loginTab,
+    this.themeMode,
     this.googleSignUpStartedAt,
   });
 
@@ -121,6 +135,7 @@ class InMemoryTokenStorage implements TokenStorage {
   Map<String, dynamic>? user;
   int? dataOwner;
   String? loginTab;
+  String? themeMode;
   DateTime? googleSignUpStartedAt;
 
   @override
@@ -135,6 +150,12 @@ class InMemoryTokenStorage implements TokenStorage {
 
   @override
   Future<void> writeLoginTab(String tab) async => loginTab = tab;
+
+  @override
+  Future<String?> readThemeMode() async => themeMode;
+
+  @override
+  Future<void> writeThemeMode(String mode) async => themeMode = mode;
 
   @override
   Future<int?> readDataOwner() async => dataOwner;

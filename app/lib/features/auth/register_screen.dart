@@ -43,6 +43,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   late final _name = TextEditingController(text: widget.google?.name);
   late final _email = TextEditingController(text: widget.google?.email);
   final _password = TextEditingController();
+  final _passwordConfirm = TextEditingController();
   final _passwordFocus = FocusNode();
 
   /// The Google account this registration links, from [RegisterScreen.google]
@@ -61,6 +62,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _passwordConfirm.dispose();
     _passwordFocus.dispose();
     super.dispose();
   }
@@ -286,6 +288,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   validator: (v) => (v == null || v.length < 8)
                       ? 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัว'
                       : null,
+                ),
+                const SizedBox(height: 16),
+                // Checked here only: the API takes one password (DESIGN §9.1).
+                TextFormField(
+                  key: const ValueKey('register_password_confirm'),
+                  controller: _passwordConfirm,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'ยืนยันรหัสผ่าน',
+                  ),
+                  validator: (v) =>
+                      v != _password.text ? 'รหัสผ่านไม่ตรงกัน' : null,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),

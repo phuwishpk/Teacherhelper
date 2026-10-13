@@ -3,7 +3,7 @@
     "short_name": "Krucheck",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#2563EB",
+    "background_color": "#FFFFFF",
     "theme_color": "#2563EB",
     "description": "ผู้ช่วยตรวจการบ้านและข้อสอบสำหรับครู",
     "orientation": "portrait-primary",

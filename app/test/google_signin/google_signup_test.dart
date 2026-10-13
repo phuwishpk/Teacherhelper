@@ -185,6 +185,10 @@ void main() {
       expect(_passwordFocused(tester), isTrue);
 
       await tester.enterText(_password, 'secret-pass-1');
+      await tester.enterText(
+        find.byKey(const ValueKey('register_password_confirm')),
+        'secret-pass-1',
+      );
       await tester.tap(find.widgetWithText(FilledButton, 'สมัครใช้งาน'));
       await tester.pumpAndSettle();
       expect(auth.tickets, ['a' * 48]);

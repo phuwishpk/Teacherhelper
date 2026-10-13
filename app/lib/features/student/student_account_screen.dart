@@ -8,6 +8,7 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import '../auth/sign_out_action.dart';
 import '../google_signin/google_identity_card.dart';
+import '../settings/theme_mode_section.dart';
 
 /// "บัญชีของฉัน" of a student (DESIGN §24.9.5, §24.13): who is signed in
 /// and the Google account they may sign in with.
@@ -47,6 +48,8 @@ class StudentAccountScreen extends ConsumerWidget {
             ),
           const SizedBox(height: 8),
           const GoogleIdentityCard(),
+          const SizedBox(height: 8),
+          const ThemeModeSection(),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: () => confirmSignOut(context, ref),

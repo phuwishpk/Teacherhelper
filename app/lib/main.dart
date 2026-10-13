@@ -5,6 +5,7 @@ import 'app.dart';
 import 'core/api/api_config.dart';
 import 'core/api/api_retry.dart';
 import 'core/push/push_messaging.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'features/upload_queue/upload_worker.dart';
 
 Future<void> main() async {
@@ -22,6 +23,8 @@ Future<void> main() async {
     // policy of its own asks again up to ten times.
     retry: apiRetry,
   );
+  // The remembered theme, before the first frame so it never flashes.
+  await container.read(themeModeProvider.notifier).load();
   // Registers the background upload isolate (no-op off Android).
   await container.read(uploadSchedulerProvider).initialize();
   runApp(
