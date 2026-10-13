@@ -9,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../helpers/pump_screen.dart';
 
 Finder get _studentTab => find.text('นักเรียน');
-Finder get _teacherTab => find.text('ครู / ผู้ดูแลระบบ');
+Finder get _teacherTab => find.text('ครู');
 Finder get _emailField => find.widgetWithText(TextFormField, 'อีเมล');
 Finder get _pinField => find.byKey(const ValueKey('student_password'));
 

@@ -28,7 +28,7 @@ enum LoginTab {
   };
 }
 
-/// One login page for every role: "นักเรียน" and "ครู / ผู้ดูแลระบบ".
+/// One login page for every role: "นักเรียน" and "ครู" (admins use the teacher tab too).
 /// Opens on [initialTab] (from `/login?tab=student`), else on the tab used
 /// last on this device, else on the student tab.
 class LoginScreen extends ConsumerStatefulWidget {
@@ -105,7 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   ButtonSegment(
                     value: LoginTab.teacher,
-                    label: Text('ครู / ผู้ดูแลระบบ'),
+                    label: Text('ครู'),
                   ),
                 ],
                 selected: {_tab},
@@ -180,7 +180,7 @@ class _TeacherLoginFormState extends ConsumerState<_TeacherLoginForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'ใช้อีเมลและรหัสผ่านของบัญชีครูหรือผู้ดูแลระบบ',
+            'ใช้อีเมลและรหัสผ่านของบัญชีครู',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
