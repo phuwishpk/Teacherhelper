@@ -7,7 +7,6 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/course_requests.dart';
-import '../classrooms/request_classroom_screen.dart';
 import 'course_models.dart';
 import 'courses_providers.dart';
 import 'courses_repository.dart';
@@ -61,24 +60,15 @@ class ClassroomCoursesSection extends ConsumerWidget {
     }
   }
 
+  /// The owner adds any course of theirs; a co-teacher (DESIGN §29.13.4)
+  /// adds their own course to the room the same way.
   Widget? _addButton(BuildContext context, WidgetRef ref) {
     if (readOnly) return null;
-    if (classroom.isHomeroom) {
-      return TextButton.icon(
-        key: const ValueKey('classroom_add_course'),
-        onPressed: () => startNewCourse(context, ref, classroomId: classroomId),
-        icon: const Icon(Icons.add),
-        label: const Text('เพิ่มรายวิชา'),
-      );
-    }
     return TextButton.icon(
-      key: const ValueKey('classroom_request_course'),
-      onPressed: () => showCourseRequestDialog(
-        context,
-        room: DirectoryClassroom.of(classroom),
-      ),
+      key: const ValueKey('classroom_add_course'),
+      onPressed: () => startNewCourse(context, ref, classroomId: classroomId),
       icon: const Icon(Icons.add),
-      label: const Text('ขอผูกรายวิชาอื่น'),
+      label: Text(classroom.isHomeroom ? 'เพิ่มรายวิชา' : 'เพิ่มรายวิชาของฉัน'),
     );
   }
 

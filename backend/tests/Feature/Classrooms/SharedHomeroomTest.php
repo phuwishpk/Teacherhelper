@@ -7,7 +7,6 @@ use App\Domain\Notifications\Notifier;
 use App\Domain\Notifications\PushMessage;
 use App\Models\Assignment;
 use App\Models\Classroom;
-use App\Models\ClassroomCourseRequest;
 use App\Models\Course;
 use App\Models\Mastery;
 use App\Models\Question;
@@ -61,124 +60,6 @@ class SharedHomeroomTest extends TestCase
         $this->homeroomCourse = $this->makeCourse($this->homeroom, [$this->classroom], ['code' => 'ค15101']);
         $science = Subject::query()->updateOrCreate(['code' => 'ว'], ['name' => 'วิทยาศาสตร์']);
         $this->subjectCourse = $this->makeCourse($this->subjectTeacher, [], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5', 'subject_id' => $science->id]);
-    }
-
-    public function test_a_request_is_sent_approved_and_notified_both_ways(): void
-    {
-        $url = "/api/v1/classrooms/{$this->classroom->id}/course-requests";
-        $created = $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id, 'message' => ' ขอสอนวิทย์ '])
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'pending')
-            ->assertJsonPath('data.origin', 'teacher')
-            ->assertJsonPath('data.message', 'ขอสอนวิทย์')
-            ->assertJsonPath('data.classroom.homeroom_teacher.id', $this->homeroom->id)
-            ->assertJsonPath('data.course.code', 'ว15101')
-            ->assertJsonPath('data.requester.id', $this->subjectTeacher->id)
-            ->json('data');
-        $this->assertFalse(ClassroomAccess::for($this->subjectTeacher, $this->classroom) !== null);
-
-        $push = $this->notifier->ofType(PushMessage::COURSE_REQUEST);
-        $this->assertCount(1, $push);
-        $this->assertSame([$this->homeroom->id], $push[0][0]);
-        $this->assertSame('มีคำขอผูกรายวิชา ว15101 กับห้อง ป.5/1', $push[0][1]->body);
-        $this->assertSame(['type' => 'course_request', 'request_id' => (string) $created['id'], 'classroom_id' => (string) $this->classroom->id], $push[0][1]->data());
-
-        // A second request of the pair waits for the first.
-        $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])
-            ->assertStatus(409)->assertJsonPath('code', 'request_pending');
-
-        // Both boxes and the attention card.
-        $this->asUser($this->homeroom)->getJson('/api/v1/course-requests?box=incoming')->assertOk()->assertJsonPath('data.0.id', $created['id']);
-        $this->asUser($this->homeroom)->getJson('/api/v1/course-requests?box=outgoing')->assertOk()->assertJsonCount(0, 'data');
-        $this->asUser($this->subjectTeacher)->getJson('/api/v1/course-requests?box=outgoing&status=pending')->assertOk()->assertJsonPath('data.0.id', $created['id']);
-        $this->asUser($this->subjectTeacher)->getJson('/api/v1/course-requests?box=incoming')->assertOk()->assertJsonCount(0, 'data');
-        $this->asUser($this->homeroom)->getJson('/api/v1/teacher/attention')->assertOk()->assertJsonPath('data.course_requests_pending', 1);
-
-        // Only the homeroom teacher decides.
-        $this->asUser($this->subjectTeacher)->postJson("/api/v1/course-requests/{$created['id']}/approve")
-            ->assertStatus(403)->assertJsonPath('code', 'not_homeroom_teacher');
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$created['id']}/approve")
-            ->assertOk()->assertJsonPath('data.status', 'approved')->assertJsonPath('data.decided_at', fn ($v) => $v !== null);
-        $this->assertDatabaseHas('course_classroom', ['course_id' => $this->subjectCourse->id, 'classroom_id' => $this->classroom->id]);
-        $this->assertSame(ClassroomAccess::SUBJECT, ClassroomAccess::for($this->subjectTeacher, $this->classroom)?->role);
-
-        $decided = $this->notifier->ofType(PushMessage::COURSE_REQUEST_DECIDED);
-        $this->assertSame([$this->subjectTeacher->id], $decided[0][0]);
-        $this->assertStringContainsString('อนุมัติให้ผูกรายวิชา ว15101 กับห้อง ป.5/1', $decided[0][1]->body);
-
-        // A decided request never changes again.
-        foreach (['approve', 'decline'] as $action) {
-            $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$created['id']}/{$action}")
-                ->assertStatus(409)->assertJsonPath('code', 'request_closed');
-        }
-        $this->asUser($this->subjectTeacher)->deleteJson("/api/v1/course-requests/{$created['id']}")
-            ->assertStatus(409)->assertJsonPath('code', 'request_closed');
-        $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])
-            ->assertStatus(409)->assertJsonPath('code', 'course_already_in_classroom');
-        $this->asUser($this->homeroom)->getJson('/api/v1/teacher/attention')->assertJsonPath('data.course_requests_pending', 0);
-    }
-
-    public function test_decline_and_cancel(): void
-    {
-        $url = "/api/v1/classrooms/{$this->classroom->id}/course-requests";
-        $id = $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])->assertCreated()->json('data.id');
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$id}/decline", ['reason' => 'ห้องนี้เรียนวิทย์กับครูอีกท่าน'])
-            ->assertOk()->assertJsonPath('data.status', 'declined')->assertJsonPath('data.decline_reason', 'ห้องนี้เรียนวิทย์กับครูอีกท่าน');
-        $this->assertDatabaseMissing('course_classroom', ['course_id' => $this->subjectCourse->id]);
-        $this->assertStringContainsString('ไม่อนุมัติ', $this->notifier->ofType(PushMessage::COURSE_REQUEST_DECIDED)[0][1]->body);
-
-        // Asking again after a decline is a new request; the requester takes it back.
-        $again = $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])->assertCreated()->json('data.id');
-        $this->asUser($this->homeroom)->deleteJson("/api/v1/course-requests/{$again}")->assertStatus(403)->assertJsonPath('code', 'not_requester');
-        $this->asUser($this->subjectTeacher)->deleteJson("/api/v1/course-requests/{$again}")->assertNoContent();
-        $this->assertSame(ClassroomCourseRequest::STATUS_CANCELLED, ClassroomCourseRequest::find($again)->status);
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$again}/approve")->assertStatus(409)->assertJsonPath('code', 'request_closed');
-        // Only the decision was pushed, not the cancel.
-        $this->assertCount(1, $this->notifier->ofType(PushMessage::COURSE_REQUEST_DECIDED));
-    }
-
-    public function test_request_rules(): void
-    {
-        $url = "/api/v1/classrooms/{$this->classroom->id}/course-requests";
-        // Another teacher's course, or a classroom of another school: 404.
-        $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->homeroomCourse->id])->assertNotFound();
-        $stranger = $this->makeTeacher();
-        $this->asUser($this->subjectTeacher)->postJson("/api/v1/classrooms/{$this->makeClassroom($stranger)->id}/course-requests", ['course_id' => $this->subjectCourse->id])->assertNotFound();
-        $this->asUser($this->subjectTeacher)->postJson($url, [])->assertStatus(422)->assertJsonValidationErrors(['course_id']);
-
-        // The homeroom teacher's own course binds at once, without a request.
-        $second = $this->makeCourse($this->homeroom, [], ['code' => 'ค15102']);
-        $this->asUser($this->homeroom)->postJson($url, ['course_id' => $second->id])
-            ->assertOk()->assertJsonPath('data.bound', true);
-        $this->assertDatabaseHas('course_classroom', ['course_id' => $second->id, 'classroom_id' => $this->classroom->id]);
-        $this->assertDatabaseCount('classroom_course_requests', 0);
-
-        // Closing cancels what is pending, and a closed classroom takes no request.
-        $id = $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])->assertCreated()->json('data.id');
-        $this->asUser($this->homeroom)->postJson("/api/v1/classrooms/{$this->classroom->id}/close")->assertOk();
-        $this->assertSame(ClassroomCourseRequest::STATUS_CANCELLED, ClassroomCourseRequest::find($id)->status);
-        $this->asUser($this->subjectTeacher)->postJson($url, ['course_id' => $this->subjectCourse->id])
-            ->assertStatus(409)->assertJsonPath('code', 'classroom_closed');
-        $this->asUser($this->homeroom)->postJson("/api/v1/course-requests/{$id}/approve")->assertStatus(409)->assertJsonPath('code', 'request_closed');
-    }
-
-    public function test_the_directory_lists_open_classrooms_of_the_school_without_rosters(): void
-    {
-        $other = $this->makeClassroom($this->makeTeacher($this->homeroom->school), ['name' => 'ป.6/2', 'academic_year' => 2568]);
-        $this->makeClassroom($this->homeroom, ['name' => 'ป.5/9', 'closed_at' => now()]);
-        $this->makeClassroom($this->makeTeacher(), ['name' => 'ป.5/1 โรงเรียนอื่น']);
-
-        $rows = $this->asUser($this->subjectTeacher)->getJson('/api/v1/classrooms/directory')->assertOk()->json('data');
-        $this->assertEqualsCanonicalizing([$this->classroom->id, $other->id], array_column($rows, 'id'));
-        $row = collect($rows)->firstWhere('id', $this->classroom->id);
-        $this->assertSame(['id', 'name', 'grade_level', 'academic_year', 'homeroom_teacher', 'students_count', 'my_role'], array_keys($row));
-        $this->assertSame(2, $row['students_count']);
-        $this->assertNull($row['my_role']);
-
-        $this->assertSame([$other->id], array_column($this->asUser($this->subjectTeacher)->getJson('/api/v1/classrooms/directory?academic_year=2568')->json('data'), 'id'));
-        $this->assertSame([$this->classroom->id], array_column($this->asUser($this->subjectTeacher)->getJson('/api/v1/classrooms/directory?q='.urlencode('ประจำชั้น'))->json('data'), 'id'));
-        $this->assertSame([$this->classroom->id], array_column($this->asUser($this->subjectTeacher)->getJson('/api/v1/classrooms/directory?q=5/1')->json('data'), 'id'));
-        $this->assertSame('homeroom', collect($this->asUser($this->homeroom)->getJson('/api/v1/classrooms/directory')->json('data'))->firstWhere('id', $this->classroom->id)['my_role']);
     }
 
     public function test_the_subject_teacher_works_in_the_classroom_on_their_own_course_only(): void

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Classrooms\CoTeachers;
 use App\Domain\Exams\ExamVersions;
 use App\Models\Assignment;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,12 +41,12 @@ class StoreAssignmentRequest extends FormRequest
             'classroom_id' => [
                 'required',
                 'integer',
-                // A classroom the teacher is the homeroom or a subject teacher of (DESIGN §24.8).
+                // A classroom the teacher is the homeroom, a subject or a co-teacher of (DESIGN §24.8, §29.13.4).
                 Rule::exists('classrooms', 'id')
-                    ->where('school_id', $teacher?->school_id)
                     ->where(fn ($q) => $teacher === null ? $q->whereRaw('1 = 0') : $q
                         ->where('teacher_id', $teacher->id)
-                        ->orWhereIn('id', ClassroomAccess::subjectClassroomIds($teacher))),
+                        ->orWhereIn('id', ClassroomAccess::subjectClassroomIds($teacher))
+                        ->orWhereIn('id', CoTeachers::coTeacherClassroomIds($teacher))),
             ],
             'course_id' => ['required', 'integer', 'min:1'],
             'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],

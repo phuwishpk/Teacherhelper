@@ -15,7 +15,9 @@ use App\Http\Controllers\Api\V1\ClassPostFileController;
 use App\Http\Controllers\Api\V1\ClassroomController;
 use App\Http\Controllers\Api\V1\ClassroomCourseController;
 use App\Http\Controllers\Api\V1\ClassroomGoogleController;
+use App\Http\Controllers\Api\V1\ClassroomInvitationController;
 use App\Http\Controllers\Api\V1\ClassroomStudentController;
+use App\Http\Controllers\Api\V1\ClassroomTeacherController;
 use App\Http\Controllers\Api\V1\CourseController;
 use App\Http\Controllers\Api\V1\CourseDocumentController;
 use App\Http\Controllers\Api\V1\CourseRequestController;
@@ -191,12 +193,18 @@ Route::prefix('v1')->group(function () {
                 Route::post('classrooms/{id}/students/from-classroom', [ClassroomStudentController::class, 'fromClassroom'])->name('api.classrooms.students.from-classroom');
                 Route::post('classrooms/{id}/login-cards', [LoginCardController::class, 'storeForClassroom'])->name('api.classrooms.login-cards');
 
-                // Shared homerooms (§24.7): the directory to ask for, the courses of a classroom,
-                // course requests (homeroom teacher approves or declines, the requester cancels) and unbinding.
-                Route::get('classrooms/directory', [ClassroomCourseController::class, 'directory'])->name('api.classrooms.directory');
+                // The courses taught in a classroom and unbinding one (§24.7 step 5).
                 Route::get('classrooms/{id}/courses', [ClassroomCourseController::class, 'index'])->name('api.classrooms.courses.index');
                 Route::delete('classrooms/{id}/courses/{course_id}', [ClassroomCourseController::class, 'destroy'])->where('course_id', '[0-9]{1,18}')->name('api.classrooms.courses.destroy');
-                Route::post('classrooms/{id}/course-requests', [ClassroomCourseController::class, 'storeRequest'])->name('api.classrooms.course-requests.store');
+                // Co-teaching by invitation (§29.13.4): the owner invites by e-mail, the invitee accepts or declines.
+                Route::get('classrooms/{id}/teachers', [ClassroomTeacherController::class, 'index'])->name('api.classrooms.teachers.index');
+                Route::post('classrooms/{id}/teachers', [ClassroomTeacherController::class, 'store'])->name('api.classrooms.teachers.store');
+                Route::delete('classrooms/{id}/teachers/{row_id}', [ClassroomTeacherController::class, 'destroy'])->where('row_id', '[0-9]{1,18}')->name('api.classrooms.teachers.destroy');
+                Route::get('classroom-invitations', [ClassroomInvitationController::class, 'index'])->name('api.classroom-invitations.index');
+                Route::post('classroom-invitations/{id}/accept', [ClassroomInvitationController::class, 'accept'])->name('api.classroom-invitations.accept');
+                Route::post('classroom-invitations/{id}/decline', [ClassroomInvitationController::class, 'decline'])->name('api.classroom-invitations.decline');
+                // Course requests of §24.7 are no longer made (no directory, no request route); the rows
+                // that exist are still listed and decided here until they are gone.
                 Route::get('course-requests', [CourseRequestController::class, 'index'])->name('api.course-requests.index');
                 Route::post('course-requests/{id}/approve', [CourseRequestController::class, 'approve'])->name('api.course-requests.approve');
                 Route::post('course-requests/{id}/decline', [CourseRequestController::class, 'decline'])->name('api.course-requests.decline');

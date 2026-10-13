@@ -24,7 +24,6 @@ final class GradebookAccess
     {
         // A classroom an own course is bound to is one the teacher teaches (homeroom or subject, §24.8).
         $classroom = filter_var($classroomId, FILTER_VALIDATE_INT) === false ? null : Classroom::query()
-            ->where('school_id', $teacher->school_id)
             ->whereHas('courses', fn ($q) => $q->whereKey($course->id))
             ->find((int) $classroomId);
         if ($classroom === null) {

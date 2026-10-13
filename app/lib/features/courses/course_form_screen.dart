@@ -9,7 +9,6 @@ import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/question.dart';
-import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'course_models.dart';
 import 'courses_providers.dart';
@@ -117,26 +116,11 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
         : _description.text.trim(),
   );
 
-  /// The rooms of [ids] this form may send (DESIGN §24.20: `classroom_ids`
-  /// takes the teacher's own homerooms only). Another teacher's room, where
-  /// the course came through an approved request, is left out: the server
-  /// keeps that binding. A closed room is looked up in "ห้องเก่า".
-  Future<List<int>> _homeroomIds(Iterable<int> ids) async {
-    final open = ref.read(classroomsProvider).value ?? const <Classroom>[];
-    var known = {for (final c in open) c.id: c.isHomeroom};
-    if (ids.any((id) => !known.containsKey(id))) {
-      try {
-        final closed = await ref.read(closedClassroomsProvider.future);
-        known = {...known, for (final c in closed) c.id: c.isHomeroom};
-      } catch (_) {
-        // Unknown rooms are sent as before; the server says if one is not ours.
-      }
-    }
-    return [
-      for (final id in ids)
-        if (known[id] ?? true) id,
-    ]..sort();
-  }
+  /// The rooms of [ids] this form sends: every room the teacher teaches,
+  /// their own and the ones they co-teach (DESIGN §29.13.4). The server
+  /// keeps any older binding it does not let this teacher edit.
+  Future<List<int>> _homeroomIds(Iterable<int> ids) async =>
+      ids.toList()..sort();
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -334,9 +318,8 @@ class _CourseFormScreenState extends ConsumerState<CourseFormScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        // Another teacher's room is bound through a request
-                        // ("ขอสอนห้องของครูท่านอื่น", DESIGN §24.7).
-                        for (final c in list.where((c) => c.isHomeroom))
+                        // Own rooms and the ones the teacher co-teaches (DESIGN §29.13.4).
+                        for (final c in list)
                           FilterChip(
                             key: ValueKey('course_classroom_${c.id}'),
                             label: Text(c.name),

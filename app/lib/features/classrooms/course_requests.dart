@@ -7,60 +7,6 @@ import '../../core/auth/session.dart';
 import '../../core/util/thai_date.dart';
 import 'classroom.dart';
 
-/// A row of the school's classroom directory (`GET /classrooms/directory`,
-/// DESIGN §24.7 step 1, §24.20): an open room to ask for, without its
-/// roster.
-class DirectoryClassroom {
-  const DirectoryClassroom({
-    required this.id,
-    required this.name,
-    required this.gradeLevel,
-    required this.academicYear,
-    this.homeroomTeacher,
-    this.studentCount = 0,
-    this.myRole,
-  });
-
-  final int id;
-  final String name;
-  final int gradeLevel;
-  final int academicYear;
-  final TeacherRef? homeroomTeacher;
-  final int studentCount;
-
-  /// The signed-in teacher's role in the room, null when they have none.
-  final ClassroomRole? myRole;
-
-  /// A course bound to one's own room is bound at once, no request.
-  bool get isMine => myRole == ClassroomRole.homeroom;
-
-  factory DirectoryClassroom.fromJson(Map<String, dynamic> json) =>
-      DirectoryClassroom(
-        id: (json['id'] as num).toInt(),
-        name: json['name'] as String? ?? '',
-        gradeLevel: (json['grade_level'] as num?)?.toInt() ?? 1,
-        academicYear: (json['academic_year'] as num?)?.toInt() ?? 0,
-        homeroomTeacher: TeacherRef.maybe(json['homeroom_teacher']),
-        studentCount: (json['students_count'] as num?)?.toInt() ?? 0,
-        myRole: switch (json['my_role']) {
-          'homeroom' => ClassroomRole.homeroom,
-          'subject' => ClassroomRole.subject,
-          _ => null,
-        },
-      );
-
-  /// The room the teacher is already in, as the directory shows it.
-  factory DirectoryClassroom.of(Classroom c) => DirectoryClassroom(
-    id: c.id,
-    name: c.name,
-    gradeLevel: c.gradeLevel,
-    academicYear: c.academicYear,
-    homeroomTeacher: c.homeroomTeacher,
-    studentCount: c.studentCount ?? 0,
-    myRole: c.myRole,
-  );
-}
-
 /// `classroom_course_requests.status` (DESIGN §24.3 B).
 enum CourseRequestStatus {
   pending('pending', 'รออนุมัติ'),
@@ -210,18 +156,6 @@ class CourseRequest {
 
 String? _text(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
 
-/// The answer of `POST /classrooms/{id}/course-requests`: a request that
-/// waits for the homeroom teacher, or ([request] null) a course bound at
-/// once because the room is the teacher's own.
-class CourseRequestResult {
-  const CourseRequestResult.sent(CourseRequest this.request);
-  const CourseRequestResult.bound() : request = null;
-
-  final CourseRequest? request;
-
-  bool get bound => request == null;
-}
-
 /// "ระดับชั้นของรายวิชา (ป.4) ไม่ตรงกับห้อง (ป.5)", or null when they match.
 String? gradeMismatchText({required int courseGrade, required int roomGrade}) =>
     courseGrade == roomGrade
@@ -242,19 +176,13 @@ String courseRequestErrorText(Object error) => switch (apiErrorCode(error)) {
   _ => apiErrorMessage(error),
 };
 
-/// Shared homerooms (DESIGN §24.7, §24.12 B): the school's directory of
+/// The course requests of DESIGN §24.7 that still exist (none are made since
+/// §29.13.4: the directory and the request route are gone): listing,
+/// approving, declining and cancelling.
+///
+/// Old lines: the school's directory of
 /// open rooms, the requests to bind a course to one, and deciding them.
 abstract class CourseRequestsRepository {
-  /// `GET /classrooms/directory?q=&academic_year=`.
-  Future<List<DirectoryClassroom>> directory({String? q, int? academicYear});
-
-  /// `POST /classrooms/{id}/course-requests {course_id, message?}`.
-  Future<CourseRequestResult> request(
-    int classroomId, {
-    required int courseId,
-    String? message,
-  });
-
   /// `GET /course-requests?box=`, newest first.
   Future<List<CourseRequest>> list(CourseRequestBox box);
 
@@ -272,38 +200,6 @@ class ApiCourseRequestsRepository implements CourseRequestsRepository {
   ApiCourseRequestsRepository(this._dio);
 
   final Dio _dio;
-
-  @override
-  Future<List<DirectoryClassroom>> directory({
-    String? q,
-    int? academicYear,
-  }) async {
-    final query = q?.trim() ?? '';
-    final res = await _dio.get<Object?>(
-      '/classrooms/directory',
-      queryParameters: {
-        if (query.isNotEmpty) 'q': query,
-        'academic_year': ?academicYear,
-      },
-    );
-    return unwrapList(res.data).map(DirectoryClassroom.fromJson).toList();
-  }
-
-  @override
-  Future<CourseRequestResult> request(
-    int classroomId, {
-    required int courseId,
-    String? message,
-  }) async {
-    final text = message?.trim() ?? '';
-    final res = await _dio.post<Object?>(
-      '/classrooms/$classroomId/course-requests',
-      data: {'course_id': courseId, if (text.isNotEmpty) 'message': text},
-    );
-    final body = unwrapJson(res.data);
-    if (body['bound'] == true) return const CourseRequestResult.bound();
-    return CourseRequestResult.sent(CourseRequest.fromJson(body));
-  }
 
   @override
   Future<List<CourseRequest>> list(CourseRequestBox box) async {
@@ -339,13 +235,6 @@ class ApiCourseRequestsRepository implements CourseRequestsRepository {
 final courseRequestsRepositoryProvider = Provider<CourseRequestsRepository>(
   (ref) => ApiCourseRequestsRepository(ref.watch(dioProvider)),
 );
-
-/// The directory filtered by a search text (empty = every open room).
-final classroomDirectoryProvider = FutureProvider.autoDispose
-    .family<List<DirectoryClassroom>, String>((ref, q) {
-      watchSignedInUser(ref, keepAlive: false);
-      return ref.watch(courseRequestsRepositoryProvider).directory(q: q);
-    });
 
 /// One box of "คำขอผูกรายวิชา".
 final courseRequestsProvider = FutureProvider.autoDispose

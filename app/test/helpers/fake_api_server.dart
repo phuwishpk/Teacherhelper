@@ -244,6 +244,10 @@ class FakeApiServer {
       case ('GET', ['classrooms', final id]):
         final row = _find(classrooms, id);
         return row == null ? _notFound() : (200, {'data': row});
+      case ('GET', ['classroom-invitations']):
+        return (200, {'data': <Object>[]});
+      case ('GET', ['classrooms', _, 'teachers']):
+        return (200, {'data': <Object>[]});
       case ('GET', ['classrooms', final id, 'roster']):
         return _find(classrooms, id) == null
             ? _notFound()

@@ -50,8 +50,7 @@ final class GradebookOverview
                 'gradebookCategories',
                 // Every classroom the own course is bound to (homeroom or subject, §24.8),
                 // as GradebookAccess::classroom() accepts.
-                'classrooms' => fn ($q) => $q->where('classrooms.school_id', $teacher->school_id)
-                    ->orderBy('classrooms.name')->orderBy('classrooms.id'),
+                'classrooms' => fn ($q) => $q->orderBy('classrooms.name')->orderBy('classrooms.id'),
             ])
             ->orderByDesc('academic_year')->orderByDesc('semester')->orderBy('code')->orderBy('id')
             ->get();

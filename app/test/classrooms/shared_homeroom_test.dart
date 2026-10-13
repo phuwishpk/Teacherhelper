@@ -8,7 +8,6 @@ import 'package:eduvision/features/classrooms/classrooms_page.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/classrooms/course_requests.dart';
 import 'package:eduvision/features/classrooms/course_requests_screen.dart';
-import 'package:eduvision/features/classrooms/request_classroom_screen.dart';
 import 'package:eduvision/features/courses/course_form_screen.dart';
 import 'package:eduvision/features/courses/course_models.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
@@ -79,42 +78,12 @@ CourseRequest _request(
 
 /// The request endpoints of DESIGN §24.12 B in memory, recording calls.
 class FakeCourseRequests implements CourseRequestsRepository {
-  FakeCourseRequests({
-    List<DirectoryClassroom>? rooms,
-    Map<CourseRequestBox, List<CourseRequest>>? boxes,
-  }) : rooms = rooms ?? const [],
-       boxes = boxes ?? {};
+  FakeCourseRequests({Map<CourseRequestBox, List<CourseRequest>>? boxes})
+    : boxes = boxes ?? {};
 
-  List<DirectoryClassroom> rooms;
   Map<CourseRequestBox, List<CourseRequest>> boxes;
   final calls = <String>[];
-  Object? requestError;
   Object? cancelError;
-  CourseRequestResult? requestResult;
-
-  @override
-  Future<List<DirectoryClassroom>> directory({
-    String? q,
-    int? academicYear,
-  }) async {
-    calls.add('directory:${q ?? ''}');
-    return [
-      for (final r in rooms)
-        if (q == null || q.isEmpty || r.name.contains(q)) r,
-    ];
-  }
-
-  @override
-  Future<CourseRequestResult> request(
-    int classroomId, {
-    required int courseId,
-    String? message,
-  }) async {
-    calls.add('request:$classroomId:$courseId:${message ?? ''}');
-    if (requestError case final e?) throw e;
-    return requestResult ??
-        CourseRequestResult.sent(_request(99, message: message));
-  }
 
   @override
   Future<List<CourseRequest>> list(CourseRequestBox box) async =>
@@ -316,135 +285,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('tab_incoming')));
       await tester.pumpAndSettle();
       expect(find.text('ยังไม่มีคำขอ'), findsOneWidget);
-
-      await tester.tap(find.text('ขอสอนห้องของครูท่านอื่น'));
-      await tester.pumpAndSettle();
-      expect(find.text('new request'), findsOneWidget);
-    });
-  });
-
-  group('ขอสอนห้องของครูท่านอื่น (DESIGN §24.7 step 1)', () {
-    const room7 = DirectoryClassroom(
-      id: 7,
-      name: 'ป.6/1',
-      gradeLevel: 6,
-      academicYear: 2569,
-      homeroomTeacher: _malee,
-      studentCount: 30,
-    );
-    const room8 = DirectoryClassroom(
-      id: 8,
-      name: 'ป.5/3',
-      gradeLevel: 5,
-      academicYear: 2569,
-      homeroomTeacher: _somsak,
-      myRole: ClassroomRole.homeroom,
-    );
-    FakeCoursesRepository courses() => FakeCoursesRepository([
-      course(id: 4, classrooms: const []),
-      course(
-        id: 5,
-        code: 'ค15102',
-        classrooms: const [
-          {'id': 7, 'name': 'ป.6/1'},
-        ],
-      ),
-    ]);
-
-    testWidgets('pick a room, the course is preselected, send', (tester) async {
-      _tall(tester);
-      final requests = FakeCourseRequests(rooms: [room7, room8]);
-      await pumpScreen(
-        tester,
-        const RequestClassroomScreen(courseId: 4),
-        overrides: _base(requests: requests, courses: courses()),
-      );
-      expect(
-        find.textContaining('ครูประจำชั้น ครูมาลี · นักเรียน 30 คน'),
-        findsOneWidget,
-      );
-      expect(find.text('ห้องของคุณ'), findsOneWidget);
-
-      await tester.enterText(
-        find.byKey(const ValueKey('directory_query')),
-        'ป.6',
-      );
-      await tester.tap(find.byKey(const ValueKey('directory_search')));
-      await tester.pumpAndSettle();
-      expect(requests.calls, contains('directory:ป.6'));
-      expect(find.byKey(const ValueKey('directory_room_8')), findsNothing);
-
-      await tester.tap(find.byKey(const ValueKey('directory_room_7')));
-      await tester.pumpAndSettle();
-      expect(find.text('ขอสอนห้อง ป.6/1'), findsOneWidget);
-      // ป.5 course, ป.6 room.
-      expect(
-        find.byKey(const ValueKey('request_grade_warning')),
-        findsOneWidget,
-      );
-      await tester.enterText(
-        find.byKey(const ValueKey('request_message')),
-        'ขอสอนคณิต',
-      );
-      await tester.tap(find.byKey(const ValueKey('request_send')));
-      await tester.pumpAndSettle();
-      expect(requests.calls, contains('request:7:4:ขอสอนคณิต'));
-      expect(find.text('stub-home'), findsOneWidget);
-      expect(
-        find.text('ส่งคำขอถึงครูประจำชั้นของห้อง ป.6/1 แล้ว'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a bound course is disabled; errors stay in the dialog; '
-        'one\'s own room binds at once', (tester) async {
-      _tall(tester);
-      final requests = FakeCourseRequests(rooms: [room7, room8])
-        ..requestError = dioError(409, {
-          'message': 'pending',
-          'errors': {},
-          'code': 'request_pending',
-        });
-      await pumpScreen(
-        tester,
-        const RequestClassroomScreen(),
-        overrides: _base(requests: requests, courses: courses()),
-      );
-
-      await tester.tap(find.byKey(const ValueKey('directory_room_7')));
-      await tester.pumpAndSettle();
-      final send = find.byKey(const ValueKey('request_send'));
-      expect(tester.widget<FilledButton>(send).onPressed, isNull);
-      await tester.tap(find.byKey(const ValueKey('request_course')));
-      await tester.pumpAndSettle();
-      expect(find.text('ค15102 คณิตศาสตร์ 5 (ผูกแล้ว)'), findsWidgets);
-      await tester.tap(find.text('ค15101 คณิตศาสตร์ 5').last);
-      await tester.pumpAndSettle();
-      await tester.tap(send);
-      await tester.pumpAndSettle();
-      expect(
-        find.text('มีคำขอของรายวิชานี้กับห้องนี้รออนุมัติอยู่แล้ว'),
-        findsOneWidget,
-      );
-      expect(find.text('ขอสอนห้อง ป.6/1'), findsOneWidget, reason: 'open');
-      await tester.tap(_inDialog('ยกเลิก'));
-      await tester.pumpAndSettle();
-
-      requests
-        ..requestError = null
-        ..requestResult = const CourseRequestResult.bound();
-      await tester.tap(find.byKey(const ValueKey('directory_room_8')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('request_message')), findsNothing);
-      expect(find.textContaining('ผูกกับห้องทันที'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('request_course')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('ค15101 คณิตศาสตร์ 5').last);
-      await tester.pumpAndSettle();
-      await tester.tap(_inDialog('ผูกรายวิชา'));
-      await tester.pumpAndSettle();
-      expect(requests.calls, contains('request:8:4:'));
-      expect(find.text('ผูกรายวิชากับห้อง ป.5/3 แล้ว'), findsOneWidget);
+      // No new requests since DESIGN §29.13.4: co-teaching goes by invitation.
+      expect(find.text('ขอสอนห้องของครูท่านอื่น'), findsNothing);
     });
   });
 
@@ -493,7 +335,7 @@ void main() {
       expect(opened, [AttentionTarget.courseRequests]);
     });
 
-    testWidgets('a subject teacher reads the roster and asks for another '
+    testWidgets('a subject teacher reads the roster and may add their own '
         'course', (tester) async {
       _tall(tester);
       final requests = FakeCourseRequests();
@@ -540,7 +382,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('สร้างการบ้าน'), findsOneWidget);
-      expect(find.byKey(const ValueKey('classroom_add_course')), findsNothing);
+      // A co-teacher adds their own course to the room (DESIGN §29.13.4).
+      expect(find.text('เพิ่มรายวิชาของฉัน'), findsOneWidget);
       expect(find.byKey(const ValueKey('classroom_course_4')), findsOneWidget);
 
       // Read-only roster: the menu only opens the student's skills.
@@ -565,18 +408,6 @@ void main() {
       expect(find.text('mastery 502 4'), findsOneWidget);
       Navigator.of(tester.element(find.text('mastery 502 4'))).pop();
       await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('classroom_request_course')));
-      await tester.pumpAndSettle();
-      expect(find.text('ขอสอนห้อง ป.5/2'), findsOneWidget);
-      expect(find.textContaining('ครูประจำชั้น ครูมาลี'), findsWidgets);
-      await tester.tap(find.byKey(const ValueKey('request_course')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('ค15102 คณิตศาสตร์ 5').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('request_send')));
-      await tester.pumpAndSettle();
-      expect(requests.calls, contains('request:7:5:'));
     });
 
     testWidgets('the homeroom teacher sees every course with its teacher '
@@ -747,8 +578,8 @@ void main() {
       expect(find.text('น้ำเดือดที่กี่องศา'), findsOneWidget);
     });
 
-    testWidgets('the course form edits homerooms only and keeps the shared '
-        'room', (tester) async {
+    testWidgets('the course form offers every room the teacher teaches '
+        '(DESIGN §29.13.4)', (tester) async {
       _tall(tester);
       final existing = course(
         id: 4,
@@ -785,14 +616,14 @@ void main() {
         ],
       );
       expect(find.byKey(const ValueKey('course_classroom_7')), findsOneWidget);
-      expect(find.byKey(const ValueKey('course_classroom_8')), findsNothing);
+      expect(find.byKey(const ValueKey('course_classroom_8')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('course_classroom_9')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('course_save')));
       await tester.tap(find.byKey(const ValueKey('course_save')));
       await tester.pumpAndSettle();
       expect(courses.classroomSets.single.$1, 4);
-      expect(courses.classroomSets.single.$2, [7, 9]);
+      expect(courses.classroomSets.single.$2, [7, 8, 9]);
     });
   });
 }

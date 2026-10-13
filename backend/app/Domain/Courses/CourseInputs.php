@@ -2,6 +2,7 @@
 
 namespace App\Domain\Courses;
 
+use App\Domain\Classrooms\ClassroomAccess;
 use App\Exceptions\ApiException;
 use App\Models\Classroom;
 use App\Models\Skill;
@@ -156,11 +157,10 @@ final class CourseInputs
     {
         self::assertIdList($ids, $field, self::MAX_CLASSROOMS, 'ห้องเรียน');
         $ids = array_values(array_unique(array_map('intval', (array) $ids)));
-        $found = Classroom::query()
-            ->where('teacher_id', $teacher->id)
-            ->where('school_id', $teacher->school_id)
-            ->whereIn('id', $ids === [] ? [0] : $ids)
-            ->pluck('id')
+        // Own classrooms and the ones the teacher co-teaches (DESIGN §29.13.4).
+        $found = ClassroomAccess::bindableClassrooms($teacher)
+            ->whereIn('classrooms.id', $ids === [] ? [0] : $ids)
+            ->pluck('classrooms.id')
             ->map(fn ($id) => (int) $id)
             ->all();
         foreach ($ids as $i => $id) {
