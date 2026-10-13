@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -102,6 +103,12 @@ class ClassPost extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ClassPostAttachment::class)->orderBy('position')->orderBy('id');
+    }
+
+    /** @return HasOne<ClassPostGooglePost, $this> */
+    public function googlePost(): HasOne
+    {
+        return $this->hasOne(ClassPostGooglePost::class, 'class_post_id');
     }
 
     /** @return BelongsToMany<User, $this> */

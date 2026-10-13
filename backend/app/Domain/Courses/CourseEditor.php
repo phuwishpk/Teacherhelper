@@ -3,6 +3,7 @@
 namespace App\Domain\Courses;
 
 use App\Exceptions\ApiException;
+use App\Jobs\RenameGoogleTopicJob;
 use App\Models\Assignment;
 use App\Models\Classroom;
 use App\Models\Course;
@@ -168,7 +169,11 @@ final class CourseEditor
         return DB::transaction(function () use ($unit, $data, $skillIds) {
             Course::query()->lockForUpdate()->findOrFail($unit->course_id);
             $unit = Unit::query()->findOrFail($unit->id);
+            $titleBefore = (string) $unit->title;
             $unit->fill(self::clean($data, self::UNIT_FIELDS))->save();
+            if ((string) $unit->title !== $titleBefore) {
+                RenameGoogleTopicJob::dispatch($unit->id); // the Classroom topics follow the unit (DESIGN §30.1)
+            }
             if (isset($data['position'])) {
                 CoursePositions::move(CoursePositions::UNITS, $unit->course_id, $unit->id, (int) $data['position']);
             }

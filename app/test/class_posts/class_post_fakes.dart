@@ -19,6 +19,7 @@ class FakeClassPosts implements ClassPostsRepository {
   final deleted = <int>[];
   final uploaded = <String>[];
   final feedKeys = <FeedKey>[];
+  final googleRetries = <int>[];
   int _nextFileId = 900;
 
   void _throwOnce() {
@@ -88,6 +89,18 @@ class FakeClassPosts implements ClassPostsRepository {
     usedBytes: 1024 * 1024,
     limitBytes: 2048 * 1024 * 1024,
   );
+
+  @override
+  Future<PostGoogle> retryGoogle(int id) async {
+    _throwOnce();
+    googleRetries.add(id);
+    return const PostGoogle(
+      linked: true,
+      state: GoogleSendState.sent,
+      link: 'https://classroom.google.com/c/1/p/9',
+      inClassroom: true,
+    );
+  }
 
   @override
   Future<List<FeedItem>> feed({int? courseId, int? classroomId}) async {

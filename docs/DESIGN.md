@@ -4934,7 +4934,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 
 - ตอนเผยแพร่มีช่อง "ส่งไป Google Classroom ด้วย" ติ๊กไว้เป็นค่าตั้งต้นเมื่อครูผูกคอร์สกับห้องนั้น (`classroom_google_links` ของครูคนนั้น §24.13) โพสต์ของใครไปคอร์สที่คนนั้นผูก ไม่ได้ผูก = อยู่ใน Krucheck อย่างเดียว
 - โพสต์ขึ้นใน Krucheck ทันทีเสมอ การส่งทำในคิว สถานะต่อโพสต์ `not_sent / queued / sent / failed` มีปุ่ม "ส่งอีกครั้ง" และแจ้งเตือนครูเมื่อส่งไม่สำเร็จ (แบบ `classroom_feedback_posts` §19.7)
-- แก้ใน Krucheck แล้วตามไปแก้ใน Classroom (ข้อความ ชื่อ หัวข้อ กำหนดส่ง) ลบแล้วตามไปลบ ⚠️ ไฟล์แนบของ `courseWork` อาจแก้หลังโพสต์ไม่ได้ ถ้าทดสอบแล้วไม่ได้ ให้ล็อกไฟล์แนบของงานหลังโพสต์และบอกครู
+- แก้ใน Krucheck แล้วตามไปแก้ใน Classroom (ข้อความ ชื่อ หัวข้อ กำหนดส่ง) ลบแล้วตามไปลบ **ไฟล์แนบของสำเนาที่ส่งไปแล้วล็อก** (409 `attachments_locked`) เพราะ Classroom API ไม่ให้แก้ `materials` หลังสร้าง ครูที่ต้องเปลี่ยนไฟล์ลบโพสต์แล้วสร้างใหม่ การติ๊ก "ส่งไป Google Classroom ด้วย" ออกจากโพสต์ที่ส่งไปแล้วจะลบสำเนาใน Classroom (Krucheck เป็นต้นฉบับ) ⚠️ ยังไม่ได้ยืนยันกับคอร์สจริงว่า patch `materials` ทำไม่ได้จริง ถ้าทำได้ค่อยปลดล็อก
 - ลิงก์กลับมา Krucheck ใส่เฉพาะในงาน (หน้าส่งงาน/ผลรายข้อ) และประกาศผลตรวจที่มีอยู่ (§19.7) ประกาศและเอกสารประกอบไม่ใส่ เพราะเนื้อหาเหมือนกันอยู่แล้ว ฝั่ง Krucheck ทุกโพสต์ที่ส่งแล้วมีปุ่ม "เปิดใน Classroom"
 - scope ใหม่สองตัว `classroom.courseworkmaterials` และ `classroom.topics` ขอพร้อมกันครั้งเดียว ครูที่เชื่อมไว้ต้องกด "เชื่อมใหม่" หนึ่งครั้ง (กลไกเดิม §19.3)
 - ⚠️ ต้องทดสอบกับคอร์สจริงก่อนสร้างขั้น 2: (1) แก้ `materials` ของ courseWork หลังสร้าง (2) ใส่ `assignedGrade` ให้งานที่นักเรียนไม่ได้กดส่ง (§18.2) (3) ลบ announcement / courseWorkMaterial / courseWork ที่ project สร้าง
@@ -4973,7 +4973,7 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 | ขั้น | เนื้อหา | สถานะ |
 |---|---|---|
 | 1 | โพสต์ใน Krucheck: ประกาศ เอกสารประกอบ ไฟล์และลิงก์ ฉบับร่าง ตั้งเวลา หลายห้อง รายคน หน้าของนักเรียน แจ้งเตือน (§30.1–§30.3, §30.7, §30.8) | เสร็จ |
-| 2 | ส่งไป Classroom: scope ใหม่ หัวข้อ เอกสารประกอบ ประกาศ อัปโหลดขึ้น Drive สถานะและส่งอีกครั้ง แก้และลบตาม (§30.4) หยุดที่ต้นขั้นเพื่อให้ผู้ใช้เพิ่ม scope และทดสอบกับคอร์สจริง | |
+| 2 | ส่งไป Classroom: scope ใหม่ หัวข้อ เอกสารประกอบ ประกาศ อัปโหลดขึ้น Drive สถานะและส่งอีกครั้ง แก้และลบตาม (§30.4, §30.11) | เสร็จในโค้ด (ทดสอบด้วย HTTP จำลอง) ⚠️ ยังต้องเพิ่ม scope ในหน้า OAuth consent และลองกับคอร์สจริง |
 | 3 | ยกระดับการบ้าน: ไฟล์แนบ หัวข้อ ลิงก์กลับ ช่องติ๊กส่งตอนเผยแพร่ | |
 | 3ข | งานรายคนและการคิดคะแนน (§30.5) | |
 | 5 | ส่งคะแนนข้อสอบ (§30.6) | |
@@ -4985,4 +4985,19 @@ ALTER TABLE gradebook_items ADD auto_attendance BOOLEAN NOT NULL DEFAULT FALSE;
 - นักเรียน: แท็บ "โพสต์" เป็นแท็บแรกของหน้ารายวิชา (สตรีม / งานของชั้นเรียน) การ์ด "โพสต์ล่าสุด" (3 โพสต์ใหม่สุดของทุกห้อง) บนหน้า "วิชาของฉัน" และ `/student/posts/:id` (เปิดจากการ์ดและจากแจ้งเตือน `class_post`)
 - ไฟล์แนบ: Android เปิดในแอปดูไฟล์ของเครื่อง เว็บดาวน์โหลดผ่านเบราว์เซอร์ ลิงก์เปิดในเบราว์เซอร์
 - โพสต์ของครูประจำชั้นที่ไม่ระบุรายวิชาแสดงในหน้าของทุกรายวิชาของห้องนั้น
+
+### 30.11 การส่งไป Classroom: ตารางและกติกา (ขั้น 2)
+
+สร้าง 13 ต.ค. 2569
+
+- `class_post_google_posts` (หนึ่งแถวต่อโพสต์): `class_post_id` (unique), `course_id` (คอร์สที่ส่ง), `kind`, `google_id` (id ของ announcement หรือ courseWorkMaterial), `alternate_link`, `state` (queued/sent/failed), `last_error`, `sent_at`
+- `class_post_files.drive_file_id`: สำเนาใน Drive ของเจ้าของไฟล์ อัปโหลดครั้งแรกที่ส่ง ใช้ร่วมกันทุกโพสต์ของครูคนนั้น ย้ายลงถังขยะ (`files.update trashed`) เมื่อไฟล์ถูกลบจาก host
+- `classroom_google_topics`: หัวข้อที่แอปสร้างหรือพบในคอร์ส (`course_id`, `topic_id`, `name`, `unit_id?`) หัวข้อของหน่วยการเรียนรู้เปลี่ยนชื่อตามหน่วย (`RenameGoogleTopicJob` เมื่อ `PATCH /units/{id}` เปลี่ยน `title`) หัวข้อที่ครูลบในเว็บ Classroom ถูกลืมเมื่อส่งแล้วเจอ 404 และสร้างใหม่ในการส่งครั้งถัดไป
+- ลำดับงาน: เผยแพร่ → event `ClassPostPublished` → listener `QueueClassPostGoogle` สร้างแถว `queued` เมื่อผู้เขียนผูกห้องนั้น (`classroom_google_links` ของผู้เขียน) และ `send_to_google` เป็นจริง → `PushClassPostGoogleJob` (คิว default, ลอง 3 ครั้งเมื่อ Google ล่ม) อัปโหลดไฟล์ที่ยังไม่มีใน Drive, หาหรือสร้างหัวข้อ, สร้างหรือ patch สำเนา แก้โพสต์ที่เผยแพร่แล้ว → แถวกลับเป็น `queued` และ patch (ประกาศ: `text`; เอกสาร: `title, description, topicId`) ลบโพสต์ → `DeleteClassPostGoogleJob` (ถือ id ไปเอง เพราะแถวหายไปพร้อมโพสต์)
+- ผู้รับรายคน: ส่งแบบ `INDIVIDUAL_STUDENTS` ด้วย `classroom_students.google_user_id` ของนักเรียนที่เลือก ถ้าไม่มีใครจับคู่เลย ถือว่าส่งไม่สำเร็จ (ไม่ส่งให้ทั้งห้องแทน)
+- ประกาศที่ไม่มีข้อความ (มีแต่ไฟล์) ส่ง `text` เป็นชื่อไฟล์แนบ เพราะ Classroom บังคับให้มีข้อความ
+- ห้องที่ผูกใหม่กับคอร์สอื่นหลังส่งไปแล้ว: การส่งครั้งถัดไปลบสำเนาในคอร์สเก่าแล้วสร้างในคอร์สใหม่
+- API: `POST /class-posts/{id}/google/retry` (เจ้าของโพสต์ ห้องยังเปิด) → 202 `{data: google}` เปิด `send_to_google` ให้ถ้ายังปิด 422 `classroom_not_linked` เมื่อผู้เขียนไม่ได้ผูกห้อง; payload ของโพสต์ (ครู) มี `google: {linked, state (not_sent/queued/sent/failed), last_error, link, sent_at, in_classroom}`
+- scope: `GoogleScopes::REQUIRED` เพิ่ม `classroom.courseworkmaterials` และ `classroom.topics` migration ทำเครื่องหมาย `last_error = scope_missing` ให้บัญชีที่ยังไม่มีสองตัวนี้ (แบบเดียวกับ §19.7) ข้อความเชื่อมใหม่ `GoogleAccount::CLASS_POSTS_RECONNECT_MESSAGE` ⚠️ ต้องเพิ่มสอง scope ในหน้า OAuth consent ของ Google Cloud ก่อนขึ้น production ไม่งั้นการเชื่อมใหม่จะได้ 422 `google_scope_missing`
+- แอป: ช่องติ๊ก "ส่งไป Google Classroom ด้วย" ในฟอร์มเมื่อครูผูกห้องนั้น ป้ายสถานะบนการ์ดของครู ปุ่ม "เปิดใน Classroom" และ "ส่งอีกครั้ง" ไฟล์แนบของสำเนาที่ส่งแล้วแก้ไม่ได้ในฟอร์ม
 

@@ -15,7 +15,10 @@ namespace App\Domain\Google;
  *   drive.file                        upload the spare worksheet PDF
  *   drive.readonly                    the server downloads the students' pictures
  *   classroom.announcements           the per-student private announcement of a
- *                                     published result (DESIGN §19.7)
+ *                                     published result (DESIGN §19.7) and the
+ *                                     announcements of class posts (DESIGN §30.4)
+ *   classroom.courseworkmaterials     the materials of class posts (DESIGN §30.4)
+ *   classroom.topics                  the topics the posts are filed under (DESIGN §30.4)
  *
  * An account connected before a scope was added lacks it: it counts as
  * needs_reconnect (GoogleAccount::needsReconnect(), and the migration that
@@ -28,6 +31,14 @@ final class GoogleScopes
     /** courses.announcements.create (DESIGN §19.7), added in Phase 8 build step 6. */
     public const ANNOUNCEMENTS = self::PREFIX.'classroom.announcements';
 
+    /** courseWorkMaterials and topics of class posts (DESIGN §30.4), added in §30 step 2. */
+    public const MATERIALS = self::PREFIX.'classroom.courseworkmaterials';
+
+    public const TOPICS = self::PREFIX.'classroom.topics';
+
+    /** The scopes of class posts: an account missing any of them connects again (§30.4). */
+    public const CLASS_POSTS = [self::ANNOUNCEMENTS, self::MATERIALS, self::TOPICS];
+
     public const REQUIRED = [
         self::PREFIX.'classroom.courses.readonly',
         self::PREFIX.'classroom.rosters.readonly',
@@ -36,6 +47,8 @@ final class GoogleScopes
         self::PREFIX.'drive.file',
         self::PREFIX.'drive.readonly',
         self::ANNOUNCEMENTS,
+        self::MATERIALS,
+        self::TOPICS,
     ];
 
     /** What each scope is for, in Thai (the browser flow's error page). */
@@ -44,9 +57,11 @@ final class GoogleScopes
         self::PREFIX.'classroom.rosters.readonly' => 'ดูรายชื่อนักเรียนในคอร์ส',
         self::PREFIX.'classroom.profile.emails' => 'ดูอีเมลของนักเรียนในคอร์ส',
         self::PREFIX.'classroom.coursework.students' => 'สร้างงาน ดูงานที่ส่ง ให้คะแนน และส่งคืนงานใน Classroom',
-        self::PREFIX.'drive.file' => 'อัปโหลดใบงานที่แอปสร้างขึ้นไปที่ Google Drive',
+        self::PREFIX.'drive.file' => 'อัปโหลดไฟล์ที่ครูแนบในโพสต์ไปที่ Google Drive ของครู',
         self::PREFIX.'drive.readonly' => 'เปิดไฟล์ใน Google Drive (รูปงานที่นักเรียนแนบมา)',
-        self::ANNOUNCEMENTS => 'ส่งประกาศส่วนตัวถึงนักเรียนใน Classroom (ผลตรวจรายคน)',
+        self::ANNOUNCEMENTS => 'ส่งประกาศถึงนักเรียนใน Classroom (ประกาศของห้องและผลตรวจรายคน)',
+        self::MATERIALS => 'ส่งเอกสารประกอบของห้องไป Classroom',
+        self::TOPICS => 'จัดหัวข้อใน Classroom ตามหน่วยการเรียนรู้',
     ];
 
     public static function label(string $scope): string

@@ -119,6 +119,58 @@ class PostRef {
   String get label => [?code, name].where((s) => s.isNotEmpty).join(' ');
 }
 
+/// The Google Classroom copy of a post (`google` of the teacher's payload,
+/// DESIGN §30.11).
+enum GoogleSendState {
+  notSent('not_sent'),
+  queued('queued'),
+  sent('sent'),
+  failed('failed');
+
+  const GoogleSendState(this.api);
+
+  final String api;
+
+  static GoogleSendState parse(Object? value) => switch (value) {
+    'queued' => queued,
+    'sent' => sent,
+    'failed' => failed,
+    _ => notSent,
+  };
+}
+
+class PostGoogle {
+  const PostGoogle({
+    this.linked = false,
+    this.state = GoogleSendState.notSent,
+    this.lastError,
+    this.link,
+    this.sentAt,
+    this.inClassroom = false,
+  });
+
+  factory PostGoogle.fromJson(Map<String, dynamic> json) => PostGoogle(
+    linked: json['linked'] == true,
+    state: GoogleSendState.parse(json['state']),
+    lastError: json['last_error'] as String?,
+    link: json['link'] as String?,
+    sentAt: _time(json['sent_at']),
+    inClassroom: json['in_classroom'] == true,
+  );
+
+  /// The author linked the classroom to a course of theirs.
+  final bool linked;
+  final GoogleSendState state;
+  final String? lastError;
+
+  /// The post in Classroom (`alternateLink`).
+  final String? link;
+  final DateTime? sentAt;
+
+  /// The copy exists: its files can no longer be changed (DESIGN §30.4).
+  final bool inClassroom;
+}
+
 class ClassPost {
   const ClassPost({
     required this.id,
@@ -139,6 +191,7 @@ class ClassPost {
     this.batchId,
     this.sendToGoogle = true,
     this.isMine = false,
+    this.google = const PostGoogle(),
   });
 
   factory ClassPost.fromJson(Map<String, dynamic> json) => ClassPost(
@@ -166,6 +219,9 @@ class ClassPost {
     batchId: json['batch_id'] as String?,
     sendToGoogle: json['send_to_google'] as bool? ?? true,
     isMine: json['is_mine'] as bool? ?? false,
+    google: json['google'] is Map<String, dynamic>
+        ? PostGoogle.fromJson(json['google'] as Map<String, dynamic>)
+        : const PostGoogle(),
   );
 
   final int id;
@@ -192,6 +248,7 @@ class ClassPost {
   final String? batchId;
   final bool sendToGoogle;
   final bool isMine;
+  final PostGoogle google;
 
   bool get isPublished => state == PostState.published;
 }
@@ -209,6 +266,7 @@ class PostDraft {
     this.studentIds,
     this.scheduledAt,
     this.attachments = const [],
+    this.sendToGoogle = true,
   });
 
   final PostKind kind;
@@ -224,6 +282,10 @@ class PostDraft {
   final DateTime? scheduledAt;
   final List<PostAttachment> attachments;
 
+  /// "ส่งไป Google Classroom ด้วย" (DESIGN §30.4), meaningful when the
+  /// teacher linked the classroom.
+  final bool sendToGoogle;
+
   Map<String, dynamic> toJson({List<int>? classroomIds}) => {
     'classroom_ids': ?classroomIds,
     if (classroomIds != null) 'kind': kind.api,
@@ -236,6 +298,7 @@ class PostDraft {
     'audience': studentIds == null ? 'all' : 'students',
     'student_ids': ?studentIds,
     'scheduled_at': scheduledAt?.toUtc().toIso8601String(),
+    'send_to_google': sendToGoogle,
     'attachments': [for (final a in attachments) a.toJson()],
   };
 }

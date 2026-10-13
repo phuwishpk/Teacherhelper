@@ -63,6 +63,7 @@ class GoogleNotConfiguredTest extends TestCase
             'api.assignments.google-grades.retry',
             'api.assignments.google-post',
             'api.assignments.google-submissions',
+            'api.class-posts.google.retry',
             'api.classrooms.google-link.destroy',
             'api.classrooms.google-link.store',
             'api.classrooms.google-roster.show',

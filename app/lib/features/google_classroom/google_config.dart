@@ -30,7 +30,16 @@ const googleServerScopes = [
   'https://www.googleapis.com/auth/drive.file',
   driveReadonlyScope,
   announcementsScope,
+  materialsScope,
+  topicsScope,
 ];
+
+/// The Classroom copies of class posts (DESIGN §30.4, §30 step 2): the
+/// materials and the topics they are filed under. An account connected
+/// before they were added connects again.
+const materialsScope =
+    'https://www.googleapis.com/auth/classroom.courseworkmaterials';
+const topicsScope = 'https://www.googleapis.com/auth/classroom.topics';
 
 /// The per-student private announcement of a published result (DESIGN
 /// §19.7, Phase 8 build step 6). An account connected before it was added

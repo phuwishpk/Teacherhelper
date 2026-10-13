@@ -35,6 +35,9 @@ abstract class ClassPostsRepository {
   /// `GET /class-post-files/usage`.
   Future<StorageUsage> usage();
 
+  /// `POST /class-posts/{id}/google/retry`: the Classroom copy again.
+  Future<PostGoogle> retryGoogle(int id);
+
   /// `GET /student/class-feed`.
   Future<List<FeedItem>> feed({int? courseId, int? classroomId});
 
@@ -109,6 +112,12 @@ class ApiClassPostsRepository implements ClassPostsRepository {
   Future<StorageUsage> usage() async {
     final res = await _dio.get<Object?>('/class-post-files/usage');
     return StorageUsage.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<PostGoogle> retryGoogle(int id) async {
+    final res = await _dio.post<Object?>('/class-posts/$id/google/retry');
+    return PostGoogle.fromJson(unwrapJson(res.data));
   }
 
   @override

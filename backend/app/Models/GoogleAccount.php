@@ -41,6 +41,9 @@ class GoogleAccount extends Model
     /** DESIGN §19.7: an account connected before the announcements scope was added. */
     public const ANNOUNCEMENTS_RECONNECT_MESSAGE = 'ต้องเชื่อมบัญชี Google ใหม่ เพื่อให้แอปส่งผลตรวจเป็นประกาศส่วนตัวถึงนักเรียนได้';
 
+    /** DESIGN §30.4: an account connected before the class-post scopes (materials, topics) were added. */
+    public const CLASS_POSTS_RECONNECT_MESSAGE = 'ต้องเชื่อมบัญชี Google ใหม่ เพื่อให้แอปส่งโพสต์ของห้องไป Google Classroom ได้';
+
     protected $primaryKey = 'user_id';
 
     public $incrementing = false;
@@ -97,6 +100,12 @@ class GoogleAccount extends Model
         return ! in_array(GoogleScopes::ANNOUNCEMENTS, $this->scopeList(), true);
     }
 
+    /** A scope of class posts (DESIGN §30.4) is missing. */
+    public function lacksClassPostScopes(): bool
+    {
+        return array_diff(GoogleScopes::CLASS_POSTS, $this->scopeList()) !== [];
+    }
+
     /**
      * Why the teacher must connect again, in Thai (GET /google/status
      * `reconnect_message`, the 409 google_reconnect_required message); null
@@ -112,6 +121,9 @@ class GoogleAccount extends Model
         }
         if ($this->lacksAnnouncementsScope()) {
             return self::ANNOUNCEMENTS_RECONNECT_MESSAGE;
+        }
+        if ($this->lacksClassPostScopes()) {
+            return self::CLASS_POSTS_RECONNECT_MESSAGE;
         }
 
         return 'บัญชี Google ไม่ได้ให้สิทธิ์ครบตามที่แอปต้องใช้ ไปที่ ตั้งค่า → Google Classroom แล้วกด "เชื่อมใหม่" และติ๊กอนุญาตทุกข้อ';

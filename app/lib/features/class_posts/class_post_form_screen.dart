@@ -89,6 +89,7 @@ class _PostFormState extends ConsumerState<_PostForm> {
   late final List<PostAttachment> _attachments = [...?widget.post?.attachments];
   late PostState _state = widget.post?.state ?? PostState.published;
   late DateTime? _scheduledAt = widget.post?.scheduledAt?.toLocal();
+  late bool _sendToGoogle = widget.post?.sendToGoogle ?? true;
 
   /// Other classrooms a new post also goes to.
   final _alsoClassrooms = <int>{};
@@ -98,6 +99,9 @@ class _PostFormState extends ConsumerState<_PostForm> {
 
   bool get _editing => widget.post != null;
   bool get _published => widget.post?.isPublished ?? false;
+
+  /// The copy is in Classroom: its files cannot change (DESIGN §30.4).
+  bool get _filesLocked => widget.post?.google.inClassroom ?? false;
 
   @override
   void dispose() {
@@ -211,6 +215,7 @@ class _PostFormState extends ConsumerState<_PostForm> {
       studentIds: _studentIds,
       scheduledAt: _state == PostState.scheduled ? _scheduledAt : null,
       attachments: _attachments,
+      sendToGoogle: _sendToGoogle,
     );
     setState(() {
       _busy = true;
@@ -309,44 +314,54 @@ class _PostFormState extends ConsumerState<_PostForm> {
             PostAttachmentTile(
               key: ValueKey('attached_$i'),
               attachment: a,
-              onRemove: _busy
+              onRemove: _busy || _filesLocked
                   ? null
                   : () => setState(() => _attachments.removeAt(i)),
             ),
             const SizedBox(height: 8),
           ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('post_attach_file'),
-                onPressed: _busy || _uploading ? null : _pickFiles,
-                icon: _uploading
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.attach_file),
-                label: Text(_uploading ? 'กำลังอัปโหลด…' : 'แนบไฟล์'),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('post_attach_link'),
-                onPressed: _busy ? null : _addLink,
-                icon: const Icon(Icons.link),
-                label: const Text('แนบลิงก์'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            [
-              'PDF รูปภาพ และไฟล์ Word, Excel, PowerPoint ไฟล์ละไม่เกิน 10 MB รวมกับลิงก์ไม่เกิน 5 รายการ',
-              ?ref.watch(postStorageUsageProvider).value?.label,
-            ].join(' · '),
-            style: muted,
-          ),
+          if (_filesLocked)
+            Text(
+              'โพสต์นี้ส่งไป Google Classroom แล้ว แก้ไฟล์แนบไม่ได้ '
+              'ถ้าต้องเปลี่ยนไฟล์ ให้ลบโพสต์แล้วสร้างใหม่',
+              key: const ValueKey('post_files_locked'),
+              style: muted,
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('post_attach_file'),
+                  onPressed: _busy || _uploading ? null : _pickFiles,
+                  icon: _uploading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.attach_file),
+                  label: Text(_uploading ? 'กำลังอัปโหลด…' : 'แนบไฟล์'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('post_attach_link'),
+                  onPressed: _busy ? null : _addLink,
+                  icon: const Icon(Icons.link),
+                  label: const Text('แนบลิงก์'),
+                ),
+              ],
+            ),
+          if (!_filesLocked) ...[
+            const SizedBox(height: 8),
+            Text(
+              [
+                'PDF รูปภาพ และไฟล์ Word, Excel, PowerPoint ไฟล์ละไม่เกิน 10 MB รวมกับลิงก์ไม่เกิน 5 รายการ',
+                ?ref.watch(postStorageUsageProvider).value?.label,
+              ].join(' · '),
+              style: muted,
+            ),
+          ],
 
           section('รายวิชาและหัวข้อ'),
           AsyncView(
@@ -440,6 +455,24 @@ class _PostFormState extends ConsumerState<_PostForm> {
                     ),
             ),
 
+          if (classroom.googleLink case final link?) ...[
+            section('Google Classroom'),
+            CheckboxListTile(
+              key: const ValueKey('post_send_google'),
+              value: _sendToGoogle,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('ส่งไป Google Classroom ด้วย'),
+              subtitle: Text(
+                _filesLocked && !_sendToGoogle
+                    ? 'ติ๊กออกแล้วบันทึก สำเนาใน Classroom จะถูกลบ'
+                    : 'คอร์ส ${link.courseName} ที่คุณผูกไว้กับห้องนี้',
+              ),
+              onChanged: _busy
+                  ? null
+                  : (v) => setState(() => _sendToGoogle = v ?? true),
+            ),
+          ],
           if (!_published) ...[
             section('เผยแพร่เมื่อไร'),
             SegmentedButton<PostState>(

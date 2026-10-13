@@ -291,6 +291,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.assignments.google-grades.retry' => ['POST', 'assignments/{assignment}/google-grades/retry', 404, 404],
         'api.assignments.google-feedback' => ['GET', 'assignments/{assignment}/google-feedback', 404, 404],
         'api.assignments.google-feedback.retry' => ['POST', 'assignments/{assignment}/google-feedback/retry', 404, 404],
+        'api.class-posts.google.retry' => ['POST', 'class-posts/{class_post}/google/retry', 404, 404],
         'api.google-submissions.return' => ['POST', 'google-submissions/{import}/return', 404, 404],
         'api.google-submissions.accept-late' => ['POST', 'google-submissions/{import}/accept-late', 404, 404],
         'api.classrooms.google-sync' => ['POST', 'classrooms/{classroom}/google-sync', 404, 404],
@@ -343,6 +344,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.class-posts.show' => self::OK,
         'api.class-posts.update' => '403 not_post_author',
         'api.class-posts.destroy' => '403 not_post_author',
+        'api.class-posts.google.retry' => '403 not_post_author',
     ];
 
     /** What teacher P (request pending) gets where it differs from the same-school column. */

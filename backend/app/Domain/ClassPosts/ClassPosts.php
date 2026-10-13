@@ -5,6 +5,7 @@ namespace App\Domain\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Students\StudentClassrooms;
 use App\Events\ClassPostPublished;
+use App\Jobs\TrashDriveFileJob;
 use App\Models\ClassPost;
 use App\Models\ClassPostAttachment;
 use App\Models\ClassPostFile;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Storage;
  */
 final class ClassPosts
 {
-    public const RELATIONS = ['classroom:id,name,academic_year,closed_at', 'author:id,name', 'course:id,code,name', 'unit:id,title', 'attachments.file'];
+    public const RELATIONS = ['classroom:id,name,academic_year,closed_at', 'author:id,name', 'course:id,code,name', 'unit:id,title', 'attachments.file', 'googlePost'];
 
     /**
      * Posts of a classroom as one of its teachers sees them: everything
@@ -73,7 +74,7 @@ final class ClassPosts
      *
      * @return array<string, mixed>
      */
-    public static function payload(ClassPost $post, User $viewer): array
+    public static function payload(ClassPost $post, User $viewer, ?bool $googleLinked = null): array
     {
         $teacher = $viewer->role === User::ROLE_TEACHER;
         $data = [
@@ -104,6 +105,7 @@ final class ClassPosts
             'send_to_google' => (bool) $post->send_to_google,
             'is_mine' => (int) $post->author_id === (int) $viewer->id,
             'updated_at' => $post->updated_at?->toIso8601String(),
+            'google' => ClassPostGoogle::payload($post, $googleLinked),
         ];
     }
 
@@ -225,7 +227,12 @@ final class ClassPosts
     public static function deleteFile(ClassPostFile $file): void
     {
         $path = $file->path;
+        $driveFileId = $file->drive_file_id;
+        $ownerId = (int) $file->owner_id;
         $file->delete();
         Storage::disk('local')->delete($path);
+        if ($driveFileId !== null && $driveFileId !== '') {
+            TrashDriveFileJob::dispatch($ownerId, $driveFileId);
+        }
     }
 }
