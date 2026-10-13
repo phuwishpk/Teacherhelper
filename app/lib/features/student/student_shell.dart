@@ -77,6 +77,12 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       onSelected: _select,
       actions: [
         ShellAction(
+          key: const ValueKey('help_button'),
+          tooltip: 'คู่มือการใช้งาน',
+          icon: Icons.help_outline,
+          onPressed: () => context.push(AppRoutes.studentHelp),
+        ),
+        ShellAction(
           key: const ValueKey('student_account_button'),
           tooltip: 'บัญชีของฉัน',
           icon: Icons.account_circle_outlined,
