@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,16 +32,9 @@ enum LoginTab {
 /// Opens on [initialTab] (from `/login?tab=student`), else on the tab used
 /// last on this device, else on the student tab.
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({
-    super.key,
-    this.initialTab,
-    this.qrScanSupported = !kIsWeb,
-  });
+  const LoginScreen({super.key, this.initialTab});
 
   final LoginTab? initialTab;
-
-  /// The card scanner needs the Android app's camera (not the web preview).
-  final bool qrScanSupported;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -122,9 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 24),
               switch (_tab) {
                 LoginTab.teacher => const _TeacherLoginForm(),
-                LoginTab.student => StudentLoginForm(
-                  qrScanSupported: widget.qrScanSupported,
-                ),
+                LoginTab.student => const StudentLoginForm(),
               },
               // "เข้าสู่ระบบด้วย Google" on both tabs (DESIGN §24.13).
               GoogleSignInSection(

@@ -147,12 +147,14 @@ class StudentResourceTest extends TestCase
             ->assertSee('ไม่พบบัญชีที่อาจซ้ำ');
     }
 
-    public function test_a_pair_from_two_workspaces_cannot_merge_yet(): void
+    public function test_a_pair_from_two_workspaces_can_be_compared(): void
     {
-        // The merge still wants one workspace until DESIGN §29.13.3 (step 3ข) relaxes it.
+        // Pupils sit in many teachers' classrooms (DESIGN §29.13.3): one workspace is no longer required.
         $elsewhere = $this->enrollStudent($this->makeClassroom($this->makeTeacher()), 1, 'สมชาย ใจดี')['student'];
 
-        $this->assertSame(['preview' => null, 'error' => 'รวมได้เฉพาะบัญชีของโรงเรียนเดียวกัน'], StudentMergeSupport::previewData($this->keep, $elsewhere));
+        $data = StudentMergeSupport::previewData($this->keep, $elsewhere);
+        $this->assertNull($data['error']);
+        $this->assertTrue($data['preview']['can_merge']);
 
         $this->assertNull($elsewhere->refresh()->merged_into_id);
         $this->assertSame(0, StudentMerge::query()->count());

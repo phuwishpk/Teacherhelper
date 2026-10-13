@@ -11,6 +11,7 @@ class Classroom {
     this.closedAt,
     this.myRole = ClassroomRole.homeroom,
     this.homeroomTeacher,
+    this.joinOpen = true,
   });
 
   final int id;
@@ -40,6 +41,9 @@ class Classroom {
   /// room the signed-in teacher teaches as a subject teacher.
   final TeacherRef? homeroomTeacher;
 
+  /// Pupils may join with the class code or its QR (DESIGN §29.13.3).
+  final bool joinOpen;
+
   bool get isClosed => closedAt != null;
 
   bool get isHomeroom => myRole == ClassroomRole.homeroom;
@@ -63,6 +67,7 @@ class Classroom {
     closedAt: closedAt,
     myRole: myRole,
     homeroomTeacher: homeroomTeacher,
+    joinOpen: joinOpen,
   );
 
   factory Classroom.fromJson(Map<String, dynamic> json) => Classroom(
@@ -87,7 +92,24 @@ class Classroom {
         ? ClassroomRole.subject
         : ClassroomRole.homeroom,
     homeroomTeacher: TeacherRef.maybe(json['homeroom_teacher']),
+    joinOpen: json['join_open'] != false,
   );
+}
+
+/// `GET /classrooms/{id}/join-qr` (DESIGN §29.13.3): the join link, its
+/// code and its QR as rows of '1' (dark) and '0'.
+class JoinQr {
+  const JoinQr({required this.code, required this.url, required this.matrix});
+
+  factory JoinQr.fromJson(Map<String, dynamic> json) => JoinQr(
+    code: json['code'] as String? ?? '',
+    url: json['url'] as String? ?? '',
+    matrix: [for (final r in json['matrix'] as List? ?? const []) r as String],
+  );
+
+  final String code;
+  final String url;
+  final List<String> matrix;
 }
 
 /// `{id, name}` of a teacher as the shared-homeroom payloads carry it

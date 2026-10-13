@@ -248,7 +248,6 @@ final class StudentMerger
         $reason = match (true) {
             $keep->id === $merge->id => 'เลือกบัญชีเดียวกันทั้งสองฝั่ง',
             ! $keep->isStudent() || ! $merge->isStudent() => 'รวมได้เฉพาะบัญชีนักเรียน',
-            $keep->school_id === null || $keep->school_id !== $merge->school_id => 'รวมได้เฉพาะบัญชีของโรงเรียนเดียวกัน',
             $merge->isMerged() => 'บัญชีนี้ถูกรวมเข้าบัญชีอื่นแล้ว',
             $keep->isMerged() => 'บัญชีที่จะเก็บไว้ถูกรวมเข้าบัญชีอื่นแล้ว',
             default => null,

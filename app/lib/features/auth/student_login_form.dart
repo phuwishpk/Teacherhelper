@@ -1,11 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
-import '../../core/router/app_router.dart';
 import '../../core/widgets/password_field.dart';
 
 /// Thai message for a failed username + password login.
@@ -49,15 +47,11 @@ String? _firstFieldError(Object error, String field) {
   return null;
 }
 
-/// The "นักเรียน" tab of the login page: scan the login card, or sign in
-/// with a username and password (DESIGN §9.1 /auth/student/qr, §29.10
-/// /auth/student/login).
+/// The "นักเรียน" tab of the login page: username and password (DESIGN
+/// §29.10 /auth/student/login). The login-card scanner is gone (§29.2):
+/// pupils join with a class code instead.
 class StudentLoginForm extends ConsumerStatefulWidget {
-  const StudentLoginForm({super.key, this.qrScanSupported = true});
-
-  /// False on the web preview: the card scanner needs the Android app's
-  /// camera, so the button explains that instead.
-  final bool qrScanSupported;
+  const StudentLoginForm({super.key});
 
   @override
   ConsumerState<StudentLoginForm> createState() => _StudentLoginFormState();
@@ -98,81 +92,12 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
     }
   }
 
-  void _scanCard() {
-    if (widget.qrScanSupported) {
-      context.push(AppRoutes.studentQr);
-      return;
-    }
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('สแกนบัตร QR ได้ในแอป Android'),
-        content: const Text(
-          'การสแกนบัตรต้องใช้กล้องของแอป Krucheck บน Android '
-          'บนเว็บให้กรอกชื่อผู้ใช้และรหัสผ่านด้านล่างแทน',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ตกลง'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Card(
-          clipBehavior: Clip.antiAlias,
-          margin: EdgeInsets.zero,
-          child: InkWell(
-            onTap: _busy ? null : _scanCard,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.qr_code_scanner,
-                    size: 40,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('สแกนบัตร QR', style: theme.textTheme.titleMedium),
-                        Text(
-                          widget.qrScanSupported
-                              ? 'วิธีหลัก: ถือบัตรที่ครูแจกให้หน้ากล้อง'
-                              : 'ใช้ได้ในแอป Android',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            const Expanded(child: Divider()),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('หรือใช้รหัสผ่าน', style: theme.textTheme.labelLarge),
-            ),
-            const Expanded(child: Divider()),
-          ],
-        ),
-        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Column(

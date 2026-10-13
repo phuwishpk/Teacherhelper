@@ -16,12 +16,12 @@ import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_repository.dart';
 import '../home/teacher_attention.dart' show teacherAttentionProvider;
 import '../scan/offline_cache_repository.dart';
-import '../worksheets/print_flow.dart';
 import 'classroom.dart';
 import 'classroom_lifecycle.dart';
 import 'classrooms_providers.dart';
 import 'classrooms_repository.dart';
 import 'duplicate_candidates_card.dart';
+import 'join_qr_dialog.dart';
 import 'one_time_pins_view.dart';
 import 'student_edit_dialog.dart';
 
@@ -186,34 +186,99 @@ class ClassroomDetailScreen extends ConsumerWidget {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
+class _HeaderCard extends ConsumerWidget {
   const _HeaderCard({required this.classroom});
 
   final Classroom classroom;
 
+  Future<void> _toggleJoin(
+    BuildContext context,
+    WidgetRef ref,
+    bool open,
+  ) async {
+    try {
+      await ref
+          .read(classroomsProvider.notifier)
+          .edit(classroom.id, joinOpen: open);
+      ref.invalidate(classroomProvider(classroom.id));
+      if (context.mounted) {
+        showMessage(
+          context,
+          open
+              ? 'เปิดรับสมาชิกด้วยรหัสห้องแล้ว'
+              : 'ปิดรับสมาชิกด้วยรหัสห้องแล้ว',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) showMessage(context, apiErrorMessage(e));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // The owner shows the code or QR and opens or closes joining (DESIGN
+    // §29.13.3); a closed room takes nobody.
+    final owner = classroom.isHomeroom && !classroom.isClosed;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 24,
-          runSpacing: 8,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Fact(
-              label: 'ระดับชั้น',
-              value: gradeLevelLabel(classroom.gradeLevel),
+            Wrap(
+              spacing: 24,
+              runSpacing: 8,
+              children: [
+                _Fact(
+                  label: 'ระดับชั้น',
+                  value: gradeLevelLabel(classroom.gradeLevel),
+                ),
+                _Fact(label: 'ปีการศึกษา', value: '${classroom.academicYear}'),
+                _Fact(
+                  label: 'รหัสห้อง',
+                  value: classroom.classCode,
+                  valueStyle: theme.textTheme.titleLarge?.copyWith(
+                    fontFamily: 'monospace',
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
             ),
-            _Fact(label: 'ปีการศึกษา', value: '${classroom.academicYear}'),
-            _Fact(
-              label: 'รหัสห้อง',
-              value: classroom.classCode,
-              valueStyle: theme.textTheme.titleLarge?.copyWith(
-                fontFamily: 'monospace',
-                letterSpacing: 2,
+            if (owner) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('join_qr'),
+                    onPressed: () => showJoinQrDialog(context, ref, classroom),
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('แสดง QR เข้าห้อง'),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Switch(
+                        key: const ValueKey('join_open'),
+                        value: classroom.joinOpen,
+                        onChanged: (v) => _toggleJoin(context, ref, v),
+                      ),
+                      const Text('รับสมาชิกด้วยรหัสห้อง'),
+                    ],
+                  ),
+                ],
               ),
-            ),
+              Text(
+                classroom.joinOpen
+                    ? 'นักเรียนกรอกรหัสห้องหรือสแกน QR ในแอปเพื่อเข้าห้องและเลือกชื่อของตัวเอง'
+                    : 'ปิดรับสมาชิกอยู่ นักเรียนใหม่เข้าด้วยรหัสห้องไม่ได้',
+                key: const ValueKey('join_hint'),
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),
@@ -248,29 +313,6 @@ class _ActionsRow extends ConsumerWidget {
   final Classroom classroom;
   final bool offlineScan;
 
-  Future<void> _printCards(BuildContext context, WidgetRef ref) async {
-    // One QR card per student across rooms (DESIGN §24.4): printing the
-    // whole room gives everyone a new card.
-    final ok = await confirm(
-      context,
-      title: 'พิมพ์บัตร QR ทั้งห้อง?',
-      message:
-          'นักเรียนทุกคนในห้องนี้จะได้บัตรใหม่ บัตรเดิมใช้ไม่ได้ '
-          'รวมถึงบัตรเดิมของนักเรียนที่อยู่หลายห้อง',
-      confirmLabel: 'พิมพ์บัตร',
-    );
-    if (!ok || !context.mounted) return;
-    final repo = ref.read(classroomsRepositoryProvider);
-    await runPrintFlow(
-      context,
-      ref,
-      title: 'บัตร QR ${classroom.name}',
-      fileName: 'login-cards-${classroom.id}.pdf',
-      request: () => repo.requestLoginCards(classroom.id),
-      poll: repo.loginCardPrint,
-    );
-  }
-
   Future<void> _prepareOffline(BuildContext context, WidgetRef ref) async {
     showMessage(context, 'กำลังดาวน์โหลด layout และรายชื่อ…');
     try {
@@ -296,12 +338,6 @@ class _ActionsRow extends ConsumerWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        if (open && classroom.isHomeroom)
-          FilledButton.tonalIcon(
-            onPressed: () => _printCards(context, ref),
-            icon: const Icon(Icons.qr_code_2),
-            label: const Text('พิมพ์บัตร QR'),
-          ),
         if (open && offlineScan)
           FilledButton.tonalIcon(
             onPressed: () => _prepareOffline(context, ref),
@@ -529,26 +565,6 @@ class _StudentTile extends ConsumerWidget {
     }
   }
 
-  Future<void> _reissueCard(BuildContext context, WidgetRef ref) async {
-    final ok = await confirm(
-      context,
-      title: 'ออกบัตรใหม่ให้ ${student.name}?',
-      message:
-          'บัตร QR เดิมจะใช้เข้าสู่ระบบไม่ได้อีก และนักเรียนจะถูกออกจากระบบทุกเครื่อง',
-      confirmLabel: 'ออกบัตรใหม่',
-    );
-    if (!ok || !context.mounted) return;
-    final repo = ref.read(classroomsRepositoryProvider);
-    await runPrintFlow(
-      context,
-      ref,
-      title: 'บัตร QR ${student.name}',
-      fileName: 'login-card-${student.studentId}.pdf',
-      request: () => repo.reissueLoginCard(student.studentId),
-      poll: repo.loginCardPrint,
-    );
-  }
-
   Future<void> _editUsername(BuildContext context, WidgetRef ref) async {
     final username = await showDialog<String>(
       context: context,
@@ -704,7 +720,6 @@ class _StudentTile extends ConsumerWidget {
           'analysis' => context.push(
             AppRoutes.studentAnalysis(classroomId, student.studentId),
           ),
-          'card' => _reissueCard(context, ref),
           'pin' => _resetPin(context, ref),
           'username' => _editUsername(context, ref),
           'edit' => _edit(context, ref),
@@ -747,13 +762,6 @@ class _StudentTile extends ConsumerWidget {
               child: ListTile(
                 leading: Icon(Icons.badge_outlined),
                 title: Text('แก้ชื่อผู้ใช้'),
-              ),
-            ),
-            PopupMenuItem(
-              value: 'card',
-              child: ListTile(
-                leading: Icon(Icons.qr_code_2),
-                title: Text('ออกบัตร QR ใหม่'),
               ),
             ),
             PopupMenuItem(

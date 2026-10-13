@@ -5,6 +5,7 @@ namespace App\Domain\Classrooms;
 use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\StudentCode;
 use App\Domain\Students\StudentUsernames;
+use App\Domain\Students\StudentVisibility;
 use App\Exceptions\ApiException;
 use App\Models\Classroom;
 use App\Models\User;
@@ -128,13 +129,13 @@ class StudentEnroller
             }
             $student = $existing->get((int) $row['student_id']);
             if (! self::isEnrollableStudent($student, $classroom)) {
-                $notInSchool["students.{$i}.student_id"] = ['ไม่พบนักเรียนคนนี้ในโรงเรียน'];
+                $notInSchool["students.{$i}.student_id"] = ['ไม่พบนักเรียนคนนี้ในห้องของคุณ'];
             } elseif (in_array($student->id, $enrolledIds, true)) {
                 $already["students.{$i}.student_id"] = [$student->name.' อยู่ในห้องนี้แล้ว'];
             }
         }
         if ($notInSchool !== []) {
-            throw new ApiException('ไม่พบนักเรียนบางคนในโรงเรียน', 'student_not_in_school', 422, $notInSchool);
+            throw new ApiException('ไม่พบนักเรียนบางคน', 'student_not_in_school', 422, $notInSchool);
         }
         if ($already !== []) {
             throw new ApiException('นักเรียนบางคนอยู่ในห้องนี้แล้ว', 'already_enrolled', 422, $already);
@@ -156,14 +157,15 @@ class StudentEnroller
         return $existing->all();
     }
 
-    /** An active, unmerged student of the classroom's school. */
+    /** An active, unmerged student the classroom's owner may see (DESIGN §29.13.3). */
     public static function isEnrollableStudent(?User $student, Classroom $classroom): bool
     {
         return $student !== null
             && $student->isStudent()
             && $student->isActive()
             && ! $student->isMerged()
-            && $student->school_id === $classroom->school_id;
+            && $classroom->teacher !== null
+            && StudentVisibility::sees($classroom->teacher, $student);
     }
 
     /**

@@ -30,12 +30,18 @@ abstract class ClassroomsRepository {
     required int gradeLevel,
     required int academicYear,
   });
+
+  /// [joinOpen] opens or closes joining with the class code (DESIGN §29.13.3).
   Future<Classroom> update(
     int id, {
     String? name,
     int? gradeLevel,
     int? academicYear,
+    bool? joinOpen,
   });
+
+  /// `GET /classrooms/{id}/join-qr`: the join link's QR for the owner.
+  Future<JoinQr> joinQr(int id);
 
   /// Moves the classroom to "ห้องเก่า" / back (DESIGN §24.6).
   Future<Classroom> close(int id);
@@ -168,6 +174,7 @@ class ApiClassroomsRepository implements ClassroomsRepository {
     String? name,
     int? gradeLevel,
     int? academicYear,
+    bool? joinOpen,
   }) async {
     final res = await _dio.patch<Object?>(
       '/classrooms/$id',
@@ -175,9 +182,16 @@ class ApiClassroomsRepository implements ClassroomsRepository {
         'name': ?name,
         'grade_level': ?gradeLevel,
         'academic_year': ?academicYear,
+        'join_open': ?joinOpen,
       },
     );
     return Classroom.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<JoinQr> joinQr(int id) async {
+    final res = await _dio.get<Object?>('/classrooms/$id/join-qr');
+    return JoinQr.fromJson(unwrapJson(res.data));
   }
 
   @override

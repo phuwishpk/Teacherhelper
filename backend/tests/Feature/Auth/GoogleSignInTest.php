@@ -409,7 +409,7 @@ class GoogleSignInTest extends TestCase
         $this->signIn(['sub' => 'not-yet-synced', 'email' => 'new@school.ac.th'], 'student')
             ->assertNotFound()
             ->assertJsonPath('code', 'google_not_linked')
-            ->assertJsonPath('message', fn (string $m) => str_contains($m, 'Google Classroom') && str_contains($m, 'รอประมาณ 20 นาที') && str_contains($m, 'PIN'));
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, 'Google Classroom') && str_contains($m, 'รอประมาณ 20 นาที') && str_contains($m, 'รหัสห้อง'));
     }
 
     public function test_a_student_confirms_the_first_sign_in_with_the_pin(): void

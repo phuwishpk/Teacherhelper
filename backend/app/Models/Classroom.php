@@ -30,6 +30,11 @@ class Classroom extends Model
     /** @use HasFactory<ClassroomFactory> */
     use HasFactory;
 
+    /** @var array<string, mixed> the database default, also on a row not read back yet (DESIGN §29.13.3) */
+    protected $attributes = [
+        'join_open' => true,
+    ];
+
     protected $fillable = [
         'school_id',
         'teacher_id',
@@ -37,6 +42,7 @@ class Classroom extends Model
         'grade_level',
         'academic_year',
         'class_code',
+        'join_open',
         'auto_share_analysis',
         'closed_at',
         'closed_by',
@@ -50,6 +56,7 @@ class Classroom extends Model
         return [
             'grade_level' => 'integer',
             'academic_year' => 'integer',
+            'join_open' => 'boolean',
             'auto_share_analysis' => 'boolean',
             'closed_at' => 'datetime',
         ];

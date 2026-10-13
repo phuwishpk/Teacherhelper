@@ -65,7 +65,7 @@ void main() {
     final fake = FakeSchoolClassrooms(open: [room()], closed: []);
     await _pumpDetail(tester, fake, offlineScanSupported: false);
 
-    expect(find.text('พิมพ์บัตร QR'), findsOneWidget);
+    expect(find.text('แสดง QR เข้าห้อง'), findsOneWidget);
     expect(find.text('สร้างการบ้าน'), findsOneWidget);
     expect(find.text('เตรียมสแกนออฟไลน์'), findsNothing);
   });
@@ -94,7 +94,7 @@ void main() {
       expect(find.byType(FloatingActionButton), findsNothing);
       expect(find.byTooltip('แก้ไข'), findsNothing);
       for (final label in [
-        'พิมพ์บัตร QR',
+        'แสดง QR เข้าห้อง',
         'เตรียมสแกนออฟไลน์',
         'สร้างการบ้าน',
       ]) {
@@ -111,7 +111,6 @@ void main() {
       expect(find.text('ทักษะและจุดอ่อน'), findsOneWidget);
       expect(find.text('รวมบัญชีนักเรียน'), findsOneWidget);
       expect(find.text('รีเซ็ตรหัสผ่าน'), findsNothing);
-      expect(find.text('ออกบัตร QR ใหม่'), findsNothing);
       expect(find.text('เอาออกจากห้อง'), findsNothing);
       expect(find.text('แก้ชื่อ เลขประจำตัว และเลขที่'), findsNothing);
       await tester.tapAt(const Offset(5, 5));
@@ -208,18 +207,33 @@ void main() {
   });
 
   group('students of an open room (DESIGN §24.4)', () {
-    testWidgets('printing the whole room warns about shared cards first', (
-      tester,
-    ) async {
-      await _pumpDetail(tester, FakeSchoolClassrooms());
-      await tester.tap(find.text('พิมพ์บัตร QR'));
-      await tester.pumpAndSettle();
-      expect(find.text('พิมพ์บัตร QR ทั้งห้อง?'), findsOneWidget);
-      expect(find.textContaining('นักเรียนที่อยู่หลายห้อง'), findsOneWidget);
-      await tester.tap(find.text('ยกเลิก'));
-      await tester.pumpAndSettle();
-      expect(find.text('พิมพ์บัตร QR ทั้งห้อง?'), findsNothing);
-    });
+    testWidgets(
+      'the owner shows the join QR and closes joining (DESIGN §29.13.3)',
+      (tester) async {
+        final fake = FakeSchoolClassrooms();
+        await _pumpDetail(tester, fake);
+        expect(find.text('K7Q3M2'), findsOneWidget);
+        expect(find.byKey(const ValueKey('join_open')), findsOneWidget);
+        expect(find.textContaining('นักเรียนกรอกรหัสห้อง'), findsOneWidget);
+
+        await tester.tap(find.text('แสดง QR เข้าห้อง'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('join_qr_dialog')), findsOneWidget);
+        expect(
+          find.text('https://krucheck.example/app/#/join/K7Q3M2'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('join_qr_copy')), findsOneWidget);
+        await tester.tap(find.text('ปิด'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('join_open')));
+        await tester.pumpAndSettle();
+        expect(fake.updates, [(7, false)]);
+        expect(find.text('ปิดรับสมาชิกด้วยรหัสห้องแล้ว'), findsOneWidget);
+        expect(find.textContaining('ปิดรับสมาชิกอยู่'), findsOneWidget);
+      },
+    );
 
     testWidgets('edit the name, the student code and the number', (
       tester,

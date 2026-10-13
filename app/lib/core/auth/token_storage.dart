@@ -41,11 +41,17 @@ abstract class TokenStorage {
   Future<DateTime?> readGoogleSignUpStartedAt();
   Future<void> writeGoogleSignUpStartedAt(DateTime? at);
 
+  /// The class code a signed-out pupil joins with after Google's account
+  /// chooser on the web (DESIGN §29.13.3); null = none waiting.
+  Future<String?> readPendingJoinCode();
+  Future<void> writePendingJoinCode(String? code);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
 
 class SecureTokenStorage implements TokenStorage {
+  static const _pendingJoinKey = 'pending_join_code';
   SecureTokenStorage([FlutterSecureStorage? storage])
     : _storage = storage ?? const FlutterSecureStorage();
 
@@ -115,6 +121,14 @@ class SecureTokenStorage implements TokenStorage {
         );
 
   @override
+  Future<String?> readPendingJoinCode() => _storage.read(key: _pendingJoinKey);
+
+  @override
+  Future<void> writePendingJoinCode(String? code) => code == null
+      ? _storage.delete(key: _pendingJoinKey)
+      : _storage.write(key: _pendingJoinKey, value: code);
+
+  @override
   Future<void> clear() async {
     await _storage.delete(key: _key);
     await _storage.delete(key: _userKey);
@@ -144,6 +158,15 @@ class InMemoryTokenStorage implements TokenStorage {
   @override
   Future<void> writeGoogleSignUpStartedAt(DateTime? at) async =>
       googleSignUpStartedAt = at;
+
+  String? pendingJoinCode;
+
+  @override
+  Future<String?> readPendingJoinCode() async => pendingJoinCode;
+
+  @override
+  Future<void> writePendingJoinCode(String? code) async =>
+      pendingJoinCode = code;
 
   @override
   Future<String?> readLoginTab() async => loginTab;

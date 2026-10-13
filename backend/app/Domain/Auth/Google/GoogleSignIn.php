@@ -2,17 +2,22 @@
 
 namespace App\Domain\Auth\Google;
 
+use App\Domain\Classrooms\ClassroomJoiner;
+use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\StudentAuthenticator;
+use App\Domain\Students\StudentUsernames;
 use App\Domain\Teachers\Workspaces;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Jobs\ClassroomSyncJob;
+use App\Models\Classroom;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\NewAccessToken;
 
 /**
@@ -34,6 +39,7 @@ final class GoogleSignIn
     public function __construct(
         private readonly GoogleSignInTickets $tickets,
         private readonly StudentAuthenticator $students,
+        private readonly CredentialIssuer $issuer,
     ) {}
 
     /**
@@ -74,6 +80,57 @@ final class GoogleSignIn
         $identity = $this->link($student, $google, UserGoogleIdentity::VIA_PIN_CONFIRM, $student);
 
         return $this->complete($identity->setRelation('user', $student), $google, $deviceName);
+    }
+
+    /**
+     * POST /auth/google/join (DESIGN §29.13.3): the Google account of a link
+     * ticket is unknown, but the pupil holds a class code, so it becomes a
+     * student account at once: name from Google, no e-mail or password of
+     * its own (a random one nobody knows, never forced to change), a
+     * generated username, the classroom owner's workspace as its origin, and
+     * the Google account linked as `google_signup`. The classroom itself is
+     * joined afterwards with POST /student/join. A Google account linked
+     * meanwhile simply signs in.
+     *
+     * @return array{token: NewAccessToken, user: User}
+     *
+     * @throws ApiException 409 join_closed, 422 link_ticket_invalid
+     */
+    public function signUpStudent(VerifiedGoogleIdentity $google, Classroom $classroom, string $ticket, ?string $deviceName = null): array
+    {
+        $linked = UserGoogleIdentity::query()->with('user.school')->where('google_sub', $google->sub)->first();
+        if ($linked !== null && $linked->user !== null) {
+            $this->tickets->consumeLink($ticket);
+
+            return $this->complete($linked, $google, $deviceName);
+        }
+        if (! ClassroomJoiner::accepts($classroom)) {
+            self::log('signup_student', 'join_closed');
+
+            throw new ApiException('ห้องนี้ปิดรับสมาชิกแล้ว ติดต่อครูประจำวิชาเพื่อให้เพิ่มชื่อ', 'join_closed', 409);
+        }
+        if ($this->tickets->consumeLink($ticket) === null) {
+            throw GoogleSignInErrors::linkTicketInvalid();
+        }
+
+        $identity = DB::transaction(function () use ($google, $classroom) {
+            $student = User::create([
+                'school_id' => $classroom->school_id,
+                'role' => User::ROLE_STUDENT,
+                'name' => self::signUpName($google),
+                'email' => null,
+                'password' => null,
+                'status' => User::STATUS_ACTIVE,
+                'username' => StudentUsernames::generate(null),
+            ]);
+            $this->issuer->create($student);
+            $this->issuer->setPassword($student, Str::random(40));
+
+            return $this->link($student, $google, UserGoogleIdentity::VIA_GOOGLE_SIGNUP, null)->setRelation('user', $student->setRelation('school', $classroom->school));
+        });
+        self::log('signup_student', 'ok', (int) $identity->user_id, UserGoogleIdentity::VIA_GOOGLE_SIGNUP);
+
+        return $this->complete($identity, $google, $deviceName);
     }
 
     /**
@@ -351,7 +408,7 @@ final class GoogleSignIn
         throw GoogleSignInErrors::notLinked(
             'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส '
             .'รอประมาณ '.self::rosterWaitMinutes().' นาทีแล้วกดเข้าสู่ระบบด้วย Google อีกครั้ง ระบบจะเชื่อมให้เอง '
-            .'หรือยืนยันตัวตนครั้งแรกด้วยรหัสห้อง เลขที่ และ PIN หรือสแกนบัตร QR',
+            .'ถ้าครูให้รหัสห้องมา กรอกรหัสห้องเพื่อสร้างบัญชี หรือยืนยันตัวตนครั้งแรกด้วยชื่อผู้ใช้และรหัสผ่านที่ครูให้',
             ['link_ticket' => $this->tickets->issueLink($google)],
         );
     }

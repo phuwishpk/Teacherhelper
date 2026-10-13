@@ -34,6 +34,7 @@ class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
     String? name,
     int? gradeLevel,
     int? academicYear,
+    bool? joinOpen,
   }) async {
     final updated = await ref
         .read(classroomsRepositoryProvider)
@@ -42,6 +43,7 @@ class ClassroomsNotifier extends AsyncNotifier<List<Classroom>> {
           name: name,
           gradeLevel: gradeLevel,
           academicYear: academicYear,
+          joinOpen: joinOpen,
         );
     state = AsyncData([
       for (final c in state.value ?? const <Classroom>[])

@@ -121,17 +121,13 @@ class UserPolicy
 
     private static function isHomeroomOf(User $user, User $student, bool $openOnly): bool
     {
-        if (! $user->isTeacher() || ! $user->isActive() || $user->school_id === null) {
+        if (! $user->isTeacher() || ! $user->isActive() || ! $student->isStudent()) {
             return false;
         }
 
-        if (! $student->isStudent() || $student->school_id !== $user->school_id) {
-            return false;
-        }
-
+        // Any classroom of theirs: pupils come from many workspaces (DESIGN §29.13.3).
         return Classroom::query()
             ->where('teacher_id', $user->id)
-            ->where('school_id', $user->school_id)
             ->when($openOnly, fn ($q) => $q->whereNull('closed_at'))
             ->whereHas('students', fn ($q) => $q->whereKey($student->id))
             ->exists();

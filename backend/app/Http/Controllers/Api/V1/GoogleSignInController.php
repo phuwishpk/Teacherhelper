@@ -9,6 +9,7 @@ use App\Domain\Auth\Google\GoogleSignInErrors;
 use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Domain\Auth\Google\GoogleSignInWeb;
 use App\Domain\Auth\Google\VerifiedGoogleIdentity;
+use App\Domain\Classrooms\ClassroomJoiner;
 use App\Domain\Students\StudentAuthenticator;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -140,6 +141,25 @@ class GoogleSignInController extends Controller
         return self::tokenResponse($this->signIn->linkStudentWithTicket($student, $google, $data['link_ticket'], $data['device_name'] ?? null));
     }
 
+    /**
+     * POST /auth/google/join {link_ticket, join_code, accept_notice, device_name?} -> {token, user}
+     * (DESIGN §29.13.3): the unknown Google account becomes a student because the pupil holds
+     * a class code. 404 classroom_not_found, 409 join_closed, 422 notice_required / link_ticket_invalid.
+     */
+    public function join(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'link_ticket' => ['required', 'string', 'max:64'],
+            'join_code' => ['required', 'string', 'max:12'],
+            'accept_notice' => ['sometimes', 'boolean'],
+            'device_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+        ], self::messages());
+        $google = $this->ticketIdentity($data);
+        $classroom = ClassroomJoiner::byCode($data['join_code']);
+
+        return self::tokenResponse($this->signIn->signUpStudent($google, $classroom, $data['link_ticket'], $data['device_name'] ?? null));
+    }
+
     /** POST /auth/google/link-with-qr {link_ticket, qr_token, accept_notice, device_name?} -> {token, user}. */
     public function linkWithQr(Request $request, StudentAuthenticator $students): JsonResponse
     {
@@ -202,6 +222,8 @@ class GoogleSignInController extends Controller
             'pin.required' => 'กรุณากรอก PIN',
             'pin.digits' => 'PIN ต้องเป็นตัวเลข 6 หลัก',
             'qr_token.required' => 'กรุณาสแกนบัตร QR',
+            'join_code.required' => 'กรอกรหัสห้อง',
+            'join_code.max' => 'รหัสห้องมี 6 ตัวอักษร',
         ];
     }
 }

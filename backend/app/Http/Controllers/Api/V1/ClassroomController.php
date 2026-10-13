@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Classrooms\ClassCodeGenerator;
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Classrooms\ClassroomJoiner;
 use App\Domain\Classrooms\ClassroomLifecycle;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreClassroomRequest;
@@ -91,6 +92,19 @@ class ClassroomController extends Controller
         $classroom->loadCount('students')->load('googleLinks.owner:id,name');
 
         return new ClassroomResource($classroom);
+    }
+
+    /**
+     * GET /api/v1/classrooms/{id}/join-qr -> {data: {code, url, matrix}}: the join
+     * link's QR for the owner to show the class (DESIGN §29.13.3); matrix rows
+     * are strings of 1 (dark) and 0 without the quiet zone.
+     */
+    public function joinQr(Request $request, int $id): JsonResponse
+    {
+        $classroom = $this->ownQuery($request)->findOrFail($id);
+        Gate::authorize('update', $classroom);
+
+        return response()->json(['data' => ClassroomJoiner::qr($classroom)]);
     }
 
     /** POST /api/v1/classrooms/{id}/close -> {data: classroom}: moves it to "ห้องเก่า" (DESIGN §24.6) */
