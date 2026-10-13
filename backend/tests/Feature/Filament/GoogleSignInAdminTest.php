@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\Schools\Pages\EditSchool;
-use App\Filament\Resources\Schools\Pages\ListSchools;
 use App\Filament\Resources\Students\Pages\ManageStudents;
 use App\Models\Classroom;
 use App\Models\School;
@@ -37,64 +36,8 @@ class GoogleSignInAdminTest extends TestCase
         $teacher = $this->makeTeacher();
         $this->school = $teacher->school;
         $this->classroom = $this->makeClassroom($teacher);
-        $this->admin = $this->makeAdmin(['school_id' => $this->school->id]);
+        $this->admin = $this->makeAdmin();
         $this->actingAs($this->admin);
-    }
-
-    public function test_admin_sets_the_domains_and_the_student_switch(): void
-    {
-        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
-            ->fillForm(['google_signin_domains' => ['School.ac.th', '@students.school.ac.th', 'school.ac.th'], 'student_google_signin' => true])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $school = $this->school->refresh();
-        $this->assertSame(['school.ac.th', 'students.school.ac.th'], $school->google_signin_domains);
-        $this->assertTrue($school->student_google_signin);
-        $this->assertTrue($school->allowsGoogleDomain('school.ac.th'));
-        $this->assertFalse($school->allowsGoogleDomain('gmail.com'));
-
-        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
-            ->fillForm(['google_signin_domains' => ['not a domain']])
-            ->call('save')
-            ->assertHasFormErrors();
-
-        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
-            ->fillForm(['google_signin_domains' => [], 'student_google_signin' => false])
-            ->call('save')
-            ->assertHasNoFormErrors();
-        $this->assertNull($this->school->refresh()->google_signin_domains);
-        $this->assertTrue($this->school->allowsGoogleDomain('gmail.com'));
-    }
-
-    public function test_admin_turns_the_automatic_teacher_approval_off_and_on(): void
-    {
-        $this->assertTrue($this->school->refresh()->teacher_google_auto_approve, 'on by default (#71)');
-
-        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
-            ->assertFormFieldExists('teacher_google_auto_approve')
-            ->fillForm(['teacher_google_auto_approve' => false])
-            ->call('save')
-            ->assertHasNoFormErrors();
-        $this->assertFalse($this->school->refresh()->teacher_google_auto_approve);
-
-        Livewire::test(EditSchool::class, ['record' => $this->school->getRouteKey()])
-            ->fillForm(['teacher_google_auto_approve' => true])
-            ->call('save')
-            ->assertHasNoFormErrors();
-        $this->assertTrue($this->school->refresh()->teacher_google_auto_approve);
-    }
-
-    public function test_an_admin_of_a_school_sees_and_edits_only_that_school(): void
-    {
-        $other = $this->makeSchool(['name' => 'โรงเรียนอื่น']);
-
-        Livewire::test(ListSchools::class)->assertCanSeeTableRecords([$this->school])->assertCanNotSeeTableRecords([$other]);
-        $this->get("/admin/schools/{$other->id}/edit")->assertNotFound();
-        $this->get('/admin/schools/create')->assertForbidden();
-
-        $this->actingAs($this->makeAdmin());
-        Livewire::test(ListSchools::class)->assertCanSeeTableRecords([$this->school, $other]);
     }
 
     public function test_admin_removes_every_student_link_of_the_school(): void

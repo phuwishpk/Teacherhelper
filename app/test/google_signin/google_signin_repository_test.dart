@@ -56,37 +56,6 @@ void main() {
     expect(_body(only()), {'id_token': 'id.tok', 'intent': 'student'});
   });
 
-  test('sign-in and web-url send the picked school (#71)', () async {
-    answer(200, tokenBody);
-    await repo.signIn(
-      idToken: 'id.tok',
-      intent: GoogleIntent.staff,
-      schoolId: 7,
-    );
-    expect(_body(only()), {
-      'id_token': 'id.tok',
-      'intent': 'staff',
-      'school_id': 7,
-    });
-
-    answer(200, {
-      'data': {'url': 'https://accounts.google.com/o/oauth2/v2/auth?x=1'},
-    });
-    await repo.webUrl(link: false, intent: GoogleIntent.staff, schoolId: 7);
-    expect(_body(only()), {
-      'purpose': 'login',
-      'intent': 'staff',
-      'school_id': 7,
-    });
-  });
-
-  test('a 404 with needs_school is read', () {
-    final notLinked = GoogleNotLinked.of(staffNeedsSchool())!;
-    expect(notLinked.needsSchool, isTrue);
-    expect(notLinked.registration?.email, 'new@school.ac.th');
-    expect(GoogleNotLinked.of(staffNotLinked())!.needsSchool, isFalse);
-  });
-
   test('web-url for login sends the intent, for link the notice', () async {
     answer(200, {
       'data': {'url': 'https://accounts.google.com/o/oauth2/v2/auth?x=1'},
@@ -182,38 +151,20 @@ void main() {
     });
     final auth = ApiAuthRepository(fakeDio(adapter));
     await auth.register(
-      schoolId: 3,
       name: 'ครู',
       email: 'k@s.th',
       password: 'secret-pass',
       googleLinkTicket: 'd' * 48,
     );
     expect(_body(only())['google_link_ticket'], 'd' * 48);
-    expect(_body(only())['school_id'], 3);
 
     adapter.requests.clear();
     await auth.register(name: 'ครู', email: 'k@s.th', password: 'secret-pass');
-    expect(
-      _body(only()),
-      {'name': 'ครู', 'email': 'k@s.th', 'password': 'secret-pass'},
-      reason: 'no school_id (the server picks its only school), no code',
-    );
-  });
-
-  test('the sign-up school list is read from GET /auth/schools', () async {
-    answer(200, {
-      'data': [
-        {'id': 1, 'name': 'โรงเรียนหนึ่ง'},
-        {'id': 2, 'name': 'โรงเรียนสอง'},
-      ],
-    });
-    final schools = await ApiAuthRepository(fakeDio(adapter)).schools();
-    expect(only().path, '/auth/schools');
-    expect(only().method, 'GET');
-    expect(
-      [for (final s in schools) '${s.id}:${s.name}'],
-      ['1:โรงเรียนหนึ่ง', '2:โรงเรียนสอง'],
-    );
+    expect(_body(only()), {
+      'name': 'ครู',
+      'email': 'k@s.th',
+      'password': 'secret-pass',
+    }, reason: 'no school fields (DESIGN §29.13.2), no code');
   });
 
   group('google_not_linked', () {

@@ -67,7 +67,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     return AdaptiveShell(
       title: user == null ? 'Krucheck' : 'สวัสดี ${user.name}',
       accountName: user?.name,
-      accountCaption: user?.schoolName,
+      accountCaption: user?.username,
       destinations: [
         for (final d in _destinations)
           ShellDestination(d.label, d.icon, d.selectedIcon),

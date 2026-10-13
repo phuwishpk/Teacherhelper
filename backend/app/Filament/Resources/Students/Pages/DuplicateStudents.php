@@ -27,23 +27,18 @@ class DuplicateStudents extends Page
 
     protected static ?string $breadcrumb = 'บัญชีที่อาจซ้ำ';
 
-    /** The school whose pairs are listed (fixed for an admin of a school). */
+    /** The workspace (teacher) whose pairs are listed. */
     public ?int $schoolId = null;
 
     public function mount(): void
     {
         StudentResource::authorizeViewAny();
-        $this->schoolId = StudentResource::admin()?->school_id
-            ?? School::query()->orderBy('name')->value('id');
+        $this->schoolId = School::query()->orderBy('name')->value('id');
     }
 
-    /** @return array<int, string> the schools a system admin may pick */
+    /** @return array<int, string> the workspaces the admin may pick */
     public function getSchoolOptions(): array
     {
-        if (StudentResource::admin()?->school_id !== null) {
-            return [];
-        }
-
         return School::query()->orderBy('name')->pluck('name', 'id')->all();
     }
 
@@ -95,7 +90,7 @@ class DuplicateStudents extends Page
         return Gate::allows('mergeStudents', [$keep, $merge]);
     }
 
-    /** $schoolId if this admin may see it: their own school, or any for a system admin. */
+    /** $schoolId when an admin is signed in (every admin sees every workspace). */
     private function allowedSchoolId(): ?int
     {
         $admin = StudentResource::admin();
@@ -103,6 +98,6 @@ class DuplicateStudents extends Page
             return null;
         }
 
-        return $admin->school_id ?? $this->schoolId;
+        return $this->schoolId;
     }
 }

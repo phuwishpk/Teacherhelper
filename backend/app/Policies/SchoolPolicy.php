@@ -6,9 +6,8 @@ use App\Models\School;
 use App\Models\User;
 
 /**
- * Schools are managed only in the Filament admin (DESIGN §7.5). An admin of
- * a school (school_id set) reads and edits only that school, Google sign-in
- * settings included (§24.2); only a system admin creates schools.
+ * The teachers' workspaces (`schools`, DESIGN §29.13.1) are seen only in the
+ * Filament admin (§7.5), by every active admin: one admin level.
  */
 class SchoolPolicy
 {
@@ -19,12 +18,12 @@ class SchoolPolicy
 
     public function view(User $user, School $school): bool
     {
-        return $this->isAdmin($user) && ($user->school_id === null || $user->school_id === $school->id);
+        return $this->isAdmin($user);
     }
 
     public function create(User $user): bool
     {
-        return $this->isAdmin($user) && $user->school_id === null;
+        return $this->isAdmin($user);
     }
 
     public function update(User $user, School $school): bool

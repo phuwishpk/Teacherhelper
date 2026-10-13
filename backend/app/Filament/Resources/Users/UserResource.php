@@ -16,17 +16,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
  * DESIGN §7.5: approve or disable teacher accounts. Students are listed for
  * reference only (they are created by teachers through the API).
  *
- * An admin of a school (school_id set) sees, edits, approves and disables
- * only the accounts of that school, and every account it creates or edits
- * stays in that school (so it cannot make a system admin); a system admin
- * sees all (DESIGN §24.2, #70). Approval is the only gate of teacher
- * sign-up since 2 Oct 2569, so this matters: a teacher may pick any school.
+ * One admin level (DESIGN §29.13.1): every active admin sees, approves,
+ * disables and edits every account. Approval is the only gate of a
+ * password sign-up (§29.1); teachers who sign up with Google are active at
+ * once. Workspaces (`schools`) are made by the API, never picked here.
  */
 class UserResource extends Resource
 {
@@ -80,19 +78,6 @@ class UserResource extends Resource
                     ->maxLength(255)
                     ->unique(ignoreRecord: true)
                     ->required(fn (callable $get) => $get('role') !== User::ROLE_STUDENT),
-                Select::make('school_id')
-                    ->label('โรงเรียน')
-                    ->relationship('school', 'name', fn (Builder $query) => $query->when(
-                        self::adminSchoolId() !== null,
-                        fn (Builder $q) => $q->whereKey(self::adminSchoolId()),
-                    ))
-                    ->searchable()
-                    ->preload()
-                    ->default(fn () => self::adminSchoolId())
-                    ->required(fn (callable $get) => self::adminSchoolId() !== null || $get('role') !== User::ROLE_ADMIN)
-                    ->helperText(fn () => self::adminSchoolId() === null
-                        ? 'ผู้ดูแลระดับระบบไม่ต้องเลือกโรงเรียน'
-                        : 'ผู้ดูแลโรงเรียนจัดการได้เฉพาะบัญชีของโรงเรียนตัวเอง'),
                 Select::make('status')
                     ->label('สถานะ')
                     ->options(self::STATUS_LABELS)
@@ -134,8 +119,6 @@ class UserResource extends Resource
                         User::STATUS_PENDING => 'warning',
                         default => 'danger',
                     }),
-                TextColumn::make('school.name')->label('โรงเรียน')->placeholder('ระดับระบบ')->sortable()
-                    ->visible(fn () => self::adminSchoolId() === null),
                 TextColumn::make('created_at')
                     ->label('สมัครเมื่อ')
                     ->dateTime('d/m/Y H:i', 'Asia/Bangkok')
@@ -145,8 +128,6 @@ class UserResource extends Resource
             ->filters([
                 SelectFilter::make('role')->label('บทบาท')->options(self::ROLE_LABELS),
                 SelectFilter::make('status')->label('สถานะ')->options(self::STATUS_LABELS),
-                SelectFilter::make('school_id')->label('โรงเรียน')->relationship('school', 'name')
-                    ->visible(fn () => self::adminSchoolId() === null),
             ])
             ->recordActions([
                 Action::make('approve')
@@ -179,24 +160,20 @@ class UserResource extends Resource
 
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
                     }),
-                EditAction::make()
-                    ->mutateDataUsing(fn (array $data) => self::keepInAdminSchool($data)),
+                EditAction::make(),
             ]);
     }
 
     /**
      * The menu badge: teachers waiting for approval. Since 2 Oct 2569 the
      * admin's approval is the only gate of teacher sign-up (no school code),
-     * so the waiting count is shown where the admin looks first. An admin of
-     * a school counts that school's teachers; a system admin all.
+     * so the waiting count is shown where the admin looks first.
      */
     public static function getNavigationBadge(): ?string
     {
-        $schoolId = self::adminSchoolId();
         $count = User::query()
             ->where('role', User::ROLE_TEACHER)
             ->where('status', User::STATUS_PENDING)
-            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId))
             ->count();
 
         return $count > 0 ? (string) $count : null;
@@ -210,41 +187,6 @@ class UserResource extends Resource
     public static function getNavigationBadgeTooltip(): ?string
     {
         return 'ครูรออนุมัติ';
-    }
-
-    /** An admin of a school lists only that school's accounts (DESIGN §24.2). */
-    public static function getEloquentQuery(): Builder
-    {
-        $schoolId = self::adminSchoolId();
-
-        return parent::getEloquentQuery()
-            ->with('school')
-            ->when($schoolId !== null, fn (Builder $q) => $q->where('school_id', $schoolId));
-    }
-
-    /** The school of the signed-in admin; null for a system admin. */
-    public static function adminSchoolId(): ?int
-    {
-        $user = auth()->user();
-
-        return $user instanceof User ? $user->school_id : null;
-    }
-
-    /**
-     * Saved data of a create or edit by an admin of a school: always in that
-     * school, whatever the request sent (the select only offers it anyway).
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
-    public static function keepInAdminSchool(array $data): array
-    {
-        $schoolId = self::adminSchoolId();
-        if ($schoolId !== null) {
-            $data['school_id'] = $schoolId;
-        }
-
-        return $data;
     }
 
     public static function getPages(): array

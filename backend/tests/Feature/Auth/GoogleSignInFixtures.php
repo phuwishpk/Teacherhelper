@@ -3,7 +3,6 @@
 namespace Tests\Feature\Auth;
 
 use App\Domain\Auth\Google\GoogleCerts;
-use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
 use Firebase\JWT\JWT;
@@ -111,11 +110,6 @@ trait GoogleSignInFixtures
             'linked_via' => $via,
             'linked_at' => now(),
         ]);
-    }
-
-    protected function allowStudents(School $school, ?array $domains = null): void
-    {
-        $school->forceFill(['student_google_signin' => true, 'google_signin_domains' => $domains])->save();
     }
 
     protected function captureSignInLog(): void

@@ -80,9 +80,7 @@ class GoogleSignInCallbackController extends Controller
             if (! $isLink) {
                 GoogleSignIn::log('web_callback', 'login_ticket');
 
-                $schoolId = is_int($data['school_id'] ?? null) ? $data['school_id'] : null;
-
-                return $this->redirect('/#/login/google?ticket='.$tickets->issueLogin($google, (string) $data['intent'], $schoolId));
+                return $this->redirect('/#/login/google?ticket='.$tickets->issueLogin($google, (string) $data['intent']));
             }
 
             $user = $userId === null ? null : User::query()->with('school')->find($userId);

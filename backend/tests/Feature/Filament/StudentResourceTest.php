@@ -45,18 +45,18 @@ class StudentResourceTest extends TestCase
         $this->room2 = $this->makeClassroom($this->makeTeacher($this->teacher->school), ['name' => 'ป.6/1']);
         $this->keep = $this->enrollStudent($this->room1, 1, 'สมชาย ใจดี')['student'];
         $this->merge = $this->enrollStudent($this->room2, 7, 'ด.ช.สมชาย ใจดี')['student'];
-        $this->admin = $this->makeAdmin(['school_id' => $this->teacher->school_id]);
+        $this->admin = $this->makeAdmin();
         $this->actingAs($this->admin);
     }
 
-    public function test_the_list_shows_only_students_of_the_admins_school(): void
+    public function test_the_list_shows_every_student(): void
     {
         $elsewhere = $this->enrollStudent($this->makeClassroom($this->makeTeacher()), 1, 'โรงเรียนอื่น')['student'];
 
         $this->get('/admin/students')->assertOk();
         Livewire::test(ManageStudents::class)
-            ->assertCanSeeTableRecords([$this->keep, $this->merge])
-            ->assertCanNotSeeTableRecords([$elsewhere, $this->teacher, $this->admin])
+            ->assertCanSeeTableRecords([$this->keep, $this->merge, $elsewhere])
+            ->assertCanNotSeeTableRecords([$this->teacher, $this->admin])
             ->searchTable('ใจดี')
             ->assertCanSeeTableRecords([$this->keep, $this->merge]);
     }
@@ -109,12 +109,12 @@ class StudentResourceTest extends TestCase
         $this->assertSame(0, StudentMerge::query()->count());
     }
 
-    public function test_an_admin_of_another_school_cannot_merge(): void
+    public function test_every_admin_may_merge(): void
     {
-        $this->actingAs($this->makeAdmin(['school_id' => $this->makeSchool()->id]));
+        $this->actingAs($this->makeAdmin());
 
-        Livewire::test(ManageStudents::class)->assertCanNotSeeTableRecords([$this->keep]);
-        $this->assertFalse(auth()->user()->can('mergeStudents', [$this->keep, $this->merge]));
+        Livewire::test(ManageStudents::class)->assertCanSeeTableRecords([$this->keep]);
+        $this->assertTrue(auth()->user()->can('mergeStudents', [$this->keep, $this->merge]));
     }
 
     public function test_the_duplicates_page_lists_pairs_and_merges_either_way(): void
@@ -147,12 +147,11 @@ class StudentResourceTest extends TestCase
             ->assertSee('ไม่พบบัญชีที่อาจซ้ำ');
     }
 
-    public function test_the_duplicates_page_refuses_a_pair_outside_the_admins_school(): void
+    public function test_a_pair_from_two_workspaces_cannot_merge_yet(): void
     {
+        // The merge still wants one workspace until DESIGN §29.13.3 (step 3ข) relaxes it.
         $elsewhere = $this->enrollStudent($this->makeClassroom($this->makeTeacher()), 1, 'สมชาย ใจดี')['student'];
 
-        Livewire::test(DuplicateStudents::class)
-            ->assertActionHidden(TestAction::make('merge')->arguments(['keep' => $this->keep->id, 'merge' => $elsewhere->id]));
         $this->assertSame(['preview' => null, 'error' => 'รวมได้เฉพาะบัญชีของโรงเรียนเดียวกัน'], StudentMergeSupport::previewData($this->keep, $elsewhere));
 
         $this->assertNull($elsewhere->refresh()->merged_into_id);

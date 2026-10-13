@@ -6,12 +6,10 @@ use App\Filament\Resources\Schools\Pages\CreateSchool;
 use App\Filament\Resources\Schools\Pages\EditSchool;
 use App\Filament\Resources\Schools\Pages\ListSchools;
 use App\Models\School;
-use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -22,20 +20,16 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
- * DESIGN §7.5: schools, the consent/retention settings of §8.1 and the
- * Google sign-in settings of §24.9.2 (allowed domains, the students' switch,
- * the automatic approval of teachers who sign up with Google, #71).
- * An admin of a school sees and edits only that school (§24.2); a system
- * admin all.
+ * The teachers' workspaces (DESIGN §29.13.1): one `schools` row per teacher,
+ * created by the API and never chosen anywhere. The panel keeps the
+ * consent/retention settings of §8.1 per workspace. The Google sign-in
+ * settings of §24.9.2 are gone (no per-school domains or switches).
  *
- * teacher_join_code no longer gates teacher sign-up (2 Oct 2569: teachers
- * pick the school and an admin approves them). The column stays because
- * older app builds still send it, so the form keeps it filled with a random
- * default inside a collapsed "older app builds" section, and the table no
- * longer shows it, so nobody hands it out as a required step.
+ * teacher_join_code is NOT NULL UNIQUE from the days teachers typed it; the
+ * form keeps it filled with a random default inside a collapsed section and
+ * the table never shows it.
  */
 class SchoolResource extends Resource
 {
@@ -43,11 +37,11 @@ class SchoolResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingLibrary;
 
-    protected static ?string $modelLabel = 'โรงเรียน';
+    protected static ?string $modelLabel = 'พื้นที่ของครู';
 
-    protected static ?string $pluralModelLabel = 'โรงเรียน';
+    protected static ?string $pluralModelLabel = 'พื้นที่ของครู';
 
-    protected static ?string $navigationLabel = 'โรงเรียน';
+    protected static ?string $navigationLabel = 'พื้นที่ของครู (ภายใน)';
 
     protected static ?int $navigationSort = 10;
 
@@ -58,7 +52,7 @@ class SchoolResource extends Resource
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->label('ชื่อโรงเรียน')
+                    ->label('ชื่อพื้นที่ (ชื่อโรงเรียนที่ครูกรอก หรือชื่อครู)')
                     ->required()
                     ->maxLength(255),
                 Toggle::make('allow_training_data')
@@ -70,7 +64,7 @@ class SchoolResource extends Resource
                     ->native(false)
                     ->displayFormat('d/m/Y'),
                 Section::make('รหัสสมัครครูสำหรับแอปรุ่นเก่า (ไม่จำเป็น)')
-                    ->description('ครูไม่ต้องใช้รหัสนี้แล้ว: ครูเลือกโรงเรียนตอนสมัครในแอป แล้วรอผู้ดูแลระบบอนุมัติในเมนู "ผู้ใช้และครู" รหัสนี้มีไว้ให้แอปรุ่นเก่าที่ยังถามรหัสเท่านั้น ไม่ต้องแจกให้ครู')
+                    ->description('ไม่มีใครใช้รหัสนี้แล้ว: พื้นที่ของครูถูกสร้างให้เองตอนสมัคร คอลัมน์ยังอยู่เพราะเป็น NOT NULL UNIQUE ระบบสุ่มให้ ไม่ต้องแก้')
                     ->collapsible()
                     ->collapsed()
                     ->schema([
@@ -98,26 +92,6 @@ class SchoolResource extends Resource
                                     ->action(fn (Set $set) => $set('teacher_join_code', School::randomJoinCode())),
                             ),
                     ]),
-                Section::make('เข้าสู่ระบบด้วย Google')
-                    ->description('ครู นักเรียน และผู้ดูแลระบบเข้าสู่ระบบด้วยบัญชี Google ที่เชื่อมไว้ได้ (รหัสผ่าน PIN และบัตร QR ใช้ได้เหมือนเดิม)')
-                    ->schema([
-                        TagsInput::make('google_signin_domains')
-                            ->label('โดเมนที่อนุญาตให้ใช้ Google')
-                            ->placeholder('เช่น school.ac.th แล้วกด Enter')
-                            ->helperText('ว่าง = ทุกโดเมน ถ้าระบุ ใช้ได้เฉพาะอีเมลที่ลงท้ายด้วยโดเมนเหล่านี้ตรงตัว (ไม่นับ subdomain) การเปลี่ยนรายการไม่ลบการเชื่อมเดิม แต่บัญชีโดเมนอื่นจะเข้าสู่ระบบไม่ได้')
-                            ->splitKeys(['Tab', ',', ' '])
-                            ->nestedRecursiveRules(['string', 'max:253', 'regex:/^@?[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/'])
-                            ->validationMessages(['regex' => 'โดเมนไม่ถูกต้อง ใส่เฉพาะส่วนหลัง @ เช่น school.ac.th'])
-                            ->dehydrateStateUsing(fn (?array $state) => self::normalizeDomains($state)),
-                        Toggle::make('student_google_signin')
-                            ->label('ให้นักเรียนเข้าสู่ระบบด้วย Google')
-                            ->helperText('นักเรียนเป็นผู้เยาว์: เปิดเมื่อโรงเรียนได้รับความยินยอมจากผู้ปกครองที่ครอบคลุมการใช้บัญชี Google เพื่อเข้าสู่ระบบแล้วเท่านั้น ระบบเก็บเฉพาะรหัสบัญชี ชื่อ อีเมล และ URL รูปโปรไฟล์ ปิดสวิตช์แล้วการเชื่อมเดิมยังอยู่แต่ใช้เข้าสู่ระบบไม่ได้ ถ้าต้องการลบให้กด "ลบการเชื่อม Google ของนักเรียนทั้งหมด" ด้านบน')
-                            ->default(false),
-                        Toggle::make('teacher_google_auto_approve')
-                            ->label('อนุมัติครูที่สมัครด้วย Google อัตโนมัติ')
-                            ->helperText('เปิดอยู่: ใครก็ตามที่เข้าสู่ระบบด้วยบัญชี Google ที่ยังไม่มีในระบบ (และอยู่ในโดเมนที่อนุญาตด้านบน) จะได้บัญชีครูของโรงเรียนนี้ทันทีโดยไม่ต้องรออนุมัติ จึงควรระบุโดเมนของโรงเรียนไว้ด้วย ถ้าพบบัญชีที่ไม่ใช่ครู ระงับได้ในเมนู "ผู้ใช้และครู" ปิดสวิตช์: ครูใหม่ที่ใช้ Google ต้องกรอกฟอร์มสมัครแล้วรอผู้ดูแลระบบอนุมัติเหมือนการสมัครด้วยรหัสผ่าน')
-                            ->default(true),
-                    ]),
             ]);
     }
 
@@ -125,7 +99,7 @@ class SchoolResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('name')->label('ชื่อโรงเรียน')->searchable()->sortable(),
+                TextColumn::make('name')->label('ชื่อพื้นที่ (ชื่อโรงเรียนที่ครูกรอก หรือชื่อครู)')->searchable()->sortable(),
                 TextColumn::make('teachers_count')
                     ->label('ครู')
                     ->counts('teachers')
@@ -134,7 +108,6 @@ class SchoolResource extends Resource
                     ->label('ห้องเรียน')
                     ->counts('classrooms'),
                 IconColumn::make('allow_training_data')->label('ยินยอมเทรน')->boolean(),
-                IconColumn::make('student_google_signin')->label('นักเรียนใช้ Google')->boolean(),
                 TextColumn::make('crop_retention_until')
                     ->label('เก็บภาพถึง')
                     ->date('d/m/Y')
@@ -161,15 +134,6 @@ class SchoolResource extends Resource
         )));
 
         return $domains === [] ? null : $domains;
-    }
-
-    /** An admin of a school sees only that school (DESIGN §24.2). */
-    public static function getEloquentQuery(): Builder
-    {
-        $user = auth()->user();
-        $schoolId = $user instanceof User ? $user->school_id : null;
-
-        return parent::getEloquentQuery()->when($schoolId !== null, fn (Builder $q) => $q->whereKey($schoolId));
     }
 
     /** What is stored and compared: trimmed, uppercase (School::randomJoinCode() format). */

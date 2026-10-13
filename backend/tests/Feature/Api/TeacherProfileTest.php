@@ -15,7 +15,6 @@ class TeacherProfileTest extends TestCase
     {
         $teacher = $this->makeTeacher();
         $colleague = $this->makeTeacher($teacher->school);
-        $original = $teacher->school->name;
 
         $this->asUser($teacher)->patchJson('/api/v1/me', ['name' => '  ครูสมศรี ใจดี ', 'school_name' => ' โรงเรียนบ้านหนองน้ำใส '])
             ->assertOk()
@@ -23,12 +22,14 @@ class TeacherProfileTest extends TestCase
             ->assertJsonPath('data.school.name', 'โรงเรียนบ้านหนองน้ำใส');
 
         $this->asUser($teacher)->getJson('/api/v1/me')->assertJsonPath('data.school.name', 'โรงเรียนบ้านหนองน้ำใส');
-        // Only this teacher's text: the school row and the colleague are untouched.
-        $this->asUser($colleague)->getJson('/api/v1/me')->assertJsonPath('data.school.name', $original);
-        $this->assertSame($original, $teacher->school->fresh()->name);
+        // Only this teacher's text: the colleague (same legacy school row) has none, and the
+        // workspace row follows the teacher's text (DESIGN §29.13.1).
+        $this->asUser($colleague)->getJson('/api/v1/me')->assertJsonPath('data.school.name', null);
+        $this->assertSame('โรงเรียนบ้านหนองน้ำใส', $teacher->school->fresh()->name);
 
         // Empty clears it again; the name alone can change too.
-        $this->asUser($teacher)->patchJson('/api/v1/me', ['school_name' => ''])->assertOk()->assertJsonPath('data.school.name', $original);
+        $this->asUser($teacher)->patchJson('/api/v1/me', ['school_name' => ''])->assertOk()->assertJsonPath('data.school.name', null);
+        $this->assertSame('ครูสมศรี ใจดี', $teacher->school->fresh()->name, 'the workspace falls back to the teacher\'s name');
         $this->asUser($teacher)->patchJson('/api/v1/me', ['name' => ' '])->assertStatus(422)->assertJsonValidationErrors(['name']);
         $this->asUser($teacher)->patchJson('/api/v1/me', ['school_name' => str_repeat('ก', 151)])->assertStatus(422)->assertJsonValidationErrors(['school_name']);
     }

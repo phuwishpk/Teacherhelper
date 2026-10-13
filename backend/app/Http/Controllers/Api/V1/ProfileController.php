@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Teachers\Workspaces;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -40,8 +41,9 @@ class ProfileController extends Controller
             $user->school_name = $schoolName === '' ? null : $schoolName;
         }
         $user->save();
+        Workspaces::rename($user->loadMissing('school'));
 
-        return new UserResource($user->loadMissing('school'));
+        return new UserResource($user);
     }
 
     /**

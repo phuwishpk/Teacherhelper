@@ -14,22 +14,18 @@ abstract class GoogleSignInRepository {
   /// `GET /auth/google/config` (public, never 503).
   Future<GoogleSignInServerConfig> config();
 
-  /// `POST /auth/google {id_token, intent, school_id?}`. [schoolId] is the
-  /// school a new teacher picked after a 404 with `needs_school` (#71).
+  /// `POST /auth/google {id_token, intent}`.
   Future<String> signIn({
     required String idToken,
     required GoogleIntent intent,
-    int? schoolId,
   });
 
   /// `POST /auth/google/web-url`: Google's account chooser for the web
   /// preview. `link` sends the user's token (the Dio interceptor adds it).
-  /// [schoolId] rides to the ticket like in [signIn].
   Future<Uri> webUrl({
     required bool link,
     GoogleIntent? intent,
     bool acceptNotice = false,
-    int? schoolId,
   });
 
   /// `POST /auth/google/ticket {ticket}`: the web flow's one-time ticket.
@@ -93,19 +89,14 @@ class ApiGoogleSignInRepository implements GoogleSignInRepository {
   Future<String> signIn({
     required String idToken,
     required GoogleIntent intent,
-    int? schoolId,
-  }) => _token('/auth/google', {
-    'id_token': idToken,
-    'intent': intent.apiValue,
-    'school_id': ?schoolId,
-  });
+  }) =>
+      _token('/auth/google', {'id_token': idToken, 'intent': intent.apiValue});
 
   @override
   Future<Uri> webUrl({
     required bool link,
     GoogleIntent? intent,
     bool acceptNotice = false,
-    int? schoolId,
   }) async {
     final res = await _dio.post<Object?>(
       '/auth/google/web-url',
@@ -113,7 +104,6 @@ class ApiGoogleSignInRepository implements GoogleSignInRepository {
         'purpose': link ? 'link' : 'login',
         'intent': ?intent?.apiValue,
         if (acceptNotice) 'accept_notice': true,
-        'school_id': ?schoolId,
       },
     );
     return Uri.parse(unwrapJson(res.data)['url'] as String);

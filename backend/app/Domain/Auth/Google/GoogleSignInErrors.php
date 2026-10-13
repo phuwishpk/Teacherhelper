@@ -54,24 +54,6 @@ final class GoogleSignInErrors
         );
     }
 
-    public static function domainNotAllowed(): ApiException
-    {
-        return new ApiException(
-            'โรงเรียนไม่อนุญาตให้ใช้บัญชี Google ของโดเมนนี้ กรุณาใช้บัญชี Google ของโรงเรียน',
-            'google_domain_not_allowed',
-            403,
-        );
-    }
-
-    public static function studentDisabled(): ApiException
-    {
-        return new ApiException(
-            'โรงเรียนยังไม่เปิดให้นักเรียนเข้าสู่ระบบด้วย Google กรุณาใช้บัตร QR หรือ PIN',
-            'student_google_disabled',
-            403,
-        );
-    }
-
     public static function alreadyLinked(): ApiException
     {
         return new ApiException(

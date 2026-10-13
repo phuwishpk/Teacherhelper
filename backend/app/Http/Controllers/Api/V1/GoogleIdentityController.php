@@ -47,9 +47,6 @@ class GoogleIdentityController extends Controller
         ], ['id_token.required' => 'ไม่ได้รับข้อมูลยืนยันจาก Google']);
         /** @var User $user */
         $user = $request->user()->loadMissing('school');
-        if (! GoogleSignIn::canLink($user)) {
-            throw GoogleSignInErrors::studentDisabled();
-        }
         if ($user->isStudent() && ! ($data['accept_notice'] ?? false)) {
             throw GoogleSignInErrors::noticeRequired();
         }
@@ -80,9 +77,6 @@ class GoogleIdentityController extends Controller
             GoogleSignIn::log('web_link', $link === null ? 'ticket_invalid' : 'ticket_other_user', $user->id);
 
             throw GoogleSignInErrors::webLinkTicketInvalid();
-        }
-        if (! GoogleSignIn::canLink($user)) {
-            throw GoogleSignInErrors::studentDisabled();
         }
 
         $this->signIn->link($user, $link['identity'], UserGoogleIdentity::VIA_SELF, $user);
@@ -137,7 +131,7 @@ class GoogleIdentityController extends Controller
             'picture_url' => $identity?->picture_url,
             'linked_via' => $identity?->linked_via,
             'linked_at' => $identity?->linked_at?->toIso8601String(),
-            'can_link' => GoogleSignIn::canLink($user->loadMissing('school')),
+            'can_link' => true, // every role may link (DESIGN §29.13.2)
             'notice_version' => GoogleSignInConfig::NOTICE_VERSION,
         ];
     }

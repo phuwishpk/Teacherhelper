@@ -112,13 +112,13 @@ class ClassroomPolicy
         return $this->administers($user, $classroom) || ClassroomAccess::for($user, $classroom) !== null;
     }
 
-    /** The Filament classroom list (DESIGN §24.13): any active admin, scoped to their school there. */
+    /** The Filament classroom list (DESIGN §24.13): any active admin. */
     public function adminViewAny(User $user): bool
     {
         return $user->isAdmin() && $user->isActive();
     }
 
-    /** One classroom in Filament: an admin of its school, or a system admin (school_id null). */
+    /** One classroom in Filament: any active admin (one admin level, DESIGN §29.13.1). */
     public function adminView(User $user, Classroom $classroom): bool
     {
         return $this->administers($user, $classroom);
@@ -147,7 +147,6 @@ class ClassroomPolicy
 
     private function administers(User $user, Classroom $classroom): bool
     {
-        return $user->isAdmin() && $user->isActive()
-            && ($user->school_id === null || $user->school_id === $classroom->school_id);
+        return $user->isAdmin() && $user->isActive();
     }
 }

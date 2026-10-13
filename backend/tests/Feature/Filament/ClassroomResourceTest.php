@@ -38,15 +38,14 @@ class ClassroomResourceTest extends TestCase
         $this->classroom = $this->makeClassroom($this->teacher, ['name' => 'ป.5/1']);
     }
 
-    public function test_a_school_admin_sees_only_the_classrooms_of_their_school(): void
+    public function test_every_admin_sees_every_classroom(): void
     {
-        $other = $this->makeClassroom($this->makeTeacher(), ['name' => 'ห้องโรงเรียนอื่น']);
-        $this->actingAs($this->makeAdmin(['school_id' => $this->teacher->school_id]));
+        $other = $this->makeClassroom($this->makeTeacher(), ['name' => 'ห้องของครูอีกคน']);
+        $this->actingAs($this->makeAdmin());
 
         $this->get('/admin/classrooms')->assertOk();
         Livewire::test(ManageClassrooms::class)
-            ->assertCanSeeTableRecords([$this->classroom])
-            ->assertCanNotSeeTableRecords([$other])
+            ->assertCanSeeTableRecords([$this->classroom, $other])
             ->assertTableActionHidden('reopen', $this->classroom);
     }
 
@@ -64,7 +63,7 @@ class ClassroomResourceTest extends TestCase
 
     public function test_admin_closes_and_reopens_a_classroom(): void
     {
-        $admin = $this->makeAdmin(['school_id' => $this->teacher->school_id]);
+        $admin = $this->makeAdmin();
         $this->actingAs($admin);
 
         Livewire::test(ManageClassrooms::class)
@@ -84,7 +83,7 @@ class ClassroomResourceTest extends TestCase
 
     public function test_admin_deletes_an_empty_classroom_but_not_one_with_work(): void
     {
-        $this->actingAs($this->makeAdmin(['school_id' => $this->teacher->school_id]));
+        $this->actingAs($this->makeAdmin());
         $student = $this->enrollStudent($this->classroom)['student'];
         $assignment = Assignment::factory()->create(['classroom_id' => $this->classroom->id]);
         Submission::create(['assignment_id' => $assignment->id, 'student_id' => $student->id, 'status' => Submission::STATUS_AWAITING_SCAN]);
@@ -103,18 +102,9 @@ class ClassroomResourceTest extends TestCase
         $this->assertSame(2, User::query()->where('role', User::ROLE_STUDENT)->count());
     }
 
-    public function test_an_admin_of_another_school_cannot_act(): void
-    {
-        $this->actingAs($this->makeAdmin(['school_id' => $this->makeSchool()->id]));
-
-        Livewire::test(ManageClassrooms::class)->assertCanNotSeeTableRecords([$this->classroom]);
-        $this->assertFalse($this->makeAdmin(['school_id' => $this->makeSchool()->id])->can('close', $this->classroom));
-        $this->assertTrue($this->makeAdmin()->can('delete', $this->classroom));
-    }
-
     public function test_admin_binds_a_subject_teachers_course_directly(): void
     {
-        $admin = $this->makeAdmin(['school_id' => $this->teacher->school_id]);
+        $admin = $this->makeAdmin();
         $this->actingAs($admin);
         $subjectTeacher = $this->makeTeacher($this->teacher->school, ['name' => 'ครูวิทย์']);
         $course = $this->makeCourse($subjectTeacher, [], ['code' => 'ว15101', 'name' => 'วิทยาศาสตร์ 5']);
@@ -150,8 +140,7 @@ class ClassroomResourceTest extends TestCase
         }
         $this->assertSame(1, ClassroomCourseRequest::query()->where('origin', ClassroomCourseRequest::ORIGIN_ADMIN)->count());
 
-        // A closed classroom takes no new subject teacher; another school's admin cannot.
-        $this->assertFalse($this->makeAdmin(['school_id' => $this->makeSchool()->id])->can('assignCourses', $this->classroom));
+        // A closed classroom takes no new subject teacher.
         $this->classroom->forceFill(['closed_at' => now()])->save();
         Livewire::test(ManageClassrooms::class)->assertTableActionHidden('assignCourse', $this->classroom);
     }
