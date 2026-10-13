@@ -174,8 +174,7 @@ cd ~/eduvision/repo/tools/selfhost
 ./compose.sh logs --tail 100 app                 # หรือ worker, db
 ./compose.sh exec -T -u www-data app php artisan migrate:status
 # ล้างข้อมูลทดลองแล้วเริ่มใหม่แบบครูอิสระ (DESIGN §29.7, §29.13.5): ตั้ง ADMIN_* และ DEMO_* ใน app.env ก่อน
-./compose.sh exec -T -u www-data app php artisan migrate:fresh --force --seed
-./compose.sh exec -T -u www-data app php artisan db:seed --class=DemoSeeder --force
+./compose.sh exec -T -u www-data app php artisan eduvision:reset-demo --force   # = migrate:fresh --seed, DemoSeeder, optimize:clear
 ./compose.sh stop                                # หยุดทั้งชุด ข้อมูลอยู่ครบ
 ./compose.sh up -d                               # เริ่มใหม่
 ```
