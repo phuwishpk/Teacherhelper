@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\V1\GradebookScoreController;
 use App\Http\Controllers\Api\V1\GradeConflictController;
 use App\Http\Controllers\Api\V1\GradingController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\ImpersonationController;
 use App\Http\Controllers\Api\V1\IndicatorSuggestionController;
 use App\Http\Controllers\Api\V1\JoinController;
 use App\Http\Controllers\Api\V1\LayoutController;
@@ -113,6 +114,8 @@ Route::prefix('v1')->group(function () {
             Route::post('teacher/register', [TeacherAuthController::class, 'register'])->name('api.auth.teacher.register');
             Route::post('teacher/login', [TeacherAuthController::class, 'login'])->name('api.auth.teacher.login');
         });
+        // The panel's "เข้าใช้แทน" (DESIGN §29.14): the web app redeems the one-time ticket.
+        Route::post('impersonate/ticket', [ImpersonationController::class, 'ticket'])->middleware('throttle:impersonate')->name('api.auth.impersonate.ticket');
         Route::middleware('throttle:student-auth')->group(function () {
             Route::post('student/qr', [StudentAuthController::class, 'qr'])->name('api.auth.student.qr');
             Route::post('student/login', [StudentAuthController::class, 'login'])->name('api.auth.student.login');

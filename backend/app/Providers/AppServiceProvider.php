@@ -129,6 +129,8 @@ class AppServiceProvider extends ServiceProvider
         // capped per address (it has no login, a bad token only redirects).
         RateLimiter::for('admin-handoff', fn (Request $request) => self::perUser($request, 10));
         RateLimiter::for('admin-handoff-link', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
+        // The web app redeems an impersonation ticket once (§29.14): a bad one only answers 422.
+        RateLimiter::for('impersonate', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
 
         // Endpoints that call Google on the teacher's behalf (DESIGN §18.6): a
         // runaway client must not burn the Cloud project's Classroom quota.

@@ -7,6 +7,7 @@ use App\Domain\Auth\Google\GoogleSignInConfig;
 use App\Domain\Auth\Google\GoogleSignInErrors;
 use App\Domain\Auth\Google\GoogleSignInTickets;
 use App\Domain\Auth\Google\VerifiedGoogleIdentity;
+use App\Domain\Auth\Impersonations;
 use App\Domain\Teachers\Workspaces;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -20,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * Teacher auth (DESIGN §9.1, §7.4): register, login (teachers and admins), logout.
@@ -159,7 +161,12 @@ class TeacherAuthController extends Controller
      */
     public function logout(Request $request): Response
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            // An admin's "เข้าใช้แทน" session ends here (DESIGN §29.14).
+            Impersonations::stop($request->user(), $token);
+        }
+        $token->delete();
 
         return response()->noContent();
     }

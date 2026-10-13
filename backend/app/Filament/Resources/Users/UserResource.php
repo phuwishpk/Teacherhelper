@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Domain\Auth\Impersonations;
+use App\Domain\Web\WebApp;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
 use BackedEnum;
@@ -159,6 +161,23 @@ class UserResource extends Resource
                         $record->tokens()->delete();
 
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
+                    }),
+                Action::make('impersonate')
+                    ->label('เข้าใช้แทน')
+                    ->icon(Heroicon::OutlinedArrowRightOnRectangle)
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('เข้าใช้แอปในฐานะผู้ใช้นี้')
+                    ->modalDescription(fn (User $record) => "เบราว์เซอร์จะเปิดเว็บแอปในฐานะ {$record->name} ด้วยสิทธิ์เต็มของผู้ใช้ มีแถบบอกตลอดเวลาและบันทึกลงบันทึกการใช้งาน (ลิงก์ใช้ได้ 1 นาที ครั้งเดียว) ใช้เมื่อผู้ใช้มีปัญหาเท่านั้น")
+                    ->modalSubmitActionLabel('เปิดแอป')
+                    ->authorize('impersonate')
+                    ->action(function (User $record, $livewire) {
+                        $admin = auth()->user();
+                        if (! $admin instanceof User) {
+                            return;
+                        }
+                        $ticket = app(Impersonations::class)->issueTicket($admin, $record);
+                        $livewire->redirect(WebApp::url('impersonate?ticket='.$ticket), navigate: false);
                     }),
                 EditAction::make(),
             ]);
