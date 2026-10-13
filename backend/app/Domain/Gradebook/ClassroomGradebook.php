@@ -13,6 +13,7 @@ use App\Models\Submission;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The live gradebook of one classroom in one course (DESIGN §23.3, §23.4):
@@ -345,6 +346,22 @@ final class ClassroomGradebook
                 published: $existing->published,
                 submissionId: $existing->submissionId,
             );
+        }
+
+        // Homework for chosen students (DESIGN §30.13): the others get a "not assigned" cell.
+        $limited = $assignments->filter(fn (Assignment $a) => $a->isForStudents())->modelKeys();
+        if ($limited !== []) {
+            $recipients = DB::table('assignment_recipients')->whereIn('assignment_id', $limited)->get()
+                ->groupBy('assignment_id')->map(fn ($rows) => $rows->pluck('student_id')->map(fn ($id) => (int) $id)->flip()->all());
+            foreach ($limited as $assignmentId) {
+                $key = GradebookColumn::assignmentKey($assignmentId);
+                $given = $recipients->get($assignmentId, []);
+                foreach ($studentIds as $studentId) {
+                    if (! isset($given[$studentId])) {
+                        $cells[$studentId][$key] = new GradebookCell(notAssigned: true);
+                    }
+                }
+            }
         }
 
         $columns = [];

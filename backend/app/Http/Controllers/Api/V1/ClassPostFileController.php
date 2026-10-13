@@ -150,6 +150,7 @@ class ClassPostFileController extends Controller
             return Assignment::query()
                 ->where('status', Assignment::STATUS_READY)
                 ->whereIn('classroom_id', DB::table('classroom_students')->select('classroom_id')->where('student_id', $user->id))
+                ->reaching((int) $user->id)
                 ->whereIn('id', $ids)
                 ->exists();
         }

@@ -293,7 +293,15 @@ class _TeacherUploadScreenState extends ConsumerState<TeacherUploadScreen> {
         AsyncView(
           value: roster,
           onRetry: () => ref.invalidate(rosterProvider(a.classroomId)),
-          data: (students) {
+          data: (roster) {
+            // Homework for chosen students (DESIGN §30.13): only they hand in.
+            final students = switch (a.studentIds) {
+              final ids? => [
+                for (final s in roster)
+                  if (ids.contains(s.studentId)) s,
+              ],
+              null => roster,
+            };
             if (students.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16),

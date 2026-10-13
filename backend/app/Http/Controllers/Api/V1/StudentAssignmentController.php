@@ -149,10 +149,9 @@ class StudentAssignmentController extends Controller
      */
     private static function own(Request $request): Builder
     {
-        return Assignment::query()->whereIn(
-            'classroom_id',
-            ClassroomStudent::query()->select('classroom_id')->where('student_id', $request->user()->id),
-        );
+        return Assignment::query()
+            ->whereIn('classroom_id', ClassroomStudent::query()->select('classroom_id')->where('student_id', $request->user()->id))
+            ->reaching((int) $request->user()->id); // DESIGN §30.13
     }
 
     private static function status(?Submission $submission): string

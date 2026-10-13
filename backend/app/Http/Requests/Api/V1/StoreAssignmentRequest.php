@@ -78,6 +78,10 @@ class StoreAssignmentRequest extends FormRequest
             'attachments.*.file_id' => ['sometimes', 'integer'],
             'attachments.*.url' => ['sometimes', 'string', 'max:2000'],
             'attachments.*.title' => ['sometimes', 'nullable', 'string', 'max:200'],
+            // Homework for chosen students (DESIGN §30.13).
+            'audience' => ['sometimes', 'nullable', Rule::in([Assignment::AUDIENCE_ALL, Assignment::AUDIENCE_STUDENTS])],
+            'student_ids' => ['sometimes', 'array', 'max:500'],
+            'student_ids.*' => ['integer', 'distinct'],
         ];
     }
 

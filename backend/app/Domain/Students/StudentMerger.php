@@ -95,6 +95,7 @@ final class StudentMerger
         'attendance_records.updated_by' => self::UNRELATED,
         'attendance_sessions.created_by' => self::UNRELATED,
         'class_post_recipients.student_id' => self::MOVE, // posts naming D now name K
+        'assignment_recipients.student_id' => self::MOVE, // homework given to D is given to K
         'class_posts.author_id' => self::UNRELATED,
         'class_post_files.owner_id' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,
@@ -166,6 +167,7 @@ final class StudentMerger
             $summary['gradebook_entries'] = $this->moveGradebookEntries($k->id, $d->id);
             $summary['attendance_records'] = $this->moveKeyed('attendance_records', ['attendance_session_id'], $k->id, $d->id);
             $summary['class_post_recipients'] = $this->moveKeyed('class_post_recipients', ['class_post_id'], $k->id, $d->id);
+            $summary['assignment_recipients'] = $this->moveKeyed('assignment_recipients', ['assignment_id'], $k->id, $d->id);
             $summary['gradebook_special_grades'] = $this->moveKeyed('gradebook_special_grades', ['course_id', 'classroom_id'], $k->id, $d->id);
             $summary['gradebook_published_grades'] = $this->moveKeyed('gradebook_published_grades', ['publication_id'], $k->id, $d->id);
 

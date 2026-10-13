@@ -5,13 +5,16 @@ namespace App\Models;
 use App\Domain\AnswerKeys\KeyCompleteness;
 use App\Domain\Exams\ExamKeyCheck;
 use Database\Factories\AssignmentFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * DESIGN §8.3 `assignments`.
@@ -142,6 +145,7 @@ class Assignment extends Model
         'send_to_google',
         'google_post_state',
         'google_post_error',
+        'audience',
         'kind',
         'grading_method',
         'version_count',
@@ -246,6 +250,36 @@ class Assignment extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(AssignmentAttachment::class)->orderBy('position')->orderBy('id');
+    }
+
+    public const AUDIENCE_ALL = 'all';
+
+    public const AUDIENCE_STUDENTS = 'students';
+
+    /** The work is for chosen students only (DESIGN §30.13). */
+    public function isForStudents(): bool
+    {
+        return $this->audience === self::AUDIENCE_STUDENTS;
+    }
+
+    /** @return BelongsToMany<User, $this> */
+    public function recipients(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'assignment_recipients', 'assignment_id', 'student_id');
+    }
+
+    /**
+     * Assignments that reach the student: for the whole classroom, or naming
+     * them (DESIGN §30.13).
+     *
+     * @param  Builder<Assignment>  $query
+     * @return Builder<Assignment>
+     */
+    public function scopeReaching(Builder $query, int $studentId): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->where('assignments.audience', self::AUDIENCE_ALL)
+            ->orWhereIn('assignments.id', DB::table('assignment_recipients')->select('assignment_id')->where('student_id', $studentId)));
     }
 
     /** The unit's title, else the free topic (DESIGN §30.12). */

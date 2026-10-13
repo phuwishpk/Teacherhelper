@@ -72,6 +72,7 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     String? instructions,
     bool sendToGoogle = true,
     List<PostAttachment> attachments = const [],
+    List<int>? studentIds,
   }) async {
     posts.add({
       'unit_id': unitId,
@@ -133,6 +134,8 @@ class _FakeAssignments extends Fake implements AssignmentsRepository {
     String? instructions,
     bool? sendToGoogle,
     List<PostAttachment>? attachments,
+    List<int>? studentIds,
+    bool clearStudents = false,
   }) async {
     posts.add({
       'unit_id': unitId,

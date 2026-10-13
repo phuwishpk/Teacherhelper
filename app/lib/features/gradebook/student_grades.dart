@@ -246,6 +246,8 @@ class _CategoryCard extends StatelessWidget {
               trailing: Text(
                 i.state == CellState.excused
                     ? 'ยกเว้น'
+                    : i.state == CellState.notAssigned
+                    ? 'ไม่ได้รับมอบ'
                     : i.score == null
                     ? '0/${formatGbNumber(i.max)}'
                     : '${formatGbNumber(i.score)}/${formatGbNumber(i.max)}',
@@ -267,6 +269,7 @@ class _CategoryCard extends StatelessWidget {
       if (i.state == CellState.missing) 'ไม่ส่ง / ไม่มีคะแนน',
       if (i.state == CellState.pending) 'รอประกาศผล (ไม่นับ)',
       if (i.state == CellState.notDue) 'ยังไม่ถึงกำหนด (ไม่นับ)',
+      if (i.state == CellState.notAssigned) 'งานนี้ไม่ได้มอบให้ (ไม่นับ)',
       if (i.dropped) 'ตัดออก (คะแนนต่ำสุดของหมวด)',
     ];
     return notes.isEmpty ? null : notes.join(' · ');

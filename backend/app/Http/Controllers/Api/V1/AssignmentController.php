@@ -122,6 +122,7 @@ class AssignmentController extends Controller
             'send_to_google' => (bool) ($request->validated('send_to_google') ?? true),
         ]);
         AttachmentInput::write($assignment->attachments(), $attachments);
+        AssignmentPosts::setRecipients($assignment, AssignmentPosts::recipients($assignment, $request->validated('audience'), $request->validated('student_ids')));
         if ($grading === Assignment::GRADING_MANUAL) {
             // No key gate for an exam graded by hand: ready from the start (DESIGN §22.1).
             $assignment->status = Assignment::STATUS_READY;
@@ -239,6 +240,10 @@ class AssignmentController extends Controller
             if ($attachments !== null) {
                 AssignmentPosts::replaceAttachments($assignment, $attachments);
             }
+            if (array_key_exists('audience', $data) || array_key_exists('student_ids', $data)) {
+                $audience = $data['audience'] ?? (array_key_exists('student_ids', $data) ? Assignment::AUDIENCE_STUDENTS : $assignment->audience);
+                AssignmentPosts::setRecipients($assignment, AssignmentPosts::recipients($assignment, $audience, $data['student_ids'] ?? null));
+            }
             if (array_key_exists('send_to_google', $data)) {
                 // Switched on for ready homework: post it now; off: forget a queued or failed post
                 // (a courseWork that exists stays, its submissions refer to it).
@@ -303,7 +308,7 @@ class AssignmentController extends Controller
 
     public static function loadDetail(Assignment $assignment): Assignment
     {
-        return $assignment->load(['classroom', 'subject', 'course', 'lessonPlan', 'unit', 'attachments.file', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
+        return $assignment->load(['classroom', 'subject', 'course', 'lessonPlan', 'unit', 'attachments.file', 'recipients:users.id', 'googleLink', 'questions.skills', 'questions.rubricCriteria'])
             ->loadCount(['questions', 'responses as missing_ai_key_count' => fn ($q) => $q->awaitingAiKey()]);
     }
 

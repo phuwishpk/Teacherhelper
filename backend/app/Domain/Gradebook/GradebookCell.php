@@ -15,5 +15,7 @@ final readonly class GradebookCell
         public bool $hasSubmission = false,
         public bool $published = false,
         public ?int $submissionId = null,
+        /** The work was not given to this student (DESIGN §30.13): left out like excused. */
+        public bool $notAssigned = false,
     ) {}
 }

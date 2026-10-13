@@ -187,6 +187,11 @@ class AssignmentDetailScreen extends ConsumerWidget {
                             Text('แผน: ${a.lessonPlanTitle}'),
                           if (a.topic case final t? when t.isNotEmpty)
                             Text('หัวข้อ: $t'),
+                          if (a.studentIds case final ids?)
+                            Text(
+                              'เฉพาะนักเรียน ${ids.length} คน',
+                              key: const ValueKey('assignment_audience_note'),
+                            ),
                           Text('ตรวจแบบ${a.strictness.label}'),
                           if (a.dueAt != null)
                             Text('ส่ง ${formatThaiDate(a.dueAt!)}'),

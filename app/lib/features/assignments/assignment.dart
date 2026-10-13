@@ -97,6 +97,7 @@ class Assignment {
     this.sendToGoogle = true,
     this.attachments = const [],
     this.googlePost = const AssignmentGooglePost(),
+    this.studentIds,
   });
 
   static const kindHomework = 'homework';
@@ -233,6 +234,12 @@ class Assignment {
   final List<PostAttachment> attachments;
   final AssignmentGooglePost googlePost;
 
+  /// The chosen students the work is for; null = the whole classroom
+  /// (DESIGN §30.13).
+  final List<int>? studentIds;
+
+  bool get forStudents => studentIds != null;
+
   bool get isExam => kind == kindExam;
 
   bool get isManualExam => isExam && gradingMethod == 'manual';
@@ -292,6 +299,7 @@ class Assignment {
     googlePost: link != null
         ? const AssignmentGooglePost(state: GoogleSendState.sent)
         : googlePost,
+    studentIds: studentIds,
   );
 
   /// Every show_work / open question has an approved rubric (required
@@ -377,6 +385,12 @@ class Assignment {
               json['google_post'] as Map<String, dynamic>,
             )
           : const AssignmentGooglePost(),
+      studentIds: json['audience'] == 'students'
+          ? [
+              for (final id in json['student_ids'] as List? ?? const [])
+                id as int,
+            ]
+          : null,
     );
   }
 }

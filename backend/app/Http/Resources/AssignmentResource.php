@@ -84,6 +84,9 @@ class AssignmentResource extends JsonResource
             'send_to_google' => (bool) $this->send_to_google,
             'unit' => $this->whenLoaded('unit', fn () => $this->unit === null ? null : ['id' => $this->unit->id, 'title' => $this->unit->title]),
             'attachments' => $this->whenLoaded('attachments', fn () => $this->attachments->map(fn ($a) => ClassPosts::attachment($a))->values()->all()),
+            // Who the work is for (§30.13): the whole classroom, or the listed students.
+            'audience' => $this->audience ?? 'all',
+            'student_ids' => $this->whenLoaded('recipients', fn () => $this->recipients->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all()),
             // The automatic post to Classroom (§30.12): not_sent | queued | failed, or sent once the courseWork exists.
             'google_post' => $this->when($this->relationLoaded('googleLink'), fn () => AssignmentGooglePosts::payload($this->resource, $this->googleLink)),
             'questions_count' => $this->whenCounted('questions'),
