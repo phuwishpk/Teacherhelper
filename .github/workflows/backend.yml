@@ -12,8 +12,9 @@
 # The secret scan lives in secrets.yml so it also runs for changes outside
 # backend/.
 #
-# Nothing here deploys: production is a manual "Pull Updates" in Plesk Git
-# (docs/HOSTING.md). No secrets are needed; APP_KEY for tests is the fixed
+# Nothing here deploys: Plesk Git pulls main on its own and a Scheduled Task
+# runs eduvision:post-deploy --when-changed (docs/HOSTING.md §5); the web app
+# is built by web-build.yml. No secrets are needed; APP_KEY for tests is the fixed
 # non-secret value in phpunit.xml.
 name: backend
 
