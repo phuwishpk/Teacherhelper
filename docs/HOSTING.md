@@ -310,11 +310,12 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 
 | งาน | Arguments | หมายเหตุ |
 |---|---|---|
+| **หลัง Deploy ทุกครั้ง (ทางลัด)** | `eduvision:post-deploy` | ทำข้อ 3 และ 4 ของ §5 ให้ใน Run Now เดียว: `migrate --force` แล้ว `optimize:clear` → `optimize` → `filament:optimize` ถ้า migrate ล้มจะหยุดก่อนแตะ cache |
 | migration (ครั้งแรกและทุกครั้งที่ deploy) | `migrate --force` | ต้องมี `--force` เพราะ `APP_ENV=production` จะถามยืนยันและใน task ถูกยกเลิกเงียบๆ |
 | โรงเรียนแรก (ทดลอง/M0) | `db:seed --class=SchoolSeeder --force` | สร้างโรงเรียน 1 แห่งที่ `teacher_join_code` = `SEED_TEACHER_JOIN_CODE` โรงเรียนจริงเพิ่มใน `/admin` ได้ |
 | admin คนแรก | `db:seed --class=AdminSeeder --force` | ต้องมี `ADMIN_EMAIL`/`ADMIN_PASSWORD` ใน `.env` ตอนรัน แล้ว**ลบสองค่านั้นออก** (seeder ไม่สร้างอะไรเมื่อว่าง) |
 | บัญชีตัวอย่าง (admin + ครู 2 คน + นักเรียน) | `db:seed --class=DemoSeeder --force` | DESIGN §29.13.5: admin (ถ้าตั้ง `ADMIN_*`) ครู 2 คนที่อนุมัติแล้วคนละพื้นที่ (`DEMO_TEACHER_EMAIL` และ `DEMO_TEACHER2_EMAIL` หรืออีเมลแรก+`+co` รหัสผ่านเดียวกัน) ห้อง "ป.5/1 (ตัวอย่าง)" ของครูคนแรกที่มีนักเรียนสมมติ 10 คนใช้รหัสผ่านเดียวกัน (`DEMO_STUDENT_PIN`) ครูคนที่สองร่วมสอนห้องนั้นและมีห้อง "ป.6/1 (ตัวอย่าง)" ที่นักเรียนคนที่ 1 อยู่ด้วย ตารางสอน 3 คาบ โพสต์ต้อนรับ และคะแนนตัวอย่าง output บอกรหัสห้อง ลิงก์เข้าห้อง และชื่อผู้ใช้ รันซ้ำไม่สร้างซ้ำ |
-| ล้างข้อมูลทดลองแล้วเริ่มใหม่ (DESIGN §29.7) | `migrate:fresh --force --seed` แล้ว `db:seed --class=DemoSeeder --force` | **ลบทุก table** (เก็บ `.env`, `APP_KEY` และ `QR_SIGNING_KEY` เดิม) ทำเฉพาะเมื่อข้อมูลเป็นข้อมูลทดลองเท่านั้น ต้องตั้ง `ADMIN_*` และ `DEMO_*` ก่อนรัน แล้วลบออกหลังรัน ตามด้วย `optimize:clear` |
+| ล้างข้อมูลทดลองแล้วเริ่มใหม่ (DESIGN §29.7) | `eduvision:reset-demo --force` | **ลบทุก table** (เก็บ `.env`, `APP_KEY`, `QR_SIGNING_KEY` และไฟล์ใน storage เดิม) แล้วรัน `migrate:fresh --seed`, `DemoSeeder` และ `optimize:clear` ให้ใน Run Now เดียว ทำเฉพาะเมื่อข้อมูลเป็นข้อมูลทดลองเท่านั้น ลำดับ: (1) ใส่ `ADMIN_*` และ `DEMO_*` ใน `.env` (2) Run Now `optimize:clear` ถ้า config ถูก cache อยู่ (3) Run Now `eduvision:reset-demo --force` อ่าน output ซึ่งบอกรหัสห้องและชื่อผู้ใช้ตัวอย่าง (4) ลบ `ADMIN_*` และ `DEMO_*` ออกจาก `.env` (5) Run Now `eduvision:post-deploy` คำสั่งปฏิเสธถ้าไม่มี `--force` หรือ `DEMO_*` ยังว่าง โดยไม่แตะข้อมูล |
 | cache config/route/view หลังแก้ `.env` หรือ deploy | `optimize` แล้ว `filament:optimize` | ห้ามลืม `optimize:clear` ก่อนถ้าแก้ `.env` (config cache ทำให้ค่าใหม่ไม่ถูกอ่าน) |
 | ล้าง cache | `optimize:clear` แล้ว `filament:optimize-clear` | หลังจากนี้ `queue_last_run_at` ใน /health เป็น null ราว 1 นาทีจนกว่า worker รอบถัดไปจะเขียนใหม่ (cache:clear ล้าง table `cache`) ถือว่าปกติ |
 | asset ของ Filament | `filament:assets` | เฉพาะถ้า `/admin/login` ขึ้นแต่ไม่มี CSS (asset ถูก commit มาใน `public/css/filament`, `public/js/filament`, `public/fonts/filament` แล้ว) |
@@ -405,7 +406,7 @@ CI (`.github/workflows/backend.yml`) รัน test บน PHP 8.3 + MariaDB, pi
 
 1. Websites & Domains > Git > **Pull Updates** → **Deploy** (ถ้าเปิด Automatic deployment ไว้ ขั้นนี้เกิดเองเมื่อ push)
 2. ถ้า commit นั้นแก้ `composer.lock`: ทำ §4.3 ซ้ำ (สลับ docroot → Composer Install → สลับกลับ) หรืออัปโหลด `vendor.zip` ใหม่
-3. `eduvision-maintenance` Run Now: `migrate --force` (ถ้ามี migration ใหม่; ดู output)
+3. `eduvision-maintenance` Run Now: `eduvision:post-deploy` (= `migrate --force` แล้ว `optimize:clear` → `optimize` → `filament:optimize` ดู output; ข้อ 4 จึงไม่ต้องทำแยก) หรือทำทีละคำสั่ง: `migrate --force` (ถ้ามี migration ใหม่; ดู output)
    - **รอบบัญชีนักเรียนระดับโรงเรียน (DESIGN §24) มี migration 4 ไฟล์** (`2026_10_01_000005` ถึง `2026_10_02_000002`) ตัวสุดท้าย**สร้าง `classroom_google_links` ใหม่แล้วคัดลอกแถว** (เปลี่ยน primary key) **export database จาก phpMyAdmin ก่อน** (§9) ทดสอบ up → down → up บน MariaDB 11.8 ในเครื่องแล้ว แต่ยังไม่เคยรันบน MariaDB ของ hosting ถ้า output มี error ให้หยุด อย่ารันซ้ำ แล้วส่ง output มาดู
 4. Run Now: `optimize:clear` → `optimize` → `filament:optimize` (ทุกครั้ง เพราะ route/config/view ถูก cache ไว้)
 5. `curl -s https://teacherhelper.phuwish.com/api/v1/health | jq .` และเปิด `/admin` หนึ่งหน้า
