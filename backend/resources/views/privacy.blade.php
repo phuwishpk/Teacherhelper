@@ -1,0 +1,117 @@
+{{--
+    GET /privacy (routes/web.php, DESIGN §24.14): the public privacy policy,
+    linked from the consent screens of the Google Cloud projects. Describes
+    what the system actually stores and sends; keep it in step with DESIGN
+    (§7.3 retention, §10 Gemini, §18 Classroom scopes, §24.14 sign-in) and
+    change the date at the top when the content changes. Self-contained (the
+    CSP allows inline styles only).
+--}}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>นโยบายความเป็นส่วนตัว Krucheck</title>
+<style>
+    :root { --bg: #f4f6fb; --card: #ffffff; --text: #1d2433; --muted: #5b6475; --line: #e3e7ef; --accent: #2f5bd3; }
+    @media (prefers-color-scheme: dark) {
+        :root { --bg: #12151c; --card: #1c212b; --text: #e8ebf2; --muted: #a3abbb; --line: #2c3340; --accent: #8fb0ff; }
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+        font: 16px/1.7 system-ui, -apple-system, "Segoe UI", "Noto Sans Thai", "Sarabun", Tahoma, sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; }
+    h1 { font-size: 1.5rem; line-height: 1.4; margin: 0 0 4px; }
+    h2 { font-size: 1.15rem; line-height: 1.4; margin: 28px 0 8px; }
+    p, ul { margin: 0 0 12px; }
+    ul { padding-left: 1.4em; }
+    li { margin-bottom: 6px; }
+    a { color: var(--accent); overflow-wrap: anywhere; }
+    blockquote { margin: 0 0 12px; padding: 8px 16px; border-left: 3px solid var(--line); color: var(--muted); }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+    <h1>นโยบายความเป็นส่วนตัว Krucheck</h1>
+    <p class="muted">ปรับปรุงล่าสุด 15 ตุลาคม 2569</p>
+
+    <p>Krucheck เป็นระบบช่วยครูตรวจการบ้าน จัดการห้องเรียน และส่งผลการตรวจให้นักเรียน ใช้งานได้ทางแอป Android และเว็บไซต์ teacherhelper.phuwish.com หน้านี้อธิบายว่าระบบเก็บข้อมูลอะไร นำไปใช้อย่างไร ส่งให้ใคร และผู้ใช้ทำอะไรกับข้อมูลของตัวเองได้บ้าง</p>
+
+    <h2>1. ข้อมูลที่เก็บ</h2>
+    <ul>
+        <li><strong>บัญชีครูและผู้ดูแลระบบ</strong>: ชื่อ อีเมล และรหัสผ่าน (เก็บเป็นค่าแฮช ไม่มีใครอ่านรหัสผ่านจริงได้)</li>
+        <li><strong>บัญชีนักเรียน</strong>: ชื่อ ชื่อผู้ใช้ ห้องเรียนและเลขที่ PIN และรหัสในบัตร QR (เก็บเป็นค่าแฮชทั้งคู่)</li>
+        <li><strong>งานและผลการเรียน</strong>: ใบงานและข้อสอบที่ครูสร้าง ภาพคำตอบและไฟล์งานที่นักเรียนส่ง คะแนน คำอธิบายรายข้อ คำขอตรวจใหม่ การเข้าเรียน และสมุดคะแนน</li>
+        <li><strong>ไฟล์ที่ครูอัปโหลด</strong>: เฉลย ใบโจทย์ และไฟล์แนบในโพสต์ของห้อง</li>
+        <li><strong>คีย์ Gemini ของครู</strong>: เก็บแบบเข้ารหัส ใช้เรียก Gemini ในนามของครูคนนั้นเท่านั้น</li>
+        <li><strong>การแจ้งเตือน</strong>: รหัสเครื่องสำหรับส่งการแจ้งเตือนไปยังแอป Android</li>
+    </ul>
+
+    <h2>2. ข้อมูลจากบัญชี Google</h2>
+    <p><strong>เข้าสู่ระบบด้วย Google</strong> (ทุกบทบาท): ระบบเก็บเฉพาะรหัสบัญชี Google ชื่อ อีเมล และลิงก์รูปโปรไฟล์ (ไม่ดาวน์โหลดรูป) และเวลาที่เชื่อมหรือเข้าสู่ระบบล่าสุด ใช้เพื่อเข้าสู่ระบบเท่านั้น ไม่เข้าถึงอีเมล ไฟล์ หรือข้อมูลอื่นในบัญชี และไม่เก็บ token ของการเข้าสู่ระบบ</p>
+    <p><strong>เชื่อม Google Classroom</strong> (ครูเท่านั้น และเมื่อครูกดอนุญาตเอง): ระบบเก็บ refresh token แบบเข้ารหัสเพื่อทำงานต่อไปนี้ในนามของครู</p>
+    <ul>
+        <li>อ่านรายการคอร์สที่ครูสอน และรายชื่อพร้อมอีเมลของนักเรียนในคอร์ส เพื่อสร้างและจับคู่รายชื่อนักเรียนในห้องของ Krucheck</li>
+        <li>สร้างงานใน Classroom อ่านงานที่นักเรียนส่ง ใส่คะแนน และส่งคืนงาน</li>
+        <li>เปิดไฟล์ใน Google Drive ที่นักเรียนแนบมากับงาน (เช่น รูปการบ้าน) เพื่อนำมาตรวจ</li>
+        <li>อัปโหลดไฟล์ที่ครูแนบในโพสต์ไปที่ Google Drive ของครู</li>
+        <li>โพสต์ประกาศ เอกสารประกอบ และหัวข้อของห้องไปที่ Classroom รวมถึงประกาศผลการตรวจถึงนักเรียนรายคน</li>
+    </ul>
+    <p>Krucheck ใช้ข้อมูลจาก Google เพื่อให้บริการตามรายการข้างต้นเท่านั้น ไม่ขาย ไม่ใช้ทำโฆษณา และไม่ให้คนอ่านข้อมูลนั้น ยกเว้นเมื่อผู้ใช้ขอให้ช่วยแก้ปัญหา เมื่อจำเป็นด้านความปลอดภัย หรือเมื่อกฎหมายกำหนด</p>
+    <blockquote lang="en">Krucheck's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</blockquote>
+
+    <h2>3. การใช้ AI และผู้ที่ได้รับข้อมูล</h2>
+    <ul>
+        <li><strong>Google Gemini API</strong>: ระบบส่งภาพคำตอบ (หรือภาพงานทั้งหน้าเมื่อครูเลือกตรวจแบบนั้น) โจทย์ และเฉลยให้ Gemini ช่วยอ่านคำตอบและเขียนคำอธิบาย คะแนนคำนวณโดยระบบของ Krucheck และครูตรวจทานได้ก่อนเผยแพร่ ระบบไม่ส่งชื่อนักเรียนจากฐานข้อมูลไปกับคำขอ แต่ภาพงานทั้งหน้าอาจมีชื่อที่นักเรียนเขียนไว้ คำขอใช้คีย์ Gemini ของครู จึงเป็นไปตามเงื่อนไขของ Google สำหรับคีย์ประเภทนั้น เราแนะนำให้ใช้คีย์แบบชำระเงิน เพราะคีย์ฟรี Google อาจนำข้อมูลไปปรับปรุงบริการ</li>
+        <li><strong>Google Classroom และ Google Drive</strong>: เฉพาะงาน คะแนน และโพสต์ที่ครูสั่งส่งจาก Krucheck</li>
+        <li><strong>Firebase Cloud Messaging</strong>: ส่งการแจ้งเตือนไปยังแอป Android</li>
+        <li><strong>ผู้ให้บริการโฮสติ้ง</strong>: เครื่องแม่ข่ายที่เก็บฐานข้อมูลและไฟล์ของระบบ</li>
+    </ul>
+    <p>นอกจากนี้ Krucheck ไม่ขายหรือเปิดเผยข้อมูลส่วนบุคคลให้บุคคลอื่น</p>
+
+    <h2>4. ใครเห็นข้อมูลอะไร</h2>
+    <ul>
+        <li>นักเรียนเห็นงาน คะแนน และคำอธิบายของตัวเองหลังครูเผยแพร่แล้ว</li>
+        <li>ครูเห็นข้อมูลของห้องที่ตัวเองสอน</li>
+        <li>ผู้ดูแลระบบเข้าถึงข้อมูลได้เพื่อดูแลและแก้ปัญหาการใช้งาน</li>
+    </ul>
+
+    <h2>5. ระยะเวลาเก็บ</h2>
+    <ul>
+        <li>ภาพหน้ากระดาษที่สแกน: ลบหลังครูเผยแพร่ผลของงานนั้น</li>
+        <li>ภาพคำตอบและไฟล์งานทั้งหน้า: ลบเมื่อพ้นวันสิ้นสุดการเก็บที่โรงเรียนหรือพื้นที่ของครูกำหนด (ปกติคือสิ้นปีการศึกษา)</li>
+        <li>เฉลยและใบโจทย์ที่ครูอัปโหลด: ลบหลัง 30 วัน (เก็บไว้เฉพาะข้อความที่อ่านได้จากไฟล์)</li>
+        <li>ข้อมูลการเชื่อมบัญชี Google: ลบทันทีเมื่อยกเลิกการเชื่อมหรือเมื่อบัญชีถูกลบ</li>
+        <li>บัญชี คะแนน และผลการเรียน: เก็บไว้ตลอดที่ยังใช้งาน ขอให้ลบได้ตามข้อ 6</li>
+    </ul>
+
+    <h2>6. สิทธิ์ของผู้ใช้</h2>
+    <ul>
+        <li>ยกเลิกการเชื่อมบัญชี Google ได้ทุกเมื่อในหน้าตั้งค่า (ครู) หรือหน้าบัญชีของฉัน (นักเรียน) นักเรียนขอให้ครูยกเลิกให้ก็ได้</li>
+        <li>เพิกถอนสิทธิ์ที่ให้ Krucheck ทั้งหมดได้ที่ <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a></li>
+        <li>ขอดู แก้ไข หรือลบข้อมูลของตัวเองได้ผ่านครูหรือผู้ดูแลระบบ หรือช่องทางติดต่อด้านล่าง</li>
+    </ul>
+
+    <h2>7. นักเรียนที่เป็นผู้เยาว์</h2>
+    <p>ผู้ใช้ส่วนใหญ่เป็นนักเรียนอายุต่ำกว่า 20 ปี บัญชีนักเรียนสร้างโดยครู หรือนักเรียนเข้าห้องเองด้วยรหัสห้องที่ครูให้ โรงเรียนหรือครูที่นำ Krucheck ไปใช้มีหน้าที่ขอความยินยอมจากผู้ปกครองตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 ก่อนนำข้อมูลของนักเรียนเข้าสู่ระบบ</p>
+
+    <h2>8. ความปลอดภัย</h2>
+    <p>การรับส่งข้อมูลทั้งหมดผ่าน HTTPS รหัสผ่าน PIN และรหัสบัตร QR เก็บเป็นค่าแฮช token ของ Google Classroom และคีย์ Gemini เก็บแบบเข้ารหัส บันทึกการเข้าสู่ระบบด้วย Google ไม่เก็บอีเมลหรือ token</p>
+
+    <h2>9. ติดต่อ</h2>
+    @if ($contactEmail !== null)
+        <p>สอบถามหรือขอใช้สิทธิ์เกี่ยวกับข้อมูลส่วนบุคคล: <a href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a></p>
+    @else
+        <p>สอบถามหรือขอใช้สิทธิ์เกี่ยวกับข้อมูลส่วนบุคคล ติดต่อครูหรือผู้ดูแลระบบของโรงเรียน</p>
+    @endif
+    <p>เมื่อนโยบายนี้เปลี่ยน วันที่ด้านบนของหน้าจะเปลี่ยนตาม</p>
+
+    <footer class="muted">Krucheck</footer>
+</main>
+</body>
+</html>

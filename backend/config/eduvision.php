@@ -190,4 +190,11 @@ return [
         // An admin token opens only /me, logout and the panel handoff (§7.4).
         'admin' => 1,
     ],
+
+    // The public privacy policy at GET /privacy (DESIGN §24.14), linked from
+    // the consent screens of both Google Cloud projects. Empty contact = the
+    // page tells people to ask their teacher or the school's admin.
+    'privacy' => [
+        'contact_email' => env('PRIVACY_CONTACT_EMAIL'),
+    ],
 ];

@@ -517,7 +517,7 @@ Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** �
 
 1. **สร้าง project** Google Cloud Console → เลือก project (มุมซ้ายบน) → **New project** ชื่อ `eduvision-signin` (ชื่อไม่สำคัญ แต่ต้องเป็นคนละ project กับ Classroom/Firebase) → Create แล้วเลือก project นี้ให้แน่ใจก่อนทำข้อต่อไป
 2. **หน้าจอขอความยินยอม** (Google Auth Platform หรือ APIs & Services → OAuth consent screen)
-   - Branding: App name `Krucheck` (project ที่สร้างก่อน 10 ต.ค. 2569 ใช้ชื่อ `EduVision` ให้แก้ที่ช่องนี้ DESIGN §28.3), User support email และ Developer contact = อีเมลของทีม **ไม่ต้องใส่โลโก้** (ใส่โลโก้แล้ว Google ต้องตรวจ brand ก่อนแสดง) Authorized domains: `phuwish.com` Application home page และ privacy policy ใส่ได้ถ้ามี
+   - Branding: App name `Krucheck` (project ที่สร้างก่อน 10 ต.ค. 2569 ใช้ชื่อ `EduVision` ให้แก้ที่ช่องนี้ DESIGN §28.3), User support email และ Developer contact = อีเมลของทีม **ไม่ต้องใส่โลโก้** (ใส่โลโก้แล้ว Google ต้องตรวจ brand ก่อนแสดง) Authorized domains: `phuwish.com` Application home page `https://teacherhelper.phuwish.com` และ **Application privacy policy link `https://teacherhelper.phuwish.com/privacy`** (ต้องมี ไม่อย่างนั้นปุ่ม Publish app กดไม่ได้ ตั้ง `PRIVACY_CONTACT_EMAIL` ใน `.env` ให้หน้านี้แสดงอีเมลติดต่อ)
    - Audience: User type **External** → แล้วกด **Publish app** (In production) หลังตั้งเสร็จ scope พื้นฐานไม่ต้องผ่าน verification ถ้าค้างโหมด Testing จะใช้ได้เฉพาะ test users และบัญชีอื่นได้ error `access_denied`
    - Data access (Scopes): `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile` เท่านั้น ห้ามเพิ่ม scope ของ Classroom หรือ Drive ใน project นี้
 3. **client แบบ Web application** Credentials → Create credentials → OAuth client ID → Application type **Web application** ชื่อ `Krucheck sign-in web`
