@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\Auth\Impersonations;
+use App\Http\Middleware\EnsureStudentPasswordChanged;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,7 +26,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'username' => $this->username,
             // A student on the initial password changes it before anything else (DESIGN §29.10).
-            'must_change_password' => $this->isStudent() && (bool) $this->credential?->must_change_password,
+            'must_change_password' => EnsureStudentPasswordChanged::mustChange($this->resource),
             'role' => $this->role,
             'status' => $this->status,
             // The admin behind this session, when the panel's "เข้าใช้แทน" opened it (DESIGN §29.14).

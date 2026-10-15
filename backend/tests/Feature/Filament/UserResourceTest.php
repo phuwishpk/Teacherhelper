@@ -95,7 +95,7 @@ class UserResourceTest extends TestCase
             ->assertActionVisible(TestAction::make('disable')->table($active))
             ->assertActionHidden(TestAction::make('approve')->table($active))
             ->assertActionHidden(TestAction::make('approve')->table($student))
-            ->assertActionHidden(TestAction::make('disable')->table($student))
+            ->assertActionVisible(TestAction::make('disable')->table($student))
             ->assertActionHidden(TestAction::make('disable')->table($this->admin));
     }
 
