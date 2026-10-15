@@ -3,12 +3,21 @@
 namespace App\Filament\Resources\Students;
 
 use App\Domain\Auth\Google\GoogleSignIn;
+use App\Domain\Students\CredentialIssuer;
+use App\Domain\Students\StudentCode;
+use App\Domain\Students\StudentUsernames;
+use App\Exceptions\ApiException;
 use App\Filament\Resources\Students\Pages\DuplicateStudents;
 use App\Filament\Resources\Students\Pages\ManageStudents;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use BackedEnum;
+use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
@@ -20,14 +29,18 @@ use Filament\Tables\Table;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
  * DESIGN §24.13: the students of the school in Filament, searchable by name
  * or student code, with "รวมบัญชีนักเรียน" (the row is the account kept),
- * "ยกเลิกการเชื่อม Google" (§24.9.5) and the page of likely duplicates. Students are created and edited by
- * their homeroom teachers in the app. An admin of a school sees that
- * school's students; a system admin (school_id null) sees all.
+ * "ยกเลิกการเชื่อม Google" (§24.9.5) and the page of likely duplicates.
+ * Students are created by teachers in the app; an admin may also edit the
+ * name, student code and username, reset the password, disable or enable
+ * the account and "เข้าใช้แทน" (§7.5, §29.14). Every active admin sees
+ * every student (one admin level, §29.13.1).
  */
 class StudentResource extends Resource
 {
@@ -125,7 +138,146 @@ class StudentResource extends Resource
                         ),
                     ])
                     ->action(fn (User $record, array $data, Action $action) => StudentMergeSupport::merge($record, StudentMergeSupport::student($data['merge_id'] ?? null), $action)),
+                ActionGroup::make([
+                    self::editAction(),
+                    self::resetPasswordAction(),
+                    UserResource::impersonateAction(),
+                    self::disableAction(),
+                    self::enableAction(),
+                ]),
             ]);
+    }
+
+    /** Name, student code and username: the checks of PATCH /students/{id} and of the usernames (§24.4, §29.10). */
+    private static function editAction(): Action
+    {
+        return Action::make('editStudent')
+            ->label('แก้ไข')
+            ->icon(Heroicon::OutlinedPencilSquare)
+            ->authorize(fn (User $record) => Gate::allows('adminManageStudent', $record))
+            ->modalHeading(fn (User $record) => "แก้ไข {$record->name}")
+            ->modalSubmitActionLabel('บันทึก')
+            ->fillForm(fn (User $record) => [
+                'name' => $record->name,
+                'student_code' => $record->student_code,
+                'username' => $record->username,
+            ])
+            ->schema(fn (User $record) => [
+                TextInput::make('name')->label('ชื่อ')->required()->maxLength(255),
+                TextInput::make('student_code')
+                    ->label('เลขประจำตัว')
+                    ->maxLength(40)
+                    ->rule(fn () => function (string $attribute, mixed $value, Closure $fail) use ($record) {
+                        try {
+                            $code = StudentCode::parse(filled($value) ? $value : null, 'student_code');
+                        } catch (ApiException $e) {
+                            $fail($e->getMessage());
+
+                            return;
+                        }
+                        $holder = $code === null ? null : StudentCode::holder((int) $record->school_id, $code, $record->id);
+                        if ($holder !== null) {
+                            $fail("เลขประจำตัว {$code} เป็นของ {$holder->name} อยู่แล้ว");
+                        }
+                    }),
+                TextInput::make('username')
+                    ->label('ชื่อผู้ใช้')
+                    ->helperText('ตัวอักษรอังกฤษพิมพ์เล็ก ตัวเลข จุด ขีด และขีดล่าง 3–40 ตัว ใช้เข้าสู่ระบบ')
+                    ->required(fn () => $record->username !== null)
+                    ->maxLength(40)
+                    ->rule(fn () => function (string $attribute, mixed $value, Closure $fail) use ($record) {
+                        if (blank($value)) {
+                            return;
+                        }
+                        $username = StudentUsernames::normalize((string) $value);
+                        if (! StudentUsernames::valid($username)) {
+                            $fail('ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษรอังกฤษพิมพ์เล็ก ตัวเลข จุด ขีด และขีดล่าง 3–40 ตัว');
+                        } elseif (StudentUsernames::taken($username, $record->id)) {
+                            $fail("ชื่อผู้ใช้ {$username} มีคนใช้แล้ว");
+                        }
+                    }),
+            ])
+            ->action(function (User $record, array $data, Action $action) {
+                $code = StudentCode::parse(filled($data['student_code'] ?? null) ? $data['student_code'] : null, 'student_code');
+                $username = filled($data['username'] ?? null) ? StudentUsernames::normalize((string) $data['username']) : $record->username;
+                try {
+                    DB::transaction(fn () => $record->forceFill([
+                        'name' => trim((string) $data['name']),
+                        'student_code' => $code,
+                        'username' => $username,
+                    ])->save());
+                } catch (UniqueConstraintViolationException) {
+                    // Another save took the code or the username between the check and this one.
+                    Notification::make()->title('เลขประจำตัวหรือชื่อผู้ใช้นี้เพิ่งถูกใช้ ลองใหม่อีกครั้ง')->danger()->send();
+                    $action->halt();
+                }
+                Notification::make()->title("บันทึก {$record->name} แล้ว")->success()->send();
+            });
+    }
+
+    /** The teacher's reset (POST /students/{id}/pin, §29.10): back to the initial password, sessions revoked. */
+    private static function resetPasswordAction(): Action
+    {
+        return Action::make('resetPassword')
+            ->label('รีเซ็ตรหัสผ่าน')
+            ->icon(Heroicon::OutlinedKey)
+            ->color('warning')
+            ->authorize(fn (User $record) => Gate::allows('adminManageStudent', $record))
+            ->modalHeading(fn (User $record) => "รีเซ็ตรหัสผ่านของ {$record->name}")
+            ->modalDescription('รหัสผ่านกลับเป็นรหัสเริ่มต้น นักเรียนต้องตั้งรหัสใหม่ตอนเข้าครั้งถัดไป และถูกออกจากระบบทุกเครื่อง')
+            ->modalSubmitActionLabel('รีเซ็ต')
+            ->schema([
+                Toggle::make('keep_google')
+                    ->label('คงการเชื่อม Google ไว้')
+                    ->helperText('ปิดไว้ถ้าสงสัยว่ามีคนอื่นรู้รหัสผ่าน เพราะคนนั้นอาจเชื่อมบัญชี Google ของตัวเองไว้แล้ว')
+                    ->default(false),
+            ])
+            ->action(function (User $record, array $data, CredentialIssuer $issuer, GoogleSignIn $google) {
+                $password = $issuer->issuePin($record);
+                if (! ($data['keep_google'] ?? false)) {
+                    $google->unlink($record, self::admin(), 'pin_reset');
+                }
+                Notification::make()
+                    ->title("รีเซ็ตรหัสผ่านของ {$record->name} แล้ว")
+                    ->body('ชื่อผู้ใช้ '.($record->username ?? '—')." รหัสผ่านเริ่มต้น {$password}")
+                    ->success()
+                    ->persistent()
+                    ->send();
+            });
+    }
+
+    private static function disableAction(): Action
+    {
+        return Action::make('disable')
+            ->label('ระงับ')
+            ->icon(Heroicon::OutlinedNoSymbol)
+            ->color('danger')
+            ->authorize('disable')
+            ->requiresConfirmation()
+            ->modalHeading(fn (User $record) => "ระงับบัญชีของ {$record->name}")
+            ->modalDescription('นักเรียนจะถูกออกจากระบบทุกเครื่องและเข้าใช้ไม่ได้จนกว่าจะเปิดใช้งานใหม่ ข้อมูลและคะแนนยังอยู่ครบ')
+            ->modalSubmitActionLabel('ระงับ')
+            ->action(function (User $record) {
+                $record->forceFill(['status' => User::STATUS_DISABLED])->save();
+                $record->tokens()->delete();
+                Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
+            });
+    }
+
+    private static function enableAction(): Action
+    {
+        return Action::make('enable')
+            ->label('เปิดใช้งาน')
+            ->icon(Heroicon::OutlinedCheckCircle)
+            ->color('success')
+            ->authorize(fn (User $record) => Gate::allows('enableStudent', $record))
+            ->requiresConfirmation()
+            ->modalHeading(fn (User $record) => "เปิดใช้งานบัญชีของ {$record->name}")
+            ->modalSubmitActionLabel('เปิดใช้งาน')
+            ->action(function (User $record) {
+                $record->forceFill(['status' => User::STATUS_ACTIVE])->save();
+                Notification::make()->title("เปิดใช้งาน {$record->name} แล้ว")->success()->send();
+            });
     }
 
     public static function getEloquentQuery(): Builder
@@ -135,7 +287,7 @@ class StudentResource extends Resource
             ->with(['school', 'classrooms', 'mergedInto', 'googleIdentity']);
     }
 
-    /** Students are created and edited by their homeroom teachers in the app. */
+    /** Students are created by teachers in the app; the admin edits through the "แก้ไข" action. */
     public static function getCreateAuthorizationResponse(): Response
     {
         return Response::deny();

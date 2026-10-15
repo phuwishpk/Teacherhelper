@@ -164,4 +164,114 @@ class StudentResourceTest extends TestCase
     {
         return view('filament.student-merge-preview', StudentMergeSupport::previewData($keep, $merge))->render();
     }
+
+    public function test_admin_edits_name_student_code_and_username(): void
+    {
+        $this->keep->forceFill(['username' => 'somchai1'])->save();
+        $this->makeStudentWith(['username' => 'taken.name', 'student_code' => '9001', 'school_id' => $this->keep->school_id]);
+
+        Livewire::test(ManageStudents::class)
+            ->callAction(TestAction::make('editStudent')->table($this->keep), ['name' => 'x', 'student_code' => '9001', 'username' => 'Taken.Name'])
+            ->assertHasActionErrors(['student_code', 'username']);
+        Livewire::test(ManageStudents::class)
+            ->callAction(TestAction::make('editStudent')->table($this->keep), ['name' => 'x', 'student_code' => 'ไม่ได้', 'username' => 'ab'])
+            ->assertHasActionErrors(['student_code', 'username']);
+        $this->assertSame('สมชาย ใจดี', $this->keep->refresh()->name);
+        Livewire::test(ManageStudents::class)->callAction(TestAction::make('editStudent')->table($this->keep), ['name' => '  สมชาย ใจงาม ', 'student_code' => '6701', 'username' => ' SomChai.J '])
+            ->assertHasNoActionErrors();
+
+        $this->keep->refresh();
+        $this->assertSame('สมชาย ใจงาม', $this->keep->name);
+        $this->assertSame('6701', $this->keep->student_code);
+        $this->assertSame('somchai.j', $this->keep->username);
+    }
+
+    public function test_admin_resets_the_password_and_removes_the_google_link_unless_kept(): void
+    {
+        $this->keep->credential()->update(['must_change_password' => false, 'failed_pin_attempts' => 4]);
+        $this->keep->createToken('phone', ['student']);
+        $this->linkGoogle($this->keep);
+
+        Livewire::test(ManageStudents::class)
+            ->callAction(TestAction::make('resetPassword')->table($this->keep), ['keep_google' => false])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $credential = $this->keep->credential()->first();
+        $this->assertTrue((bool) $credential->must_change_password);
+        $this->assertSame(0, (int) $credential->failed_pin_attempts);
+        $this->assertSame(0, $this->keep->tokens()->count());
+        $this->assertDatabaseMissing('user_google_identities', ['user_id' => $this->keep->id]);
+
+        $this->linkGoogle($this->keep);
+        Livewire::test(ManageStudents::class)
+            ->callAction(TestAction::make('resetPassword')->table($this->keep), ['keep_google' => true])
+            ->assertHasNoActionErrors();
+        $this->assertDatabaseHas('user_google_identities', ['user_id' => $this->keep->id]);
+    }
+
+    public function test_admin_disables_and_enables_a_student(): void
+    {
+        $this->keep->createToken('phone', ['student']);
+
+        Livewire::test(ManageStudents::class)
+            ->assertActionHidden(TestAction::make('enable')->table($this->keep))
+            ->callAction(TestAction::make('disable')->table($this->keep))
+            ->assertHasNoActionErrors();
+        $this->assertSame(User::STATUS_DISABLED, $this->keep->refresh()->status);
+        $this->assertSame(0, $this->keep->tokens()->count());
+
+        Livewire::test(ManageStudents::class)
+            ->assertActionHidden(TestAction::make('disable')->table($this->keep))
+            ->callAction(TestAction::make('enable')->table($this->keep))
+            ->assertHasNoActionErrors();
+        $this->assertSame(User::STATUS_ACTIVE, $this->keep->refresh()->status);
+    }
+
+    public function test_admin_opens_the_app_as_the_student(): void
+    {
+        Livewire::test(ManageStudents::class)
+            ->callAction(TestAction::make('impersonate')->table($this->keep))
+            ->assertHasNoActionErrors()
+            ->assertRedirectContains('/app/#/impersonate?ticket=');
+    }
+
+    public function test_a_merged_account_keeps_its_state(): void
+    {
+        $this->merge->forceFill(['status' => User::STATUS_DISABLED, 'merged_into_id' => $this->keep->id])->save();
+
+        $page = Livewire::test(ManageStudents::class);
+        foreach (['editStudent', 'resetPassword', 'impersonate', 'disable', 'enable'] as $action) {
+            $page->assertActionHidden(TestAction::make($action)->table($this->merge));
+        }
+    }
+
+    public function test_teachers_cannot_use_the_admin_student_actions(): void
+    {
+        $this->assertFalse($this->teacher->can('adminManageStudent', $this->keep));
+        $this->assertFalse($this->teacher->can('enableStudent', $this->keep));
+        $this->assertFalse($this->teacher->can('disable', $this->keep));
+        $this->assertTrue($this->admin->can('adminManageStudent', $this->keep));
+    }
+
+    /** @param  array<string, mixed>  $attributes */
+    private function makeStudentWith(array $attributes): User
+    {
+        $student = $this->enrollStudent($this->room2, 30, 'คนอื่น')['student'];
+        $student->forceFill($attributes)->save();
+
+        return $student;
+    }
+
+    private function linkGoogle(User $student): void
+    {
+        DB::table('user_google_identities')->insert([
+            'user_id' => $student->id,
+            'google_sub' => 'sub-'.$student->id.'-'.uniqid(),
+            'email' => 'kid'.$student->id.'@example.test',
+            'linked_via' => 'self',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
 }

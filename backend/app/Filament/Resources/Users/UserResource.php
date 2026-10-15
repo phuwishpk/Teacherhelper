@@ -20,8 +20,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 /**
- * DESIGN §7.5: approve or disable teacher accounts. Students are listed for
- * reference only (they are created by teachers through the API).
+ * DESIGN §7.5: approve or disable teacher accounts. Students are listed here
+ * too and may be disabled; their other admin actions are on the student page
+ * (StudentResource).
  *
  * One admin level (DESIGN §29.13.1): every active admin sees, approves,
  * disables and edits every account. Approval is the only gate of a
@@ -153,8 +154,8 @@ class UserResource extends Resource
                     ->icon(Heroicon::OutlinedNoSymbol)
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->modalHeading('ระงับบัญชีครู')
-                    ->modalDescription(fn (User $record) => "{$record->name} จะถูกออกจากระบบทุกเครื่องและเข้าใช้ไม่ได้จนกว่าจะอนุมัติใหม่")
+                    ->modalHeading(fn (User $record) => $record->isStudent() ? 'ระงับบัญชีนักเรียน' : 'ระงับบัญชีครู')
+                    ->modalDescription(fn (User $record) => "{$record->name} จะถูกออกจากระบบทุกเครื่องและเข้าใช้ไม่ได้จนกว่าจะ".($record->isStudent() ? 'เปิดใช้งานใหม่ในหน้านักเรียน' : 'อนุมัติใหม่'))
                     ->authorize('disable')
                     ->action(function (User $record) {
                         $record->forceFill(['status' => User::STATUS_DISABLED])->save();
@@ -162,23 +163,7 @@ class UserResource extends Resource
 
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
                     }),
-                Action::make('impersonate')
-                    ->label('เข้าใช้แทน')
-                    ->icon(Heroicon::OutlinedArrowRightOnRectangle)
-                    ->color('gray')
-                    ->requiresConfirmation()
-                    ->modalHeading('เข้าใช้แอปในฐานะผู้ใช้นี้')
-                    ->modalDescription(fn (User $record) => "เบราว์เซอร์จะเปิดเว็บแอปในฐานะ {$record->name} ด้วยสิทธิ์เต็มของผู้ใช้ มีแถบบอกตลอดเวลาและบันทึกลงบันทึกการใช้งาน (ลิงก์ใช้ได้ 1 นาที ครั้งเดียว) ใช้เมื่อผู้ใช้มีปัญหาเท่านั้น")
-                    ->modalSubmitActionLabel('เปิดแอป')
-                    ->authorize('impersonate')
-                    ->action(function (User $record, $livewire) {
-                        $admin = auth()->user();
-                        if (! $admin instanceof User) {
-                            return;
-                        }
-                        $ticket = app(Impersonations::class)->issueTicket($admin, $record);
-                        $livewire->redirect(WebApp::url('impersonate?ticket='.$ticket), navigate: false);
-                    }),
+                self::impersonateAction(),
                 EditAction::make(),
             ]);
     }
@@ -213,5 +198,27 @@ class UserResource extends Resource
         return [
             'index' => ManageUsers::route('/'),
         ];
+    }
+
+    /** "เข้าใช้แทน" (DESIGN §29.14), also on the student page. */
+    public static function impersonateAction(): Action
+    {
+        return Action::make('impersonate')
+            ->label('เข้าใช้แทน')
+            ->icon(Heroicon::OutlinedArrowRightOnRectangle)
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalHeading('เข้าใช้แอปในฐานะผู้ใช้นี้')
+            ->modalDescription(fn (User $record) => "เบราว์เซอร์จะเปิดเว็บแอปในฐานะ {$record->name} ด้วยสิทธิ์เต็มของผู้ใช้ มีแถบบอกตลอดเวลาและบันทึกลงบันทึกการใช้งาน (ลิงก์ใช้ได้ 1 นาที ครั้งเดียว) ใช้เมื่อผู้ใช้มีปัญหาเท่านั้น")
+            ->modalSubmitActionLabel('เปิดแอป')
+            ->authorize('impersonate')
+            ->action(function (User $record, $livewire) {
+                $admin = auth()->user();
+                if (! $admin instanceof User) {
+                    return;
+                }
+                $ticket = app(Impersonations::class)->issueTicket($admin, $record);
+                $livewire->redirect(WebApp::url('impersonate?ticket='.$ticket), navigate: false);
+            });
     }
 }

@@ -54,10 +54,27 @@ class UserPolicy
         return $this->isAdmin($user) && Impersonations::allowed($user, $target);
     }
 
-    /** Filament "disable": an active teacher loses access (tokens revoked). */
+    /** Filament "disable": an active teacher or student loses access (tokens revoked). */
     public function disable(User $user, User $target): bool
     {
-        return $this->view($user, $target) && $target->isTeacher() && $target->isActive();
+        return $this->view($user, $target) && ($target->isTeacher() || $target->isStudent())
+            && $target->isActive() && ! $target->isMerged();
+    }
+
+    /** Filament "เปิดใช้งาน" of a disabled student (teachers come back with approve). */
+    public function enableStudent(User $user, User $student): bool
+    {
+        return $this->isAdmin($user) && $student->isStudent() && ! $student->isActive() && ! $student->isMerged();
+    }
+
+    /**
+     * Filament "แก้ไข" (name, student code, username) and "รีเซ็ตรหัสผ่าน"
+     * of a student: any active admin, whichever classrooms the student is in.
+     * A merged account is evidence of the merge (§24.5) and stays as it is.
+     */
+    public function adminManageStudent(User $user, User $student): bool
+    {
+        return $this->isAdmin($user) && $student->isStudent() && ! $student->isMerged();
     }
 
     /**

@@ -80,6 +80,31 @@ class ImpersonationTest extends TestCase
         $this->asUser($this->teacher)->getJson('/api/v1/me')->assertOk()->assertJsonPath('data.impersonated_by', null);
     }
 
+    public function test_a_student_with_the_initial_password_is_opened_without_changing_it(): void
+    {
+        $student = $this->enrollStudent($this->makeClassroom($this->teacher))['student'];
+        $student->credential()->update(['must_change_password' => true]);
+
+        $ticket = app(Impersonations::class)->issueTicket($this->admin, $student);
+        $token = $this->withoutToken()->postJson('/api/v1/auth/impersonate/ticket', ['ticket' => $ticket])
+            ->assertOk()
+            ->assertJsonPath('user.must_change_password', false)
+            ->json('token');
+
+        $this->forgetGuards();
+        $this->withToken($token)->getJson('/api/v1/me')->assertOk()->assertJsonPath('data.must_change_password', false);
+        $this->forgetGuards();
+        $this->withToken($token)->getJson('/api/v1/student/overview')->assertOk();
+
+        // The student's own session still has to replace the password.
+        $this->forgetGuards();
+        $own = $student->createToken('app', ['student'])->plainTextToken;
+        $this->withToken($own)->getJson('/api/v1/me')->assertOk()->assertJsonPath('data.must_change_password', true);
+        $this->forgetGuards();
+        $this->withToken($own)->getJson('/api/v1/student/overview')->assertForbidden()->assertJsonPath('code', 'password_change_required');
+        $this->assertTrue((bool) $student->credential()->first()->must_change_password);
+    }
+
     public function test_only_active_teachers_and_students_are_impersonated(): void
     {
         $student = $this->enrollStudent($this->makeClassroom($this->teacher))['student'];
