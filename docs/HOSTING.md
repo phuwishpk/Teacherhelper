@@ -459,13 +459,45 @@ Rollback: `git revert` commit ที่มีปัญหาบน `main` แล
 
 ### 6.2 Firebase Cloud Messaging (DESIGN §9.9)
 
-1. Firebase console > Project settings > **Service accounts** > Generate new private key (ไฟล์ JSON)
-2. Files > สร้างโฟลเดอร์ `eduvision-private` ที่ระดับ home (นอก docroot ทุกตัว) > Upload ไฟล์ JSON ไปที่นั่น ตั้ง permission 600 ถ้าทำได้
-3. `.env`: `FIREBASE_CREDENTIALS=<path เต็ม>/eduvision-private/<ชื่อไฟล์>.json` (path สัมพัทธ์จะถูกตีความจาก `backend/`) → `optimize:clear`/`optimize`
-4. Run Now `eduvision:fcm-check` → `access token ok`; `eduvision:fcm-check --user=<user id>` ส่ง push ทดสอบไปเครื่องของผู้ใช้นั้น (ไม่พิมพ์ key หรือ device token)
-5. แอปต้องมี `google-services.json` ของ project เดียวกัน (ดู `app/README.md`) ไฟล์นี้ก็ห้าม commit
+Firebase ใช้ส่งการแจ้งเตือนบนแอป Android อย่างเดียว (เว็บแอปไม่มี push) ไม่ตั้งค่า = ระบบทำงานครบ แค่ไม่มีแจ้งเตือน
 
-ไฟล์ key เสีย/ไม่มี = แอปยังทำงานปกติ push แค่ถูกเขียนลง log (`LogNotifier`) พร้อม `fcm.credentials_invalid` หนึ่งบรรทัด
+**ฝั่ง Firebase (ครั้งเดียว)**
+
+1. https://console.firebase.google.com > **Add project** > เลือก Google Cloud project เดิมของระบบ (ตัวเดียวกับ Google sign-in/Classroom) ไม่ต้องเปิด Google Analytics
+2. Project settings > General > **Add app** > Android: package name `com.eduvision.app`, ชื่อ `Krucheck`, SHA-1 ใส่ของ key ที่เซ็นแอป (ข้อ "ฝั่งแอป" ข้อ 2) > Register > ดาวน์โหลด `google-services.json`
+3. Project settings > **Cloud Messaging**: ตรวจว่า Firebase Cloud Messaging API (V1) เปิดอยู่ จด **Project ID**
+4. Project settings > **Service accounts** > Generate new private key (ไฟล์ JSON ของ server)
+
+**ฝั่ง server**
+
+5. Files > สร้างโฟลเดอร์ `eduvision-private` ที่ระดับ home (นอก docroot และนอก deployment path ทุกตัว) > Upload ไฟล์ JSON ของข้อ 4 ไปที่นั่น ตั้ง permission 600 ถ้าทำได้
+6. `.env`: `FIREBASE_CREDENTIALS=/var/www/vhosts/<โดเมนหลัก>/eduvision-private/<ชื่อไฟล์>.json` (path เต็ม) และ `FIREBASE_PROJECT_ID=<Project ID>` → Run Now `eduvision:post-deploy`
+7. Run Now `eduvision:fcm-check` → `access token ok`; หลังมีคนติดตั้งแอปใหม่แล้ว `eduvision:fcm-check --user=<user id>` ส่ง push ทดสอบไปเครื่องของผู้ใช้นั้น (ไม่พิมพ์ key หรือ device token)
+
+**ฝั่งแอป (เครื่องผู้พัฒนา)**
+
+1. วาง `google-services.json` ที่ `app/android/app/google-services.json` (gitignored ห้าม commit)
+2. key ของโครงการ (ครั้งเดียว เก็บไฟล์และรหัสผ่านใน password manager พร้อมสำเนา ถ้าหาย ออกรุ่นอัปเดตทับไม่ได้อีก):
+
+   ```bash
+   keytool -genkeypair -v -keystore app/android/krucheck-release.jks -alias krucheck \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+   แล้วสร้าง `app/android/key.properties` (gitignored):
+
+   ```
+   storeFile=krucheck-release.jks
+   storePassword=<รหัสของ keystore>
+   keyAlias=krucheck
+   keyPassword=<รหัสของ key>
+   ```
+
+   ไม่มีไฟล์นี้ = release ถูกเซ็นด้วย debug key ของเครื่อง (`app/android/app/build.gradle.kts`)
+3. `GOOGLE_SIGNIN_CLIENT_ID=<Web client ID> tools/build-android.sh` สคริปต์ตรวจสองไฟล์ข้างบน build `--split-per-abi` แล้วพิมพ์ path ของ `app-arm64-v8a-release.apk` และ SHA-1/SHA-256 ของ key ที่เซ็น เอา SHA-1 นั้นไปใส่ใน Firebase (Android app) และใน OAuth client แบบ Android ของ Google sign-in ถ้ายังไม่มี
+4. แจก APK (คู่มือติดตั้ง บท "แจกและติดตั้งแอป Android") ผู้ใช้เปิดแอปครั้งแรกบน Android 13+ จะถูกถามสิทธิ์แจ้งเตือน ให้อนุญาต หน้า "ตั้งค่า" ของครูต้องขึ้นว่าเปิดใช้การแจ้งเตือนแล้ว
+
+ไฟล์ key ของ server เสีย/ไม่มี = แอปยังทำงานปกติ push แค่ถูกเขียนลง log (`LogNotifier`) พร้อม `fcm.credentials_invalid` หนึ่งบรรทัด แอปที่ build โดยไม่มี `google-services.json` ไม่ลงทะเบียนเครื่อง จึงไม่ได้รับแจ้งเตือนแม้ server ตั้งค่าแล้ว
 
 ### 6.3 Google Classroom (DESIGN §18, KICKOFF ส่วนที่ 6)
 
