@@ -16,6 +16,19 @@ Route::get('/', function () {
     return WebApp::installed() ? redirect('/'.WebApp::PATH.'/') : view('welcome');
 });
 
+// The public privacy policy (DESIGN §24.14): the "Application privacy policy
+// link" of both Google Cloud projects' consent screens, which Google needs
+// before an External app can be published. Static Thai page, no session.
+Route::get('privacy', function () {
+    return response()
+        ->view('privacy', ['contactEmail' => config('eduvision.privacy.contact_email') ?: null])
+        ->withHeaders([
+            'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        ]);
+})
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class])
+    ->name('privacy');
+
 // Google's redirect after the consent page of the browser connect flow
 // (POST /api/v1/google/oauth/url, DESIGN §18.5). No login: the single-use
 // state says which teacher asked. No session or cookie either: the browser

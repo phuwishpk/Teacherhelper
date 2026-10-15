@@ -1,0 +1,48 @@
+<?php
+
+namespace Tests\Feature\Web;
+
+use Tests\TestCase;
+
+/**
+ * GET /privacy: the public privacy policy that the Google Cloud consent
+ * screens link to (DESIGN §24.14). Google reads it without signing in.
+ */
+class PrivacyPageTest extends TestCase
+{
+    public function test_anyone_can_read_the_policy_without_a_session(): void
+    {
+        $page = $this->get('/privacy');
+
+        $page->assertOk();
+        $page->assertSee('นโยบายความเป็นส่วนตัว Krucheck');
+        $page->assertCookieMissing(config('session.cookie'));
+        $this->assertStringContainsString("default-src 'none'", (string) $page->headers->get('Content-Security-Policy'));
+    }
+
+    public function test_it_carries_the_google_limited_use_disclosure(): void
+    {
+        $page = $this->get('/privacy');
+
+        $page->assertSee('Google API Services User Data Policy');
+        $page->assertSee('Limited Use requirements');
+        $page->assertSee('https://developers.google.com/terms/api-services-user-data-policy', false);
+    }
+
+    public function test_it_shows_the_configured_contact_address(): void
+    {
+        config(['eduvision.privacy.contact_email' => 'privacy@example.test']);
+
+        $this->get('/privacy')->assertOk()->assertSee('mailto:privacy@example.test', false);
+    }
+
+    public function test_without_a_contact_address_it_points_at_the_teacher(): void
+    {
+        config(['eduvision.privacy.contact_email' => null]);
+
+        $page = $this->get('/privacy')->assertOk();
+
+        $page->assertDontSee('mailto:', false);
+        $page->assertSee('ติดต่อครูหรือผู้ดูแลระบบของโรงเรียน');
+    }
+}
