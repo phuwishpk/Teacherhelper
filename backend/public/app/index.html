@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/app/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Krucheck">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Krucheck">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Krucheck</title>
+  <link rel="manifest" href="manifest.json">
+  <!-- The Google Picker of "เลือกจาก Google Drive" (DESIGN §30.15): the
+       teacher grants drive.file in the browser and picks a file; the file
+       comes back to the app as a link. No-op until the app is built with the
+       GOOGLE_PICKER_* defines. -->
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    window.kruPickDrive = function (clientId, apiKey, appId) {
+      return new Promise(function (resolve, reject) {
+        if (!window.gapi || !window.google || !google.accounts) {
+          reject(new Error('picker_unavailable'));
+          return;
+        }
+        gapi.load('picker', function () {
+          var tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            callback: function (t) {
+              if (!t || !t.access_token) { reject(new Error('no_token')); return; }
+              var picker = new google.picker.PickerBuilder()
+                .setAppId(appId)
+                .setDeveloperKey(apiKey)
+                .setOAuthToken(t.access_token)
+                .addView(new google.picker.DocsView().setIncludeFolders(true))
+                .addView(new google.picker.DocsUploadView())
+                .setCallback(function (data) {
+                  if (data.action === google.picker.Action.PICKED) {
+                    var d = data.docs[0];
+                    resolve({ id: d.id, name: d.name, url: d.url, mimeType: d.mimeType });
+                  } else if (data.action === google.picker.Action.CANCEL) {
+                    resolve(null);
+                  }
+                })
+                .build();
+              picker.setVisible(true);
+            },
+            error_callback: function (e) { reject(new Error(e && e.type ? e.type : 'token_error')); }
+          });
+          tokenClient.requestAccessToken({ prompt: '' });
+        });
+      });
+    };
+  </script>
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -1,0 +1,571 @@
+<?php
+
+namespace App\Domain\Google;
+
+use App\Models\GoogleAccount;
+use Closure;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+
+/**
+ * The few Google Classroom v1 and Drive v3 REST calls Krucheck makes
+ * (DESIGN §18.2), through the Laravel HTTP client (no google/apiclient, which
+ * is far too big for shared hosting). Every call sends the teacher's access
+ * token as a Bearer header; a 401 drops the cached token and tries once more
+ * with a fresh one.
+ *
+ * Errors come out as GoogleApiException (typed by kind). For a connected
+ * account, invalid_grant and scope_missing also mark google_accounts.last_error,
+ * so GET /google/status reports needs_reconnect.
+ */
+final class GoogleApi
+{
+    public const CLASSROOM = 'https://classroom.googleapis.com/v1';
+
+    public const DRIVE = 'https://www.googleapis.com/drive/v3';
+
+    public const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
+
+    /** A course roster or a courseWork's submissions never need more pages than this. */
+    private const MAX_PAGES = 50;
+
+    /**
+     * @param  Closure(): string  $token
+     * @param  (Closure(): void)|null  $forgetToken
+     * @param  (Closure(GoogleApiException): void)|null  $onError
+     */
+    private function __construct(
+        private readonly Closure $token,
+        private readonly ?Closure $forgetToken = null,
+        private readonly ?Closure $onError = null,
+    ) {}
+
+    /** Calls made with a token the caller already holds (POST /google/connect). */
+    public static function withAccessToken(#[\SensitiveParameter] string $token): self
+    {
+        return new self(fn () => $token);
+    }
+
+    public static function forAccount(GoogleAccount $account, ?GoogleAccessTokens $tokens = null): self
+    {
+        $tokens ??= app(GoogleAccessTokens::class);
+
+        return new self(
+            fn () => $tokens->get($account),
+            fn () => $tokens->forget($account),
+            function (GoogleApiException $e) use ($account) {
+                // A 401 that survives the one token retry means the grant is
+                // gone, not just the cached access token: report it like a
+                // failed refresh so GET /google/status says needs_reconnect.
+                $error = match ($e->kind) {
+                    GoogleApiException::INVALID_GRANT => GoogleAccount::ERROR_INVALID_GRANT,
+                    GoogleApiException::SCOPE_MISSING => GoogleAccount::ERROR_SCOPE_MISSING,
+                    default => null,
+                };
+                if ($error !== null) {
+                    GoogleAccessTokens::markNeedsReconnect($account, $error);
+                }
+            },
+        );
+    }
+
+    /**
+     * userProfiles.get("me"): the Google user id (the OpenID `sub`) and the
+     * e-mail address of the token's owner.
+     *
+     * @return array{id: string, email: string, name: string}
+     */
+    public function profile(): array
+    {
+        $body = $this->send('userProfiles.get', fn (PendingRequest $http) => $http->get(self::CLASSROOM.'/userProfiles/me'))->json();
+
+        return [
+            'id' => (string) ($body['id'] ?? ''),
+            'email' => (string) ($body['emailAddress'] ?? ''),
+            'name' => (string) ($body['name']['fullName'] ?? ''),
+        ];
+    }
+
+    /**
+     * courses.list: ACTIVE courses the teacher teaches.
+     *
+     * @return list<array{course_id: string, name: string, section: string|null}>
+     */
+    public function teacherCourses(): array
+    {
+        $courses = [];
+        foreach ($this->pages('courses.list', self::CLASSROOM.'/courses', [
+            'teacherId' => 'me',
+            'courseStates' => 'ACTIVE',
+            'pageSize' => 100,
+        ], 'courses') as $course) {
+            if (! isset($course['id'])) {
+                continue;
+            }
+            $courses[] = [
+                'course_id' => (string) $course['id'],
+                'name' => (string) ($course['name'] ?? ''),
+                'section' => isset($course['section']) && trim((string) $course['section']) !== '' ? (string) $course['section'] : null,
+            ];
+        }
+
+        return $courses;
+    }
+
+    /**
+     * courses.students.list with the profile (name, e-mail with the
+     * classroom.profile.emails scope).
+     *
+     * @return list<array{google_user_id: string, name: string, email: string|null}>
+     */
+    public function courseStudents(string $courseId): array
+    {
+        $students = [];
+        foreach ($this->pages('courses.students.list', self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/students', ['pageSize' => 100], 'students') as $row) {
+            $userId = (string) ($row['userId'] ?? $row['profile']['id'] ?? '');
+            if ($userId === '') {
+                continue;
+            }
+            $email = $row['profile']['emailAddress'] ?? null;
+            $students[] = [
+                'google_user_id' => $userId,
+                'name' => (string) ($row['profile']['name']['fullName'] ?? ''),
+                'email' => is_string($email) && $email !== '' ? $email : null,
+            ];
+        }
+
+        return $students;
+    }
+
+    /**
+     * courses.courseWork.create.
+     *
+     * @param  array<string, mixed>  $courseWork
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createCourseWork(string $courseId, array $courseWork): array
+    {
+        $body = $this->send(
+            'courseWork.create',
+            fn (PendingRequest $http) => $http->post(self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork', $courseWork),
+        )->json();
+
+        return [
+            'id' => (string) ($body['id'] ?? ''),
+            'alternate_link' => (string) ($body['alternateLink'] ?? ''),
+        ];
+    }
+
+    /**
+     * courses.courseWork.list of PUBLISHED courseWork (DESIGN §19.10): the
+     * sync looks for courseWork the teacher created on the Classroom website
+     * (associatedWithDeveloper false) and reads its materials.
+     *
+     * @return list<array<string, mixed>> raw CourseWork resources
+     */
+    public function courseWorks(string $courseId): array
+    {
+        return $this->pages('courseWork.list', self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork', [
+            'courseWorkStates' => 'PUBLISHED',
+            'pageSize' => 100,
+        ], 'courseWork');
+    }
+
+    /**
+     * courses.courseWork.studentSubmissions.list, optionally for some states
+     * (TURNED_IN, or TURNED_IN and RETURNED for the grade sync; the
+     * parameter repeats) or one student (userId).
+     *
+     * @param  string|list<string>|null  $state
+     * @return list<array<string, mixed>> raw StudentSubmission resources
+     */
+    public function studentSubmissions(string $courseId, string $courseWorkId, string|array|null $state = null, ?string $userId = null): array
+    {
+        $query = ['pageSize' => 100];
+        if ($state !== null) {
+            $query['states'] = $state;
+        }
+        if ($userId !== null) {
+            $query['userId'] = $userId;
+        }
+
+        return $this->pages('studentSubmissions.list', self::submissionsUrl($courseId, $courseWorkId), $query, 'studentSubmissions');
+    }
+
+    /**
+     * studentSubmissions.patch with updateMask=assignedGrade,draftGrade
+     * (DESIGN §19.7: both, so the teacher's grading view in Classroom shows the
+     * same number). Only courseWork this project created can be graded (else
+     * project_permission_denied).
+     *
+     * @return array<string, mixed> the updated StudentSubmission
+     */
+    public function setAssignedGrade(string $courseId, string $courseWorkId, string $submissionId, float $grade): array
+    {
+        return (array) $this->send(
+            'studentSubmissions.patch',
+            fn (PendingRequest $http) => $http->patch(
+                self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).'?updateMask=assignedGrade,draftGrade',
+                ['assignedGrade' => $grade, 'draftGrade' => $grade],
+            ),
+        )->json();
+    }
+
+    /**
+     * courses.announcements.create of a PUBLISHED announcement that only the
+     * listed students (and the course's teachers) see: assigneeMode
+     * INDIVIDUAL_STUDENTS with individualStudentsOptions.studentIds
+     * (DESIGN §19.7). Needs the classroom.announcements scope.
+     *
+     * @param  list<string>  $studentIds  Classroom user ids
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createPrivateAnnouncement(string $courseId, string $text, array $studentIds): array
+    {
+        return $this->createAnnouncement($courseId, [
+            'text' => $text,
+            'state' => 'PUBLISHED',
+            'assigneeMode' => 'INDIVIDUAL_STUDENTS',
+            'individualStudentsOptions' => ['studentIds' => array_values($studentIds)],
+        ]);
+    }
+
+    /** studentSubmissions.return: the student sees the work returned (and may hand in again). */
+    public function returnSubmission(string $courseId, string $courseWorkId, string $submissionId): void
+    {
+        $this->send(
+            'studentSubmissions.return',
+            fn (PendingRequest $http) => $http->withBody('{}', 'application/json')
+                ->post(self::submissionsUrl($courseId, $courseWorkId).'/'.rawurlencode($submissionId).':return'),
+        );
+    }
+
+    /**
+     * announcements.create (DESIGN §19.7, §30.4): $body is the Classroom
+     * Announcement resource (text, materials, state, assigneeMode, ...).
+     * Needs the classroom.announcements scope.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createAnnouncement(string $courseId, array $body): array
+    {
+        return self::created($this->send(
+            'announcements.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'announcements'), $body),
+        )->json());
+    }
+
+    /**
+     * announcements.patch: text, state and scheduledTime are the fields
+     * Classroom lets a developer change (materials are not).
+     *
+     * @param  array<string, mixed>  $body
+     * @param  list<string>  $updateMask
+     */
+    public function patchAnnouncement(string $courseId, string $id, array $body, array $updateMask): void
+    {
+        $this->send(
+            'announcements.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'announcements', $id).'?updateMask='.rawurlencode(implode(',', $updateMask)), $body),
+        );
+    }
+
+    /** announcements.delete; one that is already gone counts as deleted. */
+    public function deleteAnnouncement(string $courseId, string $id): void
+    {
+        $this->deleteIgnoringNotFound('announcements.delete', self::coursePath($courseId, 'announcements', $id));
+    }
+
+    /**
+     * courseWorkMaterials.create (DESIGN §30.4): $body is the Classroom
+     * CourseWorkMaterial resource. Needs classroom.courseworkmaterials.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array{id: string, alternate_link: string}
+     */
+    public function createCourseWorkMaterial(string $courseId, array $body): array
+    {
+        return self::created($this->send(
+            'courseWorkMaterials.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'courseWorkMaterials'), $body),
+        )->json());
+    }
+
+    /**
+     * courseWorkMaterials.patch: title, description, state, scheduledTime
+     * and topicId (materials are not patchable).
+     *
+     * @param  array<string, mixed>  $body
+     * @param  list<string>  $updateMask
+     */
+    public function patchCourseWorkMaterial(string $courseId, string $id, array $body, array $updateMask): void
+    {
+        $this->send(
+            'courseWorkMaterials.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'courseWorkMaterials', $id).'?updateMask='.rawurlencode(implode(',', $updateMask)), $body),
+        );
+    }
+
+    /** courseWorkMaterials.delete; one that is already gone counts as deleted. */
+    public function deleteCourseWorkMaterial(string $courseId, string $id): void
+    {
+        $this->deleteIgnoringNotFound('courseWorkMaterials.delete', self::coursePath($courseId, 'courseWorkMaterials', $id));
+    }
+
+    /**
+     * topics.list (classroom.topics): every topic of the course.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function topics(string $courseId): array
+    {
+        $rows = [];
+        foreach ($this->pages('topics.list', self::coursePath($courseId, 'topics'), ['pageSize' => 100], 'topic') as $topic) {
+            $rows[] = ['id' => (string) ($topic['topicId'] ?? ''), 'name' => (string) ($topic['name'] ?? '')];
+        }
+
+        return $rows;
+    }
+
+    /** topics.create -> the new topic's id. */
+    public function createTopic(string $courseId, string $name): string
+    {
+        $id = $this->send(
+            'topics.create',
+            fn (PendingRequest $http) => $http->post(self::coursePath($courseId, 'topics'), ['name' => $name]),
+        )->json('topicId');
+        if (! is_string($id) || $id === '') {
+            throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'topics.create answered without a topicId');
+        }
+
+        return $id;
+    }
+
+    /** topics.patch (the name only). */
+    public function renameTopic(string $courseId, string $topicId, string $name): void
+    {
+        $this->send(
+            'topics.patch',
+            fn (PendingRequest $http) => $http->patch(self::coursePath($courseId, 'topics', $topicId).'?updateMask=name', ['name' => $name]),
+        );
+    }
+
+    /**
+     * Drive files.create (multipart upload) into the teacher's Drive
+     * (drive.file scope: the app only sees files it created).
+     *
+     * @return string the Drive file id
+     */
+    public function uploadDriveFile(string $name, string $mimeType, string $bytes): string
+    {
+        $boundary = 'eduvision-'.Str::random(24);
+        $metadata = json_encode(['name' => $name, 'mimeType' => $mimeType], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $body = "--{$boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$metadata}\r\n"
+            ."--{$boundary}\r\nContent-Type: {$mimeType}\r\n\r\n{$bytes}\r\n--{$boundary}--";
+
+        $response = $this->send(
+            'drive.files.create',
+            fn (PendingRequest $http) => $http->withBody($body, "multipart/related; boundary={$boundary}")
+                ->post(self::DRIVE_UPLOAD.'/files?uploadType=multipart&fields=id'),
+        );
+        $id = $response->json('id');
+        if (! is_string($id) || $id === '') {
+            throw new GoogleApiException(GoogleApiException::BAD_REQUEST, 'drive.files.create answered without an id', $response->status());
+        }
+
+        return $id;
+    }
+
+    /** The PDF case of [uploadDriveFile]. */
+    public function uploadPdf(string $name, string $bytes): string
+    {
+        return $this->uploadDriveFile($name, 'application/pdf', $bytes);
+    }
+
+    /** Drive files.delete; a file that is already gone counts as deleted. */
+    public function deleteDriveFile(string $fileId): void
+    {
+        $this->deleteIgnoringNotFound('drive.files.delete', self::DRIVE.'/files/'.rawurlencode($fileId));
+    }
+
+    /** Drive files.update {trashed: true}: into the teacher's bin (DESIGN §30.2); already gone counts as done. */
+    public function trashDriveFile(string $fileId): void
+    {
+        try {
+            $this->send('drive.files.trash', fn (PendingRequest $http) => $http->patch(self::DRIVE.'/files/'.rawurlencode($fileId), ['trashed' => true]));
+        } catch (GoogleApiException $e) {
+            if ($e->kind !== GoogleApiException::NOT_FOUND) {
+                throw $e;
+            }
+        }
+    }
+
+    private function deleteIgnoringNotFound(string $what, string $url): void
+    {
+        try {
+            $this->send($what, fn (PendingRequest $http) => $http->delete($url));
+        } catch (GoogleApiException $e) {
+            if ($e->kind !== GoogleApiException::NOT_FOUND) {
+                throw $e;
+            }
+        }
+    }
+
+    /** /courses/{id}/{resource}[/{item}] */
+    private static function coursePath(string $courseId, string $resource, ?string $item = null): string
+    {
+        $url = self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/'.$resource;
+
+        return $item === null ? $url : $url.'/'.rawurlencode($item);
+    }
+
+    /**
+     * @return array{id: string, alternate_link: string}
+     */
+    private static function created(mixed $body): array
+    {
+        return [
+            'id' => (string) (is_array($body) ? ($body['id'] ?? '') : ''),
+            'alternate_link' => (string) (is_array($body) ? ($body['alternateLink'] ?? '') : ''),
+        ];
+    }
+
+    /** Drive files.get?fields=mimeType (drive.readonly). */
+    public function driveMimeType(string $fileId): ?string
+    {
+        $mime = $this->send(
+            'drive.files.get',
+            fn (PendingRequest $http) => $http->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['fields' => 'mimeType', 'supportsAllDrives' => 'true']),
+        )->json('mimeType');
+
+        return is_string($mime) && $mime !== '' ? $mime : null;
+    }
+
+    /**
+     * Drive files.get?fields=mimeType,size,name (drive.readonly): what a
+     * Classroom attachment is before the server downloads it (DESIGN §19.4).
+     * size is null for Google Docs, Sheets and Slides (they have no bytes).
+     *
+     * @return array{mime_type: string, size: int|null, name: string}
+     */
+    public function driveFile(string $fileId): array
+    {
+        $body = (array) $this->send(
+            'drive.files.get',
+            fn (PendingRequest $http) => $http->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['fields' => 'mimeType,size,name', 'supportsAllDrives' => 'true']),
+        )->json();
+
+        return [
+            'mime_type' => is_string($body['mimeType'] ?? null) ? $body['mimeType'] : '',
+            'size' => is_numeric($body['size'] ?? null) ? (int) $body['size'] : null,
+            'name' => is_string($body['name'] ?? null) ? $body['name'] : '',
+        ];
+    }
+
+    /** Drive files.get?alt=media: the attachment's bytes, with the teacher's token. */
+    public function downloadDriveFile(string $fileId): string
+    {
+        return $this->send(
+            'drive.files.download',
+            fn (PendingRequest $http) => $http->withHeaders(['Accept' => '*/*'])
+                ->get(self::DRIVE.'/files/'.rawurlencode($fileId), ['alt' => 'media', 'supportsAllDrives' => 'true']),
+        )->body();
+    }
+
+    private static function submissionsUrl(string $courseId, string $courseWorkId): string
+    {
+        return self::CLASSROOM.'/courses/'.rawurlencode($courseId).'/courseWork/'.rawurlencode($courseWorkId).'/studentSubmissions';
+    }
+
+    /**
+     * Follows nextPageToken.
+     *
+     * @param  array<string, mixed>  $query
+     * @return list<array<string, mixed>>
+     */
+    private function pages(string $what, string $url, array $query, string $key): array
+    {
+        $items = [];
+        $pageToken = null;
+        for ($page = 0; $page < self::MAX_PAGES; $page++) {
+            $params = self::queryString($pageToken === null ? $query : [...$query, 'pageToken' => $pageToken]);
+            $body = $this->send($what, fn (PendingRequest $http) => $http->get($url, $params))->json();
+            foreach (is_array($body[$key] ?? null) ? $body[$key] : [] as $item) {
+                if (is_array($item)) {
+                    $items[] = $item;
+                }
+            }
+            $pageToken = is_string($body['nextPageToken'] ?? null) && $body['nextPageToken'] !== '' ? $body['nextPageToken'] : null;
+            if ($pageToken === null) {
+                break;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Google repeats a list parameter (states=TURNED_IN&states=RETURNED);
+     * PHP's http_build_query would write states[0]=..., which Google ignores.
+     *
+     * @param  array<string, scalar|list<scalar>>  $query
+     */
+    private static function queryString(array $query): string
+    {
+        $pairs = [];
+        foreach ($query as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $item) {
+                $pairs[] = rawurlencode((string) $key).'='.rawurlencode(is_bool($item) ? ($item ? 'true' : 'false') : (string) $item);
+            }
+        }
+
+        return implode('&', $pairs);
+    }
+
+    /**
+     * @param  Closure(PendingRequest): Response  $call
+     *
+     * @throws GoogleApiException
+     */
+    private function send(string $what, Closure $call): Response
+    {
+        try {
+            $response = $this->attempt($what, $call);
+            if ($response->status() === 401 && $this->forgetToken !== null) {
+                ($this->forgetToken)();
+                $response = $this->attempt($what, $call);
+            }
+            if (! $response->successful()) {
+                throw GoogleApiException::fromApiResponse($response, $what);
+            }
+        } catch (GoogleApiException $e) {
+            if ($this->onError !== null) {
+                ($this->onError)($e);
+            }
+
+            throw $e;
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param  Closure(PendingRequest): Response  $call
+     */
+    private function attempt(string $what, Closure $call): Response
+    {
+        $http = Http::withToken(($this->token)())
+            ->acceptJson()
+            ->timeout(max(1, (int) config('services.google.timeout', 20)));
+
+        try {
+            return $call($http);
+        } catch (ConnectionException) {
+            throw new GoogleApiException(GoogleApiException::UNAVAILABLE, "{$what} failed: Google unreachable");
+        }
+    }
+}
