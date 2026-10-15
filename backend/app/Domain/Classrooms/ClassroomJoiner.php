@@ -102,6 +102,7 @@ final class ClassroomJoiner
     {
         return $classroom->students()
             ->where('users.status', User::STATUS_ACTIVE)
+            ->whereNull('users.deleted_at')
             ->whereNull('users.merged_into_id')
             ->whereHas('credential', fn ($q) => $q->where('must_change_password', true))
             ->whereDoesntHave('googleIdentity')

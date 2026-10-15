@@ -87,8 +87,13 @@ class ClassroomPolicy
         return $this->administers($user, $classroom) ?: $this->homeroom($user, $classroom);
     }
 
+    /** A classroom closed by its owner's deletion (DESIGN §31) reopens only with "กู้คืนบัญชี". */
     public function reopen(User $user, Classroom $classroom): Response|bool
     {
+        if ($classroom->deleted_at !== null) {
+            return false;
+        }
+
         return $this->administers($user, $classroom) ?: $this->homeroom($user, $classroom);
     }
 

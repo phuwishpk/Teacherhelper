@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Domain\Accounts\AccountDeletion;
 use App\Domain\Auth\Impersonations;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Models\Classroom;
@@ -36,16 +37,28 @@ class UserPolicy
         return $this->view($user, $target);
     }
 
-    /** Accounts are disabled, never deleted (FKs from classrooms and scores). */
+    /** Filament's own delete stays off: accounts go through "ลบบัญชี" (deleteAccount, DESIGN §31). */
     public function delete(User $user, User $target): bool
     {
         return false;
     }
 
+    /** "ลบบัญชี" (DESIGN §31): a teacher or student, not the admin themself, not merged, not deleted yet. */
+    public function deleteAccount(User $user, User $target): bool
+    {
+        return $this->isAdmin($user) && AccountDeletion::deletable($user, $target);
+    }
+
+    /** "กู้คืนบัญชี" within the 30 days (DESIGN §31). */
+    public function restoreAccount(User $user, User $target): bool
+    {
+        return $this->isAdmin($user) && $target->isDeleted();
+    }
+
     /** Filament "approve": a pending or disabled teacher becomes active. */
     public function approve(User $user, User $target): bool
     {
-        return $this->view($user, $target) && $target->isTeacher() && ! $target->isActive();
+        return $this->view($user, $target) && $target->isTeacher() && ! $target->isActive() && ! $target->isDeleted();
     }
 
     /** Filament "เข้าใช้แทน" (DESIGN §29.14): an active teacher or student, never another admin. */
@@ -64,17 +77,18 @@ class UserPolicy
     /** Filament "เปิดใช้งาน" of a disabled student (teachers come back with approve). */
     public function enableStudent(User $user, User $student): bool
     {
-        return $this->isAdmin($user) && $student->isStudent() && ! $student->isActive() && ! $student->isMerged();
+        return $this->isAdmin($user) && $student->isStudent() && ! $student->isActive() && ! $student->isMerged() && ! $student->isDeleted();
     }
 
     /**
      * Filament "แก้ไข" (name, student code, username) and "รีเซ็ตรหัสผ่าน"
      * of a student: any active admin, whichever classrooms the student is in.
-     * A merged account is evidence of the merge (§24.5) and stays as it is.
+     * A merged account is evidence of the merge (§24.5) and stays as it is; a
+     * deleted one (§31) is restored first.
      */
     public function adminManageStudent(User $user, User $student): bool
     {
-        return $this->isAdmin($user) && $student->isStudent() && ! $student->isMerged();
+        return $this->isAdmin($user) && $student->isStudent() && ! $student->isMerged() && ! $student->isDeleted();
     }
 
     /**
