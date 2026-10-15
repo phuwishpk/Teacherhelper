@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property bool $auto_share_analysis new analysis texts go to students without approval (§20.5)
  * @property Carbon|null $closed_at closed = "ห้องเก่า", read-only (DESIGN §24.6)
  * @property int|null $closed_by
+ * @property Carbon|null $deleted_at its owner's account was deleted; closed until restored or purged (DESIGN §31)
  */
 class Classroom extends Model
 {
@@ -59,6 +60,7 @@ class Classroom extends Model
             'join_open' => 'boolean',
             'auto_share_analysis' => 'boolean',
             'closed_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 

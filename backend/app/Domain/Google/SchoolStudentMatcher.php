@@ -192,6 +192,7 @@ final class SchoolStudentMatcher
         $query->where('users.school_id', $schoolId)
             ->where('users.role', User::ROLE_STUDENT)
             ->where('users.status', User::STATUS_ACTIVE)
+            ->whereNull('users.deleted_at')
             ->whereNull('users.merged_into_id');
     }
 }

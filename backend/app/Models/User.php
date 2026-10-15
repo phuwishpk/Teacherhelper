@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -27,6 +28,8 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int|null $approved_by
  * @property string|null $student_code the school student ID, normalised (DESIGN §24.4)
  * @property int|null $merged_into_id this account was merged into that one (DESIGN §24.5)
+ * @property Carbon|null $deleted_at an admin deleted the account; restorable for 30 days (DESIGN §31)
+ * @property int|null $deleted_by
  */
 class User extends Authenticatable implements FilamentUser
 {
@@ -71,6 +74,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'password' => 'hashed',
+            'deleted_at' => 'datetime',
         ];
     }
 
@@ -146,9 +150,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->merged_into_id !== null;
     }
 
+    /** A deleted account (DESIGN §31) is not active, whatever its status: every login path refuses it. */
     public function isActive(): bool
     {
-        return $this->status === self::STATUS_ACTIVE;
+        return $this->status === self::STATUS_ACTIVE && $this->deleted_at === null;
+    }
+
+    /** An admin deleted the account; it is restorable until it is purged (DESIGN §31). */
+    public function isDeleted(): bool
+    {
+        return $this->deleted_at !== null;
     }
 
     public function isAdmin(): bool

@@ -9,6 +9,7 @@ use App\Domain\Students\StudentUsernames;
 use App\Exceptions\ApiException;
 use App\Filament\Resources\Students\Pages\DuplicateStudents;
 use App\Filament\Resources\Students\Pages\ManageStudents;
+use App\Filament\Resources\Users\AccountDeletionActions;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use BackedEnum;
@@ -39,7 +40,7 @@ use Illuminate\Support\Facades\Gate;
  * "ยกเลิกการเชื่อม Google" (§24.9.5) and the page of likely duplicates.
  * Students are created by teachers in the app; an admin may also edit the
  * name, student code and username, reset the password, disable or enable
- * the account and "เข้าใช้แทน" (§7.5, §29.14). Every active admin sees
+ * the account, "เข้าใช้แทน" (§7.5, §29.14) and delete or restore it (§31). Every active admin sees
  * every student (one admin level, §29.13.1).
  */
 class StudentResource extends Resource
@@ -75,15 +76,16 @@ class StudentResource extends Resource
                 TextColumn::make('status')
                     ->label('สถานะ')
                     ->badge()
-                    ->state(fn (User $record) => $record->isMerged() ? 'merged' : $record->status)
+                    ->state(fn (User $record) => $record->isMerged() ? 'merged' : ($record->isDeleted() ? 'deleted' : $record->status))
                     ->formatStateUsing(fn (string $state, User $record) => match ($state) {
                         'merged' => 'ถูกรวมเข้า '.($record->mergedInto?->name ?? '#'.$record->merged_into_id),
+                        'deleted' => AccountDeletionActions::statusLabel($record),
                         User::STATUS_ACTIVE => 'ใช้งานได้',
                         default => 'ระงับ',
                     })
                     ->color(fn (string $state) => match ($state) {
                         User::STATUS_ACTIVE => 'success',
-                        'merged' => 'gray',
+                        'merged', 'deleted' => 'gray',
                         default => 'danger',
                     }),
             ])
@@ -91,10 +93,11 @@ class StudentResource extends Resource
             ->filters([
                 SelectFilter::make('state')
                     ->label('สถานะ')
-                    ->options(['active' => 'ใช้งานได้', 'merged' => 'ถูกรวมแล้ว'])
+                    ->options(['active' => 'ใช้งานได้', 'merged' => 'ถูกรวมแล้ว', 'deleted' => 'ลบแล้ว (รอลบถาวร)'])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
-                        'active' => $query->whereNull('merged_into_id')->where('status', User::STATUS_ACTIVE),
+                        'active' => $query->whereNull('merged_into_id')->whereNull('deleted_at')->where('status', User::STATUS_ACTIVE),
                         'merged' => $query->whereNotNull('merged_into_id'),
+                        'deleted' => $query->whereNotNull('deleted_at'),
                         default => $query,
                     }),
                 SelectFilter::make('school_id')->label('พื้นที่ของครู')->relationship('school', 'name'),
@@ -144,6 +147,8 @@ class StudentResource extends Resource
                     UserResource::impersonateAction(),
                     self::disableAction(),
                     self::enableAction(),
+                    AccountDeletionActions::delete(),
+                    AccountDeletionActions::restore(),
                 ]),
             ]);
     }

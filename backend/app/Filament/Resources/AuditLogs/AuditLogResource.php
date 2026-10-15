@@ -33,6 +33,8 @@ class AuditLogResource extends Resource
     public const ACTION_LABELS = [
         AuditLog::IMPERSONATE_START => 'เข้าใช้แทน',
         AuditLog::IMPERSONATE_STOP => 'ออกจากการเข้าใช้แทน',
+        AuditLog::ACCOUNT_DELETE => 'ลบบัญชี',
+        AuditLog::ACCOUNT_RESTORE => 'กู้คืนบัญชี',
     ];
 
     public static function table(Table $table): Table

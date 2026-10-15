@@ -25,6 +25,11 @@ class AuditLog extends Model
 
     public const IMPERSONATE_STOP = 'impersonate.stop';
 
+    /** An admin deleted a teacher or student account (DESIGN §31); meta.purge_at. */
+    public const ACCOUNT_DELETE = 'account.delete';
+
+    public const ACCOUNT_RESTORE = 'account.restore';
+
     public $timestamps = false;
 
     protected $fillable = ['actor_id', 'action', 'target_user_id', 'meta', 'created_at'];

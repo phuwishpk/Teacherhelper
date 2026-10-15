@@ -16,13 +16,15 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * DESIGN §7.5: approve or disable teacher accounts. Students are listed here
  * too and may be disabled; their other admin actions are on the student page
- * (StudentResource).
+ * (StudentResource). "ลบบัญชี" and "กู้คืนบัญชี" (DESIGN §31) are on both pages.
  *
  * One admin level (DESIGN §29.13.1): every active admin sees, approves,
  * disables and edits every account. Approval is the only gate of a
@@ -116,10 +118,14 @@ class UserResource extends Resource
                 TextColumn::make('status')
                     ->label('สถานะ')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => self::STATUS_LABELS[$state] ?? $state)
+                    ->state(fn (User $record) => $record->isDeleted() ? 'deleted' : $record->status)
+                    ->formatStateUsing(fn (string $state, User $record) => $state === 'deleted'
+                        ? AccountDeletionActions::statusLabel($record)
+                        : (self::STATUS_LABELS[$state] ?? $state))
                     ->color(fn (string $state) => match ($state) {
                         User::STATUS_ACTIVE => 'success',
                         User::STATUS_PENDING => 'warning',
+                        'deleted' => 'gray',
                         default => 'danger',
                     }),
                 TextColumn::make('created_at')
@@ -131,6 +137,7 @@ class UserResource extends Resource
             ->filters([
                 SelectFilter::make('role')->label('บทบาท')->options(self::ROLE_LABELS),
                 SelectFilter::make('status')->label('สถานะ')->options(self::STATUS_LABELS),
+                Filter::make('deleted')->label('บัญชีที่ลบแล้ว (รอลบถาวร)')->query(fn (Builder $query) => $query->whereNotNull('deleted_at')),
             ])
             ->recordActions([
                 Action::make('approve')
@@ -164,7 +171,9 @@ class UserResource extends Resource
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
                     }),
                 self::impersonateAction(),
-                EditAction::make(),
+                EditAction::make()->visible(fn (User $record) => ! $record->isDeleted()),
+                AccountDeletionActions::delete(),
+                AccountDeletionActions::restore(),
             ]);
     }
 
