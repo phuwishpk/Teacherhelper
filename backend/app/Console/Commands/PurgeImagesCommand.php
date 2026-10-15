@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Documents\SourceDocuments;
 use App\Domain\Exams\ExamFigures;
+use App\Domain\Google\GoogleEvents;
 use App\Domain\Scans\ScanRetention;
 use App\Domain\Worksheets\WorksheetFiles;
 use Illuminate\Console\Command;
@@ -24,7 +25,8 @@ use Illuminate\Support\Facades\Log;
  *   eduvision.documents.retention_days (SourceDocuments, §19.8); what
  *   Gemini read from them stays in document_extractions;
  * - exam page images the figures were cropped from (§22.17): with the
- *   documents; the cropped figures stay as long as the exam.
+ *   documents; the cropped figures stay as long as the exam;
+ * - google_events rows (and the Google e-mails in them) after 30 days (§32).
  */
 class PurgeImagesCommand extends Command
 {
@@ -38,8 +40,9 @@ class PurgeImagesCommand extends Command
         $scans = ScanRetention::purge();
         $documents = SourceDocuments::purge();
         $examPages = ExamFigures::purge();
+        $googleEvents = GoogleEvents::purge();
 
-        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages]);
+        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages, 'google_events' => $googleEvents]);
         $this->info("Worksheet prints expired: {$worksheets}");
         $this->info("Page images deleted (published): {$scans['page_images']}");
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
@@ -48,6 +51,7 @@ class PurgeImagesCommand extends Command
         $this->info("Whole-page files deleted (superseded or past crop_retention_until): {$scans['whole_pages']}");
         $this->info("Teacher documents deleted (past retention): {$documents}");
         $this->info("Exam page images deleted (past retention): {$examPages}");
+        $this->info("Google events deleted (older than 30 days): {$googleEvents}");
 
         return self::SUCCESS;
     }

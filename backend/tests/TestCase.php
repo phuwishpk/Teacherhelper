@@ -12,6 +12,7 @@ use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
@@ -40,6 +41,9 @@ abstract class TestCase extends BaseTestCase
 
         // No test may reach Google (or anything else) over the network.
         Http::preventStrayRequests();
+        // A Livewire::test() of an earlier test leaves Livewire's "a component was
+        // rendered" flag set, and the next plain HTML page would get its script injected.
+        Livewire::flushState();
     }
 
     protected function makeSchool(array $attributes = []): School

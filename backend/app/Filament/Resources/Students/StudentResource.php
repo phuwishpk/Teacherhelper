@@ -10,6 +10,7 @@ use App\Exceptions\ApiException;
 use App\Filament\Resources\Students\Pages\DuplicateStudents;
 use App\Filament\Resources\Students\Pages\ManageStudents;
 use App\Filament\Resources\Users\AccountDeletionActions;
+use App\Filament\Resources\Users\AccountInfolist;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use BackedEnum;
@@ -90,6 +91,7 @@ class StudentResource extends Resource
                     }),
             ])
             ->defaultSort('name')
+            ->recordAction('view')
             ->filters([
                 SelectFilter::make('state')
                     ->label('สถานะ')
@@ -103,6 +105,7 @@ class StudentResource extends Resource
                 SelectFilter::make('school_id')->label('พื้นที่ของครู')->relationship('school', 'name'),
             ])
             ->recordActions([
+                AccountInfolist::action(),
                 Action::make('unlinkGoogle')
                     ->label('ยกเลิกการเชื่อม Google')
                     ->icon(Heroicon::OutlinedLinkSlash)

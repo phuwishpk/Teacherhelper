@@ -4,6 +4,7 @@ namespace App\Domain\Google;
 
 use App\Jobs\NotifyGoogleReconnectJob;
 use App\Models\GoogleAccount;
+use App\Models\GoogleEvent;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -86,6 +87,7 @@ final class GoogleAccessTokens
         $account->last_error = $error;
         $account->save();
         Log::warning('google.needs_reconnect', ['user_id' => $account->user_id, 'error' => $error]);
+        GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'token', 'needs_reconnect', (int) $account->user_id, $error, $account->email);
         if ($account->reconnect_notified_at === null) {
             NotifyGoogleReconnectJob::dispatch($account->user_id);
         }

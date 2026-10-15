@@ -139,6 +139,12 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasOne(UserGoogleIdentity::class);
     }
 
+    /** The latest Google sign-in and Classroom events of the account (DESIGN §32). @return HasMany<GoogleEvent, $this> */
+    public function recentGoogleEvents(): HasMany
+    {
+        return $this->hasMany(GoogleEvent::class)->latest('created_at')->latest('id')->limit(20);
+    }
+
     /** The account this one was merged into (DESIGN §24.5). @return BelongsTo<User, $this> */
     public function mergedInto(): BelongsTo
     {
