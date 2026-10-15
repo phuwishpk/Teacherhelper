@@ -3,6 +3,7 @@
 namespace App\Domain\Auth\Google;
 
 use App\Domain\Classrooms\ClassroomJoiner;
+use App\Domain\Google\GoogleEvents;
 use App\Domain\Students\CredentialIssuer;
 use App\Domain\Students\StudentAuthenticator;
 use App\Domain\Students\StudentUsernames;
@@ -11,6 +12,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
 use App\Jobs\ClassroomSyncJob;
 use App\Models\Classroom;
+use App\Models\GoogleEvent;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserGoogleIdentity;
@@ -105,7 +107,7 @@ final class GoogleSignIn
             return $this->complete($linked, $google, $deviceName);
         }
         if (! ClassroomJoiner::accepts($classroom)) {
-            self::log('signup_student', 'join_closed');
+            self::log('signup_student', 'join_closed', null, null, null, $google->email);
 
             throw new ApiException('ห้องนี้ปิดรับสมาชิกแล้ว ติดต่อครูประจำวิชาเพื่อให้เพิ่มชื่อ', 'join_closed', 409);
         }
@@ -128,7 +130,7 @@ final class GoogleSignIn
 
             return $this->link($student, $google, UserGoogleIdentity::VIA_GOOGLE_SIGNUP, null)->setRelation('user', $student->setRelation('school', $classroom->school));
         });
-        self::log('signup_student', 'ok', (int) $identity->user_id, UserGoogleIdentity::VIA_GOOGLE_SIGNUP);
+        self::log('signup_student', 'ok', (int) $identity->user_id, UserGoogleIdentity::VIA_GOOGLE_SIGNUP, null, $google->email);
 
         return $this->complete($identity, $google, $deviceName);
     }
@@ -162,13 +164,13 @@ final class GoogleSignIn
             ]));
         } catch (UniqueConstraintViolationException) {
             // Another request linked the same Google account or the same user meanwhile.
-            self::log('link', 'conflict', $user->id, $via);
+            self::log('link', 'conflict', $user->id, $via, null, $google->email);
 
             throw UserGoogleIdentity::query()->where('google_sub', $google->sub)->exists()
                 ? GoogleSignInErrors::alreadyLinked()
                 : GoogleSignInErrors::identityExists();
         }
-        self::log('link', 'ok', $user->id, $via, $actor?->id);
+        self::log('link', 'ok', $user->id, $via, $actor?->id, $google->email);
 
         return $identity;
     }
@@ -186,12 +188,12 @@ final class GoogleSignIn
             if ((int) $bySub->user_id === (int) $user->id) {
                 return $bySub;
             }
-            self::log('link', 'google_already_linked', $user->id);
+            self::log('link', 'google_already_linked', $user->id, null, null, $google->email);
 
             throw GoogleSignInErrors::alreadyLinked();
         }
         if (UserGoogleIdentity::query()->where('user_id', $user->id)->exists()) {
-            self::log('link', 'google_identity_exists', $user->id);
+            self::log('link', 'google_identity_exists', $user->id, null, null, $google->email);
 
             throw GoogleSignInErrors::identityExists();
         }
@@ -238,7 +240,7 @@ final class GoogleSignIn
     }
 
     /** One audit line: the event, its result, the user ids and the link path; never an e-mail or token. */
-    public static function log(string $event, string $result, ?int $userId = null, ?string $via = null, ?int $actorId = null): void
+    public static function log(string $event, string $result, ?int $userId = null, ?string $via = null, ?int $actorId = null, ?string $email = null): void
     {
         Log::info('google_signin', array_filter([
             'event' => $event,
@@ -247,6 +249,8 @@ final class GoogleSignIn
             'via' => $via,
             'actor_id' => $actorId,
         ], fn ($v) => $v !== null));
+        // The e-mail goes to google_events only (30 days, DESIGN §32), never to the log file.
+        GoogleEvents::record(GoogleEvent::FLOW_SIGNIN, $event, $result, $userId, $via, $email);
     }
 
     /**
@@ -260,7 +264,7 @@ final class GoogleSignIn
     {
         $user = $identity->user;
         if (! $user->isActive() || $user->isMerged()) {
-            self::log('login', 'account_not_active', $user->id);
+            self::log('login', 'account_not_active', $user->id, $user->isDeleted() ? 'deleted' : ($user->isMerged() ? 'merged' : $user->status), null, $google->email);
 
             throw GoogleSignInErrors::accountNotActive($user->isMerged() ? User::STATUS_DISABLED : $user->status);
         }
@@ -294,14 +298,14 @@ final class GoogleSignIn
             ->first();
 
         if ($staff !== null && $staff->isAdmin()) {
-            self::log('login', 'google_not_linked', $staff->id, 'admin_email');
+            self::log('login', 'google_not_linked', $staff->id, 'admin_email', null, $google->email);
 
             throw GoogleSignInErrors::notLinked('เข้าสู่ระบบด้วยรหัสผ่านก่อน แล้วกดเชื่อมบัญชี Google ในหน้าผู้ดูแลระบบ');
         }
 
         if ($staff !== null) {
             if (UserGoogleIdentity::query()->where('user_id', $staff->id)->exists()) {
-                self::log('login', 'google_not_linked', $staff->id, 'other_identity');
+                self::log('login', 'google_not_linked', $staff->id, 'other_identity', null, $google->email);
 
                 throw GoogleSignInErrors::notLinked('บัญชีครูที่ใช้อีเมลนี้เชื่อมกับบัญชี Google อื่นอยู่แล้ว กรุณาเข้าสู่ระบบด้วยบัญชี Google นั้นหรือรหัสผ่าน');
             }
@@ -326,7 +330,7 @@ final class GoogleSignIn
     {
         if (User::query()->whereRaw('LOWER(email) = ?', [$google->email])->exists()) {
             // A student (or a merged account) has the e-mail: users.email is unique.
-            self::log('signup', 'email_taken');
+            self::log('signup', 'email_taken', null, null, null, $google->email);
 
             throw $this->registration($google);
         }
@@ -352,11 +356,11 @@ final class GoogleSignIn
             if ($identity !== null && $identity->user !== null) {
                 return $this->complete($identity, $google, $deviceName);
             }
-            self::log('signup', 'conflict');
+            self::log('signup', 'conflict', null, null, null, $google->email);
 
             throw $this->registration($google);
         }
-        self::log('signup', 'ok', (int) $identity->user_id, UserGoogleIdentity::VIA_GOOGLE_SIGNUP);
+        self::log('signup', 'ok', (int) $identity->user_id, UserGoogleIdentity::VIA_GOOGLE_SIGNUP, null, $google->email);
 
         return $this->complete($identity, $google, $deviceName);
     }
@@ -403,7 +407,7 @@ final class GoogleSignIn
             return $this->complete($identity->setRelation('user', $student), $google, $deviceName);
         }
 
-        self::log('login', 'google_not_linked', null, 'unknown_student');
+        self::log('login', 'google_not_linked', null, 'unknown_student', null, $google->email);
 
         throw GoogleSignInErrors::notLinked(
             'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส '

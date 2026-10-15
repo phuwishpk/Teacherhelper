@@ -2,7 +2,9 @@
 
 namespace App\Domain\Auth\Google;
 
+use App\Domain\Google\GoogleEvents;
 use App\Exceptions\ApiException;
+use App\Models\GoogleEvent;
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Log;
@@ -96,6 +98,7 @@ final class GoogleIdTokenVerifier
         $verified = $claims['email_verified'] ?? false;
         if ($verified !== true && $verified !== 'true') {
             Log::info('google_signin.verify', ['result' => 'email_unverified']);
+            GoogleEvents::record(GoogleEvent::FLOW_SIGNIN, 'verify', 'google_email_unverified', null, null, $email);
 
             throw GoogleSignInErrors::emailUnverified();
         }
@@ -114,6 +117,7 @@ final class GoogleIdTokenVerifier
     private static function invalid(string $reason): ApiException
     {
         Log::info('google_signin.verify', ['result' => 'invalid', 'reason' => $reason]);
+        GoogleEvents::record(GoogleEvent::FLOW_SIGNIN, 'verify', 'google_token_invalid', null, $reason);
 
         return GoogleSignInErrors::tokenInvalid();
     }

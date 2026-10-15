@@ -128,18 +128,26 @@ class UserResource extends Resource
                         'deleted' => 'gray',
                         default => 'danger',
                     }),
+                TextColumn::make('google')
+                    ->label('Google')
+                    ->badge()
+                    ->placeholder('—')
+                    ->state(fn (User $record) => self::googleBadges($record))
+                    ->color(fn (string $state) => str_contains($state, 'ต้องเชื่อมใหม่') ? 'danger' : 'success'),
                 TextColumn::make('created_at')
                     ->label('สมัครเมื่อ')
                     ->dateTime('d/m/Y H:i', 'Asia/Bangkok')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->recordAction('view')
             ->filters([
                 SelectFilter::make('role')->label('บทบาท')->options(self::ROLE_LABELS),
                 SelectFilter::make('status')->label('สถานะ')->options(self::STATUS_LABELS),
                 Filter::make('deleted')->label('บัญชีที่ลบแล้ว (รอลบถาวร)')->query(fn (Builder $query) => $query->whereNotNull('deleted_at')),
             ])
             ->recordActions([
+                AccountInfolist::action(),
                 Action::make('approve')
                     ->label('อนุมัติ')
                     ->icon(Heroicon::OutlinedCheckCircle)
@@ -207,6 +215,30 @@ class UserResource extends Resource
         return [
             'index' => ManageUsers::route('/'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['googleIdentity', 'googleAccount']);
+    }
+
+    /**
+     * The Google column (DESIGN §32): signs in with Google, and the state of
+     * the Classroom connection of a teacher.
+     *
+     * @return list<string>
+     */
+    public static function googleBadges(User $user): array
+    {
+        $badges = [];
+        if ($user->googleIdentity !== null) {
+            $badges[] = 'เข้าสู่ระบบ';
+        }
+        if ($user->googleAccount !== null) {
+            $badges[] = $user->googleAccount->needsReconnect() ? 'Classroom ต้องเชื่อมใหม่' : 'Classroom';
+        }
+
+        return $badges;
     }
 
     /** "เข้าใช้แทน" (DESIGN §29.14), also on the student page. */

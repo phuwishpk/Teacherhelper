@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Google\GoogleAccounts;
+use App\Domain\Google\GoogleEvents;
 use App\Domain\Google\GoogleOAuth;
 use App\Domain\Google\GoogleOAuthStates;
 use App\Domain\Google\GoogleScopes;
 use App\Exceptions\ApiException;
 use App\Models\GoogleAccount;
+use App\Models\GoogleEvent;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -44,6 +46,7 @@ class GoogleOAuthCallbackController extends Controller
             // Google's codes are lower_snake_case; show and log nothing else.
             $error = preg_match('/^[a-z_]{1,40}/', $error, $m) === 1 ? $m[0] : '';
             Log::info('google.oauth_callback', ['result' => 'google_error', 'error' => $error, 'user_id' => $teacherId]);
+            GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', $error === 'access_denied' ? 'cancelled' : 'google_error', $teacherId, $error);
 
             return $error === 'access_denied'
                 ? $this->page(200, 'cancelled', 'ยกเลิกการเชื่อม Google Classroom แล้ว',
@@ -54,6 +57,7 @@ class GoogleOAuthCallbackController extends Controller
 
         if ($teacherId === null) {
             Log::info('google.oauth_callback', ['result' => 'state_invalid']);
+            GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', 'state_invalid');
 
             return $this->page(400, 'error', 'ลิงก์เชื่อม Google ใช้ไม่ได้แล้ว',
                 'ลิงก์นี้ถูกใช้ไปแล้วหรือเปิดไว้นานเกิน 10 นาที กลับไปที่แอป Krucheck แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
@@ -62,6 +66,7 @@ class GoogleOAuthCallbackController extends Controller
         $teacher = User::query()->find($teacherId);
         if ($teacher === null || Gate::forUser($teacher)->denies('manage', GoogleAccount::class)) {
             Log::info('google.oauth_callback', ['result' => 'forbidden', 'user_id' => $teacherId]);
+            GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', 'forbidden', $teacher?->id);
 
             return $this->page(403, 'error', 'เชื่อม Google Classroom ไม่ได้',
                 'บัญชีครูที่ขอเชื่อมใช้งานไม่ได้แล้ว (ถูกระงับหรือไม่ใช่บัญชีครู) กรุณาแจ้งผู้ดูแลระบบ');
@@ -70,6 +75,7 @@ class GoogleOAuthCallbackController extends Controller
         $code = $request->query('code');
         if (! is_string($code) || preg_match('/^[\x21-\x7E]{10,2048}$/', $code) !== 1) {
             Log::info('google.oauth_callback', ['result' => 'code_missing', 'user_id' => $teacher->id]);
+            GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', 'code_missing', $teacher->id);
 
             return $this->page(400, 'error', 'Google ไม่ได้ส่งรหัสยืนยันมา',
                 'กลับไปที่แอป Krucheck แล้วกด "เชื่อม Google Classroom" อีกครั้ง');
@@ -80,10 +86,14 @@ class GoogleOAuthCallbackController extends Controller
         } catch (ApiException $e) {
             Log::info('google.oauth_callback', ['result' => $e->errorCode, 'user_id' => $teacher->id]);
             $missing = $e->errorCode === 'google_scope_missing' ? ($e->errors['scopes'] ?? []) : [];
+            GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', $e->errorCode, $teacher->id,
+                $missing === [] ? null : implode(',', array_map(fn ($scope) => str_replace(GoogleScopes::PREFIX, '', (string) $scope), $missing)));
 
             return $this->page($e->status, 'error', 'เชื่อม Google Classroom ไม่สำเร็จ', $e->getMessage(),
                 missing: array_map(GoogleScopes::label(...), array_values($missing)));
         }
+
+        GoogleEvents::record(GoogleEvent::FLOW_CLASSROOM, 'connect', 'ok', $teacher->id, null, (string) ($status['email'] ?? ''));
 
         return $this->page(200, 'success', 'เชื่อม Google Classroom สำเร็จ',
             'กลับไปที่แอป Krucheck ได้เลย แอปจะเห็นการเชื่อมเองในไม่กี่วินาที (หรือกด "ตรวจสอบการเชื่อม") แล้วปิดหน้านี้ได้',
