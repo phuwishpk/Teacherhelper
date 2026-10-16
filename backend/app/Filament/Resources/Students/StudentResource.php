@@ -114,7 +114,7 @@ class StudentResource extends Resource
                     ->authorize(fn (User $record) => Gate::allows('unlinkGoogle', $record))
                     ->requiresConfirmation()
                     ->modalHeading(fn (User $record) => "ยกเลิกการเชื่อม Google ของ {$record->name}")
-                    ->modalDescription('นักเรียนจะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเชื่อมใหม่ (ยังใช้บัตร QR และ PIN ได้) เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้จนกว่าจะรีเซ็ต PIN')
+                    ->modalDescription('นักเรียนจะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเชื่อมใหม่ ยังเข้าด้วยชื่อผู้ใช้และรหัสผ่านได้ถ้ารู้รหัสผ่าน (บัญชีที่สร้างด้วยปุ่ม Google ไม่มีรหัสผ่านที่นักเรียนรู้ ให้ใช้รีเซ็ตรหัสผ่านแทน) เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้จนกว่าจะรีเซ็ตรหัสผ่าน')
                     ->modalSubmitActionLabel('ยกเลิกการเชื่อม')
                     ->action(function (User $record, GoogleSignIn $signIn) {
                         $signIn->unlink($record, self::admin(), 'admin');

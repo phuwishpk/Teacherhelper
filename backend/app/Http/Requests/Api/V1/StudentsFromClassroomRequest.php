@@ -51,7 +51,7 @@ class StudentsFromClassroomRequest extends FormRequest
             'student_ids.*.distinct' => 'เลือกนักเรียนคนเดียวกันซ้ำ',
             'numbering.required' => 'กรุณาเลือกวิธีให้เลขที่',
             'numbering.in' => 'numbering ต้องเป็น keep หรือ sorted',
-            'pin.required' => 'กรุณาเลือกว่าจะใช้ PIN เดิมหรือออก PIN ใหม่',
+            'pin.required' => 'กรุณาเลือกว่าจะใช้รหัสผ่านเดิมหรือออกรหัสผ่านใหม่',
             'pin.in' => 'pin ต้องเป็น keep หรือ new',
         ];
     }

@@ -240,7 +240,7 @@ final class CourseRequests
     {
         ClosedClassrooms::assertOpen($classroom);
         if ((int) $course->school_id !== (int) $classroom->school_id) {
-            throw new ApiException('รายวิชานี้ไม่ได้อยู่ในโรงเรียนของห้อง', 'course_not_in_school', 422, ['course_id' => ['รายวิชานี้ไม่ได้อยู่ในโรงเรียนของห้อง']]);
+            throw new ApiException('รายวิชานี้ไม่ได้อยู่ในพื้นที่ของครูของห้อง', 'course_not_in_school', 422, ['course_id' => ['รายวิชานี้ไม่ได้อยู่ในพื้นที่ของครูของห้อง']]);
         }
 
         return self::locked($classroom->id, $course->id, function () use ($admin, $classroom, $course) {

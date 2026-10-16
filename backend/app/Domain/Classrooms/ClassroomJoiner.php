@@ -131,7 +131,7 @@ final class ClassroomJoiner
             return ['member' => true, 'joined' => false, 'student_number' => (int) $current->pivot->student_number];
         }
         if (! self::accepts($classroom)) {
-            throw new ApiException('ห้องนี้ปิดรับสมาชิกแล้ว ติดต่อครูประจำวิชาเพื่อให้เพิ่มชื่อ', 'join_closed', 409);
+            throw new ApiException('ห้องนี้ปิดรับสมาชิกแล้ว ติดต่อครูประจำชั้นเพื่อให้เพิ่มชื่อ', 'join_closed', 409);
         }
         if ($seatId !== null) {
             return $this->claimSeat($student, $classroom, $seatId, $studentCode);

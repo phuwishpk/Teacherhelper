@@ -96,7 +96,7 @@ class ClassroomResource extends Resource
                     ->visible(fn (Classroom $record) => ! $record->isClosed())
                     ->authorize('assignCourses')
                     ->modalHeading(fn (Classroom $record) => "เพิ่มครูประจำวิชาของห้อง {$record->name}")
-                    ->modalDescription('เลือกรายวิชาของครูในโรงเรียน ครูเจ้าของรายวิชาจะสั่งงานและสอบในห้องนี้ได้ทันที เห็นเฉพาะผลของรายวิชาตัวเอง และแก้รายชื่อนักเรียนไม่ได้')
+                    ->modalDescription('เลือกรายวิชาในพื้นที่ของครูเดียวกับห้องนี้ ครูเจ้าของรายวิชาจะสั่งงานและสอบในห้องนี้ได้ทันที เห็นเฉพาะผลของรายวิชาตัวเอง และแก้รายชื่อนักเรียนไม่ได้ ครูจากพื้นที่อื่นให้ครูประจำชั้นเชิญสอนร่วมในแอป')
                     ->modalSubmitActionLabel('เพิ่ม')
                     ->schema(fn (Classroom $record) => [
                         Select::make('course_id')
@@ -108,7 +108,7 @@ class ClassroomResource extends Resource
                     ->action(function (Classroom $record, array $data) {
                         $course = Course::query()->where('school_id', $record->school_id)->find((int) ($data['course_id'] ?? 0));
                         if ($course === null) {
-                            Notification::make()->title('ไม่พบรายวิชานี้ในโรงเรียนของห้อง')->danger()->send();
+                            Notification::make()->title('ไม่พบรายวิชานี้ในพื้นที่ของครูของห้อง')->danger()->send();
 
                             return;
                         }

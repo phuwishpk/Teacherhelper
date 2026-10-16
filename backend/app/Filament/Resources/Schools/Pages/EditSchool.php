@@ -32,7 +32,7 @@ class EditSchool extends EditRecord
                 ->authorize(fn (School $record) => Gate::allows('unlinkStudentGoogle', $record))
                 ->requiresConfirmation()
                 ->modalHeading('ลบการเชื่อม Google ของนักเรียนทั้งหมด')
-                ->modalDescription(fn (School $record) => 'นักเรียน '.self::linkedStudents($record).' คนของโรงเรียนนี้จะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเชื่อมใหม่ (ยังใช้บัตร QR และ PIN ได้) ระบบลบรหัสบัญชี ชื่อ อีเมล และรูปที่เก็บจาก Google ทันที ย้อนกลับไม่ได้')
+                ->modalDescription(fn (School $record) => 'นักเรียน '.self::linkedStudents($record).' คนของพื้นที่นี้จะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเชื่อมใหม่ (คนที่รู้รหัสผ่านยังเข้าด้วยชื่อผู้ใช้และรหัสผ่านได้) ระบบลบรหัสบัญชี ชื่อ อีเมล และรูปที่เก็บจาก Google ทันที ย้อนกลับไม่ได้')
                 ->modalSubmitActionLabel('ลบการเชื่อมทั้งหมด')
                 ->action(function (School $record, GoogleSignIn $signIn) {
                     $actor = auth()->user();

@@ -269,7 +269,7 @@ class AssignmentController extends Controller
             }
             if ($assignment->worksheetPrints()->exists()) {
                 throw new ApiException(
-                    $exam ? 'ข้อสอบนี้พิมพ์ไปแล้ว ลบไม่ได้' : 'การบ้านนี้พิมพ์ใบงานไปแล้ว ลบไม่ได้ ให้ปิดการบ้านแทน',
+                    $exam ? 'ข้อสอบนี้พิมพ์ไปแล้ว ลบไม่ได้' : 'การบ้านนี้พิมพ์ใบงานไปแล้ว ลบไม่ได้',
                     'assignment_printed',
                     409,
                 );
@@ -281,7 +281,7 @@ class AssignmentController extends Controller
             }
             if ($assignment->googleLink()->exists()) {
                 // The courseWork lives on in Classroom and its submissions refer to this row (§18.4).
-                throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว ลบไม่ได้ ให้ปิดการบ้านแทน', 'assignment_posted', 409);
+                throw new ApiException('การบ้านนี้โพสต์ลง Google Classroom แล้ว ลบไม่ได้', 'assignment_posted', 409);
             }
             $fileIds = AttachmentInput::fileIds($assignment->attachments()->get());
             $assignment->delete();
