@@ -158,7 +158,7 @@ class _StudentsBulkAddScreenState extends ConsumerState<StudentsBulkAddScreen> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                'เพิ่มนักเรียน ${enrolled.length} คนแล้ว ใช้รหัสผ่านและบัตร QR เดิมได้',
+                'เพิ่มนักเรียน ${enrolled.length} คนแล้ว ใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้',
               ),
             ),
           );
@@ -311,7 +311,7 @@ class _StudentsBulkAddScreenState extends ConsumerState<StudentsBulkAddScreen> {
   List<Widget> _newForm(ThemeData theme) => [
     Text(
       'วางรายชื่อบรรทัดละคน ขึ้นต้นด้วยเลขที่ ตามด้วยชื่อ และเลขประจำตัวนักเรียน (ถ้ามี) '
-      'นักเรียนที่มีบัญชีในโรงเรียนอยู่แล้วให้ใช้ "เลือกนักเรียนที่มีอยู่" เพื่อไม่ให้มีบัญชีซ้ำ',
+      'นักเรียนที่มีบัญชีอยู่แล้วให้ใช้ "เลือกนักเรียนที่มีอยู่" เพื่อไม่ให้มีบัญชีซ้ำ',
       style: theme.textTheme.bodyMedium,
     ),
     const SizedBox(height: 12),
@@ -370,7 +370,7 @@ class _StudentsBulkAddScreenState extends ConsumerState<StudentsBulkAddScreen> {
 
   List<Widget> _existingForm(ThemeData theme) => [
     Text(
-      'นักเรียนที่มีบัญชีในโรงเรียนแล้วใช้รหัสผ่านและบัตร QR เดิมได้ทุกห้อง '
+      'นักเรียนที่มีบัญชีแล้วใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้ทุกห้อง '
       'ประวัติและคะแนนต่อเนื่องในบัญชีเดียว',
       style: theme.textTheme.bodyMedium,
     ),

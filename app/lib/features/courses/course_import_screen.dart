@@ -653,8 +653,8 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
             ),
             if (unresolved > 0)
               Text(
-                'ไม่พบ $unresolved รหัสในหลักสูตรของโรงเรียน '
-                'เลือกตัวที่ตรงกัน หรือเพิ่มเป็นตัวชี้วัดของโรงเรียน',
+                'ไม่พบ $unresolved รหัสในหลักสูตรหรือในตัวชี้วัดที่คุณเพิ่มไว้ '
+                'เลือกตัวที่ตรงกัน หรือเพิ่มเป็นตัวชี้วัดเอง',
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             for (final code in codes)
@@ -884,7 +884,7 @@ class _IndicatorMatchTile extends StatelessWidget {
           ),
           IconButton(
             key: ValueKey('add_indicator_$code'),
-            tooltip: 'เพิ่มเป็นตัวชี้วัดของโรงเรียน',
+            tooltip: 'เพิ่มเป็นตัวชี้วัดเอง',
             icon: const Icon(Icons.add_circle_outline),
             onPressed: onAdd,
           ),

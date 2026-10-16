@@ -344,7 +344,8 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
         if (d.isPublished)
           const _Notice(
             icon: Icons.info_outline,
-            text: 'ผลนี้เผยแพร่แล้ว ถ้าแก้ นักเรียนจะเห็นผลใหม่',
+            text:
+                'ผลนี้เผยแพร่แล้ว แก้ได้ผ่านคำขอตรวจใหม่หรือการสแกนใหม่เท่านั้น',
           ),
         _Section(
           title: 'โจทย์',

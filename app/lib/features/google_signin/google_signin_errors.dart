@@ -7,9 +7,9 @@ import '../google_classroom/google_auth.dart' show GoogleAuthException;
 String? googleSignInCodeMessage(String? code) => switch (code) {
   'google_not_linked' => 'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชี Krucheck',
   'google_domain_not_allowed' =>
-    'โรงเรียนไม่อนุญาตให้ใช้บัญชี Google ของโดเมนนี้ กรุณาใช้บัญชี Google ของโรงเรียน',
+    'ระบบไม่อนุญาตให้ใช้บัญชี Google ของโดเมนนี้ กรุณาใช้บัญชี Google อื่น',
   'student_google_disabled' =>
-    'โรงเรียนยังไม่เปิดให้นักเรียนเข้าสู่ระบบด้วย Google กรุณาใช้บัตร QR หรือรหัสผ่าน',
+    'ระบบยังไม่เปิดให้นักเรียนเข้าสู่ระบบด้วย Google กรุณาใช้ชื่อผู้ใช้และรหัสผ่าน',
   'account_not_active' =>
     'บัญชีนี้ยังใช้งานไม่ได้ (รอผู้ดูแลระบบอนุมัติหรือถูกระงับ)',
   'google_token_invalid' =>
@@ -29,7 +29,7 @@ String? googleSignInCodeMessage(String? code) => switch (code) {
   'google_ticket_invalid' =>
     'ลิงก์เข้าสู่ระบบด้วย Google หมดอายุหรือถูกใช้ไปแล้ว กรุณาลองใหม่',
   'google_signin_not_configured' =>
-    'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาใช้รหัสผ่านหรือบัตร QR',
+    'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาเข้าสู่ระบบด้วยรหัสผ่าน',
   'google_signin_web_not_configured' =>
     'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google ทางเว็บ กรุณาใช้แอปบน Android หรือรหัสผ่าน',
   'cancelled' => 'ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว',

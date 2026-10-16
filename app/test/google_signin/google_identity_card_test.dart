@@ -233,7 +233,9 @@ void main() {
       );
       await _tap(tester, _unlink);
       expect(
-        find.textContaining('บัตร QR หรือรหัสผ่านได้ตามเดิม'),
+        find.textContaining(
+          'ถ้าบัญชีนี้สร้างด้วยปุ่ม Google ให้ขอครูรีเซ็ตรหัสผ่านก่อน',
+        ),
         findsOneWidget,
       );
     });

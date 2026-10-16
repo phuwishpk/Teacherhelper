@@ -155,6 +155,24 @@ void main() {
     expect(json['answer_lines'], 3);
   });
 
+  testWidgets('answer lines stop at 15, the server\'s limit', (tester) async {
+    final repo = await pumpForm(tester);
+    await tester.tap(find.text('อัตนัย'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'โจทย์'),
+      'อธิบายวัฏจักรของน้ำ',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'จำนวนบรรทัดคำตอบ'),
+      '16',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'เพิ่มข้อ'));
+    await tester.pumpAndSettle();
+    expect(find.text('1–15 บรรทัด'), findsOneWidget);
+    expect(repo.added, isEmpty);
+  });
+
   testWidgets('a freeform assignment shows its key card, not the worksheet', (
     tester,
   ) async {

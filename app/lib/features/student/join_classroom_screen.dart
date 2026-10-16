@@ -234,7 +234,7 @@ class _GuestJoinState extends ConsumerState<_GuestJoin> {
           const SizedBox(height: 16),
           if (!info.open)
             Text(
-              'ห้องนี้ปิดรับสมาชิกแล้ว ถ้ายังไม่มีชื่อในห้อง ติดต่อครูประจำวิชา',
+              'ห้องนี้ปิดรับสมาชิกแล้ว ถ้ายังไม่มีชื่อในห้อง ติดต่อครูประจำชั้น',
               key: const ValueKey('join_closed'),
               style: TextStyle(color: theme.colorScheme.error),
             )

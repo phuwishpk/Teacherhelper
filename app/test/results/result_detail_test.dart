@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
+
 import 'package:eduvision/core/api/response_crops.dart';
 import 'package:eduvision/features/results/result_detail_screen.dart';
 import 'package:eduvision/features/results/results_repository.dart';
@@ -80,8 +82,15 @@ class _FakeResults extends Fake implements ResultsRepository {
         _detail(appealOnQ2: appealOnQ2, overridden: overridden),
       );
 
+  /// When set, the next appeal fails with this error.
+  Object? failAppeal;
+
   @override
   Future<Appeal> appeal(int responseId, {String? reason}) async {
+    if (failAppeal case final error?) {
+      failAppeal = null;
+      throw error;
+    }
     appeals.add((responseId, reason));
     appealOnQ2 = {'id': 9, 'status': 'open', 'reason': reason};
     return Appeal.fromJson(appealOnQ2!);
@@ -139,6 +148,46 @@ void main() {
     expect(results.appeals, [(12, 'หนูหารได้ 5 ค่ะ')]);
     expect(find.text('คำขอให้ครูตรวจใหม่: รอครูตรวจ'), findsOneWidget);
     expect(find.text('ขอให้ครูตรวจใหม่'), findsNothing);
+  });
+
+  testWidgets('a refused appeal shows why, not "already asked"', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final results = _FakeResults();
+    await pumpScreen(
+      tester,
+      const ResultDetailScreen(submissionId: 70),
+      overrides: [
+        resultsRepositoryProvider.overrideWithValue(results),
+        cropLoaderProvider.overrideWithValue(NoCropLoader()),
+      ],
+    );
+
+    Future<void> appealWith(Object error) async {
+      results.failAppeal = error;
+      await tester.tap(find.text('ขอให้ครูตรวจใหม่'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ส่งคำขอ'));
+      await tester.pumpAndSettle();
+    }
+
+    // Another 409 (a closed classroom) keeps the server's own message.
+    await appealWith(
+      _apiError(409, 'ห้องนี้ปิดแล้ว (ห้องเก่า)', 'classroom_closed'),
+    );
+    expect(find.text('ห้องนี้ปิดแล้ว (ห้องเก่า)'), findsOneWidget);
+    expect(find.text('ข้อนี้ขอให้ครูตรวจใหม่ไปแล้ว'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await appealWith(
+      _apiError(409, 'ขอให้ครูตรวจข้อนี้ใหม่ไปแล้ว', 'appeal_exists'),
+    );
+    expect(find.text('ข้อนี้ขอให้ครูตรวจใหม่ไปแล้ว'), findsOneWidget);
+    expect(results.appeals, isEmpty);
   });
 
   testWidgets('a total taken from Classroom carries a note (§19.3)', (
@@ -201,4 +250,17 @@ void main() {
     expect(body(0), {'reason': 'ช่วยดูอีกที'});
     expect(body(1), <String, dynamic>{}, reason: 'reason is optional');
   });
+}
+
+DioException _apiError(int status, String message, String code) {
+  final options = RequestOptions(path: '/student/responses/12/appeal');
+  return DioException(
+    requestOptions: options,
+    type: DioExceptionType.badResponse,
+    response: Response(
+      requestOptions: options,
+      statusCode: status,
+      data: {'message': message, 'code': code, 'errors': <String, Object?>{}},
+    ),
+  );
 }

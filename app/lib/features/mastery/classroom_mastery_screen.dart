@@ -137,7 +137,8 @@ class _ClassroomMasteryScreenState
               key: ValueKey('heatmap_no_course'),
               icon: Icons.menu_book_outlined,
               title: 'ยังไม่มีรายวิชาของคุณในห้องนี้',
-              message: 'ส่งคำขอผูกรายวิชากับห้องนี้ แล้วรอครูประจำชั้นอนุมัติ',
+              message:
+                  'กด "เพิ่มรายวิชาของฉัน" ที่หน้าห้องเรียนเพื่อผูกรายวิชาของคุณกับห้องนี้',
             )
           : AsyncView(
               value: mastery,

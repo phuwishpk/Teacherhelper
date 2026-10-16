@@ -17,7 +17,6 @@ import '../helpers/pump_screen.dart';
 import 'google_signin_fakes.dart';
 
 final _submit = find.byKey(const ValueKey('google_first_link_submit'));
-final _qr = find.byKey(const ValueKey('google_first_link_qr'));
 final _accept = find.byKey(const ValueKey('google_notice_accept'));
 final _error = find.byKey(const ValueKey('google_first_link_error'));
 
@@ -27,14 +26,13 @@ Future<ProviderContainer> _pump(
   WidgetTester tester, {
   required FakeGoogleSignInRepository repo,
   String? ticket,
-  bool qrScanSupported = true,
 }) async {
   tester.view.physicalSize = const Size(800, 2000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = await pumpScreen(
     tester,
-    GoogleFirstLinkScreen(qrScanSupported: qrScanSupported),
+    const GoogleFirstLinkScreen(),
     overrides: [
       tokenStorageProvider.overrideWithValue(InMemoryTokenStorage()),
       authRepositoryProvider.overrideWithValue(FakeMeAuth(studentUser)),
@@ -88,7 +86,8 @@ void main() {
 
     expect(find.text(googleSignInNotice), findsOneWidget);
     expect(tester.widget<FilledButton>(_submit).onPressed, isNull);
-    expect(tester.widget<OutlinedButton>(_qr).onPressed, isNull);
+    // Login cards are no longer issued (§29.2): no card scanner here.
+    expect(find.byKey(const ValueKey('google_first_link_qr')), findsNothing);
     expect(find.textContaining('กดยอมรับข้อความแจ้งก่อน'), findsOneWidget);
     expect(repo.pinLinks, isEmpty);
   });
@@ -154,28 +153,6 @@ void main() {
 
     expect(container.read(googleLinkTicketProvider), isNull);
     expect(find.byKey(const ValueKey('google_link_expired')), findsOneWidget);
-  });
-
-  testWidgets('the card scanner opens after accepting', (tester) async {
-    await _pump(tester, repo: FakeGoogleSignInRepository(), ticket: _ticket);
-    await _tap(tester, _accept);
-    await _tap(tester, _qr);
-    expect(find.text('qr-link-scanner'), findsOneWidget);
-  });
-
-  testWidgets('on the web the scanner explains it needs the Android app', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      repo: FakeGoogleSignInRepository(),
-      ticket: _ticket,
-      qrScanSupported: false,
-    );
-    await _tap(tester, _accept);
-    await _tap(tester, _qr);
-    expect(find.text('สแกนบัตร QR ได้ในแอป Android'), findsOneWidget);
-    await _tap(tester, find.text('ตกลง'));
   });
 
   group('linkGoogleWithQr', () {

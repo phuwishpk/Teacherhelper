@@ -106,8 +106,7 @@ class _AttachmentsEditorState extends ConsumerState<AttachmentsEditor> {
         ],
         if (widget.locked)
           Text(
-            'ส่งไป Google Classroom แล้ว แก้ไฟล์แนบไม่ได้ '
-            'ถ้าต้องเปลี่ยนไฟล์ ให้ลบแล้วสร้างใหม่',
+            'ส่งไป Google Classroom แล้ว แก้ไฟล์แนบไม่ได้',
             key: const ValueKey('post_files_locked'),
             style: muted,
           )

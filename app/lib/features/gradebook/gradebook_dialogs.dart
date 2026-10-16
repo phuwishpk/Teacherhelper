@@ -80,6 +80,9 @@ class _CellEditDialogState extends State<CellEditDialog> {
     final column = widget.column;
     final row = widget.row;
     final stateText = cellStateLabel(_cell.state, column.type);
+    // The "การเข้าเรียน" item made from the check-ins (§29.9): its scores
+    // come from the attendance page, and the server refuses any change here.
+    final fromAttendance = column.type == ColumnType.custom && !column.editable;
     return AlertDialog(
       title: Text('${row.studentNumber}. ${row.name}'),
       content: SingleChildScrollView(
@@ -110,6 +113,12 @@ class _CellEditDialogState extends State<CellEditDialog> {
                 ),
                 onSubmitted: (_) => _save(),
               )
+            else if (fromAttendance)
+              Text(
+                '${_cell.score == null ? 'ยังไม่มีคะแนน' : 'คะแนน ${formatGbNumber(_cell.score)}/${formatGbNumber(column.fullMarks)}'} '
+                'จากการเช็คชื่อ แก้ได้ที่หน้าเช็คชื่อของรายวิชา',
+                key: const ValueKey('cell_from_attendance'),
+              )
             else
               Text(
                 _cell.state == CellState.scored
@@ -118,14 +127,15 @@ class _CellEditDialogState extends State<CellEditDialog> {
                           '${formatGbNumber(column.fullMarks)}'
                     : 'ตรวจด้วยแอป: $stateText',
               ),
-            SwitchListTile(
-              key: const ValueKey('cell_excused'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('ยกเว้น'),
-              subtitle: const Text('ไม่นำช่องนี้เข้าค่าเฉลี่ยของนักเรียน'),
-              value: _excused,
-              onChanged: (v) => setState(() => _excused = v),
-            ),
+            if (!fromAttendance)
+              SwitchListTile(
+                key: const ValueKey('cell_excused'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('ยกเว้น'),
+                subtitle: const Text('ไม่นำช่องนี้เข้าค่าเฉลี่ยของนักเรียน'),
+                value: _excused,
+                onChanged: (v) => setState(() => _excused = v),
+              ),
           ],
         ),
       ),
@@ -138,13 +148,14 @@ class _CellEditDialogState extends State<CellEditDialog> {
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ยกเลิก'),
+          child: Text(fromAttendance ? 'ปิด' : 'ยกเลิก'),
         ),
-        FilledButton(
-          key: const ValueKey('cell_save'),
-          onPressed: _save,
-          child: const Text('บันทึก'),
-        ),
+        if (!fromAttendance)
+          FilledButton(
+            key: const ValueKey('cell_save'),
+            onPressed: _save,
+            child: const Text('บันทึก'),
+          ),
       ],
     );
   }

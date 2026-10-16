@@ -79,7 +79,7 @@ class _SchoolStudentSearchState extends ConsumerState<SchoolStudentSearch> {
         const SizedBox(height: 8),
         if (_query.length < 2)
           Text(
-            'พิมพ์อย่างน้อย 2 ตัวอักษร ค้นได้ทั้งโรงเรียน',
+            'พิมพ์อย่างน้อย 2 ตัวอักษร ค้นได้เฉพาะนักเรียนที่คุณเคยเพิ่ม หรือที่อยู่ในห้องที่คุณสอน',
             style: theme.textTheme.bodySmall,
           )
         else
