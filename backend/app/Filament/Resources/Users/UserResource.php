@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users;
 
 use App\Domain\Auth\Impersonations;
+use App\Domain\Teachers\Workspaces;
 use App\Domain\Web\WebApp;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
@@ -20,6 +21,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * DESIGN §7.5: approve or disable teacher accounts. Students are listed here
@@ -29,7 +31,8 @@ use Illuminate\Database\Eloquent\Builder;
  * One admin level (DESIGN §29.13.1): every active admin sees, approves,
  * disables and edits every account. Approval is the only gate of a
  * password sign-up (§29.1); teachers who sign up with Google are active at
- * once. Workspaces (`schools`) are made by the API, never picked here.
+ * once. Workspaces (`schools`) are never picked here: a teacher added with
+ * "เพิ่มผู้ใช้" gets one of their own (createAccount), as at registration.
  */
 class UserResource extends Resource
 {
@@ -96,6 +99,7 @@ class UserResource extends Resource
                     ->maxLength(255)
                     ->required(fn (string $operation, callable $get) => $operation === 'create' && $get('role') !== User::ROLE_STUDENT)
                     ->dehydrated(fn (?string $state) => filled($state))
+                    ->hidden(fn (?User $record) => $record?->isStudent() ?? false)
                     ->helperText('เว้นว่างเมื่อแก้ไขถ้าไม่ต้องการเปลี่ยนรหัสผ่าน'),
             ]);
     }
@@ -179,7 +183,9 @@ class UserResource extends Resource
                         Notification::make()->title("ระงับ {$record->name} แล้ว")->warning()->send();
                     }),
                 self::impersonateAction(),
-                EditAction::make()->visible(fn (User $record) => ! $record->isDeleted()),
+                EditAction::make()
+                    ->visible(fn (User $record) => ! $record->isDeleted())
+                    ->after(fn (User $record) => self::ensureWorkspace($record)),
                 AccountDeletionActions::delete(),
                 AccountDeletionActions::restore(),
             ]);
@@ -208,6 +214,35 @@ class UserResource extends Resource
     public static function getNavigationBadgeTooltip(): ?string
     {
         return 'ครูรออนุมัติ';
+    }
+
+    /**
+     * "เพิ่มผู้ใช้": an admin has no workspace; a teacher gets one of their
+     * own, as at registration (Workspaces::create, DESIGN §29.13.1), or they
+     * could not create a classroom. An account added as active counts as
+     * approved by this admin, like the "approve" action.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function createAccount(array $data): User
+    {
+        return DB::transaction(function () use ($data) {
+            $isTeacher = ($data['role'] ?? null) === User::ROLE_TEACHER;
+
+            return User::create([
+                ...$data,
+                'school_id' => $isTeacher ? Workspaces::create((string) $data['name'], null)->id : null,
+                'approved_by' => ($data['status'] ?? null) === User::STATUS_ACTIVE ? auth()->id() : null,
+            ]);
+        });
+    }
+
+    /** An admin account turned into a teacher by "แก้ไข" gets the workspace it lacks. */
+    public static function ensureWorkspace(User $user): void
+    {
+        if ($user->isTeacher() && $user->school_id === null) {
+            $user->forceFill(['school_id' => Workspaces::create($user->name, $user->school_name)->id])->save();
+        }
     }
 
     public static function getPages(): array

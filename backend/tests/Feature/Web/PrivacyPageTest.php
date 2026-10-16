@@ -43,6 +43,12 @@ class PrivacyPageTest extends TestCase
         $page = $this->get('/privacy')->assertOk();
 
         $page->assertDontSee('mailto:', false);
-        $page->assertSee('ติดต่อครูหรือผู้ดูแลระบบของโรงเรียน');
+        $page->assertSee('ติดต่อครูหรือผู้ดูแลระบบ');
+    }
+
+    public function test_it_names_the_site_it_is_served_from(): void
+    {
+        // The same view serves production and the self-hosted test server (DESIGN §26).
+        $this->get('http://krucheck.example.test/privacy')->assertOk()->assertSee('เว็บไซต์ krucheck.example.test');
     }
 }

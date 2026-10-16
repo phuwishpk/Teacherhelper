@@ -133,7 +133,7 @@ final class TeacherSkills
     private function assertCodeFree(string $code, int $schoolId, ?int $exceptId = null): void
     {
         if ($this->taken($code, $schoolId, $exceptId)) {
-            $message = "รหัส \"{$code}\" มีอยู่แล้วในหลักสูตรหรือในโรงเรียน";
+            $message = "รหัส \"{$code}\" มีอยู่แล้วในหลักสูตรหรือในตัวชี้วัดที่คุณเพิ่มไว้";
 
             throw new ApiException($message, 'skill_code_taken', 422, ['code' => [$message]]);
         }

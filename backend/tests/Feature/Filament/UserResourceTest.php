@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Filament\Resources\Users\UserResource;
+use App\Models\School;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -119,6 +120,99 @@ class UserResourceTest extends TestCase
             $this->assertTrue($other->can($ability, $own), $ability);
         }
         $this->assertTrue($other->can('update', $this->admin));
+    }
+
+    // ---- "เพิ่มผู้ใช้" (the create action) ----
+
+    public function test_admin_adds_a_teacher_who_gets_a_workspace_and_can_create_a_classroom(): void
+    {
+        $schools = School::query()->count();
+
+        Livewire::test(ManageUsers::class)
+            ->callAction(TestAction::make('create'), data: [
+                'name' => 'ครูเพิ่มโดยผู้ดูแล',
+                'role' => User::ROLE_TEACHER,
+                'email' => 'added-teacher@example.com',
+                'status' => User::STATUS_ACTIVE,
+                'password' => 'teacher-pass-1234',
+            ])
+            ->assertHasNoActionErrors();
+
+        $teacher = User::query()->where('email', 'added-teacher@example.com')->sole();
+        $this->assertSame(User::ROLE_TEACHER, $teacher->role);
+        $this->assertNotNull($teacher->school_id, 'a teacher needs a workspace of their own (DESIGN §29.13.1)');
+        $this->assertSame($schools + 1, School::query()->count());
+        $this->assertSame('ครูเพิ่มโดยผู้ดูแล', $teacher->school->name);
+        $this->assertSame($this->admin->id, $teacher->approved_by, 'added as active = approved by this admin');
+
+        $this->asUser($teacher)->postJson('/api/v1/classrooms', [
+            'name' => 'ป.5/1', 'grade_level' => 5, 'academic_year' => 2569,
+        ])->assertCreated();
+    }
+
+    public function test_admin_adds_another_admin_without_a_workspace(): void
+    {
+        $schools = School::query()->count();
+
+        Livewire::test(ManageUsers::class)
+            ->callAction(TestAction::make('create'), data: [
+                'name' => 'ผู้ดูแลคนที่สอง',
+                'role' => User::ROLE_ADMIN,
+                'email' => 'second-admin@example.com',
+                'status' => User::STATUS_ACTIVE,
+                'password' => 'admin-pass-1234',
+            ])
+            ->assertHasNoActionErrors();
+
+        $admin = User::query()->where('email', 'second-admin@example.com')->sole();
+        $this->assertSame(User::ROLE_ADMIN, $admin->role);
+        $this->assertNull($admin->school_id);
+        $this->assertSame($schools, School::query()->count());
+    }
+
+    public function test_a_pending_teacher_added_by_an_admin_still_waits_for_approval(): void
+    {
+        Livewire::test(ManageUsers::class)
+            ->callAction(TestAction::make('create'), data: [
+                'name' => 'ครูรออนุมัติ',
+                'role' => User::ROLE_TEACHER,
+                'email' => 'pending-teacher@example.com',
+                'status' => User::STATUS_PENDING,
+                'password' => 'teacher-pass-1234',
+            ])
+            ->assertHasNoActionErrors();
+
+        $teacher = User::query()->where('email', 'pending-teacher@example.com')->sole();
+        $this->assertSame(User::STATUS_PENDING, $teacher->status);
+        $this->assertNull($teacher->approved_by);
+        $this->assertNotNull($teacher->school_id);
+    }
+
+    public function test_the_create_form_checks_its_fields(): void
+    {
+        Livewire::test(ManageUsers::class)
+            ->callAction(TestAction::make('create'), data: [
+                'name' => '',
+                'role' => User::ROLE_TEACHER,
+                'email' => $this->admin->email,
+                'status' => User::STATUS_ACTIVE,
+                'password' => 'short',
+            ])
+            ->assertHasActionErrors(['name', 'email', 'password']);
+    }
+
+    public function test_an_admin_turned_into_a_teacher_gets_a_workspace(): void
+    {
+        $other = User::factory()->admin()->create(['name' => 'แอดมินที่จะเป็นครู']);
+        $this->assertNull($other->school_id);
+
+        Livewire::test(ManageUsers::class)
+            ->callAction(TestAction::make('edit')->table($other), data: ['role' => User::ROLE_TEACHER])
+            ->assertHasNoActionErrors();
+
+        $other->refresh();
+        $this->assertSame(User::ROLE_TEACHER, $other->role);
+        $this->assertNotNull($other->school_id);
     }
 
     public function test_teachers_cannot_open_the_panel(): void

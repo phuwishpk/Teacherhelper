@@ -39,9 +39,9 @@ class ManageSkills extends ManageRecords
                         // The whole core curriculum is a few MB of Thai text.
                         ->maxSize(20480),
                     Select::make('school_id')
-                        ->label('นำเข้าเป็นทักษะย่อยของโรงเรียน')
+                        ->label('นำเข้าเป็นทักษะย่อยของพื้นที่ของครู')
                         ->options(fn () => School::query()->orderBy('name')->pluck('name', 'id')->all())
-                        ->placeholder('— ตัวชี้วัดหลักสูตรแกนกลาง (ทุกโรงเรียน) —')
+                        ->placeholder('— ตัวชี้วัดหลักสูตรแกนกลาง (ครูทุกคนใช้) —')
                         ->nullable(),
                 ])
                 ->action(function (array $data, SkillCsvImporter $importer) {

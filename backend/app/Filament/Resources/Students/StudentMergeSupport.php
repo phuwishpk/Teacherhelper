@@ -75,7 +75,7 @@ final class StudentMergeSupport
             $action->halt();
         }
         if (! Gate::forUser($actor)->allows('mergeStudents', [$keep, $merge])) {
-            Notification::make()->title('ไม่มีสิทธิ์รวมบัญชีของโรงเรียนนี้')->danger()->send();
+            Notification::make()->title('ไม่มีสิทธิ์รวมบัญชีของพื้นที่นี้')->danger()->send();
             $action->halt();
         }
 

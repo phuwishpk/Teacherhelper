@@ -13,7 +13,7 @@ final class GoogleSignInErrors
     public static function notConfigured(): ApiException
     {
         return new ApiException(
-            'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาใช้รหัสผ่าน PIN หรือบัตร QR',
+            'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google กรุณาเข้าสู่ระบบด้วยรหัสผ่าน',
             'google_signin_not_configured',
             503,
         );
@@ -76,7 +76,7 @@ final class GoogleSignInErrors
     public static function unlinkNeedsPassword(): ApiException
     {
         return new ApiException(
-            'บัญชีนี้ยังไม่มีรหัสผ่าน ถ้ายกเลิกการเชื่อม Google จะเข้าสู่ระบบไม่ได้ ขอให้ผู้ดูแลโรงเรียนตั้งรหัสผ่านให้ก่อน',
+            'บัญชีนี้ยังไม่มีรหัสผ่าน ถ้ายกเลิกการเชื่อม Google จะเข้าสู่ระบบไม่ได้ ตั้งรหัสผ่านที่ "เปลี่ยนรหัสผ่าน" ในหน้าตั้งค่าก่อน',
             'google_unlink_needs_password',
             409,
         );

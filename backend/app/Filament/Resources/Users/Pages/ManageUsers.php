@@ -15,7 +15,7 @@ class ManageUsers extends ManageRecords
         return [
             CreateAction::make()
                 ->label('เพิ่มผู้ใช้')
-                ->mutateDataUsing(fn (array $data) => UserResource::keepInAdminSchool($data)),
+                ->using(fn (array $data) => UserResource::createAccount($data)),
         ];
     }
 }
