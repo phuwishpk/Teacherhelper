@@ -176,7 +176,7 @@ Future<void> _appeal(
     if (!context.mounted) return;
     showMessage(
       context,
-      apiStatusCode(e) == 409 || apiErrorCode(e) == 'appeal_exists'
+      apiErrorCode(e) == 'appeal_exists'
           ? 'ข้อนี้ขอให้ครูตรวจใหม่ไปแล้ว'
           : apiErrorMessage(e),
     );

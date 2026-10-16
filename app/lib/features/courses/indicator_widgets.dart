@@ -161,7 +161,7 @@ class IndicatorsField extends StatelessWidget {
   }
 }
 
-/// "เพิ่มตัวชี้วัดของโรงเรียน" (DESIGN §20.2): the teacher picks the
+/// "เพิ่มตัวชี้วัดเอง" (DESIGN §20.2): the teacher picks the
 /// standard (or indicator) it belongs under and names it; the server gives
 /// it a code when none is typed. Pops the new [Skill], shared with every
 /// teacher of the school and labelled "ครูเพิ่มเอง".
@@ -286,7 +286,7 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('เพิ่มตัวชี้วัดของโรงเรียน'),
+      title: const Text('เพิ่มตัวชี้วัดเอง'),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -295,7 +295,7 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'ตัวชี้วัดที่เพิ่มจะมีป้าย "ครูเพิ่มเอง" และครูทุกคนในโรงเรียนเลือกใช้ได้',
+                'ตัวชี้วัดที่เพิ่มจะมีป้าย "ครูเพิ่มเอง" และเห็นเฉพาะในบัญชีของคุณ',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 12),

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../review/review_labels.dart' show formatScore;
 import 'assignment.dart';
 import 'assignments_providers.dart';
 import 'assignments_repository.dart';
@@ -184,30 +185,21 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
       setState(() => _error = 'เลือกเกณฑ์หลักได้เพียงข้อเดียว');
       return null;
     }
+    // The server approves a rubric only with exactly one core criterion
+    // whose points add up to the question's full marks (RubricService), so
+    // both are errors here rather than a question the server then refuses.
     if (cores == 0) {
-      // §11.5 grades without a core criterion (K = R), but the teacher
-      // should know that nothing then marks the essential idea.
-      final ok = await confirm(
-        context,
-        title: 'ยังไม่ได้เลือกเกณฑ์หลัก',
-        message:
-            'ถ้าไม่มีเกณฑ์หลัก ระบบจะเฉลี่ยทุกเกณฑ์ตามคะแนน คำตอบที่พลาดแก่นของเรื่องอาจได้คะแนนสูง '
-            'ต้องการอนุมัติต่อหรือไม่',
-        confirmLabel: 'อนุมัติ',
-      );
-      if (!ok) return null;
+      setState(() => _error = 'เลือกเกณฑ์หลัก (แก่นของคำตอบ) 1 ข้อก่อนอนุมัติ');
+      return null;
     }
     final total = criteria.fold<double>(0, (s, c) => s + c.points);
     if ((total - q.maxPoints).abs() > 0.001) {
-      if (!mounted) return null;
-      final ok = await confirm(
-        context,
-        title: 'คะแนนรวมไม่เท่ากับคะแนนเต็ม',
-        message:
-            'เกณฑ์รวมได้ $total คะแนน แต่ข้อนี้เต็ม ${q.maxPoints} คะแนน ต้องการอนุมัติต่อหรือไม่',
-        confirmLabel: 'อนุมัติ',
+      setState(
+        () => _error =
+            'คะแนนรวมของเกณฑ์ (${formatScore(total)}) ต้องเท่ากับคะแนนเต็มของข้อ '
+            '(${formatScore(q.maxPoints)})',
       );
-      if (!ok) return null;
+      return null;
     }
     return criteria;
   }

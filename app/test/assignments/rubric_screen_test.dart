@@ -385,9 +385,11 @@ void main() {
       expect(fake.saved, isEmpty);
     });
 
-    testWidgets('approving without a core criterion asks first', (
+    testWidgets('approving without a core criterion is refused', (
       tester,
     ) async {
+      // The server approves only with exactly one core criterion
+      // (RubricService), so the screen does not send such a rubric.
       await _setPhoneSize(tester);
       final fake = _FakeAssignments(
         criteria: [_oldCriteria[0].copyWith(isCore: false), _oldCriteria[1]],
@@ -400,26 +402,30 @@ void main() {
       await tester.ensureVisible(find.text('บันทึกและอนุมัติ'));
       await tester.tap(find.text('บันทึกและอนุมัติ'));
       await tester.pumpAndSettle();
-      expect(find.text('ยังไม่ได้เลือกเกณฑ์หลัก'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'อนุมัติ'));
-      await tester.pumpAndSettle();
+      expect(
+        find.text('เลือกเกณฑ์หลัก (แก่นของคำตอบ) 1 ข้อก่อนอนุมัติ'),
+        findsOneWidget,
+      );
+      expect(fake.saved, isEmpty);
+    });
 
-      final sent = fake.saved.single;
-      expect(sent['reference_steps'], isNull);
-      expect(sent['criteria'], [
-        {
-          'position': 1,
-          'description': 'ตั้งสมการจากโจทย์ได้ถูกต้องครบทุกเงื่อนไข',
-          'points': 2.0,
-          'is_core': false,
-        },
-        {
-          'position': 2,
-          'description': 'แสดงวิธีทำและได้คำตอบ 125',
-          'points': 3.0,
-          'is_core': false,
-        },
-      ]);
+    testWidgets('approving when the points do not add up is refused', (
+      tester,
+    ) async {
+      await _setPhoneSize(tester);
+      final fake = _FakeAssignments(
+        criteria: [_oldCriteria[0], _oldCriteria[1].copyWith(points: 1)],
+      );
+      await pumpScreen(
+        tester,
+        const RubricScreen(assignmentId: 1, questionId: 501),
+        overrides: [assignmentsRepositoryProvider.overrideWithValue(fake)],
+      );
+      await tester.ensureVisible(find.text('บันทึกและอนุมัติ'));
+      await tester.tap(find.text('บันทึกและอนุมัติ'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('ต้องเท่ากับคะแนนเต็มของข้อ'), findsOneWidget);
+      expect(fake.saved, isEmpty);
     });
   });
 

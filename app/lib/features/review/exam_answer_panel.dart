@@ -172,11 +172,7 @@ class _ExamAnswerPanelState extends ConsumerState<ExamAnswerPanel> {
           ),
         ],
         const SizedBox(height: 4),
-        Text(
-          'คะแนนคิดด้วยเฉลยเหมือนรอยฝน ไม่นับเป็นการแก้คะแนน '
-          '"ตรวจใหม่ทั้งห้อง" ภายหลังจะคิดคำตอบนี้กับเฉลยใหม่',
-          style: muted,
-        ),
+        Text('คะแนนคิดด้วยเฉลยเหมือนรอยฝน ไม่นับเป็นการแก้คะแนน', style: muted),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

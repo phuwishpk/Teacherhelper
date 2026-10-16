@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,14 +62,12 @@ Future<void> linkGoogleWithQr(WidgetRef ref, String payload) => _confirm(
 );
 
 /// "ยืนยันตัวตนครั้งแรก" (DESIGN §24.9.5, §24.13): the student's Google
-/// account is not linked yet, so they prove who they are once with the
-/// their username and password or the login card, after accepting the PDPA
-/// notice (§24.14). Success links the account and signs the student in.
+/// account is not linked yet, so they prove who they are once with their
+/// username and password, after accepting the PDPA notice (§24.14). Success
+/// links the account and signs the student in. Login cards are no longer
+/// issued (§29.2), so the card scanner is not offered here any more.
 class GoogleFirstLinkScreen extends ConsumerStatefulWidget {
-  const GoogleFirstLinkScreen({super.key, this.qrScanSupported = !kIsWeb});
-
-  /// The card scanner needs the Android app's camera.
-  final bool qrScanSupported;
+  const GoogleFirstLinkScreen({super.key});
 
   @override
   ConsumerState<GoogleFirstLinkScreen> createState() =>
@@ -115,26 +112,6 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
     }
   }
 
-  void _scanCard() {
-    if (widget.qrScanSupported) {
-      context.push(AppRoutes.googleFirstLinkQr);
-      return;
-    }
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('สแกนบัตร QR ได้ในแอป Android'),
-        content: const Text('บนเว็บให้กรอกชื่อผู้ใช้และรหัสผ่านแทน'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ตกลง'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ticket = ref.watch(googleLinkTicketProvider);
@@ -167,7 +144,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
           'บัญชี Google นี้ยังไม่ได้เชื่อมกับบัญชีนักเรียน '
           'ถ้าห้องของคุณใช้ Google Classroom และเพิ่งเข้าคอร์ส ไม่ต้องกรอกอะไร '
           'รอประมาณ 20 นาทีแล้วกด "เข้าสู่ระบบด้วย Google" อีกครั้ง '
-          'หรือยืนยันว่าเป็นคุณครั้งเดียวด้วยบัตร QR หรือชื่อผู้ใช้และรหัสผ่าน '
+          'หรือยืนยันว่าเป็นคุณครั้งเดียวด้วยชื่อผู้ใช้และรหัสผ่าน '
           'ครั้งต่อไปกด "เข้าสู่ระบบด้วย Google" ได้เลย',
           style: theme.textTheme.bodyLarge,
         ),
@@ -204,24 +181,6 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
-          key: const ValueKey('google_first_link_qr'),
-          onPressed: ready ? _scanCard : null,
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('สแกนบัตร QR'),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            const Expanded(child: Divider()),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('หรือใช้รหัสผ่าน', style: theme.textTheme.labelLarge),
-            ),
-            const Expanded(child: Divider()),
-          ],
-        ),
-        const SizedBox(height: 8),
         Form(
           key: _formKey,
           child: Column(

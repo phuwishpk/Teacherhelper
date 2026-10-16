@@ -140,7 +140,8 @@ class _ProfileDialogState extends ConsumerState<_ProfileDialog> {
                 maxLength: 150,
                 decoration: const InputDecoration(
                   labelText: 'ชื่อโรงเรียน',
-                  helperText: 'แสดงในแอปและบนบัตร QR ของนักเรียน เว้นว่างได้',
+                  helperText:
+                      'แสดงในแอปและในหน้าเข้าห้องที่นักเรียนเห็น เว้นว่างได้',
                   helperMaxLines: 2,
                 ),
               ),

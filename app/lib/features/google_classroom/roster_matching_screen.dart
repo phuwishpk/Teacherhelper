@@ -163,8 +163,8 @@ class _RosterMatchingFormState extends ConsumerState<RosterMatchingForm> {
                             key: const ValueKey('roster_unmatched_accounts'),
                             text:
                                 'บัญชีใน Classroom ที่ยังไม่จับคู่ $unmatchedAccounts บัญชี: '
-                                'งานที่ส่งจากบัญชีเหล่านี้ยังสแกนได้ถ้าใบงานมี QR ของนักเรียน '
-                                'แต่ส่งคะแนนกลับ Classroom ไม่ได้',
+                                'งานที่ส่งจากบัญชีเหล่านี้ยังไม่ถูกดาวน์โหลดและไม่ถูกตรวจจนกว่าจะจับคู่ '
+                                'และส่งคะแนนกลับ Classroom ไม่ได้',
                           ),
                         ],
                         if (studentsWithout.isNotEmpty) ...[

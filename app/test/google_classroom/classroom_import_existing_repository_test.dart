@@ -217,7 +217,7 @@ void main() {
       ('request_pending', 'รออนุมัติอยู่แล้ว'),
       ('classroom_closed', 'ห้องเก่า'),
       ('course_link_busy', 'รอสักครู่'),
-      ('student_not_in_school', 'ไม่พบนักเรียนบางคน'),
+      ('student_not_in_school', 'ไม่พบบัญชีของนักเรียนบางคน'),
       ('course_already_in_classroom', 'ผูกกับห้องนี้อยู่แล้ว'),
     ]) {
       final error = dioError(409, {'message': 'x', 'code': code});

@@ -57,7 +57,7 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'งานของผู้ดูแลระบบ เช่น อนุมัติบัญชีครู จัดการโรงเรียน ตัวชี้วัด '
+            'งานของผู้ดูแลระบบ เช่น อนุมัติบัญชีครู จัดการบัญชีผู้ใช้ ตัวชี้วัด '
             'และเวอร์ชันโมเดล ทำในหน้าเว็บผู้ดูแลระบบ',
             style: theme.textTheme.bodyMedium,
           ),

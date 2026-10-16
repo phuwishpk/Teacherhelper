@@ -118,7 +118,7 @@ class ClassroomDetailScreen extends ConsumerWidget {
                               Text(
                                 c.canManageStudents
                                     ? 'ยังไม่มีนักเรียน กด "เพิ่มนักเรียน" แล้ววางรายชื่อจากไฟล์ของโรงเรียน '
-                                          'หรือเลือกนักเรียนที่มีบัญชีในโรงเรียนอยู่แล้ว'
+                                          'หรือเลือกนักเรียนที่มีบัญชีอยู่แล้ว'
                                     : 'ห้องนี้ไม่มีนักเรียน',
                                 textAlign: TextAlign.center,
                               ),
@@ -445,7 +445,7 @@ class _PendingPinsCardState extends ConsumerState<_PendingPinsCard> {
             const SizedBox(height: 4),
             Text(
               'ระบบเพิ่มชื่อให้อัตโนมัติตอนซิงก์ กดออกรหัสผ่านแล้วจดให้นักเรียน '
-              'หรือพิมพ์บัตร QR ของห้อง',
+              'หรือให้นักเรียนเข้าห้องด้วยรหัสห้อง',
               style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
             ),
             const SizedBox(height: 8),
@@ -548,7 +548,8 @@ class _StudentTile extends ConsumerWidget {
       title: 'ยกเลิกการเชื่อม Google ของ ${student.name}?',
       message:
           'นักเรียนจะเข้าสู่ระบบด้วยปุ่ม Google ไม่ได้จนกว่าจะเชื่อมใหม่ '
-          'ยังเข้าสู่ระบบด้วยบัตร QR หรือรหัสผ่านได้ตามเดิม '
+          'ยังเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านได้ถ้ารู้รหัสผ่าน '
+          '(บัญชีที่สร้างด้วยปุ่ม Google ไม่มีรหัสผ่านที่นักเรียนรู้ ให้รีเซ็ตรหัสผ่านแทน) '
           'เครื่องที่เข้าสู่ระบบอยู่แล้วยังใช้ได้ ถ้าต้องการให้ออกทุกเครื่องให้รีเซ็ตรหัสผ่าน',
       confirmLabel: 'ยกเลิกการเชื่อม',
       destructive: true,

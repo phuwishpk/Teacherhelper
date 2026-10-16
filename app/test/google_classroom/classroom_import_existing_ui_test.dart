@@ -207,7 +207,7 @@ void main() {
       expect(find.text('stub-home'), findsOneWidget);
       expect(
         find.text(
-          'สร้างห้อง ป.5/1 แล้ว นักเรียน 1 คนใช้รหัสผ่านและบัตร QR เดิมได้',
+          'สร้างห้อง ป.5/1 แล้ว นักเรียน 1 คนใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้',
         ),
         findsOneWidget,
       );
@@ -260,7 +260,10 @@ void main() {
       expect(google.linkExistingCalls, [('6210', 7, null)]);
       expect(find.text('ซิงก์รายชื่อแล้ว'), findsOneWidget);
       expect(find.text('333333'), findsOneWidget);
-      expect(find.text('นักเรียนเดิมของโรงเรียนเข้าห้อง 1 คน'), findsOneWidget);
+      expect(
+        find.text('นักเรียนที่มีบัญชีอยู่แล้วเข้าห้อง 1 คน'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('จดรหัสผ่านแล้ว'));
       await tester.pumpAndSettle();
       expect(find.text('stub-home'), findsOneWidget);

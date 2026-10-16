@@ -12,10 +12,10 @@ import 'exam_import_models.dart';
 import 'exam_import_repository.dart';
 import 'exam_import_review_screen.dart';
 
-/// Exam reads are cached for the whole school (DESIGN §22.17), and Gemini
-/// must never see students' work.
+/// Exam reads are cached for reuse in the teacher's workspace (DESIGN §22.17,
+/// §29.13.1), and Gemini must never see students' work.
 const kExamReadPrivacyNote =
-    'อย่าแนบไฟล์ที่มีชื่อหรือคำตอบของนักเรียน ผลการอ่านใช้ร่วมกันทั้งโรงเรียน';
+    'อย่าแนบไฟล์ที่มีชื่อหรือคำตอบของนักเรียน เพราะผลการอ่านถูกเก็บไว้ใช้ซ้ำ';
 
 /// "อ่านจากไฟล์ข้อสอบ" (DESIGN §22.4 item 2): pick or photograph the exam
 /// file, upload it, show the cost with "คำแนะนำถึง AI", send the read once,
@@ -114,7 +114,7 @@ Future<void> runExamImport(
         filesLabel: 'ไฟล์ข้อสอบ',
         rangeHint: 'เลือกช่วงหน้าที่มีข้อสอบ',
         note: kExamReadPrivacyNote,
-        cachedMessage: 'โรงเรียนเคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย',
+        cachedMessage: 'เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย',
         readBefore: (d) => d.cachedPurposes.contains(kExamReadPurpose),
         documents: docs,
         guidanceHint: kGuidanceHintExamRead,

@@ -203,7 +203,7 @@ void main() {
     expect(result?.map((s) => s.id), [1, 2, 3]);
   });
 
-  testWidgets('"เพิ่มตัวชี้วัดของโรงเรียน" adds a missing one and ticks it', (
+  testWidgets('"เพิ่มตัวชี้วัดเอง" adds a missing one and ticks it', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1080, 2400);
@@ -218,7 +218,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('skills_picker_add_indicator')));
     await tester.pumpAndSettle();
-    expect(find.text('เพิ่มตัวชี้วัดของโรงเรียน'), findsWidgets);
+    expect(find.text('เพิ่มตัวชี้วัดเอง'), findsWidgets);
     expect(repo.levels.last, 'standard,indicator');
     await tester.tap(find.widgetWithText(RadioListTile<int>, 'ค 1.1 ป.5/1'));
     await tester.enterText(

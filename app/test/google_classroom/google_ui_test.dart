@@ -359,28 +359,24 @@ void main() {
       return google;
     }
 
-    testWidgets('post with the spare worksheet, then the link shows', (
-      tester,
-    ) async {
+    testWidgets('post, then the link shows', (tester) async {
       final google = await pumpSection(tester, assignment());
       expect(find.text(gradeReturnNote), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('google_post')));
       await tester.pumpAndSettle();
-      final checkbox = tester.widget<CheckboxListTile>(
-        find.byKey(const ValueKey('google_attach_blank')),
-      );
-      expect(checkbox.value, isTrue);
+      // No spare-worksheet option: the server ignores it (any paper works).
+      expect(find.byKey(const ValueKey('google_attach_blank')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('google_post_confirm')));
       await tester.pumpAndSettle();
 
-      expect(google.posts.single, (12, true, null));
+      expect(google.posts.single, (12, false, null));
       expect(find.text('โพสต์แล้ว'), findsWidgets);
       expect(
         find.byKey(const ValueKey('google_alternate_link')),
         findsOneWidget,
       );
-      expect(find.textContaining('แนบใบงานสำรองแล้ว'), findsOneWidget);
+      expect(find.textContaining('แนบใบงานสำรอง'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('google_fetch_submissions')));
       await tester.pumpAndSettle();

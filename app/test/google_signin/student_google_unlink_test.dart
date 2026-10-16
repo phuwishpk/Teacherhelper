@@ -89,7 +89,9 @@ void main() {
     await tester.tap(find.text('ยกเลิกการเชื่อม Google'));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('บัตร QR หรือรหัสผ่านได้ตามเดิม'),
+      find.textContaining(
+        'ยังเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านได้ถ้ารู้รหัสผ่าน',
+      ),
       findsOneWidget,
     );
     await tester.tap(find.widgetWithText(FilledButton, 'ยกเลิกการเชื่อม'));

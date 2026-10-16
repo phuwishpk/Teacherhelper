@@ -113,7 +113,9 @@ void main() {
       expect(fake.copies.single.$5, isFalse);
       expect(find.text('stub-home'), findsOneWidget);
       expect(
-        find.text('นำนักเรียน 1 คนเข้าห้องแล้ว ใช้รหัสผ่านและบัตร QR เดิมได้'),
+        find.text(
+          'นำนักเรียน 1 คนเข้าห้องแล้ว ใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้',
+        ),
         findsOneWidget,
       );
     });

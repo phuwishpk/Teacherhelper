@@ -341,7 +341,7 @@ class _HeaderCard extends StatelessWidget {
             if (c.classrooms.isEmpty)
               Text(
                 'ยังไม่ผูกห้องเรียน กด "แก้ไขรายวิชา" เพื่อเลือกห้องของคุณ '
-                'หรือ "ขอสอนห้องของครูท่านอื่น"',
+                'หรือห้องที่ตอบรับคำเชิญสอนร่วมแล้ว',
                 style: theme.textTheme.bodySmall,
               )
             else
