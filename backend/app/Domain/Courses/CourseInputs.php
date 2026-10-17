@@ -137,7 +137,7 @@ final class CourseInputs
             ->all();
         foreach ($ids as $i => $id) {
             if (! in_array($id, $found, true)) {
-                $message = 'ไม่พบตัวชี้วัดนี้ (เลือกได้เฉพาะตัวชี้วัดหรือทักษะย่อยของหลักสูตรหรือของโรงเรียน)';
+                $message = 'ไม่พบตัวชี้วัดนี้ (เลือกได้เฉพาะตัวชี้วัดหรือทักษะย่อยของหลักสูตร หรือที่คุณเพิ่มเอง)';
 
                 throw new ApiException($message, 'validation_failed', 422, ["{$field}.{$i}" => [$message]]);
             }

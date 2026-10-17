@@ -50,7 +50,7 @@ class SkillResource extends Resource
 
     public const SOURCE_LABELS = [
         Skill::SOURCE_CURRICULUM => 'หลักสูตรแกนกลาง',
-        Skill::SOURCE_SCHOOL_ADMIN => 'admin ของโรงเรียน',
+        Skill::SOURCE_SCHOOL_ADMIN => 'ผู้ดูแลระบบเพิ่ม',
         Skill::SOURCE_TEACHER => Skill::TEACHER_LABEL,
     ];
 
@@ -69,7 +69,7 @@ class SkillResource extends Resource
                         ->pluck('code')
                         ->contains(fn ($found) => (string) $found === $code);
                     if ($taken) {
-                        $fail("รหัส \"{$code}\" มีอยู่แล้วในหลักสูตรหรือในโรงเรียน");
+                        $fail("รหัส \"{$code}\" มีอยู่แล้วในหลักสูตรหรือในพื้นที่ของครูนี้");
                     }
                 }]),
             Textarea::make('name')->label('ชื่อ')->required()->rows(3),
@@ -90,7 +90,7 @@ class SkillResource extends Resource
                 TextColumn::make('grade_level')->label('ชั้น')->formatStateUsing(fn (?int $state) => self::gradeLabel($state))->sortable(),
                 TextColumn::make('level')->label('ระดับ')->formatStateUsing(fn (?string $state) => self::LEVEL_LABELS[$state] ?? '—')->sortable(),
                 TextColumn::make('parent.code')->label('ภายใต้')->placeholder('—')->fontFamily('mono'),
-                TextColumn::make('school.name')->label('ของโรงเรียน')->placeholder('หลักสูตรแกนกลาง'),
+                TextColumn::make('school.name')->label('พื้นที่ของครู')->placeholder('หลักสูตรแกนกลาง'),
                 TextColumn::make('source')->label('ที่มา')->badge()->formatStateUsing(fn (?string $state) => self::SOURCE_LABELS[$state] ?? '—'),
             ])
             ->defaultSort('code')
@@ -104,7 +104,7 @@ class SkillResource extends Resource
                 TernaryFilter::make('school_id')
                     ->label('ที่มา')
                     ->placeholder('ทั้งหมด')
-                    ->trueLabel('ทักษะย่อยของโรงเรียน')
+                    ->trueLabel('ของพื้นที่ของครู')
                     ->falseLabel('หลักสูตรแกนกลาง')
                     ->queries(
                         true: fn (Builder $q) => $q->whereNotNull('school_id'),

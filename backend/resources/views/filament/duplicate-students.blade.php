@@ -12,7 +12,7 @@
 
     @if ($schools !== [])
         <label style="display:flex;gap:8px;align-items:center;font-size:0.875rem;">
-            <span>โรงเรียน</span>
+            <span>พื้นที่ของครู</span>
             <select wire:model.live="schoolId" style="border-radius:8px;padding:4px 32px 4px 8px;color:inherit;background:transparent;">
                 @foreach ($schools as $id => $name)
                     <option value="{{ $id }}">{{ $name }}</option>

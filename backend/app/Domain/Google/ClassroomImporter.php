@@ -376,11 +376,11 @@ final class ClassroomImporter
             }
             $student = $students->get($row['student_id']);
             if ($student === null || ! $student->isStudent() || ! $student->isActive() || $student->isMerged() || (int) $student->school_id !== (int) $teacher->school_id) {
-                $errors["students.{$i}.student_id"] = ['ไม่พบนักเรียนคนนี้ในโรงเรียน'];
+                $errors["students.{$i}.student_id"] = ['ไม่พบนักเรียนคนนี้ในรายชื่อนักเรียนของคุณ'];
             }
         }
         if ($errors !== []) {
-            throw new ApiException('ไม่พบนักเรียนบางคนในโรงเรียน', 'student_not_in_school', 422, $errors);
+            throw new ApiException('ไม่พบนักเรียนบางคนในรายชื่อนักเรียนของคุณ', 'student_not_in_school', 422, $errors);
         }
     }
 

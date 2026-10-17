@@ -113,7 +113,7 @@ class SkillCsvImporter
     public function importStream($handle, ?int $schoolId = null): SkillImportResult
     {
         if ($schoolId !== null && ! School::query()->whereKey($schoolId)->exists()) {
-            throw new SkillImportException(["ไม่พบโรงเรียน id {$schoolId}"]);
+            throw new SkillImportException(["ไม่พบพื้นที่ของครู id {$schoolId}"]);
         }
 
         $lock = Cache::lock(self::LOCK, self::LOCK_SECONDS);
