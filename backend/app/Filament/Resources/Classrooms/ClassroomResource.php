@@ -137,7 +137,7 @@ class ClassroomResource extends Resource
                     ->authorize('close')
                     ->requiresConfirmation()
                     ->modalHeading('ปิดห้อง (ย้ายไปห้องเก่า)')
-                    ->modalDescription(fn (Classroom $record) => "ห้อง {$record->name} จะอ่านได้อย่างเดียว ดูและส่งออกผลได้เหมือนเดิม แต่สั่งงาน สแกน หรือแก้คะแนนไม่ได้ นักเรียนยังเข้าสู่ระบบด้วยรหัสห้องนี้ได้")
+                    ->modalDescription(fn (Classroom $record) => "ห้อง {$record->name} จะอ่านได้อย่างเดียว ดูและส่งออกผลได้เหมือนเดิม แต่สั่งงาน สแกน หรือแก้คะแนนไม่ได้ นักเรียนยังดูผลและเกรดเดิมได้ แต่เข้าห้องด้วยรหัสห้องไม่ได้")
                     ->action(function (Classroom $record) {
                         app(ClassroomLifecycle::class)->close($record, self::admin());
                         Notification::make()->title("ปิดห้อง {$record->name} แล้ว")->success()->send();
