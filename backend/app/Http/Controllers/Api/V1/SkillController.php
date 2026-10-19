@@ -53,7 +53,11 @@ class SkillController extends Controller
 
         $grade = $request->validated('grade');
         if ($grade !== null && $grade !== '') {
-            $query->where('grade_level', (int) $grade);
+            // A teacher's indicator added under a standard before the app sent the
+            // grade has none (DESIGN §20.2): it shows for every grade rather than none.
+            $query->where(fn (Builder $b) => $b
+                ->where('grade_level', (int) $grade)
+                ->orWhere(fn (Builder $b) => $b->whereNull('grade_level')->where('source', Skill::SOURCE_TEACHER)));
         }
 
         $level = (string) $request->validated('level', '');
