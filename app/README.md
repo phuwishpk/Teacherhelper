@@ -32,7 +32,9 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
 
 ## iOS (ทดสอบ, DESIGN §33)
 
-ต้องใช้ Mac ที่มี Xcode และ CocoaPods สแกนใบงานด้วยกล้องและการแจ้งเตือนยังไม่มีบน iOS
+ต้องใช้ Mac ที่มี Xcode, CocoaPods, cmake และ ninja การแจ้งเตือนยังไม่มีบน iOS
+ระบบสแกนต้องใช้ OpenCV: รัน `tools/build-opencv-ios.sh` จาก root ของ repo หนึ่งครั้งต่อเครื่อง (ราว 20–30 นาที)
+ก่อน build iOS ครั้งแรก มิฉะนั้น `pod install` จะหยุดพร้อมบอกให้รันสคริปต์นี้
 
 ปุ่ม Google: สร้าง OAuth client แบบ iOS (bundle ID `com.eduvision.app`) ใน project sign-in แล้วคัดลอก
 `ios/Flutter/GoogleSignIn.xcconfig.example` เป็น `GoogleSignIn.xcconfig` (ไม่ commit) ใส่ค่าของ client นั้น
@@ -47,6 +49,13 @@ flutter run --release -d <id> --dart-define=API_BASE_URL=https://<โดเม�
 
 ครั้งแรกบน iPhone: เปิด Settings > Privacy & Security > Developer Mode แล้วหลังติดตั้งให้เชื่อถือนักพัฒนาที่ Settings > General > VPN & Device Management ด้วย Apple ID ฟรี แอปใช้ได้ 7 วันแล้วต้องรันคำสั่งสุดท้ายใหม่
 อย่า commit ค่า Team ที่ Xcode เขียนลง `ios/Runner.xcodeproj/project.pbxproj`
+
+Test ของ scan pipeline บน iOS (ภาพใบงานสังเคราะห์ `ios/RunnerTests/Fixtures/`, สร้างใหม่ด้วย `make_scan_fixture.py`):
+
+```bash
+cd ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+  -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:RunnerTests/ScanCoreTests
+```
 
 ## ทำงานออฟไลน์
 

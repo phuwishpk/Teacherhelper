@@ -46,7 +46,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Krucheck ใช้กล้องเพื่อสแกน QR เข้าห้อง และถ่ายรูปงานที่ส่ง</string>
+	<string>Krucheck ใช้กล้องเพื่อสแกนใบงาน กระดาษคำตอบ และ QR เข้าห้อง และถ่ายรูปงานที่ส่ง</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Krucheck ใช้รูปในเครื่องเมื่อคุณเลือกรูปงานหรือเอกสารเพื่อส่งหรือให้ตรวจ</string>
 	<key>CFBundleVersion</key>

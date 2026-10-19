@@ -98,7 +98,9 @@ class UnsupportedScanPipeline implements ScanPipeline {
   ) => Future.error(const ScanPipelineException('unsupported'));
 }
 
-bool get _nativePipelineAvailable => !kIsWeb && Platform.isAndroid;
+/// Android (Kotlin) and iOS (Objective-C++, DESIGN §33) run the same pipeline.
+bool get _nativePipelineAvailable =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
 final scanPipelineProvider = Provider<ScanPipeline>(
   (ref) => _nativePipelineAvailable
