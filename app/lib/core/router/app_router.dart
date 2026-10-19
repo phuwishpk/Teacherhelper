@@ -145,6 +145,7 @@ abstract final class AppRoutes {
 
   /// The in-app guide of each role (help_content.dart).
   static const help = '/help';
+  static String helpTopic(String id) => '/help?topic=$id';
   static const studentHelp = '/student/help';
 
   static const classroomNew = '/classrooms/new';
@@ -1187,7 +1188,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.help,
-        builder: (context, state) => const HelpScreen(role: HelpRole.teacher),
+        builder: (context, state) => HelpScreen(
+          role: HelpRole.teacher,
+          initialTopic: state.uri.queryParameters['topic'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.appeals,
