@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * DESIGN §8.2 / §20.2 `skills`: the core curriculum as a tree (school_id
@@ -27,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $level strand|standard|indicator|sub_indicator
  * @property string $source curriculum|school_admin|teacher
  * @property int|null $created_by
+ * @property Carbon|null $deleted_at in the teacher's trash (DESIGN §34.1)
  */
 class Skill extends Model
 {
@@ -80,7 +82,25 @@ class Skill extends Model
         return [
             'grade_level' => 'integer',
             'created_by' => 'integer',
+            'deleted_at' => 'datetime',
         ];
+    }
+
+    /** In the teacher's trash (DESIGN §34.1): not offered for new links; existing ones stay. */
+    public function isTrashed(): bool
+    {
+        return $this->deleted_at !== null;
+    }
+
+    /**
+     * Skills offered for picking: not in a trash (DESIGN §34.1).
+     *
+     * @param  Builder<Skill>  $query
+     * @return Builder<Skill>
+     */
+    public function scopeNotTrashed(Builder $query): Builder
+    {
+        return $query->whereNull('skills.deleted_at');
     }
 
     /** @return BelongsTo<Subject, $this> */

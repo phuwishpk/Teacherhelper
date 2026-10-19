@@ -55,6 +55,15 @@ class SkillPolicy
         return false;
     }
 
+    /** The trash of DESIGN §34.1 (delete, restore, delete for good): the teacher who added it. */
+    public function trash(User $user, Skill $skill): bool
+    {
+        return $user->isTeacher() && $user->isActive()
+            && $skill->source === Skill::SOURCE_TEACHER
+            && $skill->created_by === $user->id
+            && $skill->school_id === $user->school_id;
+    }
+
     /** Run the CSV importer from Filament. */
     public function import(User $user): bool
     {

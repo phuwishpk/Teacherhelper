@@ -30,7 +30,7 @@ class TeacherIndicatorController extends Controller
     /** @param  list<int>  $ids */
     private static function listing(array $ids): JsonResponse
     {
-        $skills = $ids === [] ? collect() : Skill::query()->whereIn('id', $ids)
+        $skills = $ids === [] ? collect() : Skill::query()->whereIn('id', $ids)->notTrashed()
             ->orderBy('subject_id')->orderBy('grade_level')->orderBy('code')->orderBy('id')->get();
 
         return response()->json(['data' => SkillResource::collection($skills)->resolve()]);

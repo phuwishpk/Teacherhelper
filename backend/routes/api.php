@@ -61,6 +61,7 @@ use App\Http\Controllers\Api\V1\RubricController;
 use App\Http\Controllers\Api\V1\ScanController;
 use App\Http\Controllers\Api\V1\SchoolStudentController;
 use App\Http\Controllers\Api\V1\SkillController;
+use App\Http\Controllers\Api\V1\SkillTrashController;
 use App\Http\Controllers\Api\V1\StudentAssignmentController;
 use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentAuthController;
@@ -237,6 +238,11 @@ Route::prefix('v1')->group(function () {
                 // A teacher adds a missing indicator for the school, and edits it before any observation (§20.2).
                 Route::post('skills', [SkillController::class, 'store'])->name('api.skills.store');
                 Route::patch('skills/{id}', [SkillController::class, 'update'])->name('api.skills.update');
+                // The trash of the teacher's own indicators (§34.1).
+                Route::get('skills/trash', [SkillTrashController::class, 'index'])->name('api.skills.trash.index');
+                Route::delete('skills/{id}', [SkillTrashController::class, 'destroy'])->name('api.skills.destroy');
+                Route::post('skills/{id}/restore', [SkillTrashController::class, 'restore'])->name('api.skills.restore');
+                Route::delete('skills/{id}/permanent', [SkillTrashController::class, 'purge'])->name('api.skills.purge');
                 Route::get('subjects', [SubjectController::class, 'index'])->name('api.subjects.index');
                 // A teacher's own subject groups, seen by that teacher only (§29.4).
                 Route::post('subjects', [SubjectController::class, 'store'])->name('api.subjects.store');

@@ -33,7 +33,7 @@ final class TeacherSkills
 
         return DB::transaction(function () use ($teacher, $input, $schoolId) {
             // Locking the parent serialises the numbering of its children.
-            $parent = Skill::query()->visibleToSchool($schoolId)->lockForUpdate()->find((int) $input['parent_id']);
+            $parent = Skill::query()->visibleToSchool($schoolId)->notTrashed()->lockForUpdate()->find((int) $input['parent_id']);
             if ($parent === null) {
                 throw new ApiException('ไม่พบมาตรฐานหรือตัวชี้วัดที่เลือก', 'validation_failed', 422, ['parent_id' => ['ไม่พบมาตรฐานหรือตัวชี้วัดที่เลือก']]);
             }

@@ -36,20 +36,22 @@ class SkillResource extends JsonResource
             'source' => $this->source,
             'source_label' => $this->resource->sourceLabel(),
             'created_by' => $this->created_by,
+            'in_trash' => $this->resource->isTrashed(),
         ];
     }
 
     /**
      * The form of a course, unit or lesson plan's indicators (DESIGN §20.7):
-     * {id, code, name, subject_id, grade_level, level, source_label}.
+     * {id, code, name, subject_id, grade_level, level, source_label, in_trash}.
      *
-     * @return array{id: int, code: string, name: string, subject_id: int, grade_level: int|null, level: string, source_label: string|null}
+     * @return array{id: int, code: string, name: string, subject_id: int, grade_level: int|null, level: string, source_label: string|null, in_trash: bool}
      */
     public static function indicator(Skill $skill): array
     {
         return self::summary($skill) + [
             'level' => $skill->level,
             'source_label' => $skill->sourceLabel(),
+            'in_trash' => $skill->isTrashed(),
         ];
     }
 

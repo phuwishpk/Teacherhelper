@@ -117,6 +117,11 @@ class AuthorizationMatrixTest extends TestCase
         'api.skills.store' => ['POST', 'skills', self::OK, self::OK],
         // A teacher-added indicator is shared by the school but edited by its creator only (§20.2).
         'api.skills.update' => ['PATCH', 'skills/{teacher_skill}', 403, 404],
+        // The trash of a teacher's own indicators (§34.1): the creator only.
+        'api.skills.trash.index' => ['GET', 'skills/trash', self::OK, self::OK],
+        'api.skills.destroy' => ['DELETE', 'skills/{teacher_skill}', 403, 404],
+        'api.skills.restore' => ['POST', 'skills/{teacher_skill}/restore', 403, 404],
+        'api.skills.purge' => ['DELETE', 'skills/{teacher_skill}/permanent', 403, 404],
         // The teacher's own profile (§29.1); an empty password body is a 422 (counts as reached).
         'api.me.update' => ['PATCH', 'me', self::OK, self::OK],
         'api.me.password' => ['PUT', 'me/password', self::OK, self::OK],
