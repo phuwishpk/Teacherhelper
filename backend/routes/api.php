@@ -83,6 +83,7 @@ use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\SubmissionPageController;
 use App\Http\Controllers\Api\V1\TeacherAttentionController;
 use App\Http\Controllers\Api\V1\TeacherAuthController;
+use App\Http\Controllers\Api\V1\TeacherIndicatorController;
 use App\Http\Controllers\Api\V1\TimetableController;
 use App\Http\Controllers\Api\V1\UnitController;
 use App\Http\Controllers\Api\V1\WorksheetPrintController;
@@ -177,6 +178,10 @@ Route::prefix('v1')->group(function () {
 
                 // The home screen's "รอดำเนินการ" card (§19.9).
                 Route::get('teacher/attention', TeacherAttentionController::class)->name('api.teacher.attention');
+
+                // "ตัวชี้วัดของฉัน": the indicators the pickers show first (§34).
+                Route::get('me/indicators', [TeacherIndicatorController::class, 'show'])->name('api.me.indicators.show');
+                Route::put('me/indicators', [TeacherIndicatorController::class, 'update'])->name('api.me.indicators.update');
 
                 Route::get('classrooms', [ClassroomController::class, 'index'])->name('api.classrooms.index');
                 Route::post('classrooms', [ClassroomController::class, 'store'])->name('api.classrooms.store');

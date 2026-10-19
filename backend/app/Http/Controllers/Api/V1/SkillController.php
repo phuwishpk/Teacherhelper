@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Skills\TeacherIndicators;
 use App\Domain\Skills\TeacherSkills;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\SkillIndexRequest;
@@ -73,6 +74,11 @@ class SkillController extends Controller
             $query->where(fn (Builder $b) => $b
                 ->whereRaw("code like ? escape '!'", [$like])
                 ->orWhereRaw("name like ? escape '!'", [$like]));
+        }
+
+        // "ตัวชี้วัดของฉัน" (§34): the teacher's set and the workspace's own indicators.
+        if ($request->boolean('mine') && $user->isTeacher()) {
+            TeacherIndicators::narrow($query, $user);
         }
 
         if ($request->boolean('tree')) {

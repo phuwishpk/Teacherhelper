@@ -47,6 +47,7 @@ class ClosedClassroomTest extends TestCase
         'api.devices.store' => null,
         'api.me.ai-key.update' => null,
         'api.me.ai-key.destroy' => null,
+        'api.me.indicators.update' => null,
         'api.classrooms.store' => null,
         'api.classrooms.import-google' => null,
         // Allowed on a closed classroom (tested below).
