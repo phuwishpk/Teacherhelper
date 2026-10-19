@@ -1,7 +1,7 @@
 // Pigeon input for the native scan pipeline (DESIGN §6.2).
 //
 // This file lives outside lib/ because it imports the dev-only `pigeon`
-// package. Regenerate the Dart and Kotlin bindings after editing it:
+// package. Regenerate the Dart, Kotlin and Swift bindings after editing it:
 //
 //   cd app && dart run pigeon --input pigeons/scan.dart \
 //     && dart format lib/platform/pigeons
@@ -9,6 +9,7 @@
 // Generated files (committed, do not edit by hand):
 //   lib/platform/pigeons/scan_api.g.dart
 //   android/app/src/main/kotlin/com/eduvision/eduvision/scan/ScanApi.g.kt
+//   ios/Runner/Scan/ScanApi.g.swift
 import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(
@@ -18,6 +19,8 @@ import 'package:pigeon/pigeon.dart';
     kotlinOut:
         'android/app/src/main/kotlin/com/eduvision/eduvision/scan/ScanApi.g.kt',
     kotlinOptions: KotlinOptions(package: 'com.eduvision.eduvision.scan'),
+    swiftOut: 'ios/Runner/Scan/ScanApi.g.swift',
+    swiftOptions: SwiftOptions(),
     dartPackageName: 'eduvision',
   ),
 )

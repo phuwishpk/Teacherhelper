@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -107,10 +108,89 @@ class WorkmanagerUploadScheduler implements UploadScheduler {
       Workmanager().cancelByUniqueName(uploadTaskUniqueName);
 }
 
+/// iOS has no WorkManager (DESIGN §33), and the system suspends an app soon
+/// after it leaves the screen, so uploads run in the app itself while it is
+/// open: [requestUpload] drains the queue at once and, while anything is
+/// still pending or uploading, drains again every [retryEvery].
+class ForegroundUploadScheduler implements UploadScheduler {
+  ForegroundUploadScheduler({
+    required this.drain,
+    required this.awaiting,
+    this.retryEvery = const Duration(seconds: 30),
+  });
+
+  final Future<void> Function() drain;
+  final Future<int> Function() awaiting;
+  final Duration retryEvery;
+
+  Timer? _retry;
+  bool _draining = false;
+  bool _again = false;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> requestUpload() async {
+    _retry?.cancel();
+    _retry = null;
+    if (_draining) {
+      // A scan queued during a drain may have been passed over: go again.
+      _again = true;
+      return;
+    }
+    _draining = true;
+    try {
+      do {
+        _again = false;
+        try {
+          await drain();
+        } catch (e) {
+          debugPrint('foreground upload: $e');
+        }
+      } while (_again);
+    } finally {
+      _draining = false;
+    }
+    var left = 0;
+    try {
+      left = await awaiting();
+    } catch (e) {
+      debugPrint('foreground upload: $e');
+    }
+    if (left > 0 && _retry == null) {
+      _retry = Timer(retryEvery, () => unawaited(requestUpload()));
+    }
+  }
+
+  @override
+  Future<void> cancelPending() async {
+    _retry?.cancel();
+    _retry = null;
+  }
+
+  void dispose() {
+    _retry?.cancel();
+    _retry = null;
+  }
+}
+
 bool get _backgroundUploadsSupported => !kIsWeb && Platform.isAndroid;
 
-final uploadSchedulerProvider = Provider<UploadScheduler>(
-  (ref) => _backgroundUploadsSupported
-      ? const WorkmanagerUploadScheduler()
-      : const NoopUploadScheduler(),
-);
+bool get _foregroundUploadsOnly => !kIsWeb && Platform.isIOS;
+
+final uploadSchedulerProvider = Provider<UploadScheduler>((ref) {
+  if (_backgroundUploadsSupported) return const WorkmanagerUploadScheduler();
+  if (_foregroundUploadsOnly) {
+    final scheduler = ForegroundUploadScheduler(
+      drain: () async {
+        await ref.read(scanUploaderProvider).drain();
+      },
+      awaiting: () =>
+          ref.read(scanQueueRepositoryProvider).countAwaitingUpload(),
+    );
+    ref.onDispose(scheduler.dispose);
+    return scheduler;
+  }
+  return const NoopUploadScheduler();
+});

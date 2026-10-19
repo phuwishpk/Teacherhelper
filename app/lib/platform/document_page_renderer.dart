@@ -102,7 +102,7 @@ class UnsupportedDocumentPageRenderer implements DocumentPageRenderer {
 }
 
 final documentPageRendererProvider = Provider<DocumentPageRenderer>(
-  (ref) => !kIsWeb && Platform.isAndroid
+  (ref) => !kIsWeb && (Platform.isAndroid || Platform.isIOS)
       ? NativeDocumentPageRenderer()
       : const UnsupportedDocumentPageRenderer(),
 );

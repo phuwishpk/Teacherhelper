@@ -33,3 +33,7 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# Built by tools/build-opencv-ios.sh
+opencv/opencv2.xcframework
+opencv/VERSION

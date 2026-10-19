@@ -8,8 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		2B604E892A5AC821CF647B91 /* ScanApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131FBA59703B3A5BB190BE81 /* ScanApi.g.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		5200D7FCE401576C84A127C4 /* ScanCoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = D2834CD9329C9F3B2411356F /* ScanCoreTests.m */; };
+		67DA703DC699FB36D785CD5B /* layout_page.json in Resources */ = {isa = PBXBuildFile; fileRef = 60E7E34801F6EEDC0484E711 /* layout_page.json */; };
+		6D5424772CD1F32BF90A8F80 /* scan_photo.jpg in Resources */ = {isa = PBXBuildFile; fileRef = BE4BC0D40A386A0413228D7B /* scan_photo.jpg */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -17,7 +21,11 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		9A65449CE81359ECAF70DBA7 /* ScanPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 710E072443457E07C2DDCAB5 /* ScanPipeline.swift */; };
 		9EB8D237F6A6D1340A8E37C4 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD707B38F0FF254E5C0196EB /* Pods_RunnerTests.framework */; };
+		C733B441772979367A08572B /* DocumentPageRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 416675D2949037D993E9584D /* DocumentPageRenderer.swift */; };
+		E47F26EA5EDBDF1952FF8339 /* ScanCore.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6AF4EE73B1DBC77C1A6666ED /* ScanCore.mm */; };
+		EB764A1EA720DDF058ABA3B7 /* answer_sheet.json in Resources */ = {isa = PBXBuildFile; fileRef = 4B0DA43A6EF95733A7BACF9B /* answer_sheet.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +52,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		131FBA59703B3A5BB190BE81 /* ScanApi.g.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScanApi.g.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		17E8EB16DA5C737164564B2A /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
@@ -52,6 +61,11 @@
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		3D23081E9F37E4639AFC3C84 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
+		416675D2949037D993E9584D /* DocumentPageRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPageRenderer.swift; sourceTree = "<group>"; };
+		4B0DA43A6EF95733A7BACF9B /* answer_sheet.json */ = {isa = PBXFileReference; includeInIndex = 1; path = answer_sheet.json; sourceTree = "<group>"; };
+		60E7E34801F6EEDC0484E711 /* layout_page.json */ = {isa = PBXFileReference; includeInIndex = 1; path = layout_page.json; sourceTree = "<group>"; };
+		6AF4EE73B1DBC77C1A6666ED /* ScanCore.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = ScanCore.mm; sourceTree = "<group>"; };
+		710E072443457E07C2DDCAB5 /* ScanPipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScanPipeline.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -65,7 +79,10 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BE4BC0D40A386A0413228D7B /* scan_photo.jpg */ = {isa = PBXFileReference; includeInIndex = 1; path = scan_photo.jpg; sourceTree = "<group>"; };
+		BEAC6C0B52704A6BFD4D35C6 /* ScanCore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = ScanCore.h; sourceTree = "<group>"; };
 		C13DC4EF0861E2F368E71B5D /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		D2834CD9329C9F3B2411356F /* ScanCoreTests.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = ScanCoreTests.m; sourceTree = "<group>"; };
 		DD707B38F0FF254E5C0196EB /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DFA1D0EC210A441BA29F3D44 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		F862ACFE4BD3F8757ECA2038 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
@@ -92,10 +109,36 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0362B1BA663D27A8008A3BD6 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				BE4BC0D40A386A0413228D7B /* scan_photo.jpg */,
+				60E7E34801F6EEDC0484E711 /* layout_page.json */,
+				4B0DA43A6EF95733A7BACF9B /* answer_sheet.json */,
+			);
+			name = Fixtures;
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		11F8915BC477373040CFC50B /* Scan */ = {
+			isa = PBXGroup;
+			children = (
+				131FBA59703B3A5BB190BE81 /* ScanApi.g.swift */,
+				BEAC6C0B52704A6BFD4D35C6 /* ScanCore.h */,
+				6AF4EE73B1DBC77C1A6666ED /* ScanCore.mm */,
+				710E072443457E07C2DDCAB5 /* ScanPipeline.swift */,
+				416675D2949037D993E9584D /* DocumentPageRenderer.swift */,
+			);
+			name = Scan;
+			path = Scan;
+			sourceTree = "<group>";
+		};
 		331C8082294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
+				D2834CD9329C9F3B2411356F /* ScanCoreTests.m */,
+				0362B1BA663D27A8008A3BD6 /* Fixtures */,
 			);
 			path = RunnerTests;
 			sourceTree = "<group>";
@@ -159,6 +202,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
+				11F8915BC477373040CFC50B /* Scan */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -266,6 +310,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6D5424772CD1F32BF90A8F80 /* scan_photo.jpg in Resources */,
+				67DA703DC699FB36D785CD5B /* layout_page.json in Resources */,
+				EB764A1EA720DDF058ABA3B7 /* answer_sheet.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,6 +430,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
+				5200D7FCE401576C84A127C4 /* ScanCoreTests.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -393,6 +441,10 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
+				2B604E892A5AC821CF647B91 /* ScanApi.g.swift in Sources */,
+				E47F26EA5EDBDF1952FF8339 /* ScanCore.mm in Sources */,
+				9A65449CE81359ECAF70DBA7 /* ScanPipeline.swift in Sources */,
+				C733B441772979367A08572B /* DocumentPageRenderer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -432,7 +484,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -555,7 +607,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -612,7 +664,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;

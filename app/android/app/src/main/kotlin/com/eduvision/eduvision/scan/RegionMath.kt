@@ -23,7 +23,8 @@ data class PixelSize(val width: Int, val height: Int)
 /**
  * Geometry shared by detection and cropping. Pure Kotlin (no Android or
  * OpenCV types) so it runs in JVM unit tests. The Dart twin is
- * lib/features/scan/page_layout.dart; both must stay in step.
+ * lib/features/scan/page_layout.dart and the iOS one sits in
+ * ios/Runner/Scan/ScanCore.mm; all must stay in step.
  */
 object RegionMath {
     /** Resolution of the warped marker frame (DESIGN §6.2 step 3). */
