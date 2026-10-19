@@ -299,7 +299,7 @@ class _GoogleSignInSectionState extends ConsumerState<GoogleSignInSection> {
         const SizedBox(height: 8),
         Text(
           widget.intent == GoogleIntent.student
-              ? 'ใช้ได้เมื่อเชื่อมบัญชี Google แล้ว ครั้งแรกต้องยืนยันด้วยรหัสผ่านหรือบัตร QR'
+              ? 'ใช้ได้เมื่อเชื่อมบัญชี Google แล้ว ครั้งแรกต้องยืนยันด้วยชื่อผู้ใช้และรหัสผ่าน'
               : 'ครูที่ยังไม่มีบัญชีเข้าใช้งานได้ทันที ครูที่มีบัญชีแล้วใช้อีเมลเดียวกันหรือเชื่อมไว้ในหน้าตั้งค่า',
           style: muted,
         ),

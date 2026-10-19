@@ -240,7 +240,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
         showMessage(
           context,
           'สร้างห้อง ${result.classroom.name} แล้ว'
-          '${kept == 0 ? '' : ' นักเรียน $kept คนใช้รหัสผ่านและบัตร QR เดิมได้'}',
+          '${kept == 0 ? '' : ' นักเรียน $kept คนใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้'}',
         );
         context.pop(result.classroom.id);
         return;
@@ -382,7 +382,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
                 title: Text([preview.name, ?preview.section].join(' · ')),
                 subtitle: const Text(
                   'ชื่อและอีเมลของนักเรียนมาจาก Google Classroom '
-                  'นักเรียนที่มีบัญชีในโรงเรียนอยู่แล้วใช้บัญชีเดิม',
+                  'นักเรียนที่มีบัญชีอยู่แล้วใช้บัญชีเดิม',
                 ),
               ),
             ),
@@ -607,7 +607,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
       Text(
         'เลขที่เรียงตามชื่อ (ไม่นับคำนำหน้า) แก้เลขที่ได้ '
         'และกด "เอาออก" สำหรับบัญชีที่ไม่ใช่นักเรียน เช่น บัญชีทดสอบ'
-        '${anyMatch ? ' คนที่ติ๊ก "ใช้บัญชีเดิม" ใช้รหัสผ่านและบัตร QR เดิม '
+        '${anyMatch ? ' คนที่ติ๊ก "ใช้บัญชีเดิม" ใช้ชื่อผู้ใช้และรหัสผ่านเดิม '
                   'เอาติ๊กออกถ้าไม่ใช่คนเดียวกัน (ระบบจะสร้างบัญชีใหม่)' : ''}',
         style: muted,
       ),

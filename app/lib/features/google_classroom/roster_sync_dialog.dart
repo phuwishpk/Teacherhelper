@@ -83,10 +83,10 @@ class RosterSyncResultDialog extends StatelessWidget {
               ],
               if (result.enrolled.isNotEmpty) ...[
                 heading(
-                  'นักเรียนเดิมของโรงเรียนเข้าห้อง ${result.enrolled.length} คน',
+                  'นักเรียนที่มีบัญชีอยู่แล้วเข้าห้อง ${result.enrolled.length} คน',
                 ),
                 Text(
-                  'ใช้บัญชีรหัสผ่านและบัตร QR เดิม '
+                  'ใช้ชื่อผู้ใช้และรหัสผ่านเดิม '
                   '(คนที่ยังไม่เคยมีรหัสผ่านได้รหัสผ่านใหม่ แสดงครั้งเดียว)',
                   style: muted,
                 ),

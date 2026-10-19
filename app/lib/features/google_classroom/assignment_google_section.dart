@@ -171,7 +171,6 @@ class _AssignmentGoogleSectionState
                 'โพสต์แล้ว ${formatThaiDateTime(link.postedAt!)}'
               else
                 'โพสต์แล้ว',
-              if (link.hasBlankWorksheet) 'แนบใบงานสำรองแล้ว',
             ].join(' · '),
           ),
         if (link.alternateLink.isNotEmpty) ...[
@@ -366,7 +365,6 @@ class _PostDialog extends StatefulWidget {
 }
 
 class _PostDialogState extends State<_PostDialog> {
-  bool _attachBlank = true;
   final _note = TextEditingController();
 
   @override
@@ -389,20 +387,10 @@ class _PostDialogState extends State<_PostDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'นักเรียนจะเห็นงานพร้อมคำสั่ง "ทำบนใบงานที่ได้รับ ถ่ายรูปทุกหน้าให้เห็นมุมทั้ง 4 แล้วส่งที่นี่" '
+              'นักเรียนจะเห็นงานพร้อมคำสั่ง "ถ่ายรูปงานทุกหน้าให้เห็นตัวหนังสือชัดเจน หรือแนบไฟล์ PDF แล้วส่งที่นี่" '
               'คะแนนเต็มเท่ากับคะแนนของการบ้านนี้',
             ),
             const SizedBox(height: 8),
-            CheckboxListTile(
-              key: const ValueKey('google_attach_blank'),
-              contentPadding: EdgeInsets.zero,
-              value: _attachBlank,
-              onChanged: (v) => setState(() => _attachBlank = v ?? false),
-              title: const Text('แนบใบงานสำรอง'),
-              subtitle: const Text(
-                'ใบงานไม่ระบุชื่อ สำหรับนักเรียนที่ทำใบงานหาย พิมพ์หรือเปิดทำแล้วถ่ายรูปส่ง',
-              ),
-            ),
             TextField(
               controller: _note,
               maxLines: 3,
@@ -429,7 +417,9 @@ class _PostDialogState extends State<_PostDialog> {
           key: const ValueKey('google_post_confirm'),
           onPressed: () => Navigator.of(context).pop(
             _PostChoice(
-              attachBlankWorksheet: _attachBlank,
+              // The server stopped attaching a spare worksheet (any paper
+              // can be handed in now); kept false for its old field.
+              attachBlankWorksheet: false,
               instructions: _note.text.trim().isEmpty
                   ? null
                   : _note.text.trim(),

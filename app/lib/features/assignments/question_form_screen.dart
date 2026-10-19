@@ -383,8 +383,8 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
                       ),
                       validator: (v) {
                         final n = int.tryParse(v?.trim() ?? '');
-                        return (n == null || n < 1 || n > 20)
-                            ? '1–20 บรรทัด'
+                        return (n == null || n < 1 || n > 15)
+                            ? '1–15 บรรทัด'
                             : null;
                       },
                     ),

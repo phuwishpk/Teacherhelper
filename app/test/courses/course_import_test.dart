@@ -223,8 +223,8 @@ void main() {
     expect(find.text('ค 1.1 ป.5/9 (ไม่พบ)'), findsOneWidget);
     expect(
       find.text(
-        'ไม่พบ 1 รหัสในหลักสูตรของโรงเรียน '
-        'เลือกตัวที่ตรงกัน หรือเพิ่มเป็นตัวชี้วัดของโรงเรียน',
+        'ไม่พบ 1 รหัสในหลักสูตรหรือในตัวชี้วัดที่คุณเพิ่มไว้ '
+        'เลือกตัวที่ตรงกัน หรือเพิ่มเป็นตัวชี้วัดเอง',
       ),
       findsOneWidget,
     );
@@ -449,10 +449,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('course_doc_file')));
     await tester.pumpAndSettle();
-    expect(
-      find.text('โรงเรียนเคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย'),
-      findsOneWidget,
-    );
+    expect(find.text('เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('send_key_request')));
     await tester.pumpAndSettle();
     expect(courses.extracts.single['purpose'], 'lesson_plan');

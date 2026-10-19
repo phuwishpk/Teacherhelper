@@ -140,7 +140,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(_button, findsOneWidget);
     expect(
-      find.textContaining('ครั้งแรกต้องยืนยันด้วยรหัสผ่าน'),
+      find.textContaining('ครั้งแรกต้องยืนยันด้วยชื่อผู้ใช้และรหัสผ่าน'),
       findsOneWidget,
     );
   });

@@ -60,7 +60,7 @@ class SkillResourcesScreen extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               'นักเรียนที่ทักษะนี้ยังไม่ผ่านจะเห็นลิงก์เหล่านี้ในหน้าแบบฝึก '
-              'ใช้ร่วมกันทั้งโรงเรียน',
+              'ลิงก์อยู่ในคลังของคุณ ครูท่านอื่นไม่เห็น',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

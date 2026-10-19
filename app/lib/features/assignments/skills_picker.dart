@@ -11,7 +11,7 @@ import 'question.dart';
 /// Search dialog over `GET /skills?subject=&grade=&q=&level=` limited to
 /// indicators and sub-indicators (the only levels questions, courses, units
 /// and plans take, DESIGN §20.2); returns the chosen skills or null when
-/// cancelled. "เพิ่มตัวชี้วัดของโรงเรียน" adds a missing one and ticks it.
+/// cancelled. "เพิ่มตัวชี้วัดเอง" adds a missing one and ticks it.
 Future<List<Skill>?> showSkillsPicker(
   BuildContext context, {
   required int? subjectId,
@@ -224,7 +224,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
           key: const ValueKey('skills_picker_add_indicator'),
           onPressed: _addIndicator,
           icon: const Icon(Icons.add),
-          label: const Text('เพิ่มตัวชี้วัดของโรงเรียน'),
+          label: const Text('เพิ่มตัวชี้วัดเอง'),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

@@ -273,7 +273,7 @@ void main() {
       // No PIN was issued: nothing to show, back to the room with a note.
       expect(find.text('stub-home'), findsOneWidget);
       expect(
-        find.text('เพิ่มนักเรียน 1 คนแล้ว ใช้รหัสผ่านและบัตร QR เดิมได้'),
+        find.text('เพิ่มนักเรียน 1 คนแล้ว ใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้'),
         findsOneWidget,
       );
     });

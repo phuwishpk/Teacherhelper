@@ -248,7 +248,8 @@ class DashboardPage extends ConsumerWidget {
                   _StepTile(
                     number: 1,
                     title: 'สร้างห้องเรียนและเพิ่มนักเรียน',
-                    subtitle: 'พิมพ์บัตร QR ให้นักเรียนใช้เข้าสู่ระบบ',
+                    subtitle:
+                        'แจกชื่อผู้ใช้และรหัสผ่าน หรือให้นักเรียนเข้าห้องด้วยรหัสห้อง',
                     onTap: () => onNavigate(1),
                   ),
                   const Divider(height: 1),

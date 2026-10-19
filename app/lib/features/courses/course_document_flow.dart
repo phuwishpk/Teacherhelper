@@ -13,10 +13,10 @@ import 'course_models.dart';
 import 'courses_providers.dart';
 import 'courses_repository.dart';
 
-/// Course documents are cached for the whole school (DESIGN §20.9), so they
-/// must not carry anything about students.
+/// Course documents are cached for reuse in the teacher's workspace
+/// (DESIGN §20.9, §29.13.1), so they must not carry anything about students.
 const kCourseDocumentPrivacyNote =
-    'ผลการอ่านเอกสารนี้ใช้ร่วมกันทั้งโรงเรียน ห้ามมีชื่อ เลขที่ '
+    'ผลการอ่านเอกสารนี้ถูกเก็บไว้ใช้ซ้ำ ห้ามมีชื่อ เลขที่ '
     'หรือข้อมูลอื่นของนักเรียนในไฟล์';
 
 /// "สร้างจากเอกสาร" / "นำเข้าแผนจากเอกสาร" (DESIGN §20.1): pick or photograph
@@ -113,7 +113,7 @@ Future<Course?> runCourseDocumentImport(
         filesLabel: 'ไฟล์${purpose.label}',
         rangeHint: 'เลือกช่วงหน้าที่ต้องการให้อ่าน',
         note: kCourseDocumentPrivacyNote,
-        cachedMessage: 'โรงเรียนเคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย',
+        cachedMessage: 'เคยอ่านไฟล์นี้แล้ว ไม่เสียค่าใช้จ่าย',
         readBefore: (d) => d.cachedPurposes.contains(purpose.apiValue),
         documents: docs,
         guidanceHint: kGuidanceHintCourse,

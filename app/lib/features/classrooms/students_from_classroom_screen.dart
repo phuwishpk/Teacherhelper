@@ -124,7 +124,7 @@ class _StudentsFromClassroomScreenState
   /// "นำนักเรียน 30 คนเข้าห้องแล้ว ใช้ PIN และบัตร QR เดิมได้ (ข้าม 1 คน)".
   static String _doneText(StudentsCopyResult result) => [
     'นำนักเรียน ${result.enrolled.length} คนเข้าห้องแล้ว',
-    if (result.withPins.isEmpty) 'ใช้รหัสผ่านและบัตร QR เดิมได้',
+    if (result.withPins.isEmpty) 'ใช้ชื่อผู้ใช้และรหัสผ่านเดิมได้',
     if (result.skipped.isNotEmpty) '(ข้าม ${result.skipped.length} คน)',
   ].join(' ');
 
@@ -377,8 +377,10 @@ class _StudentsFromClassroomScreenState
                 key: ValueKey('copy_pin_keep'),
                 contentPadding: EdgeInsets.zero,
                 value: false,
-                title: Text('ใช้รหัสผ่านและบัตร QR เดิม'),
-                subtitle: Text('นักเรียนเข้าสู่ระบบได้ทันทีด้วยรหัสห้องนี้'),
+                title: Text('ใช้รหัสผ่านเดิม'),
+                subtitle: Text(
+                  'นักเรียนเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านเดิมได้ทันที',
+                ),
               ),
               RadioListTile<bool>(
                 key: ValueKey('copy_pin_new'),
@@ -387,7 +389,7 @@ class _StudentsFromClassroomScreenState
                 title: Text('ออกรหัสผ่านใหม่ให้ทุกคน'),
                 subtitle: Text(
                   'รหัสผ่านเดิมใช้ไม่ได้และนักเรียนต้องเข้าสู่ระบบใหม่ '
-                  'รหัสผ่านใหม่แสดงครั้งเดียว บัตร QR เดิมยังใช้ได้',
+                  'รหัสผ่านใหม่แสดงครั้งเดียว',
                 ),
               ),
             ],

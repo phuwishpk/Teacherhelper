@@ -241,7 +241,7 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
                             },
                             message:
                                 'กด "สร้างข้อใหม่ด้วย AI" แล้วเลือกทักษะ ข้อที่อนุมัติแล้ว'
-                                'ใช้ร่วมกันทั้งโรงเรียน',
+                                'อยู่ในคลังของคุณ ครูท่านอื่นไม่เห็น',
                           ),
                         ),
                       ]
