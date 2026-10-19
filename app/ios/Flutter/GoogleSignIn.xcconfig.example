@@ -1,0 +1,7 @@
+// Google sign-in on iOS (DESIGN §33). Copy to GoogleSignIn.xcconfig (not
+// committed) and fill in the iOS OAuth client of the sign-in Google Cloud
+// project, bundle ID com.eduvision.app. Build with
+// --dart-define=GOOGLE_SIGNIN_CLIENT_ID=<the Web client> as on Android.
+// xcconfig reads // as a comment, so no URLs here.
+GOOGLE_IOS_CLIENT_ID = 1234567890-abcdefg.apps.googleusercontent.com
+GOOGLE_IOS_REVERSED_CLIENT_ID = com.googleusercontent.apps.1234567890-abcdefg
