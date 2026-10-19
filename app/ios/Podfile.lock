@@ -1,4 +1,5 @@
 PODS:
+  - EduvisionOpenCV (4.14.0)
   - Flutter (1.0.0)
   - open_filex (0.0.2):
     - Flutter
@@ -26,6 +27,7 @@ PODS:
     - TensorFlowLiteSwift/Metal (= 2.12.0)
 
 DEPENDENCIES:
+  - EduvisionOpenCV (from `opencv`)
   - Flutter (from `Flutter`)
   - open_filex (from `.symlinks/plugins/open_filex/ios`)
   - tflite_flutter (from `.symlinks/plugins/tflite_flutter/ios`)
@@ -36,6 +38,8 @@ SPEC REPOS:
     - TensorFlowLiteSwift
 
 EXTERNAL SOURCES:
+  EduvisionOpenCV:
+    :path: opencv
   Flutter:
     :path: Flutter
   open_filex:
@@ -44,12 +48,13 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/tflite_flutter/ios"
 
 SPEC CHECKSUMS:
+  EduvisionOpenCV: a19f43b4d3c51ba5cde023f7460badaf3edf3018
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   TensorFlowLiteC: 20785a69299185a379ba9852b6625f00afd7984a
   TensorFlowLiteSwift: 3a4928286e9e35bdd3e17970f48e53c80d25e793
   tflite_flutter: 64b192e11352fe36943ab6656e1d49207f1a5595
 
-PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
+PODFILE CHECKSUM: 011b90c37f13ccc27a034211dc20085b61810571
 
 COCOAPODS: 1.17.0

@@ -189,7 +189,7 @@ class UnsupportedAnswerSheetPipeline implements AnswerSheetPipeline {
 }
 
 final answerSheetPipelineProvider = Provider<AnswerSheetPipeline>(
-  (ref) => !kIsWeb && Platform.isAndroid
+  (ref) => !kIsWeb && (Platform.isAndroid || Platform.isIOS)
       ? NativeAnswerSheetPipeline()
       : const UnsupportedAnswerSheetPipeline(),
 );

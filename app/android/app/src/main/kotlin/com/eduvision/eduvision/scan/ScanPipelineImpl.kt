@@ -47,7 +47,8 @@ import kotlin.math.roundToInt
 /**
  * Native scan pipeline (DESIGN §6.2): OpenCV ArUco + perspective warp +
  * crops, ML Kit for the QR. All work runs on one background thread so two
- * pages never hold full-resolution buffers at the same time.
+ * pages never hold full-resolution buffers at the same time. The iOS twin is
+ * app/ios/Runner/Scan/ScanCore.mm (DESIGN §33): change both together.
  */
 class ScanPipelineImpl(context: Context) : ScanPipelineApi, AutoCloseable {
     private val cacheRoot = File(context.cacheDir, OUTPUT_DIR)
