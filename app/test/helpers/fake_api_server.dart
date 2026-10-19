@@ -373,6 +373,9 @@ class FakeApiServer {
         return (200, _page(const <Object>[]));
       case ('GET', ['practice-items']):
         return (200, _page(const <Object>[]));
+      // "ตัวชี้วัดของฉัน" (DESIGN §34): none picked, the home card asks.
+      case ('GET', ['me', 'indicators']):
+        return (200, {'data': const <Object>[]});
       case ('GET', ['teacher', 'attention']):
         return (
           200,

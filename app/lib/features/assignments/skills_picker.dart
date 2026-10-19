@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../courses/indicator_widgets.dart';
+import '../my_indicators/my_indicators.dart';
 import 'assignments_repository.dart';
 import 'question.dart';
 
@@ -12,6 +13,8 @@ import 'question.dart';
 /// indicators and sub-indicators (the only levels questions, courses, units
 /// and plans take, DESIGN §20.2); returns the chosen skills or null when
 /// cancelled. "เพิ่มตัวชี้วัดเอง" adds a missing one and ticks it.
+/// A teacher who keeps "ตัวชี้วัดของฉัน" (DESIGN §34) sees only those and
+/// their own indicators, with a switch to the whole curriculum.
 Future<List<Skill>?> showSkillsPicker(
   BuildContext context, {
   required int? subjectId,
@@ -57,9 +60,22 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
   String? _error;
   Timer? _debounce;
 
+  /// "แสดงทั้งหลักสูตร": ignore the teacher's set for this dialog.
+  bool _showAll = false;
+
+  bool get _mine =>
+      hasMyIndicators(ref.read(myIndicatorsProvider)) && !_showAll;
+
   @override
   void initState() {
     super.initState();
+    // The set may arrive after the first search: search again when it does.
+    ref.listenManual(myIndicatorsProvider, (previous, next) {
+      if (hasMyIndicators(previous ?? const AsyncLoading()) !=
+          hasMyIndicators(next)) {
+        _search();
+      }
+    });
     _search();
   }
 
@@ -89,6 +105,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
             grade: widget.grade,
             q: q,
             level: kAssessableLevels,
+            mine: _mine,
           );
       if (mounted) {
         setState(() {
@@ -147,6 +164,23 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
               ),
               onChanged: _onChanged,
             ),
+            if (hasMyIndicators(ref.watch(myIndicatorsProvider)))
+              SwitchListTile(
+                key: const ValueKey('skills_picker_show_all'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('แสดงทั้งหลักสูตร'),
+                subtitle: Text(
+                  _showAll
+                      ? 'แสดงทุกตัวชี้วัดของวิชาและชั้นนี้'
+                      : 'ตอนนี้แสดงเฉพาะตัวชี้วัดของฉันและที่คุณเพิ่มเอง',
+                ),
+                value: _showAll,
+                onChanged: (v) {
+                  setState(() => _showAll = v);
+                  _search();
+                },
+              ),
             // Below the search so the dialog's button bar keeps its width.
             Align(
               alignment: Alignment.centerRight,

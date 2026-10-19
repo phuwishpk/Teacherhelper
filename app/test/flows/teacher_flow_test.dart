@@ -50,6 +50,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(rail().selectedIndex, 0);
+    // The home keeps its scroll position from the shortcut above.
+    await tester.scrollUntilVisible(
+      find.text('สวัสดี คุณครู ครูสมศรี'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('สวัสดี คุณครู ครูสมศรี'), findsOneWidget);
 
     // A 360 px phone: five bottom-bar labels, each within its slot.

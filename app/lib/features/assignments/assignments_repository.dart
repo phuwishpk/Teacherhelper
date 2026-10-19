@@ -87,6 +87,7 @@ abstract class AssignmentsRepository {
     int? grade,
     String? q,
     String? level,
+    bool mine = false,
   });
   Future<List<Subject>> subjects();
 
@@ -323,6 +324,7 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
     int? grade,
     String? q,
     String? level,
+    bool mine = false,
   }) async {
     final rows = await fetchAllPages(
       _dio,
@@ -332,6 +334,8 @@ class ApiAssignmentsRepository implements AssignmentsRepository {
         'grade': ?grade,
         if (q != null && q.isNotEmpty) 'q': q,
         if (level != null && level.isNotEmpty) 'level': level,
+        // "ตัวชี้วัดของฉัน" (DESIGN §34): the teacher's set and own indicators.
+        if (mine) 'mine': 1,
       },
       maxPages: 5,
     );
