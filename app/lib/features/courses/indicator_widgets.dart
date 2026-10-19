@@ -18,9 +18,19 @@ const kParentLevels = 'standard,indicator';
 
 /// "ครูเพิ่มเอง" next to an indicator a teacher of the school added.
 class TeacherAddedLabel extends StatelessWidget {
-  const TeacherAddedLabel({super.key, required this.label});
+  const TeacherAddedLabel({
+    super.key,
+    required this.label,
+    this.warning = false,
+  });
+
+  /// "อยู่ในถังขยะ" (DESIGN §34.1): an indicator kept where it is used.
+  const TeacherAddedLabel.inTrash({super.key})
+    : label = 'อยู่ในถังขยะ',
+      warning = true;
 
   final String label;
+  final bool warning;
 
   @override
   Widget build(BuildContext context) {
@@ -28,14 +38,14 @@ class TeacherAddedLabel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
+        color: warning ? scheme.errorContainer : scheme.tertiaryContainer,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: scheme.onTertiaryContainer),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: warning ? scheme.onErrorContainer : scheme.onTertiaryContainer,
+        ),
       ),
     );
   }
@@ -78,6 +88,10 @@ class IndicatorChips extends StatelessWidget {
                   if (s.sourceLabel case final label?) ...[
                     const SizedBox(width: 4),
                     TeacherAddedLabel(label: label),
+                  ],
+                  if (s.inTrash) ...[
+                    const SizedBox(width: 4),
+                    const TeacherAddedLabel.inTrash(),
                   ],
                 ],
               ),

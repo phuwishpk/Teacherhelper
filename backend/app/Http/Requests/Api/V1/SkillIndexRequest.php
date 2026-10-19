@@ -29,6 +29,8 @@ class SkillIndexRequest extends FormRequest
             'level' => ['sometimes', 'nullable', 'string', 'max:60', 'regex:/^(strand|standard|indicator|sub_indicator)(,(strand|standard|indicator|sub_indicator))*$/'],
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'tree' => ['sometimes', 'nullable', 'boolean'],
+            'mine' => ['sometimes', 'nullable', 'boolean'],
+            'own' => ['sometimes', 'nullable', 'boolean'],
             'cursor' => ['sometimes', 'nullable', 'string'],
         ];
     }

@@ -2,11 +2,13 @@ import 'package:eduvision/features/assignments/assignments_repository.dart';
 import 'package:eduvision/features/assignments/question.dart';
 import 'package:eduvision/features/assignments/skills_picker.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
+import 'package:eduvision/features/my_indicators/my_indicators.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../courses/course_fakes.dart' show FakeCoursesRepository;
+import '../my_indicators/fake_my_indicators.dart';
 import '../review/review_fixtures.dart';
 
 const _fraction = Skill(id: 1, code: 'ค 1.1 ป.5/1', name: 'เศษส่วน');
@@ -19,6 +21,7 @@ class _Repo extends Fake implements AssignmentsRepository {
   final Object? error;
   final searches = <(int?, int?, String?)>[];
   final levels = <String?>[];
+  final mines = <bool>[];
 
   @override
   Future<List<Skill>> searchSkills({
@@ -26,9 +29,11 @@ class _Repo extends Fake implements AssignmentsRepository {
     int? grade,
     String? q,
     String? level,
+    bool mine = false,
   }) async {
     searches.add((subjectId, grade, q));
     levels.add(level);
+    mines.add(mine);
     if (error != null) throw error!;
     const all = [_fraction, _decimal, _ratio];
     if (q == null || q.isEmpty) return all;
@@ -41,10 +46,14 @@ Widget _host(
   void Function(List<Skill>?) onResult, {
   List<Skill> selected = const [],
   FakeCoursesRepository? courses,
+  FakeMyIndicators? mine,
 }) {
   return ProviderScope(
     overrides: [
       assignmentsRepositoryProvider.overrideWithValue(repo),
+      myIndicatorsRepositoryProvider.overrideWithValue(
+        mine ?? FakeMyIndicators(const []),
+      ),
       coursesRepositoryProvider.overrideWithValue(
         courses ?? FakeCoursesRepository(),
       ),
@@ -283,5 +292,44 @@ void main() {
       'ข้อแรก',
       'ข้อที่สอง',
     ]);
+  });
+
+  testWidgets(
+    'a teacher with "ตัวชี้วัดของฉัน" sees those first and can switch to all',
+    (tester) async {
+      final repo = _Repo();
+      await tester.pumpWidget(
+        _host(
+          repo,
+          (_) {},
+          mine: FakeMyIndicators(const [_fraction], initial: [1]),
+        ),
+      );
+      await tester.tap(find.text('เลือกทักษะ'));
+      await tester.pumpAndSettle();
+
+      expect(repo.mines.last, isTrue);
+      expect(
+        find.text('ตอนนี้แสดงเฉพาะตัวชี้วัดของฉันและที่คุณเพิ่มเอง'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('skills_picker_show_all')));
+      await tester.pumpAndSettle();
+      expect(repo.mines.last, isFalse);
+      expect(find.text('แสดงทุกตัวชี้วัดของวิชาและชั้นนี้'), findsOneWidget);
+    },
+  );
+
+  testWidgets('without a set the picker shows everything and no switch', (
+    tester,
+  ) async {
+    final repo = _Repo();
+    await tester.pumpWidget(_host(repo, (_) {}));
+    await tester.tap(find.text('เลือกทักษะ'));
+    await tester.pumpAndSettle();
+
+    expect(repo.mines, everyElement(isFalse));
+    expect(find.byKey(const ValueKey('skills_picker_show_all')), findsNothing);
   });
 }

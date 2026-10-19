@@ -11,6 +11,7 @@ import '../classrooms/classrooms_providers.dart';
 import '../dashboard/teacher_overview.dart';
 import '../google_classroom/google_reconnect_banner.dart';
 import '../review/review_providers.dart';
+import '../my_indicators/my_indicators_card.dart';
 import 'ai_key_card.dart';
 import 'teacher_attention.dart';
 import 'teacher_shell.dart' show teacherGradesIndex;
@@ -83,6 +84,9 @@ class DashboardPage extends ConsumerWidget {
             ),
             AiKeyCard(onOpenSettings: () => context.push(AppRoutes.settings)),
             const SizedBox(height: 12),
+            MyIndicatorsCard(
+              onOpen: () => context.push(AppRoutes.myIndicators),
+            ),
             TeacherAttentionCard(
               onOpen: (target) {
                 if (target == AttentionTarget.courseRequests) {

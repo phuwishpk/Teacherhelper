@@ -40,6 +40,7 @@ final class IndicatorMatcher
 
         $query = Skill::query()
             ->visibleToSchool($schoolId)
+            ->notTrashed()
             ->whereIn('level', Skill::ASSESSABLE_LEVELS)
             ->orderByRaw('school_id is not null')
             ->orderBy('id');

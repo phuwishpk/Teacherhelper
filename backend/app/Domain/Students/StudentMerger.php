@@ -103,6 +103,7 @@ final class StudentMerger
         'audit_logs.actor_id' => self::UNRELATED, // admins only (§29.14)
         'audit_logs.target_user_id' => self::UNRELATED, // a student impersonated keeps that history
         'google_events.user_id' => self::UNRELATED, // each account keeps its own Google history (§32)
+        'teacher_indicators.user_id' => self::UNRELATED, // teachers only (§34)
         'class_posts.author_id' => self::UNRELATED,
         'class_post_files.owner_id' => self::UNRELATED,
         'gradebook_special_grades.set_by' => self::UNRELATED,

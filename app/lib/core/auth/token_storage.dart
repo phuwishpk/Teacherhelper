@@ -46,6 +46,11 @@ abstract class TokenStorage {
   Future<String?> readPendingJoinCode();
   Future<void> writePendingJoinCode(String? code);
 
+  /// The teacher [userId] closed the home card "เลือกตัวชี้วัดที่คุณสอน"
+  /// on this device (DESIGN §34); survives [clear].
+  Future<bool> readMyIndicatorsPromptClosed(int userId);
+  Future<void> writeMyIndicatorsPromptClosed(int userId);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
@@ -60,6 +65,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _ownerKey = 'local_data_owner';
   static const _loginTabKey = 'login_tab';
   static const _themeModeKey = 'theme_mode';
+  static const _myIndicatorsPromptKey = 'my_indicators_prompt_closed';
   static const _googleSignUpKey = 'google_signup_started_at';
   final FlutterSecureStorage _storage;
 
@@ -100,6 +106,14 @@ class SecureTokenStorage implements TokenStorage {
   @override
   Future<void> writeLoginTab(String tab) =>
       _storage.write(key: _loginTabKey, value: tab);
+
+  @override
+  Future<bool> readMyIndicatorsPromptClosed(int userId) async =>
+      await _storage.read(key: '${_myIndicatorsPromptKey}_$userId') == '1';
+
+  @override
+  Future<void> writeMyIndicatorsPromptClosed(int userId) =>
+      _storage.write(key: '${_myIndicatorsPromptKey}_$userId', value: '1');
 
   @override
   Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
@@ -151,6 +165,15 @@ class InMemoryTokenStorage implements TokenStorage {
   String? loginTab;
   String? themeMode;
   DateTime? googleSignUpStartedAt;
+  final Set<int> myIndicatorsPromptClosed = {};
+
+  @override
+  Future<bool> readMyIndicatorsPromptClosed(int userId) async =>
+      myIndicatorsPromptClosed.contains(userId);
+
+  @override
+  Future<void> writeMyIndicatorsPromptClosed(int userId) async =>
+      myIndicatorsPromptClosed.add(userId);
 
   @override
   Future<DateTime?> readGoogleSignUpStartedAt() async => googleSignUpStartedAt;

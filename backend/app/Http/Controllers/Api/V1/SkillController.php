@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Skills\TeacherIndicators;
 use App\Domain\Skills\TeacherSkills;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\SkillIndexRequest;
@@ -38,6 +39,7 @@ class SkillController extends Controller
 
         $query = Skill::query()
             ->visibleToSchool($user->isAdmin() ? null : $user->school_id)
+            ->notTrashed()
             ->orderBy('subject_id')
             ->orderBy('grade_level')
             ->orderBy('code')
@@ -75,6 +77,16 @@ class SkillController extends Controller
                 ->orWhereRaw("name like ? escape '!'", [$like]));
         }
 
+        // Only the indicators the teacher's workspace added (the "ตัวชี้วัดที่ฉันเพิ่มเอง" list, §34.1).
+        if ($request->boolean('own') && $user->isTeacher()) {
+            $query->where('source', Skill::SOURCE_TEACHER)->where('school_id', $user->school_id);
+        }
+
+        // "ตัวชี้วัดของฉัน" (§34): the teacher's set and the workspace's own indicators.
+        if ($request->boolean('mine') && $user->isTeacher()) {
+            TeacherIndicators::narrow($query, $user);
+        }
+
         if ($request->boolean('tree')) {
             return response()->json(['data' => self::tree($query->get())]);
         }
@@ -94,7 +106,7 @@ class SkillController extends Controller
     /** PATCH /api/v1/skills/{id} {name?, code?, grade_level?} -> {data: skill} */
     public function update(UpdateSkillRequest $request, int $id): SkillResource
     {
-        $skill = Skill::query()->visibleToSchool($request->user()->school_id)->findOrFail($id);
+        $skill = Skill::query()->visibleToSchool($request->user()->school_id)->notTrashed()->findOrFail($id);
         Gate::authorize('update', $skill);
 
         return new SkillResource($this->teacherSkills->update($skill, $request->validated()));
