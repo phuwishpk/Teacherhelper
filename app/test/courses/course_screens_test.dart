@@ -498,9 +498,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('add_indicator_save')));
       await tester.pumpAndSettle();
       expect(
-        find.text('เลือกมาตรฐานหรือตัวชี้วัดที่จะเพิ่มไว้ใต้ และกรอกชื่อ'),
+        find.text('เลือกมาตรฐานหรือตัวชี้วัดที่จะเพิ่มไว้ใต้'),
         findsOneWidget,
       );
+      expect(find.text('กรอกชื่อตัวชี้วัดใหม่'), findsNothing);
       await tester.tap(find.widgetWithText(RadioListTile<int>, 'ค 1.1'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('add_indicator_save')));

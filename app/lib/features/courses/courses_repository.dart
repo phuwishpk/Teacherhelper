@@ -116,6 +116,7 @@ abstract class CoursesRepository {
     required int parentId,
     required String name,
     String? code,
+    int? gradeLevel,
   });
 }
 
@@ -280,6 +281,7 @@ class ApiCoursesRepository implements CoursesRepository {
     required int parentId,
     required String name,
     String? code,
+    int? gradeLevel,
   }) async {
     final res = await _dio.post<Object?>(
       '/skills',
@@ -287,6 +289,7 @@ class ApiCoursesRepository implements CoursesRepository {
         'parent_id': parentId,
         'name': name,
         if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
+        'grade_level': ?gradeLevel,
       },
     );
     return Skill.fromJson(unwrapJson(res.data));

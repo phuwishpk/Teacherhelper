@@ -164,7 +164,9 @@ class IndicatorsField extends StatelessWidget {
 /// "เพิ่มตัวชี้วัดเอง" (DESIGN §20.2): the teacher picks the
 /// standard (or indicator) it belongs under and names it; the server gives
 /// it a code when none is typed. Pops the new [Skill], shared with every
-/// teacher of the school and labelled "ครูเพิ่มเอง".
+/// teacher of the school and labelled "ครูเพิ่มเอง". Under a standard (which
+/// has no grade) the new indicator takes [grade], so the pickers that filter
+/// by grade show it next time.
 Future<Skill?> showAddIndicatorDialog(
   BuildContext context, {
   int? subjectId,
@@ -212,6 +214,8 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
   bool _loading = false;
   bool _saving = false;
   String? _error;
+  String? _parentError;
+  String? _nameError;
   Timer? _debounce;
 
   /// "ค 1.1 ป.5/9" is searched under "ค 1.1" (its standard).
@@ -256,23 +260,30 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
 
   Future<void> _save() async {
     final parent = _parent;
-    if (parent == null || _name.text.trim().isEmpty) {
-      setState(
-        () => _error = 'เลือกมาตรฐานหรือตัวชี้วัดที่จะเพิ่มไว้ใต้ และกรอกชื่อ',
-      );
+    final name = _name.text.trim();
+    if (parent == null || name.isEmpty) {
+      setState(() {
+        _parentError = parent == null
+            ? 'เลือกมาตรฐานหรือตัวชี้วัดที่จะเพิ่มไว้ใต้'
+            : null;
+        _nameError = name.isEmpty ? 'กรอกชื่อตัวชี้วัดใหม่' : null;
+      });
       return;
     }
     setState(() {
       _saving = true;
       _error = null;
+      _parentError = null;
+      _nameError = null;
     });
     try {
       final skill = await ref
           .read(coursesRepositoryProvider)
           .addIndicator(
             parentId: parent.id,
-            name: _name.text.trim(),
+            name: name,
             code: _code.text.trim().isEmpty ? null : _code.text.trim(),
+            gradeLevel: parent.gradeLevel == null ? widget.grade : null,
           );
       if (mounted) Navigator.of(context).pop(skill);
     } catch (e) {
@@ -295,7 +306,9 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'ตัวชี้วัดที่เพิ่มจะมีป้าย "ครูเพิ่มเอง" และเห็นเฉพาะในบัญชีของคุณ',
+                'สร้างตัวชี้วัดใหม่ใต้มาตรฐานหรือตัวชี้วัดที่เลือก '
+                'ตัวชี้วัดที่เพิ่มจะมีป้าย "ครูเพิ่มเอง" และเห็นเฉพาะในบัญชีของคุณ '
+                'ถ้าตัวชี้วัดมีอยู่แล้ว ให้ติ๊กจากรายการในหน้าก่อนหน้าแทน',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -321,11 +334,12 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
                     ? const Center(child: Text('ไม่พบมาตรฐานหรือตัวชี้วัด'))
                     : RadioGroup<int>(
                         groupValue: _parent?.id,
-                        onChanged: (id) => setState(
-                          () => _parent = _parents
+                        onChanged: (id) => setState(() {
+                          _parent = _parents
                               .where((p) => p.id == id)
-                              .firstOrNull,
-                        ),
+                              .firstOrNull;
+                          _parentError = null;
+                        }),
                         child: ListView(
                           children: [
                             for (final p in _parents)
@@ -343,13 +357,26 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
                         ),
                       ),
               ),
+              if (_parentError != null)
+                Text(
+                  _parentError!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
               const SizedBox(height: 8),
               TextField(
                 key: const ValueKey('add_indicator_name'),
                 controller: _name,
                 minLines: 1,
                 maxLines: 3,
-                decoration: const InputDecoration(labelText: 'ชื่อตัวชี้วัด'),
+                decoration: InputDecoration(
+                  labelText: 'ชื่อตัวชี้วัดใหม่',
+                  errorText: _nameError,
+                ),
+                onChanged: (_) {
+                  if (_nameError != null) setState(() => _nameError = null);
+                },
               ),
               const SizedBox(height: 8),
               TextField(

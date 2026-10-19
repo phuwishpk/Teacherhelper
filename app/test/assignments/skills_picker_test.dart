@@ -228,14 +228,60 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('add_indicator_save')));
     await tester.pumpAndSettle();
 
+    // The parent has no grade (a standard): the new indicator takes the
+    // picker's, so the grade-filtered picker shows it next time.
     expect(courses.addedIndicators.single, {
       'parent_id': 1,
       'name': 'เศษส่วนในชีวิตประจำวัน',
       'code': null,
+      'grade_level': 5,
     });
     expect(find.text('ครูเพิ่มเอง'), findsOneWidget);
     await tester.tap(find.text('ใช้ 1 รายการ'));
     await tester.pumpAndSettle();
     expect(result?.single.sourceLabel, 'ครูเพิ่มเอง');
+  });
+
+  testWidgets('a second indicator can be added under the same parent', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _Repo();
+    final courses = FakeCoursesRepository();
+    await tester.pumpWidget(_host(repo, (_) {}, courses: courses));
+    await tester.tap(find.text('เลือกทักษะ'));
+    await tester.pumpAndSettle();
+
+    for (final name in ['ข้อแรก', 'ข้อที่สอง']) {
+      await tester.tap(
+        find.byKey(const ValueKey('skills_picker_add_indicator')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(RadioListTile<int>, 'ค 1.1 ป.5/1'));
+      await tester.pump();
+      // Saving without a name says so at the name, not at the parent.
+      await tester.tap(find.byKey(const ValueKey('add_indicator_save')));
+      await tester.pump();
+      expect(find.text('กรอกชื่อตัวชี้วัดใหม่'), findsOneWidget);
+      expect(
+        find.text('เลือกมาตรฐานหรือตัวชี้วัดที่จะเพิ่มไว้ใต้'),
+        findsNothing,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('add_indicator_name')),
+        name,
+      );
+      await tester.pump();
+      expect(find.text('กรอกชื่อตัวชี้วัดใหม่'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('add_indicator_save')));
+      await tester.pumpAndSettle();
+    }
+
+    expect(courses.addedIndicators.map((a) => a['name']), [
+      'ข้อแรก',
+      'ข้อที่สอง',
+    ]);
   });
 }

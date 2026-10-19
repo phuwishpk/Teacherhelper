@@ -383,8 +383,14 @@ class FakeCoursesRepository extends Fake implements CoursesRepository {
     required int parentId,
     required String name,
     String? code,
+    int? gradeLevel,
   }) async {
-    addedIndicators.add({'parent_id': parentId, 'name': name, 'code': code});
+    addedIndicators.add({
+      'parent_id': parentId,
+      'name': name,
+      'code': code,
+      'grade_level': ?gradeLevel,
+    });
     return Skill(
       id: 90,
       code: code ?? 'ค 1.1 ป.5/ค1',
