@@ -62,6 +62,23 @@ class TeacherSkillTest extends TestCase
         $this->assertSame([], $tree[0]['children'][0]['children'][0]['children']);
     }
 
+    public function test_a_teacher_indicator_without_a_grade_shows_for_every_grade(): void
+    {
+        $teacher = $this->makeTeacher();
+        $ungraded = $this->asUser($teacher)->postJson('/api/v1/skills', ['parent_id' => $this->standard->id, 'name' => 'ไม่มีชั้น'])
+            ->assertCreated()->assertJsonPath('data.grade_level', null)->json('data.id');
+        $graded = $this->asUser($teacher)->postJson('/api/v1/skills', ['parent_id' => $this->standard->id, 'name' => 'ชั้น ป.6', 'grade_level' => 6])
+            ->assertCreated()->json('data.id');
+
+        $ids = fn (int $grade) => collect($this->asUser($teacher)->getJson('/api/v1/skills?'.http_build_query(['subject' => $this->math->id, 'grade' => $grade, 'level' => 'indicator,sub_indicator']))
+            ->assertOk()->json('data'))->pluck('id')->all();
+
+        $this->assertEqualsCanonicalizing([$this->indicator->id, $ungraded], $ids(5));
+        $this->assertEqualsCanonicalizing([$graded, $ungraded], $ids(6));
+        // The standard itself (no grade, from the curriculum) still stays out of a grade filter.
+        $this->assertNotContains($this->standard->id, collect($this->asUser($teacher)->getJson('/api/v1/skills?'.http_build_query(['subject' => $this->math->id, 'grade' => 5]))->json('data'))->pluck('id')->all());
+    }
+
     public function test_a_teacher_adds_a_missing_indicator_numbered_under_its_parent_for_the_school(): void
     {
         $teacher = $this->makeTeacher();
