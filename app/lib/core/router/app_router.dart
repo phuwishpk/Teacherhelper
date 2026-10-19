@@ -85,6 +85,7 @@ import '../../features/help/help_content.dart';
 import '../../features/help/help_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/my_indicators/my_indicators_screen.dart';
+import '../../features/my_indicators/skill_trash_screen.dart';
 import '../../features/student/student_account_screen.dart';
 import '../../features/student/student_password_screen.dart';
 import '../../features/student/student_shell.dart';
@@ -320,6 +321,9 @@ abstract final class AppRoutes {
 
   /// "ตัวชี้วัดของฉัน": the indicators the pickers show first (DESIGN §34).
   static const myIndicators = '/settings/indicators';
+
+  /// The trash of the teacher's own indicators (DESIGN §34.1).
+  static const skillTrash = '/settings/indicators/trash';
 
   /// Review queue of one assignment (§9.5, §13).
   static String review(int assignmentId) => '/assignments/$assignmentId/review';
@@ -1176,6 +1180,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.myIndicators,
         builder: (context, state) => const MyIndicatorsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.skillTrash,
+        builder: (context, state) => const SkillTrashScreen(),
       ),
       GoRoute(
         path: AppRoutes.help,

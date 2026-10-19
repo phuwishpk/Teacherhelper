@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../assignments/assignments_providers.dart';
@@ -9,6 +11,8 @@ import '../assignments/assignments_repository.dart';
 import '../assignments/question.dart';
 import '../courses/indicator_widgets.dart';
 import 'my_indicators.dart';
+import 'skill_trash.dart';
+import 'skill_trash_screen.dart';
 
 /// One subject and grade of the teacher's set; [grade] null holds the
 /// teacher's own indicators that have no grade.
@@ -101,7 +105,17 @@ class _MyIndicatorsScreenState extends ConsumerState<MyIndicatorsScreen> {
         s.id: s.name,
     };
     return Scaffold(
-      appBar: AppBar(title: const Text('ตัวชี้วัดของฉัน')),
+      appBar: AppBar(
+        title: const Text('ตัวชี้วัดของฉัน'),
+        actions: [
+          IconButton(
+            key: const ValueKey('my_indicators_trash'),
+            tooltip: 'ถังขยะตัวชี้วัด',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => context.push(AppRoutes.skillTrash),
+          ),
+        ],
+      ),
       body: AsyncView<List<Skill>>(
         value: mine,
         onRetry: () => ref.invalidate(myIndicatorsProvider),
@@ -188,6 +202,8 @@ class _MyIndicatorsScreenState extends ConsumerState<MyIndicatorsScreen> {
                                 'เอา${_groupTitle(entry.key, subjects)}ออกแล้ว',
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      const _OwnIndicators(),
                     ],
                   ),
                 ),
@@ -359,6 +375,75 @@ class _AddGroupDialogState extends ConsumerState<_AddGroupDialog> {
           child: const Text('เพิ่มทุกตัวชี้วัด'),
         ),
       ],
+    );
+  }
+}
+
+/// "ตัวชี้วัดที่ฉันเพิ่มเอง" (DESIGN §34.1): each can go to the trash.
+class _OwnIndicators extends ConsumerWidget {
+  const _OwnIndicators();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final own = ref.watch(ownIndicatorsProvider);
+    final theme = Theme.of(context);
+    final rows = own.value ?? const <Skill>[];
+    return Card(
+      key: const ValueKey('my_indicators_own'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              title: Text(
+                'ตัวชี้วัดที่ฉันเพิ่มเอง',
+                style: theme.textTheme.titleMedium,
+              ),
+              subtitle: const Text(
+                'ลบแล้วไปอยู่ในถังขยะ กู้คืนได้ ของที่ใช้อยู่แล้วยังเก็บไว้',
+              ),
+            ),
+            if (own.isLoading && own.value == null)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: LinearProgressIndicator(),
+              )
+            else if (own.hasError && own.value == null)
+              ListTile(
+                title: Text(apiErrorMessage(own.error!)),
+                trailing: TextButton(
+                  onPressed: () => ref.invalidate(ownIndicatorsProvider),
+                  child: const Text('ลองใหม่'),
+                ),
+              )
+            else if (rows.isEmpty)
+              const ListTile(title: Text('ยังไม่ได้เพิ่ม'))
+            else
+              for (final s in rows)
+                ListTile(
+                  key: ValueKey('my_indicators_own_${s.id}'),
+                  dense: true,
+                  title: Text(s.code),
+                  subtitle: Text(
+                    s.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'ลบ',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => confirmMoveToTrash(
+                      context,
+                      ref,
+                      id: s.id,
+                      code: s.code,
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -46,6 +46,7 @@ class Skill {
     this.gradeLevel,
     this.level,
     this.sourceLabel,
+    this.inTrash = false,
   });
 
   final int id;
@@ -62,6 +63,10 @@ class Skill {
   /// "ครูเพิ่มเอง" for an indicator a teacher of the school added, else null.
   final String? sourceLabel;
 
+  /// In the teacher's trash (DESIGN §34.1): kept where it is used, not
+  /// offered for new links.
+  final bool inTrash;
+
   factory Skill.fromJson(Map<String, dynamic> json) => Skill(
     id: (json['id'] as num).toInt(),
     code: json['code'] as String,
@@ -70,6 +75,7 @@ class Skill {
     gradeLevel: (json['grade_level'] as num?)?.toInt(),
     level: json['level'] as String?,
     sourceLabel: json['source_label'] as String?,
+    inTrash: json['in_trash'] as bool? ?? false,
   );
 
   @override
