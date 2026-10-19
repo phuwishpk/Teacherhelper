@@ -30,6 +30,20 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
   แทนที่จะพยายามต่อ 10.0.2.2 แล้วขึ้น "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" (release ห้าม cleartext อยู่แล้ว ดู CLAUDE.md)
 - ต้องเป็น `https://` เพราะ `android/app/src/main` ไม่มี network_security_config ที่อนุญาต cleartext
 
+## iOS (ทดสอบ, DESIGN §33)
+
+ต้องใช้ Mac ที่มี Xcode และ CocoaPods สแกนใบงานด้วยกล้อง การแจ้งเตือน และปุ่ม Google ยังไม่มีบน iOS
+
+```bash
+flutter build ios --simulator --debug --dart-define=API_BASE_URL=https://<โดเมน>   # ตรวจว่า build ผ่าน
+open ios/Runner.xcworkspace          # ครั้งแรก: Runner > Signing & Capabilities > Team = Apple ID ของคุณ
+flutter devices                      # หา id ของ iPhone ที่เสียบสาย
+flutter run --release -d <id> --dart-define=API_BASE_URL=https://<โดเมน>
+```
+
+ครั้งแรกบน iPhone: เปิด Settings > Privacy & Security > Developer Mode แล้วหลังติดตั้งให้เชื่อถือนักพัฒนาที่ Settings > General > VPN & Device Management ด้วย Apple ID ฟรี แอปใช้ได้ 7 วันแล้วต้องรันคำสั่งสุดท้ายใหม่
+อย่า commit ค่า Team ที่ Xcode เขียนลง `ios/Runner.xcodeproj/project.pbxproj`
+
 ## ทำงานออฟไลน์
 
 - เปิดแอปตอนไม่มีเน็ต: `SessionNotifier.restore()` ใช้ token ที่เก็บไว้ + ผลของ `GET /me` ครั้งล่าสุด (เก็บใน secure storage

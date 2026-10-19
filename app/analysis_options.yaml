@@ -1,1 +1,7 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # An iOS build checks plugin sources out under build/ios/SourcePackages
+    # (Swift Package Manager); they are not this app's code.
+    - build/**

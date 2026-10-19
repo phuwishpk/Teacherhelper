@@ -5,7 +5,7 @@
 - **สถานะ:** ร่าง v1 สรุปจากการออกแบบร่วมกันเมื่อ 24 ก.ย. 2569 เพิ่ม Phase 8–9 และสถาปัตยกรรมการใช้ token ของ Gemini เมื่อ 29 ก.ย. 2569 (§19–§21) เพิ่มข้อสอบกับกระดาษคำตอบ และสมุดคะแนนกับการตัดเกรด เมื่อ 30 ก.ย. 2569 (§22–§23) เพิ่มบัญชีนักเรียนระดับโรงเรียน ห้องประจำชั้นร่วม และการเข้าสู่ระบบด้วย Google เมื่อ 1 ต.ค. 2569 (§24)
 - **ผู้อ่าน:** ทีมพัฒนา Krucheck
 - **เอกสารนี้ครอบคลุม:** สถาปัตยกรรม, schema ของ MariaDB, API, สูตร Fuzzy Logic, โครง prompt ของ Gemini และลำดับการพัฒนา
-- **ยังไม่ครอบคลุม (เลื่อนไว้):** security test, usability test, CI/CD และ iOS ดูหัวข้อ [16](#16-เลื่อนไว้ทีหลังและข้อที่ยังเปิดอยู่)
+- **ยังไม่ครอบคลุม (เลื่อนไว้):** security test, usability test, CI/CD และ iOS แบบเต็ม ดูหัวข้อ [16](#16-เลื่อนไว้ทีหลังและข้อที่ยังเปิดอยู่) (แอป iOS สำหรับทดสอบมีแล้ว §33)
 - **แผนเริ่มงาน (M0):** อยู่ใน [KICKOFF.md](KICKOFF.md) ถ้า KICKOFF ขัดกับ §7.6 (document root) หรือ §15 แถว Phase 0 ให้ยึด KICKOFF จนกว่า M0 จะปิดและแก้เอกสารนี้ตาม
 
 ---
@@ -109,7 +109,7 @@ subject_code,skill_code,parent_code,grade_level,name
 
 - chat tutor แบบถามตอบอิสระ เพราะผู้ใช้เป็นผู้เยาว์และคุมเนื้อหาได้ยาก
 - บัญชีผู้ปกครอง
-- iOS
+- iOS แบบเต็ม (สแกนในเครื่อง การแจ้งเตือน และการแจกผ่าน App Store) ส่วนแอป iOS สำหรับทดสอบดู §33
 - ~~ใบงานแบบเขียนอิสระ (ไม่มี template)~~ ย้ายเข้าขอบเขตแล้วใน Phase 8 เป็นการบ้านแบบ "ไม่ใช้ใบงานของแอป" ตรวจจากรูปทั้งหน้า (§19.4–§19.5)
 - editor ลากวาง layout
 
@@ -1657,7 +1657,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
   - ใช้ GitHub Actions ให้ Flutter test ผ่าน coverage ≥ 70% และรัน backend test
   - deploy ผ่าน Plesk Git
   - ทั้งหมดนี้รอยืนยันตอนทำจริง
-- **iOS** เขียน Swift ตาม interface ของ Pigeon ใน §6.2
+- **iOS** เขียน Swift ตาม interface ของ Pigeon ใน §6.2 และส่วนอื่นที่ §33 ยังปิดไว้
 - **ออกจากระบบอัตโนมัติบนเว็บเมื่อไม่ใช้งาน** และโหมดเครื่องที่ใช้ร่วมกัน (§25.3): ตอนนี้ token บนเว็บอยู่จนกว่าจะกดออกจากระบบ
 - **font ภาษาไทยที่มากับแอป** แทนการโหลดจาก `fonts.gstatic.com` บนเว็บ (§25.3)
 - **ส่งคะแนนข้อสอบไป Google Classroom** (§22.1) ข้อสอบไม่โพสต์ลง Classroom โดยค่าตั้งต้น และยังไม่มีปุ่มโพสต์หรือส่งคะแนน (ตัดสินใจ 30 ก.ย. 2569)
@@ -5175,3 +5175,16 @@ CREATE TABLE classroom_teachers (
 - **เก็บนานเท่าไร**: 30 วัน (`GoogleEvent::RETENTION_DAYS`) ลบใน `eduvision:purge-images` ทุกวัน หน้า `/privacy` บอกไว้แล้ว การรวมบัญชีนักเรียนไม่ย้ายแถวเหล่านี้ (`StudentMerger` UNRELATED) การลบจริงของ §31.3 ต้องลบแถวของบัญชีนั้นด้วย
 - **ข้อจำกัด**: ข้อผิดพลาดที่เกิดในหน้าของ Google เอง (เช่น "Access blocked" 403 `access_denied` ของแอปที่ยังไม่ publish) ไม่ถูกส่งกลับมาที่ server จึงไม่มีในตาราง ทั้งสองหน้าบอกไว้
 - **Filament**: กดแถวในหน้า "ผู้ใช้และครู" หรือ "นักเรียน" (หรือ "ดูรายละเอียด") เปิดหน้ารายละเอียดบัญชี (`AccountInfolist`): บัญชี (บทบาท สถานะ อีเมล ชื่อผู้ใช้ เลขประจำตัว พื้นที่ ห้องเรียน) การเชื่อมเพื่อเข้าสู่ระบบด้วย Google (อีเมล เชื่อมด้วยอะไร เมื่อไร เข้าสู่ระบบล่าสุด) Google Classroom ของครู (ใช้งานได้ / ต้องเชื่อมใหม่ พร้อมเหตุผลและสิทธิ์ที่ขาด) และเหตุการณ์ Google 20 รายการล่าสุด หน้า "ผู้ใช้และครู" มีคอลัมน์ Google (เข้าสู่ระบบ / Classroom / Classroom ต้องเชื่อมใหม่) เมนู "ปัญหาการเชื่อม Google" (`GoogleEventResource` อ่านอย่างเดียว เฉพาะ admin) แสดงทุกแถว ค่าตั้งต้นเฉพาะที่มีปัญหา กรองบัญชีที่ยังไม่ผูก ค้นอีเมลได้ แต่ละแถวมีคำอธิบายภาษาไทยและวิธีแก้ (`GoogleEventLabels`)
+
+## 33. แอป iOS สำหรับทดสอบ
+
+ตัดสินใจ 19 ต.ค. 2569 (ผู้ใช้ขอ: ทดสอบบน iPhone ก่อนด้วย Xcode และ Apple ID ฟรี แล้วใช้ TestFlight เมื่อทดสอบ demo ใหญ่ โดยใช้เซิร์ฟเวอร์ Plesk และฐานข้อมูลเดียวกับ Android) แทน §2.4 ที่เลื่อน iOS ไว้ทั้งหมด
+
+- **โปรเจกต์** `app/ios/` สร้างด้วย `flutter create --platforms=ios` bundle ID `com.eduvision.app` เท่ากับ applicationId ของ Android (§28: ชื่อทางเทคนิคไม่เปลี่ยน) ชื่อที่แสดง Krucheck, iOS 15 ขึ้นไป, URL scheme `eduvision` เหมือน intent filter ของ Android, สิทธิ์กล้อง (QR เข้าห้อง ถ่ายรูปงาน) และคลังรูปมีข้อความภาษาไทย, `ITSAppUsesNonExemptEncryption = false` ไว้สำหรับ TestFlight ไอคอนมาจาก `web/icons/Icon-maskable-512.png`
+- **server ไม่เปลี่ยน** แอปชี้ API ด้วย `--dart-define=API_BASE_URL=https://<โดเมน>` เหมือน Android (release build ไม่มีค่า default, `MisconfiguredApp`)
+- **ทำได้เหมือนแอป Android** ทุกหน้าของครูและนักเรียน สแกน QR เข้าห้อง (`mobile_scanner`) ส่งงานด้วยกล้องหรือไฟล์ เปิดและบันทึก PDF
+- **ยังปิดบน iOS** (โค้ดเลือกด้วย `Platform.isAndroid` อยู่แล้ว ไม่ต้องแก้ Dart): native scan pipeline (§6.2, Kotlin + OpenCV) จึงสแกนใบงานและกระดาษคำตอบด้วยกล้องไม่ได้ ใช้ทางรูปทั้งหน้าเหมือนเว็บ (§25), โมเดลอ่านตัวเลข, การอัปโหลดเบื้องหลังด้วย WorkManager, การแจ้งเตือน (ต้องมี APNs key และบัญชี Apple Developer แบบเสียเงิน), ปุ่ม Google (ต้องมี OAuth client แบบ iOS และ reversed client ID ใน Info.plist ก่อน จึงไม่ใส่ `GOOGLE_SIGNIN_CLIENT_ID` ใน build iOS)
+- **ติดตั้งระยะที่ 1** Xcode กับ Apple ID ฟรี (Personal Team) ลงเครื่องของผู้พัฒนาทางสาย ใช้ `flutter run --release` เพราะ debug build เปิดจากหน้าจอโฮมไม่ได้ provisioning profile หมดอายุใน 7 วันต้องลงใหม่ ถ้า Apple แจ้งว่า bundle ID ถูกใช้แล้ว ให้เปลี่ยนเฉพาะในเครื่อง (ไม่ commit) ทีม (`DEVELOPMENT_TEAM`) ที่ Xcode เขียนลง `project.pbxproj` ไม่ต้อง commit
+- **ระยะที่ 2** TestFlight ต้องมี Apple Developer Program, App ID `com.eduvision.app` ใน App Store Connect และ `flutter build ipa --release --dart-define=API_BASE_URL=...` ยังไม่ได้ทำ
+- **CI** ยัง build เฉพาะ Android (`app.yml`) การ build iOS ต้องใช้ Mac
+
