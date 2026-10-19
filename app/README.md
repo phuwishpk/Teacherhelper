@@ -32,7 +32,11 @@ flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://<
 
 ## iOS (ทดสอบ, DESIGN §33)
 
-ต้องใช้ Mac ที่มี Xcode และ CocoaPods สแกนใบงานด้วยกล้อง การแจ้งเตือน และปุ่ม Google ยังไม่มีบน iOS
+ต้องใช้ Mac ที่มี Xcode และ CocoaPods สแกนใบงานด้วยกล้องและการแจ้งเตือนยังไม่มีบน iOS
+
+ปุ่ม Google: สร้าง OAuth client แบบ iOS (bundle ID `com.eduvision.app`) ใน project sign-in แล้วคัดลอก
+`ios/Flutter/GoogleSignIn.xcconfig.example` เป็น `GoogleSignIn.xcconfig` (ไม่ commit) ใส่ค่าของ client นั้น
+และ build ด้วย `--dart-define=GOOGLE_SIGNIN_CLIENT_ID=<Web client>` เหมือน Android
 
 ```bash
 flutter build ios --simulator --debug --dart-define=API_BASE_URL=https://<โดเมน>   # ตรวจว่า build ผ่าน
