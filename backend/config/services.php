@@ -96,6 +96,10 @@ return [
         'credentials' => env('FIREBASE_CREDENTIALS'),
         'project_id' => env('FIREBASE_PROJECT_ID'),
         'timeout' => (int) env('FIREBASE_TIMEOUT', 10),
+        // Firestore as the live layer (DESIGN §38): off = NullLiveStore and
+        // POST /auth/firebase-token answers 503; needs `credentials` above.
+        'firestore_enabled' => filter_var(env('FIRESTORE_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'firestore_database' => env('FIRESTORE_DATABASE', '(default)'),
     ],
 
     /*

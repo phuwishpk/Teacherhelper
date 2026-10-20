@@ -2,6 +2,13 @@
 
 namespace App\Providers;
 
+use App\Domain\Firestore\FirebaseCustomTokens;
+use App\Domain\Firestore\FirestoreClient;
+use App\Domain\Firestore\FirestoreConfig;
+use App\Domain\Firestore\FirestoreInbox;
+use App\Domain\Firestore\FirestoreLiveStore;
+use App\Domain\Firestore\LiveStore;
+use App\Domain\Firestore\NullLiveStore;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiBatchClient;
 use App\Domain\Gemini\GeminiClient;
@@ -16,6 +23,7 @@ use App\Domain\Notifications\LogNotifier;
 use App\Domain\Notifications\Notifier;
 use App\Domain\Students\StudentUsernames;
 use App\Domain\Worksheets\QrSigner;
+use App\Http\Controllers\Api\V1\FirebaseTokenController;
 use App\Models\ClassroomCourseRequest;
 use App\Policies\CourseRequestPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -58,21 +66,41 @@ class AppServiceProvider extends ServiceProvider
         // broken key file logs an error (never its contents) and falls back to
         // the log, so grading and publishing never fail over pushes.
         $this->app->singleton(Notifier::class, function () {
+            // Every push is also written to the Firestore inbox (§38 step 2;
+            // a no-op through NullLiveStore when Firestore is off).
+            $inbox = $this->app->make(FirestoreInbox::class);
             $path = trim((string) config('services.firebase.credentials'));
             if ($path === '') {
-                return new LogNotifier;
+                return (new LogNotifier)->withInbox($inbox);
             }
             try {
                 $account = ServiceAccount::fromFile($path, config('services.firebase.project_id') ?: null);
             } catch (FirebaseCredentialsInvalid $e) {
                 Log::error('fcm.credentials_invalid', ['message' => $e->getMessage()]);
 
-                return new LogNotifier;
+                return (new LogNotifier)->withInbox($inbox);
             }
             $timeout = (int) config('services.firebase.timeout', 10);
 
-            return new FcmNotifier(new FcmClient($account, new AccessTokens($account, $timeout), $timeout));
+            return (new FcmNotifier(new FcmClient($account, new AccessTokens($account, $timeout), $timeout)))->withInbox($inbox);
         });
+
+        // Firestore live layer (DESIGN §38): writes go to Firestore only when
+        // FIRESTORE_ENABLED and the key file is usable; a broken file logs an
+        // error (never its contents) and nothing is mirrored.
+        $this->app->singleton(LiveStore::class, function () {
+            if (! FirestoreConfig::enabled()) {
+                return new NullLiveStore;
+            }
+            try {
+                return new FirestoreLiveStore(FirestoreClient::fromConfig());
+            } catch (FirebaseCredentialsInvalid $e) {
+                Log::error('firestore.credentials_invalid', ['message' => $e->getMessage()]);
+
+                return new NullLiveStore;
+            }
+        });
+        $this->app->bind(FirebaseCustomTokens::class, fn () => FirebaseTokenController::tokens());
 
         // Resolved lazily: a missing QR_SIGNING_KEY only fails the code paths
         // that sign or verify worksheet QRs, with a clear message.
@@ -147,6 +175,8 @@ class AppServiceProvider extends ServiceProvider
         // Endpoints that reach Gemini directly or queue a Gemini job (they
         // cost the teacher's or the school's quota), and the student write
         // endpoints. Each has its own bucket per user.
+        RateLimiter::for('firebase-token', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('notices', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('ai-key', fn (Request $request) => self::perUser($request, 10));
         // "ผู้ช่วย Krucheck" (§37): the daily limit is AssistantChat's; this only stops bursts.
         RateLimiter::for('assistant', fn (Request $request) => self::perUser($request, 20));

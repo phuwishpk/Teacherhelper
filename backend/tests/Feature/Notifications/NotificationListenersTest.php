@@ -108,7 +108,7 @@ class NotificationListenersTest extends TestCase
         [, , $submission] = $this->publishedAnswers();
         $broken = new class extends RecordingNotifier
         {
-            protected function push(array $userIds, PushMessage $message): void
+            protected function deliver(array $userIds, PushMessage $message): void
             {
                 throw new \RuntimeException('FCM down');
             }

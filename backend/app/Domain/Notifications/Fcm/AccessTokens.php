@@ -30,7 +30,20 @@ final class AccessTokens
 
     private const EARLY_REFRESH = 300;
 
-    public function __construct(private readonly ServiceAccount $account, private readonly int $timeout = 10) {}
+    /**
+     * @param  string  $scope  the OAuth scope to ask for: FCM by default, or
+     *                         FirestoreClient::SCOPE for Firestore (DESIGN §38)
+     */
+    public function __construct(
+        private readonly ServiceAccount $account,
+        private readonly int $timeout = 10,
+        private readonly string $scope = self::SCOPE,
+    ) {}
+
+    public function scope(): string
+    {
+        return $this->scope;
+    }
 
     public function get(): string
     {
@@ -64,7 +77,7 @@ final class AccessTokens
         $now = time();
         $assertion = JWT::encode([
             'iss' => $this->account->clientEmail,
-            'scope' => self::SCOPE,
+            'scope' => $this->scope,
             'aud' => $this->account->tokenUri,
             'iat' => $now,
             'exp' => $now + self::LIFETIME,
@@ -92,6 +105,6 @@ final class AccessTokens
 
     private function cacheKey(): string
     {
-        return 'fcm:access-token:'.sha1($this->account->clientEmail.'|'.$this->account->projectId);
+        return 'fcm:access-token:'.sha1($this->account->clientEmail.'|'.$this->account->projectId.'|'.$this->scope);
     }
 }

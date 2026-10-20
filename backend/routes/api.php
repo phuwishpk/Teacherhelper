@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\V1\ExamImportController;
 use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\ExamSheetController;
+use App\Http\Controllers\Api\V1\FirebaseTokenController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleIdentityController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
@@ -53,6 +54,7 @@ use App\Http\Controllers\Api\V1\MasteryController;
 use App\Http\Controllers\Api\V1\MasterySummaryController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ModelController;
+use App\Http\Controllers\Api\V1\NoticeController;
 use App\Http\Controllers\Api\V1\PracticeItemController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\QuestionController;
@@ -157,6 +159,14 @@ Route::prefix('v1')->group(function () {
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
             Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');
+            // The custom token the app signs in to Firebase with (§38.4); 503 when Firestore is off.
+            Route::post('auth/firebase-token', FirebaseTokenController::class)
+                ->middleware(['role:teacher,student', 'firestore', 'throttle:firebase-token'])
+                ->name('api.auth.firebase-token');
+            // The notification inbox in Firestore (§38 step 2): mark notices read.
+            Route::post('me/notices/read', [NoticeController::class, 'read'])
+                ->middleware(['role:teacher,student', 'firestore', 'throttle:notices'])
+                ->name('api.me.notices.read');
 
             // The Google account every role signs in with (§24.9.5), admins included.
             Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {

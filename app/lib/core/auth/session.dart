@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
+import '../live/live_session.dart';
+import '../live/live_token_api.dart';
 import 'auth_repository.dart';
 import 'local_user_data.dart';
 import 'token_storage.dart';
@@ -62,6 +66,7 @@ class SessionNotifier extends Notifier<SessionState> {
       await storage.writeUser(user.toJson());
       _restoredOffline = false;
       state = SignedIn(user);
+      _startLive(user);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         // The interceptor already cleared the token; make the state agree.
@@ -147,6 +152,16 @@ class SessionNotifier extends Notifier<SessionState> {
     await storage.writeUser(user.toJson());
     _restoredOffline = false;
     state = SignedIn(user);
+    _startLive(user);
+  }
+
+  /// The Firebase session next to this one (DESIGN §38.6): started in the
+  /// background, never awaited, never able to fail the sign-in. A server
+  /// without Firestore answers 503 once and the live screens stay off.
+  void _startLive(User user) {
+    final live = ref.read(liveSessionProvider);
+    if (!live.enabled) return;
+    unawaited(live.signIn(user.id, ref.read(liveTokenApiProvider).fetch));
   }
 
   /// The local database may still hold a previous user's roster cache and
@@ -181,6 +196,7 @@ class SessionNotifier extends Notifier<SessionState> {
   /// Token rejected (401) or sign-out: clear the credentials. Local data is
   /// left for [_claimLocalData] to keep or wipe at the next sign-in.
   Future<void> forceSignOut() async {
+    await ref.read(liveSessionProvider).signOut();
     await ref.read(tokenStorageProvider).clear();
     _restoredOffline = false;
     state = const SignedOut();

@@ -82,6 +82,7 @@ import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
 import '../../features/help/help_content.dart';
+import '../../features/notices/notices_screen.dart';
 import '../../features/help/help_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/assistant/assistant_panel.dart';
@@ -148,6 +149,10 @@ abstract final class AppRoutes {
   static const help = '/help';
   static String helpTopic(String id) => '/help?topic=$id';
   static const studentHelp = '/student/help';
+
+  /// The notification inbox of the live layer (DESIGN §38 step 2).
+  static const notices = '/notices';
+  static const studentNotices = '/student/notices';
 
   static const classroomNew = '/classrooms/new';
   static String classroom(int id) => '/classrooms/$id';
@@ -435,6 +440,7 @@ abstract final class AppRoutes {
       location == student ||
       location == studentAccount ||
       location == studentHelp ||
+      location == studentNotices ||
       location == studentPassword ||
       location == myGrades ||
       location == myAttendance ||
@@ -654,6 +660,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentHelp,
         builder: (context, state) => const HelpScreen(role: HelpRole.student),
+      ),
+      GoRoute(
+        path: AppRoutes.studentNotices,
+        builder: (context, state) => const NoticesScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentPassword,
@@ -1200,6 +1210,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           role: HelpRole.teacher,
           initialTopic: state.uri.queryParameters['topic'],
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.notices,
+        builder: (context, state) => const NoticesScreen(),
       ),
       GoRoute(
         path: AppRoutes.appeals,

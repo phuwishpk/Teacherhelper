@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/live/live_session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/breakpoints.dart';
 import '../../core/widgets/adaptive_shell.dart';
@@ -14,6 +15,7 @@ import '../assistant/assistant_panel.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
 import '../gradebook/grades_home_page.dart';
+import '../notices/notices_providers.dart';
 import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
@@ -85,6 +87,8 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     final expanded = context.windowSize == WindowSize.expanded;
     // The upload queue is on the phone only (DESIGN §25).
     final queueOpen = kIsWeb ? 0 : ref.watch(uploadQueueOpenCountProvider);
+    final liveEnabled = ref.watch(liveSessionProvider).enabled;
+    final unreadNotices = ref.watch(unreadNoticesProvider);
     // Course requests waiting for the homeroom teacher (DESIGN §24.7): a
     // badge on "ห้องเรียน", where "คำขอผูกรายวิชา" is.
     final requests =
@@ -214,6 +218,14 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
         onPressed: openScan,
       ),
       actions: [
+        if (liveEnabled)
+          ShellAction(
+            key: const ValueKey('notices_button'),
+            tooltip: 'การแจ้งเตือน',
+            icon: Icons.notifications_outlined,
+            badge: unreadNotices,
+            onPressed: () => context.push(AppRoutes.notices),
+          ),
         if (!kIsWeb)
           ShellAction(
             tooltip: 'คิวอัปโหลด',

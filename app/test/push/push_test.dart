@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:eduvision/core/auth/session.dart';
 import 'package:eduvision/core/auth/user.dart';
+import 'package:eduvision/core/firebase/firebase_bootstrap.dart';
 import 'package:eduvision/core/push/devices_repository.dart';
 import 'package:eduvision/core/push/push_coordinator.dart';
 import 'package:eduvision/core/push/push_messaging.dart';
@@ -249,7 +250,9 @@ void main() {
       // flutter_test reports Android as the platform, so this runs the real
       // Firebase.initializeApp() path, which fails like a build without
       // google-services.json does.
-      final push = await initPushMessaging();
+      final ready = await initFirebase();
+      expect(ready, isFalse);
+      final push = await initPushMessaging(firebaseReady: ready);
       expect(push.enabled, isFalse);
       expect(await push.token(), isNull);
     },

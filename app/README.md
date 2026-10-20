@@ -165,9 +165,19 @@ widget test ของหน้าสแกนด้วยกล้องปล�
   และ wrapper ของ backend ที่ซ้อนไว้ใต้ `trace`), แก้คำอธิบาย, คะแนนทีละ 0.5, ระดับความเข้าใจ, ประเภทข้อผิดพลาด
   และเหตุผล (จำเป็นเมื่อคะแนนต่างจาก `ai_score`: เลือกจากรายการ + พิมพ์เพิ่ม ส่งเป็นข้อความเดียวใน `reason`)
 - **คำขอตรวจใหม่** `/appeals` (ครู) และปุ่ม "ขอให้ครูตรวจใหม่" ในผลรายข้อของนักเรียน `/student/results/{submission_id}` (ข้อละครั้ง)
+- **Firebase** เริ่มครั้งเดียวใน `main.dart` ด้วย `initFirebase()` (`core/firebase/firebase_bootstrap.dart`): Android/iOS
+  อ่านไฟล์ config ของแพลตฟอร์ม เว็บอ่าน `--dart-define=FIREBASE_WEB_API_KEY`, `FIREBASE_WEB_APP_ID`,
+  `FIREBASE_PROJECT_ID`, `FIREBASE_MESSAGING_SENDER_ID` (HOSTING §6.5) ไม่มี = Firebase ปิดเงียบ แอปทำงานปกติ
+- **ชั้นข้อมูลสด (Firestore, DESIGN §38)** (`core/live/`): หลังเข้าสู่ระบบ `SessionNotifier` ขอ custom token จาก
+  `POST /auth/firebase-token` แล้ว `LiveSession.signIn` เข้าสู่ระบบ Firebase ในพื้นหลัง (ไม่รอ ไม่ทำให้ login ล้ม
+  server ที่ปิด Firestore ตอบ 503 หนึ่งครั้ง) ออกจากระบบทุกทางเรียก `signOut` ด้วย test ใช้ `DisabledLiveSession`
+  (ค่าเริ่มต้นของ `liveSessionProvider`) และ `fake_cloud_firestore` จึงไม่แตะ Firebase
+- **กล่องแจ้งเตือน** (`features/notices/`, DESIGN §38.7): `noticesProvider` ฟัง `users/{uid}/notices` ใน Firestore
+  กระดิ่งใน shell ครูและนักเรียนขึ้นเฉพาะ build ที่ Firebase เปิด แตะรายการ = เปิดปลายทางเดียวกับ push และ
+  `POST /me/notices/read`
 - **FCM** (`core/push/`): `firebase_core` + `firebase_messaging` ทำงานเฉพาะเมื่อมี `android/app/google-services.json`
   (Gradle apply plugin `com.google.gms.google-services` เฉพาะตอนมีไฟล์ ไฟล์นี้อยู่ใน `.gitignore` ห้าม commit)
-  ถ้าไม่มี `Firebase.initializeApp()` ล้มแล้วแอปปิดการแจ้งเตือนเอง ทำงานต่อได้ปกติ วิธีเปิดใช้:
+  ถ้าไม่มี `initFirebase()` ล้มแล้วแอปปิดการแจ้งเตือนเอง ทำงานต่อได้ปกติ วิธีเปิดใช้:
   Firebase console → project เดียวกับ Google Cloud (KICKOFF ส่วนที่ 6) → Add app Android package `com.eduvision.app`
   → ดาวน์โหลด `google-services.json` ไปวางที่ `app/android/app/` → `flutter build apk`
   หลัง login แอปขอสิทธิ์แจ้งเตือน (Android 13+) แล้ว `POST /devices`; ออกจากระบบจะลบ token ของเครื่อง

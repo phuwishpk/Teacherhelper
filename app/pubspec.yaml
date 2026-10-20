@@ -8,11 +8,13 @@ environment:
 
 dependencies:
   camera: ^0.12.1
+  cloud_firestore: ^6.10.0
   crypto: ^3.0.7
   dio: ^5.11.1
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   file_picker: ^13.1.0
+  firebase_auth: ^6.7.0
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
   fl_chart: ^1.2.0
@@ -41,6 +43,7 @@ dev_dependencies:
   drift_dev: ^2.35.0
   build_runner: ^2.15.1
   pigeon: ^29.0.4
+  fake_cloud_firestore: ^4.3.0
 
 flutter:
   uses-material-design: true

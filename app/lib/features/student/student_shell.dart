@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/live/live_session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/adaptive_shell.dart';
 import '../auth/sign_out_action.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
+import '../notices/notices_providers.dart';
 import '../practice/practice_page.dart';
 import '../results/results_page.dart';
 import 'my_subjects_page.dart';
@@ -76,6 +78,14 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       selectedIndex: _index,
       onSelected: _select,
       actions: [
+        if (ref.watch(liveSessionProvider).enabled)
+          ShellAction(
+            key: const ValueKey('notices_button'),
+            tooltip: 'การแจ้งเตือน',
+            icon: Icons.notifications_outlined,
+            badge: ref.watch(unreadNoticesProvider),
+            onPressed: () => context.push(AppRoutes.studentNotices),
+          ),
         ShellAction(
           key: const ValueKey('help_button'),
           tooltip: 'คู่มือการใช้งาน',

@@ -4,6 +4,7 @@ namespace App\Domain\Notifications;
 
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Firestore\FirestoreInbox;
 use App\Models\Appeal;
 use App\Models\Assignment;
 use App\Models\ClassPost;
@@ -16,14 +17,37 @@ use App\Models\Submission;
 /**
  * Builds the PushMessage of each §9.9 event and its recipients; subclasses
  * only deliver (FcmNotifier to the users' registered devices, LogNotifier to
- * the log).
+ * the log). Every message is also written to the recipients' inbox in
+ * Firestore first (FirestoreInbox, DESIGN §38 step 2) when one is attached.
  */
 abstract class PushNotifier implements Notifier
 {
+    private ?FirestoreInbox $inbox = null;
+
+    public function withInbox(FirestoreInbox $inbox): static
+    {
+        $this->inbox = $inbox;
+
+        return $this;
+    }
+
     /**
      * @param  list<int>  $userIds
      */
-    abstract protected function push(array $userIds, PushMessage $message): void;
+    abstract protected function deliver(array $userIds, PushMessage $message): void;
+
+    /**
+     * @param  list<int>  $userIds
+     */
+    final protected function push(array $userIds, PushMessage $message): void
+    {
+        $userIds = array_values(array_unique(array_map(intval(...), $userIds)));
+        if ($userIds === []) {
+            return;
+        }
+        $this->inbox?->record($userIds, $message);
+        $this->deliver($userIds, $message);
+    }
 
     public function gradingFinished(Assignment $assignment, int $awaitingReview, int $awaitingAiKey): void
     {
