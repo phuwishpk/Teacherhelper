@@ -48,6 +48,10 @@ abstract class AiKeyRepository {
   /// `code: ai_key_invalid`.
   Future<AiKeyStatus> save(String geminiApiKey);
   Future<AiKeyStatus> delete();
+
+  /// `POST /me/ai-key/test` (DESIGN §36): tries the stored key again; a
+  /// failure carries `ai_error_code`.
+  Future<AiKeyStatus> test();
 }
 
 class ApiAiKeyRepository implements AiKeyRepository {
@@ -67,6 +71,12 @@ class ApiAiKeyRepository implements AiKeyRepository {
       '/me/ai-key',
       data: {'gemini_api_key': geminiApiKey},
     );
+    return AiKeyStatus.fromJson(unwrapJson(res.data));
+  }
+
+  @override
+  Future<AiKeyStatus> test() async {
+    final res = await _dio.post<Object?>('/me/ai-key/test');
     return AiKeyStatus.fromJson(unwrapJson(res.data));
   }
 
@@ -107,6 +117,12 @@ class AiKeyNotifier extends AsyncNotifier<AiKeyStatus> {
 
   Future<void> delete() async {
     final status = await ref.read(aiKeyRepositoryProvider).delete();
+    state = AsyncData(status);
+  }
+
+  /// Throws the DioException on failure so the section can show the code.
+  Future<void> retest() async {
+    final status = await ref.read(aiKeyRepositoryProvider).test();
     state = AsyncData(status);
   }
 }

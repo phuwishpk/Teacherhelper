@@ -328,6 +328,23 @@ class FakeAiKeyRepository extends Fake implements AiKeyRepository {
     return current;
   }
 
+  /// When set, test() throws it; otherwise the key passes again.
+  Object? testError;
+  int tests = 0;
+
+  @override
+  Future<AiKeyStatus> test() async {
+    tests++;
+    if (testError case final e?) throw e;
+    current = AiKeyStatus(
+      configured: current.configured,
+      keyLast4: current.keyLast4,
+      lastVerifiedAt: DateTime.utc(2026, 10, 20, 3),
+      serverKeyAvailable: current.serverKeyAvailable,
+    );
+    return current;
+  }
+
   @override
   Future<AiKeyStatus> delete() async {
     deletes++;

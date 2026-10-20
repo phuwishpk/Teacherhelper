@@ -147,6 +147,41 @@ void main() {
       expect(find.textContaining('ทดสอบใช้งานได้ล่าสุด'), findsOneWidget);
     });
 
+    testWidgets('"ทดสอบอีกครั้ง" tests the stored key and shows the code '
+        'when it fails', (tester) async {
+      final keys = FakeAiKeyRepository(
+        AiKeyStatus(
+          configured: true,
+          keyLast4: 'wxyz',
+          lastVerifiedAt: DateTime.utc(2026, 10, 1, 2),
+        ),
+      );
+      await pumpScreen(
+        tester,
+        const SettingsScreen(),
+        overrides: [aiKeyRepositoryProvider.overrideWithValue(keys)],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('ai_key_retest')));
+      await tester.pumpAndSettle();
+      expect(keys.tests, 1);
+      expect(find.text('key ใช้งานได้ ทดสอบผ่านแล้ว'), findsOneWidget);
+
+      keys.testError = apiError(503, {
+        'message': 'ทดสอบ key ไม่ผ่าน: โควตาหรือเครดิตของ Gemini key หมด',
+        'errors': <String, Object>{},
+        'code': 'ai_unavailable',
+        'ai_error_code': 'AI-QUOTA',
+      });
+      await tester.tap(find.byKey(const ValueKey('ai_key_retest')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('ทดสอบ key ไม่ผ่าน: โควตาหรือเครดิตของ Gemini key หมด'),
+        findsOneWidget,
+      );
+      expect(find.text('รหัส AI-QUOTA'), findsOneWidget);
+    });
+
     testWidgets('ai_key_invalid shows the reason in Thai and keeps no key', (
       tester,
     ) async {

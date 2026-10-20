@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/error_codes.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
 import 'ai_key.dart';
@@ -21,6 +22,9 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
   bool _obscure = true;
   bool _busy = false;
   String? _error;
+
+  /// The code of the last failed save or test (DESIGN §36).
+  ErrorCode? _errorCode;
 
   @override
   void dispose() {
@@ -44,6 +48,7 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
     setState(() {
       _busy = true;
       _error = null;
+      _errorCode = null;
     });
     try {
       await ref.read(aiKeyProvider.notifier).save(key);
@@ -52,7 +57,34 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
       setState(() => _obscure = true);
       showMessage(context, 'ทดสอบผ่านและบันทึก key แล้ว');
     } catch (e) {
-      if (mounted) setState(() => _error = aiKeyErrorMessage(e));
+      if (mounted) {
+        setState(() {
+          _error = aiKeyErrorMessage(e);
+          _errorCode = errorCodeOf(e);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// "ทดสอบอีกครั้ง": the stored key against Gemini, without typing it.
+  Future<void> _retest() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _errorCode = null;
+    });
+    try {
+      await ref.read(aiKeyProvider.notifier).retest();
+      if (mounted) showMessage(context, 'key ใช้งานได้ ทดสอบผ่านแล้ว');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = aiKeyErrorMessage(e);
+          _errorCode = errorCodeOf(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -189,12 +221,20 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
                 ),
               ),
             ),
+            if (_errorCode case final code?) ErrorCodeLine(code),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.end,
               children: [
+                if (s?.configured == true)
+                  OutlinedButton.icon(
+                    key: const ValueKey('ai_key_retest'),
+                    onPressed: _busy ? null : _retest,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('ทดสอบอีกครั้ง'),
+                  ),
                 if (s?.configured == true)
                   OutlinedButton.icon(
                     onPressed: _busy ? null : () => _delete(s!),
