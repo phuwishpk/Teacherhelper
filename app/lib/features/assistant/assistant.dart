@@ -8,6 +8,9 @@ import '../../core/api/error_codes.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
 import '../assignments/assignments_providers.dart';
+import '../assignments/answer_key_models.dart';
+import '../assignments/answer_key_repository.dart';
+import '../assignments/key_document_sources.dart';
 import 'assistant_plan.dart';
 
 /// `GET /assistant/status` (DESIGN §37): whether the teacher has a Gemini
@@ -140,6 +143,7 @@ class AssistantMessage {
     this.aiCallId,
     this.plan,
     this.planStatus,
+    this.attachments = const [],
   });
 
   static const user = 'user';
@@ -160,6 +164,9 @@ class AssistantMessage {
   final AssistantPlan? plan;
   final String? planStatus;
 
+  /// The teacher's files sent with a question (DESIGN §37.10).
+  final List<({int id, String name, int pageCount})> attachments;
+
   bool get isUser => role == user;
   bool get isError => role == error;
 
@@ -172,6 +179,7 @@ class AssistantMessage {
         aiCallId: aiCallId,
         plan: plan,
         planStatus: status,
+        attachments: attachments,
       );
 
   /// "AI-QUOTA · #48213" for the error bubble.
@@ -193,6 +201,15 @@ class AssistantMessage {
               )
             : null,
         planStatus: json['plan_status'] as String?,
+        attachments: [
+          for (final a in json['attachments'] as List? ?? const [])
+            if (a is Map)
+              (
+                id: (a['id'] as num).toInt(),
+                name: a['name'] as String? ?? '',
+                pageCount: (a['page_count'] as num?)?.toInt() ?? 0,
+              ),
+        ],
       );
 }
 
@@ -247,6 +264,7 @@ abstract class AssistantRepository {
     String text, {
     int? conversationId,
     DataScope? scope,
+    List<int> documentIds = const [],
   });
 
   /// "เข้าใจแล้ว" on the student-data notice (DESIGN §37.8).
@@ -303,6 +321,7 @@ class ApiAssistantRepository implements AssistantRepository {
     String text, {
     int? conversationId,
     DataScope? scope,
+    List<int> documentIds = const [],
   }) async {
     final res = await _dio.post<Object?>(
       '/assistant/messages',
@@ -310,6 +329,7 @@ class ApiAssistantRepository implements AssistantRepository {
         'text': text,
         'conversation_id': ?conversationId,
         'scope': ?scope?.toJson(),
+        if (documentIds.isNotEmpty) 'document_ids': documentIds,
       },
       options: _slow,
     );
@@ -439,24 +459,38 @@ class AssistantChatController extends Notifier<AssistantChatState> {
     final question = text.trim();
     if (question.isEmpty || state.sending || state.loading) return;
     final before = state.messages;
+    final scope = ref.read(assistantScopeProvider);
+    final files = ref.read(assistantAttachmentsProvider).files;
     state = AssistantChatState(
       conversation: state.conversation,
       messages: [
         ...before,
-        AssistantMessage(role: AssistantMessage.user, content: question),
+        AssistantMessage(
+          role: AssistantMessage.user,
+          content: question,
+          attachments: [
+            for (final f in files)
+              (id: f.id, name: f.originalName, pageCount: f.pageCount),
+          ],
+        ),
       ],
       sending: true,
       labels: state.labels,
     );
-    final scope = ref.read(assistantScopeProvider);
-    await _ask(
+    final reached = await _ask(
       before,
       () => _repo.send(
         question,
         conversationId: state.conversation?.id,
         scope: scope,
+        documentIds: [for (final f in files) f.id],
       ),
     );
+    // The files went with the question; a question that never reached the
+    // server keeps them for sending again.
+    if (reached && ref.mounted) {
+      ref.read(assistantAttachmentsProvider.notifier).clear();
+    }
   }
 
   /// "ลองใหม่" on the last failure: the server asks its question again; a
@@ -492,13 +526,14 @@ class AssistantChatController extends Notifier<AssistantChatState> {
   }
 
   /// Runs [call]; the question and its answer or failure follow [before].
-  Future<void> _ask(
+  /// True when the server got the question (answered or stored a failure).
+  Future<bool> _ask(
     List<AssistantMessage> before,
     Future<AssistantReply> Function() call,
   ) async {
     try {
       final reply = await call();
-      if (!ref.mounted) return;
+      if (!ref.mounted) return true;
       final messages = [...before, ...reply.messages];
       state = AssistantChatState(
         conversation: reply.conversation,
@@ -511,8 +546,9 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       if (reply.applyMessageId case final id?) {
         unawaited(ref.read(assistantPlansProvider.notifier).apply(id));
       }
+      return true;
     } catch (e) {
-      if (!ref.mounted) return;
+      if (!ref.mounted) return false;
       final stored = AssistantReply.tryParse(apiErrorBody(e));
       state = stored != null
           ? AssistantChatState(
@@ -527,6 +563,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
               messages: [...state.messages, _localFailure(e)],
               labels: state.labels,
             );
+      return stored != null;
     } finally {
       if (ref.mounted) {
         ref.invalidate(assistantStatusProvider);
@@ -628,7 +665,9 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
           for (final (i, item) in plan.practiceItems.indexed)
             if (item.error == null) i,
         },
-        AssistantPlan.rubricCard || AssistantPlan.gradebookCard => const {},
+        AssistantPlan.rubricCard ||
+        AssistantPlan.gradebookCard ||
+        AssistantPlan.fileCard => const {},
         _ => {
           for (final (i, q) in plan.questions.indexed)
             if (q.usableFor(target.kind)) i,
@@ -680,6 +719,7 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
     final rubric = const [
       AssistantPlan.rubricCard,
       AssistantPlan.gradebookCard,
+      AssistantPlan.fileCard,
     ].contains(message.plan!.kind);
     if (ui.applying || (ui.selected.isEmpty && !rubric)) return;
     state = {
@@ -739,4 +779,65 @@ class AssistantScopeController extends Notifier<DataScope?> {
 final assistantScopeProvider =
     NotifierProvider<AssistantScopeController, DataScope?>(
       AssistantScopeController.new,
+    );
+
+/// Files the teacher picked for the next question (DESIGN §37.10),
+/// uploaded at once with POST /documents.
+class AssistantAttachments {
+  const AssistantAttachments({
+    this.files = const [],
+    this.uploading = false,
+    this.error,
+  });
+
+  final List<SourceDocument> files;
+  final bool uploading;
+  final String? error;
+}
+
+class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
+  /// The same limit as the server's (AssistantChat::MAX_ATTACHMENTS).
+  static const maxFiles = 5;
+
+  @override
+  AssistantAttachments build() {
+    ref.watch(currentUserProvider.select((u) => u?.id));
+    return const AssistantAttachments();
+  }
+
+  Future<void> pick() async {
+    if (state.uploading || state.files.length >= maxFiles) return;
+    final picked = await ref
+        .read(documentFilePickerProvider)
+        .pick(dialogTitle: 'แนบเอกสารของครู');
+    if (picked.isEmpty || !ref.mounted) return;
+    state = AssistantAttachments(files: state.files, uploading: true);
+    try {
+      final uploaded = await ref
+          .read(answerKeyRepositoryProvider)
+          .upload(picked.take(maxFiles - state.files.length).toList());
+      if (!ref.mounted) return;
+      state = AssistantAttachments(files: [...state.files, ...uploaded]);
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = AssistantAttachments(
+        files: state.files,
+        error: apiErrorMessage(e),
+      );
+    }
+  }
+
+  void remove(int id) => state = AssistantAttachments(
+    files: [
+      for (final f in state.files)
+        if (f.id != id) f,
+    ],
+  );
+
+  void clear() => state = const AssistantAttachments();
+}
+
+final assistantAttachmentsProvider =
+    NotifierProvider<AssistantAttachmentsController, AssistantAttachments>(
+      AssistantAttachmentsController.new,
     );

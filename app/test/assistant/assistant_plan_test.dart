@@ -38,6 +38,7 @@ class _Fake implements AssistantRepository {
     String text, {
     int? conversationId,
     DataScope? scope,
+    List<int> documentIds = const [],
   }) async => replies.removeAt(0);
   @override
   Future<AssistantMessage> apply(

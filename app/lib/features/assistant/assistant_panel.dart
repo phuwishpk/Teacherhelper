@@ -257,6 +257,7 @@ class _Chat extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: StudentDataChip(status: status, enabled: !busy),
         ),
+        _AttachedFiles(enabled: !busy),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: Text(
@@ -269,6 +270,17 @@ class _Chat extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              IconButton(
+                key: const ValueKey('assistant_attach'),
+                tooltip: 'แนบเอกสารของครู (PDF หรือรูป)',
+                icon: const Icon(Icons.attach_file),
+                onPressed:
+                    busy || ref.watch(assistantAttachmentsProvider).uploading
+                    ? null
+                    : () => ref
+                          .read(assistantAttachmentsProvider.notifier)
+                          .pick(),
+              ),
               Expanded(
                 child: TextField(
                   key: const ValueKey('assistant_input'),
@@ -373,6 +385,29 @@ class _Bubble extends StatelessWidget {
                       : withNames(message.content, labels),
                   style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
                 ),
+                for (final f in message.attachments)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 16,
+                          color: onColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${f.name} (${f.pageCount} หน้า)',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: onColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (!message.isUser && onNavigate != null)
                   if (mentioned(message.content, labels) case final students
                       when students.isNotEmpty)
@@ -669,6 +704,71 @@ class AssistantScreen extends StatelessWidget {
           onClose: close,
           onNavigate: (route) => context.push(route),
         ),
+      ),
+    );
+  }
+}
+
+/// The files picked for the next question (DESIGN §37.10), with the
+/// warning that only the teacher's own documents belong here.
+class _AttachedFiles extends ConsumerWidget {
+  const _AttachedFiles({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final state = ref.watch(assistantAttachmentsProvider);
+    if (state.files.isEmpty && !state.uploading && state.error == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final f in state.files)
+                InputChip(
+                  key: ValueKey('assistant_file_${f.id}'),
+                  avatar: const Icon(Icons.description_outlined),
+                  label: Text('${f.originalName} (${f.pageCount} หน้า)'),
+                  deleteIcon: const Icon(Icons.close),
+                  deleteButtonTooltipMessage: 'เอาไฟล์ออก',
+                  onDeleted: enabled
+                      ? () => ref
+                            .read(assistantAttachmentsProvider.notifier)
+                            .remove(f.id)
+                      : null,
+                ),
+              if (state.uploading)
+                const Chip(
+                  avatar: SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  label: Text('กำลังอัปโหลด…'),
+                ),
+            ],
+          ),
+          if (state.error case final error?)
+            Text(
+              error,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          Text(
+            'แนบเฉพาะเอกสารของครู อย่าแนบไฟล์ที่มีชื่อหรือคำตอบของนักเรียน',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -15,6 +15,8 @@ class AssistantPlan {
     this.items = const [],
     this.gradebook,
     this.practiceItems = const [],
+    this.fileAction,
+    this.documents = const [],
     this.result,
   });
 
@@ -23,6 +25,7 @@ class AssistantPlan {
   static const indicatorsCard = 'indicators';
   static const gradebookCard = 'gradebook';
   static const practiceCard = 'practice';
+  static const fileCard = 'file';
 
   final String kind;
   final PlanTarget target;
@@ -43,6 +46,11 @@ class AssistantPlan {
 
   /// A practice card's items (DESIGN §37.9).
   final List<PracticeCardItem> practiceItems;
+
+  /// A file card (DESIGN §37.10): answer_key, exam, course or lesson_plan,
+  /// and the files it sends.
+  final String? fileAction;
+  final List<({int id, String name, int pageCount})> documents;
   final PlanResult? result;
 
   /// What the ticks index: the questions, the indicator or practice items.
@@ -99,6 +107,16 @@ class AssistantPlan {
       gradebook: kind == gradebookCard
           ? GradebookProposal.fromJson(json)
           : null,
+      fileAction: json['action'] as String?,
+      documents: [
+        for (final d in json['documents'] as List? ?? const [])
+          if (d is Map)
+            (
+              id: (d['id'] as num).toInt(),
+              name: d['name'] as String? ?? '',
+              pageCount: (d['page_count'] as num?)?.toInt() ?? 0,
+            ),
+      ],
       result: result is Map
           ? PlanResult.fromJson(result.cast<String, dynamic>())
           : null,
@@ -499,6 +517,8 @@ class PlanResult {
     this.mapped = 0,
     this.courseId,
     this.skillId,
+    this.extractionId,
+    this.cached = false,
     this.skipped = const [],
   });
 
@@ -514,6 +534,12 @@ class PlanResult {
   /// A gradebook card's course; a practice card's indicator.
   final int? courseId;
   final int? skillId;
+
+  /// A course or lesson-plan read of a file card.
+  final int? extractionId;
+
+  /// A file card's read came from the school's cache (done at once).
+  final bool cached;
   final List<({int index, String reason})> skipped;
 
   factory PlanResult.fromJson(Map<String, dynamic> json) => PlanResult(
@@ -527,6 +553,8 @@ class PlanResult {
     mapped: (json['mapped'] as num?)?.toInt() ?? 0,
     courseId: (json['course_id'] as num?)?.toInt(),
     skillId: (json['skill_id'] as num?)?.toInt(),
+    extractionId: (json['extraction_id'] as num?)?.toInt(),
+    cached: json['cached'] == true,
     skipped: [
       for (final s in json['skipped'] as List? ?? const [])
         if (s is Map)
