@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\AttendanceController;
+use App\Http\Controllers\Api\V1\FirebaseTokenController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassPostController;
 use App\Http\Controllers\Api\V1\ClassPostFileController;
@@ -157,6 +158,10 @@ Route::prefix('v1')->group(function () {
             // Push tokens of the app users (§9.9); an admin token opens nothing but /me,
             // logout and the handoff below.
             Route::post('devices', [DeviceController::class, 'store'])->middleware('role:teacher,student')->name('api.devices.store');
+            // The custom token the app signs in to Firebase with (§38.4); 503 when Firestore is off.
+            Route::post('auth/firebase-token', FirebaseTokenController::class)
+                ->middleware(['role:teacher,student', 'firestore', 'throttle:firebase-token'])
+                ->name('api.auth.firebase-token');
 
             // The Google account every role signs in with (§24.9.5), admins included.
             Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {

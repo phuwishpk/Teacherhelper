@@ -252,6 +252,9 @@ GEMINI_CALIBRATION_MAX_SCORE_FLIPS=0
 FIREBASE_CREDENTIALS=                 # path เต็มของไฟล์ service account นอก docroot ว่าง = push ลง log เท่านั้น
 FIREBASE_PROJECT_ID=
 FIREBASE_TIMEOUT=10
+# ---- Firestore ชั้นข้อมูลสด (§6.5) ----
+FIRESTORE_ENABLED=false               # true = backend เขียนแจ้งเตือนและสถานะการตรวจลง Firestore (ใช้ไฟล์ service account เดิม)
+FIRESTORE_DATABASE=(default)
 
 # ---- Google Classroom (§6.3) ----
 GOOGLE_OAUTH_CLIENT_ID=               # ว่างทั้งคู่ = endpoint ของ Classroom ตอบ 503 google_not_configured
@@ -323,6 +326,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | ตรวจ Gemini | `eduvision:gemini-check --generate` | §6.1 |
 | ตรวจว่าโมเดลจริงจับ prompt injection ได้ | `eduvision:gemini-check --injection` | ส่งภาพตัวอย่าง 5 ภาพใน `backend/tests/fixtures/injection` (ภาพสังเคราะห์ ไม่มีข้อมูลนักเรียน) = 5 request; ทุกภาพต้องขึ้น `ok` และบรรทัดสุดท้าย `injection: 5/5 as expected` ถ้ามี `MISMATCH` แจ้งผู้พัฒนาเพื่อปรับ prompt |
 | ตรวจ FCM | `eduvision:fcm-check` | §6.2 |
+| ตรวจ Firestore | `eduvision:firestore-check` | §6.5 |
 | ลงทะเบียนโมเดล | `eduvision:register-model <path เต็มของโฟลเดอร์โมเดล>` | §7 |
 | import ตัวชี้วัดจาก CSV | `eduvision:import-skills <path เต็มของไฟล์ csv>` | §8 (หรือใช้หน้า Filament) |
 | export ข้อมูลสำหรับ notebook | `eduvision:export-observations --output=<path เต็ม>` | ดู `php artisan eduvision:export-observations --help` |
@@ -545,6 +549,31 @@ Google sign-in ใช้ **Google Cloud project แยกจาก Classroom** �
    - นักเรียน: กด Google ในแท็บนักเรียน ครั้งแรกเข้าหน้า "ยืนยันตัวตนครั้งแรก" (ชื่อผู้ใช้ + รหัสผ่าน หรือสแกนบัตร) ครั้งต่อไปเข้าได้ทันที
    - ⚠️ **ตรวจ `sub` = `userId` ของ Classroom** (DESIGN §24.9.3): ใช้บัญชีนักเรียนทดสอบที่อยู่ในคอร์สทดลอง (KICKOFF G7) ที่ครูนำเข้าห้องแล้ว กด Google ในแท็บนักเรียน ถ้าเข้าได้ทันทีโดยไม่ถาม PIN แปลว่าตรงกัน (การเชื่อมเป็น `classroom_roster`) ถ้าถาม PIN แปลว่าไม่ตรง ไม่มีอะไรพัง (ยืนยันด้วย PIN ได้) แต่ให้บันทึกผลใน §12
 10. ถ้า secret หลุด: Credentials → client Web → **Reset secret** แล้วแก้ `.env` (ทางเว็บเท่านั้นที่ใช้ secret)
+
+### 6.5 Firestore ชั้นข้อมูลสด (DESIGN §38)
+
+Firestore เก็บ**สำเนา**ของแจ้งเตือนและสถานะการตรวจใต้ `users/{uid}` เพื่อให้หน้าจอของแอปเปลี่ยนเองโดยไม่ต้องดึงเพื่อรีเฟรช ข้อมูลจริงยังอยู่ MariaDB ไม่ตั้งค่า = ระบบทำงานครบ แค่หน้าจอยังใช้วิธีดึงเพื่อรีเฟรชแบบเดิม ใช้ Firebase project และไฟล์ service account **เดียวกับ FCM** (§6.2 ข้อ 1–6 ต้องเสร็จก่อน)
+
+**ฝั่ง Firebase (ครั้งเดียว)**
+
+1. Firebase console > Build > **Firestore Database** > Create database > region `asia-southeast1` (Singapore) > โหมด **production** (กฎเริ่มต้นปิดทุกอย่าง)
+2. Rules > วางเนื้อหาของ `firebase/firestore.rules` ใน repo ทั้งไฟล์ > **Publish** ทำซ้ำทุกครั้งที่ไฟล์นั้นเปลี่ยน
+3. Build > **Authentication** > Get started (ไม่ต้องเปิด provider ใด แอปเข้าด้วย custom token ที่ server ออก)
+4. Firestore Database > **Time-to-live** > เพิ่ม policy ที่ field `expires_at` ให้ collection group `notices` (และ `assignments`, `submissions` เมื่อขั้น 3 ของ DESIGN §38.3 ขึ้นใช้งาน) เอกสารหมดอายุถูกลบเองใน 90 วัน
+5. ถ้าจะใช้บนเว็บแอป: Project settings > General > **Add app** > Web > ชื่อ `Krucheck web` > จด `apiKey`, `appId`, `messagingSenderId`, `projectId` (ค่าชุดนี้ไม่ใช่ความลับ แต่ก็ไม่ commit) แล้ว Authentication > Settings > **Authorized domains** เพิ่มโดเมนของระบบ
+
+**ฝั่ง server**
+
+6. `.env`: `FIRESTORE_ENABLED=true` (และ `FIRESTORE_DATABASE=(default)` ถ้าไม่ได้ตั้งชื่ออื่น) → Run Now `eduvision:post-deploy`
+7. Run Now `eduvision:firestore-check` → ต้องขึ้น `write ok`, `read ok` และ `custom token ok` ถ้า `commit failed: HTTP 403` ให้ตรวจว่าสร้าง database แล้วและ service account มี role Editor หรือ Cloud Datastore User ใน Google Cloud IAM ถ้า `HTTP 404` ชื่อ database ไม่ตรง
+8. hosting ต้องเรียก `https://firestore.googleapis.com` ได้ (เพิ่มในรายการของ `tools/hosting-probe.php` เมื่อ probe รอบถัดไป)
+
+**ฝั่งแอป (เครื่องผู้พัฒนา)**
+
+- Android: ใช้ `google-services.json` ตัวเดิม ไม่ต้องทำอะไรเพิ่ม
+- เว็บ: build ด้วย `--dart-define=FIREBASE_WEB_API_KEY=... --dart-define=FIREBASE_WEB_APP_ID=... --dart-define=FIREBASE_PROJECT_ID=... --dart-define=FIREBASE_MESSAGING_SENDER_ID=...` (ค่าจากข้อ 5; `tools/build-web.sh` อ่านจากตัวแปรสภาพแวดล้อมชื่อเดียวกัน) ไม่ใส่ = เว็บแอปไม่ต่อ Firestore และทำงานแบบเดิม
+
+ปิดเมื่อไรก็ได้ด้วย `FIRESTORE_ENABLED=false` ข้อมูลใน Firestore ลบทิ้งได้ทั้งหมดโดยไม่กระทบระบบ (สร้างใหม่จาก MariaDB ได้)
 
 ---
 

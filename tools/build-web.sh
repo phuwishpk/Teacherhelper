@@ -39,6 +39,10 @@ flutter build web --release \
   --base-href /app/ \
   --no-web-resources-cdn \
   --dart-define=API_BASE_URL="$API_BASE_URL" \
+  --dart-define=FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}" \
+  --dart-define=FIREBASE_WEB_APP_ID="${FIREBASE_WEB_APP_ID:-}" \
+  --dart-define=FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-}" \
+  --dart-define=FIREBASE_MESSAGING_SENDER_ID="${FIREBASE_MESSAGING_SENDER_ID:-}" \
   -o "$SITE"
 
 # The web server serves these files itself, so Laravel's SecurityHeaders

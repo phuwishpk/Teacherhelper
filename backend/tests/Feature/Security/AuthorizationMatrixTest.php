@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Firestore\FirestoreFixtures;
 use Tests\Feature\Google\GoogleFixtures;
 use Tests\TestCase;
 
@@ -39,6 +40,7 @@ use Tests\TestCase;
  */
 class AuthorizationMatrixTest extends TestCase
 {
+    use FirestoreFixtures;
     use GoogleFixtures;
     use RefreshDatabase;
     use SecurityWorld;
@@ -449,6 +451,8 @@ class AuthorizationMatrixTest extends TestCase
         'api.ml.models.file' => ['GET', 'ml/models/{model}/file', self::OK, self::OK, self::OK, self::OK],
         // Push tokens (§9.9): any app user, never an admin token.
         'api.devices.store' => ['POST', 'devices', self::OK, self::OK, self::OK, self::OK],
+        // The Firebase custom token of the live layer (§38.4): same rule as devices.
+        'api.auth.firebase-token' => ['POST', 'auth/firebase-token', self::OK, self::OK, self::OK, self::OK],
     ];
 
     /** Admin-only routes: [method, uri]. Teachers and students get 403. */
@@ -497,6 +501,12 @@ class AuthorizationMatrixTest extends TestCase
         return array_map(fn (string $name) => [$name], array_combine(array_keys(self::COMMON), array_keys(self::COMMON)));
     }
 
+    protected function tearDown(): void
+    {
+        $this->removeServiceAccountFile();
+        parent::tearDown();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -504,6 +514,9 @@ class AuthorizationMatrixTest extends TestCase
         $this->makeSharedHomeroomWorld();
         $this->configureGoogle();
         config(['services.google_signin.client_ids' => 'test-signin-client.apps.googleusercontent.com']);
+        // Firestore on (§38), so the token route reaches its normal end.
+        $this->makeServiceAccountFile();
+        $this->enableFirestore();
         // Every Google call answers with an empty list, so an owner's request
         // reaches its normal end instead of a stray-request error.
         $this->fakeGoogle([

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/api/api_config.dart';
 import 'core/api/api_retry.dart';
+import 'core/firebase/firebase_bootstrap.dart';
+import 'core/live/live_session.dart';
 import 'core/push/push_messaging.dart';
 import 'core/theme/theme_mode_controller.dart';
 import 'features/upload_queue/upload_worker.dart';
@@ -15,10 +17,18 @@ Future<void> main() async {
     runApp(const MisconfiguredApp());
     return;
   }
-  // FCM only when this build has a Firebase config (DESIGN §9.9).
-  final push = await initPushMessaging();
+  // Firebase only when this build has a config (DESIGN §9.9, §38.6): push
+  // on Android, and the live layer (Firestore) wherever it started.
+  final firebaseReady = await initFirebase();
+  final push = await initPushMessaging(firebaseReady: firebaseReady);
+  final LiveSession live = firebaseReady
+      ? FirebaseLiveSession(auth: FirebaseLiveAuth())
+      : const DisabledLiveSession();
   final container = ProviderContainer(
-    overrides: [pushMessagingProvider.overrideWithValue(push)],
+    overrides: [
+      pushMessagingProvider.overrideWithValue(push),
+      liveSessionProvider.overrideWithValue(live),
+    ],
     // A 4xx answer is final: without this every provider that sets no
     // policy of its own asks again up to ten times.
     retry: apiRetry,

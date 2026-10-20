@@ -231,7 +231,7 @@ class FcmNotifierTest extends TestCase
         $notifier->gradingFinished($assignment, 1, 0);
         $notifier->gradingFinished($assignment, 2, 0);
         $this->assertSame(1, $issued, 'the second push reuses the cached token');
-        $cacheKey = 'fcm:access-token:'.sha1($this->serviceAccount['client_email'].'|eduvision-test');
+        $cacheKey = 'fcm:access-token:'.sha1($this->serviceAccount['client_email'].'|eduvision-test|'.AccessTokens::SCOPE);
         $stored = Cache::get($cacheKey);
         $this->assertIsString($stored);
         $this->assertStringNotContainsString('ya29', $stored, 'stored encrypted');

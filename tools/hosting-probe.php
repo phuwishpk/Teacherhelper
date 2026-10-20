@@ -40,6 +40,7 @@ function outbound_targets()
         'Gemini API' => 'https://generativelanguage.googleapis.com/v1beta/models',
         'FCM' => 'https://fcm.googleapis.com/',
         'Google OAuth (ใช้ออก token ให้ FCM)' => 'https://oauth2.googleapis.com/token',
+        'Firestore (ชั้นข้อมูลสด DESIGN §38)' => 'https://firestore.googleapis.com/',
     );
 }
 

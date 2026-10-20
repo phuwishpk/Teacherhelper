@@ -1673,7 +1673,7 @@ mₜ = αₜ · sₜ + (1 − αₜ) · mₜ₋₁
 | ผลของไฟล์ทดสอบ hosting | รัน `tools/hosting-probe.php` ตาม §3.3 เป็นขั้นตอนแรกของ M0 (ดู `KICKOFF.md`) |
 | Cloudflare | `phuwish.com` เป็นโดเมนของทีม (nameserver อยู่ที่ Hostatom และมี MX `mail.phuwish.com`) ใส่ Cloudflare ได้แต่ต้องย้าย nameserver ทั้งโดเมน จึงเลื่อนไปหลัง M0 |
 | repo เป็น public | `github.com/phuwishpk/Teacherhelper` เปิด public ตามที่ตัดสินใจ prompt ทั้งหมดจึงเปิดเผย และต้องเปิด secret scanning + push protection ตั้งแต่ commit แรก |
-| syllabus วิชา Mobile ข้อ 4 เขียนว่า "cloud (Firestore)" | ถามอาจารย์ว่า MariaDB บน hosting นับเป็นข้อมูลบน cloud ได้ไหม ถ้าไม่ได้ ต้องย้ายข้อมูลส่วนหนึ่งไป Firestore |
+| syllabus วิชา Mobile ข้อ 4 เขียนว่า "cloud (Firestore)" | ตัดสินใจ 21 ต.ค. 2569: ใช้ Firestore เป็นชั้นข้อมูลสด (แจ้งเตือน สถานะการตรวจ) โดย MariaDB ยังเป็นแหล่งความจริง (§38) |
 | การแสดงผลภาษาไทยและเวลาสร้าง PDF ด้วย mPDF | ทดสอบใน Phase 1 |
 | รุ่นและราคาของ Gemini | เลือกตอนเริ่ม Phase 3 แล้ววัดค่าใช้จ่ายจริงจาก `ai_calls` |
 | ความแม่นในการอ่านลายมือเด็กไทยของ Gemini | ยังไม่มีข้อมูล ต้องวัดด้วย fixture set ใน Phase 3 ก่อนสัญญาอะไรกับครู |
@@ -5342,3 +5342,78 @@ CREATE TABLE classroom_teachers (
 - **การบ้านจากไฟล์ใบงาน**: ถ้าครูยังไม่บอก ผู้ช่วยถามทุกครั้งพร้อมสองตัวเลือก (ก) ใบงานของแอป (แนะนำ ค่าเริ่มต้น): อ่านโจทย์และเฉลยเป็นการ์ดสร้างข้อ (ข) ไม่ใช้ใบงาน: การ์ดอ่านไฟล์แบบ `answer_key` ให้การบ้านไม่ใช้ใบงานใหม่
 - **การ์ดอ่านไฟล์** (`FileCards`, kind `file`): `answer_key` (การบ้านที่มีอยู่ ใบงานของแอปหรือไม่ใช้ใบงาน หรือการบ้านไม่ใช้ใบงานใหม่ `AnswerKeyService::request`) `exam` (ข้อสอบที่มีอยู่หรือใหม่ `ExamDocuments::request` ข้อเข้ามาเป็นร่าง) `course` และ `lesson_plan` (`CourseDocuments::request` ครูกด «ตรวจและนำเข้า» เปิดหน้านำเข้ารายวิชาเดิมเมื่ออ่านเสร็จ) อ่านในคิวเหมือนกดจากหน้าปกติ (แคชทั้งโรงเรียน ครูต้องมี key) ผลให้ครูตรวจในหน้าเฉลย หน้าข้อสอบ หรือหน้านำเข้า Gemini ไม่ใส่งานปลายทาง = server ใช้งานที่ชื่อตรงกับข้อความครูมากที่สุด (`AssistantContext::namedAssignment`) ไม่พบ = การ์ดบอกให้พิมพ์บอกผู้ช่วย
 - prompt `assistant_chat.general.v6` (schema เพิ่ม `need_file`, kind `file`, `file_action`, `document_ids` และ `plan.target` เป็นฟิลด์บังคับ เป็น `{}` เมื่อการ์ดไม่มีงาน)
+
+## 38. Firestore เป็นชั้นข้อมูลสด (Cloud)
+
+ตัดสินใจ 21 ต.ค. 2569 (ผู้ใช้ขอ: แนวทางโครงงานกลุ่มของวิชา Mobile ข้อ "การจัดเก็บข้อมูล Local Database และ Cloud (Firestore)" ให้หาที่ใช้ Firestore ร่วมด้วย โดยไม่ย้ายข้อมูลออกจาก MariaDB) ปิดข้อ "ถามอาจารย์เรื่อง Firestore" ในตาราง §15 ด้วยการใช้ Firestore จริงในส่วนที่ได้ประโยชน์
+
+### 38.1 หลักการ
+
+- **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
+- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
+- **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
+- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp) และตั้ง TTL policy ของ Firestore ลบเองเมื่อครบ 90 วัน การลบบัญชี (§31) ลบ subtree `users/{uid}` ด้วย
+- **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
+
+### 38.2 โครงสร้างเอกสาร
+
+ทุกเอกสารของขั้น 1–3 อยู่ใต้ `users/{uid}` เพื่อให้ rule มีบรรทัดเดียว (อ่านได้เมื่อ uid ตรงกับผู้ล็อกอิน เขียนไม่ได้) ขั้น 4 ขึ้นไปจึงมี `classrooms/{id}` ที่ต้องมี `members`
+
+| path | เนื้อหา | ผู้เขียน | ขั้น |
+|---|---|---|---|
+| `users/{uid}/notices/{id}` | `kind` (ชื่อเหตุการณ์ใน `NoticeTexts`), `title`, `body`, `data` (map เดียวกับ `data` ของ push: ปลายทางในแอป), `read` (bool), `created_at`, `expires_at` | `FirestoreInbox` คู่กับทุก `PushMessage` ที่ `PushNotifier` สร้าง (11 เหตุการณ์) | 2 |
+| `users/{uid}/meta/inbox` | `unread` (จำนวนยังไม่อ่าน), `updated_at` | เขียนพร้อม notice ใหม่ และเมื่อแอปเรียก `POST /me/notices/read` | 2 |
+| `users/{teacherUid}/assignments/{id}` | `title`, `queued`, `grading`, `graded`, `awaiting_review`, `awaiting_ai_key`, `updated_at`, `expires_at` | grading job ทุกครั้งที่สถานะของ submission เปลี่ยน (รวมเป็นครั้งละ 1 เขียนต่อ assignment ผ่าน `Cache::lock` แบบ `GradingNotices`) | 3 |
+| `users/{studentUid}/submissions/{id}` | `assignment_id`, `assignment_title`, `status` (`queued`/`grading`/`awaiting_review`/`published`), `updated_at`, `expires_at` **ไม่มีคะแนน** | grading job และการเผยแพร่ผล | 3 |
+| `classrooms/{id}/feed/{postId}` และ `classrooms/{id}/members/{uid}` | หัวข้อ ชนิด ชื่อผู้เขียน เวลา มีไฟล์หรือไม่ | listener ของ `ClassPostPublished` (§30) และการเข้า/ออกห้อง | 4 |
+| `classrooms/{id}/attendance/{date}_{period}` | สถานะต่อ `uid` | `AttendanceBook` (§29.9) | 4 |
+
+uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`) ไม่เก็บคอลัมน์ใหม่ใน MariaDB
+
+### 38.3 ลำดับการสร้าง
+
+| ขั้น | เนื้อหา | สถานะ |
+|---|---|---|
+| 1 | โครงพื้นฐาน: `FirestoreClient` (commit แบบ batch, แปลงค่า, 401 ลองใหม่), `LiveStore`/`NullLiveStore`, `FirebaseCustomTokens`, `POST /auth/firebase-token`, `eduvision:firestore-check`, `firebase/firestore.rules` ใน repo, แอป: `firebase_auth` sign-in หลังเข้าสู่ระบบและ sign-out ตาม, Firebase บนเว็บผ่าน `--dart-define`, `LiveSession` seam, HOSTING §6.5 (§38.4–§38.6) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเปิด Firestore และ Authentication ใน Firebase console แล้ว Run Now `eduvision:firestore-check` |
+| 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` | ยังไม่ทำ |
+| 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน | ยังไม่ทำ |
+| 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด (ต้องมี `members` และ rule ระดับห้อง) | ยังไม่ทำ |
+
+### 38.4 backend (ขั้น 1)
+
+- `app/Domain/Firestore/`: `FirestoreConfig` (เปิดเมื่อ `FIRESTORE_ENABLED` และ `FIREBASE_CREDENTIALS` ใช้ได้), `FirestoreValues` (PHP → Firestore `Value`: string, int, float, bool, null, `DateTimeInterface` → `timestampValue`, list → `arrayValue`, map → `mapValue`), `FirestoreClient` (`set(path, fields, merge)`, `delete(path)`, `commit(writes)` ไปที่ `https://firestore.googleapis.com/v1/projects/{project}/databases/{db}/documents:commit` bearer จาก `AccessTokens` scope datastore, 401 ทิ้ง token แล้วลองหนึ่งครั้ง, ล้ม → `FirestoreUnavailable`), `LiveStore` (interface `set`/`delete` ที่**ไม่โยน** exception), `FirestoreLiveStore`, `NullLiveStore`, `FirebaseCustomTokens::issue(User)` (JWT RS256: `iss`/`sub` = client_email, `aud` = `https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit`, `uid`, `claims: {role}`, อายุ 3600 วินาที), `FirestoreUid`
+- `AccessTokens` รับ scope เป็นพารามิเตอร์ (ค่าเริ่มต้นคือ FCM) cache key แยกตาม scope
+- container: `LiveStore` singleton เป็น `FirestoreLiveStore` เมื่อ `FirestoreConfig::enabled()` ไม่เช่นนั้น `NullLiveStore` (`AppServiceProvider` ข้าง `Notifier`)
+- API: `POST /auth/firebase-token` (auth, active, role teacher|student, middleware `firestore` → 503 `firestore_not_configured`, throttle `firebase-token` 10/นาที/คน) → `{data: {token, uid, expires_at}}` admin ที่เข้าใช้แทน (§29.14) ได้ token ของผู้ใช้ที่เข้าแทน (uid ของเขา) เพราะหน้าจอเป็นของเขา
+- `eduvision:firestore-check` (Plesk Run Now): ตรวจ credentials, ขอ access token scope datastore, เขียน `_health/server {checked_at}` แล้วอ่านกลับ, และออก custom token ทดสอบ (ไม่พิมพ์ token) พิมพ์ project และ database
+- `.env`: `FIRESTORE_ENABLED=false`, `FIRESTORE_DATABASE=(default)`
+- test: `tests/Feature/Firestore/` (client: body ของ commit, bearer, 401 ลองใหม่, unreachable; token: 503 เมื่อปิด, 401 guest, JWT ตรวจด้วย public key ว่า `aud`/`uid`/`claims`/อายุถูก, claims มีแค่ `role`; `NullLiveStore` เมื่อปิด; `FirestoreLiveStore` กลืน `FirestoreUnavailable` และ log)
+
+### 38.5 กฎความปลอดภัยและไฟล์ใน repo
+
+`firebase/firestore.rules` เก็บใน git และวางลงใน Firebase console > Firestore > Rules ด้วยมือ (ไม่ใช้ Firebase CLI เพราะไม่มีขั้น deploy อัตโนมัติ) ขั้น 1:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+`firebase/README.md` อธิบายการเปิด Firestore (region `asia-southeast1`, โหมด production), เปิด Authentication (ไม่ต้องเปิด provider ใด custom token ใช้ได้เลย), การวาง rules, TTL policy ที่ field `expires_at` ของ collection group `notices`/`assignments`/`submissions` และโควตา Spark (อ่าน 50,000 เขียน 20,000 ครั้งต่อวัน listener นับหนึ่งอ่านต่อ document ที่เปลี่ยน) ไฟล์ service account และ `google-services.json` ยัง gitignored เหมือนเดิม
+
+### 38.6 แอป (ขั้น 1)
+
+- package ใหม่: `cloud_firestore`, `firebase_auth` และ `fake_cloud_firestore` (dev)
+- `core/firebase/firebase_bootstrap.dart`: `initFirebase()` เรียกครั้งเดียวใน `main.dart` ก่อน push: Android/iOS ใช้ไฟล์ config ของแพลตฟอร์ม (ไม่มีไฟล์ = ปิด), เว็บใช้ `FirebaseOptions` จาก `--dart-define` `FIREBASE_WEB_API_KEY`, `FIREBASE_WEB_APP_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_MESSAGING_SENDER_ID` (ว่าง = ปิด) ล้มเหลวทุกกรณี = ปิดเงียบพร้อม `debugPrint` `initPushMessaging` ใช้ผลนี้แทนการ initialize เอง
+- `core/live/live_session.dart`: `LiveSession` (`enabled`, `signIn(fetchToken)`, `signOut()`, `firestore`) ผ่าน seam `LiveAuth` (ครอบ `FirebaseAuth`) ให้ทดสอบด้วย fake ได้ `DisabledLiveSession` เป็นค่าเริ่มต้นของ provider ทุก test จึงไม่แตะ Firebase `core/live/live_token_api.dart` เรียก `POST /auth/firebase-token`
+- `SessionNotifier`: เมื่อเข้าสู่ระบบสำเร็จหรือกู้ session ได้ → `liveSession.signIn(...)` แบบไม่รอและไม่ทำให้การเข้าสู่ระบบล้ม (503 = ปิด, อื่น ๆ = log) ข้าม sign-in เมื่อ Firebase Auth มี uid เดิมอยู่แล้ว ออกจากระบบทุกทาง (`forceSignOut`) → `liveSession.signOut()`
+- ยังไม่มีหน้าจอใหม่ในขั้นนี้ หน้าแจ้งเตือนมาในขั้น 2

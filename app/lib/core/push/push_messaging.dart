@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,21 +105,18 @@ class FirebasePushMessaging implements PushMessaging {
   }
 }
 
-/// Starts Firebase when this build carries a config. The Gradle build only
-/// applies the google-services plugin when `android/app/google-services.json`
-/// exists; without it `Firebase.initializeApp()` throws and push stays off,
-/// so the app runs normally without Firebase.
-Future<PushMessaging> initPushMessaging() async {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+/// Push on Android when Firebase started (`initFirebase` in
+/// core/firebase/firebase_bootstrap.dart: the Gradle build only applies the
+/// google-services plugin when `android/app/google-services.json` exists, so
+/// a build without it runs normally with push off). [firebaseReady] false,
+/// the web and iOS keep push off.
+Future<PushMessaging> initPushMessaging({required bool firebaseReady}) async {
+  if (!firebaseReady ||
+      kIsWeb ||
+      defaultTargetPlatform != TargetPlatform.android) {
     return const DisabledPushMessaging();
   }
-  try {
-    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
-    return FirebasePushMessaging();
-  } catch (e) {
-    debugPrint('Push notifications off: Firebase is not configured ($e)');
-    return const DisabledPushMessaging();
-  }
+  return FirebasePushMessaging();
 }
 
 /// Overridden in main.dart with the result of [initPushMessaging].
