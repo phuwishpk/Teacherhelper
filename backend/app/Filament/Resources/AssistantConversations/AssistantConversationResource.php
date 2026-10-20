@@ -78,9 +78,7 @@ class AssistantConversationResource extends Resource
                                 TextEntry::make('content')
                                     ->hiddenLabel()
                                     ->columnSpan(3)
-                                    ->helperText(fn (AssistantMessage $record) => $record->error_code === null
-                                        ? null
-                                        : "รหัส {$record->error_code}".($record->ai_call_id === null ? '' : " · #{$record->ai_call_id}")),
+                                    ->helperText(fn (AssistantMessage $record) => self::note($record)),
                                 TextEntry::make('created_at')->hiddenLabel()->dateTime('d/m H:i', 'Asia/Bangkok'),
                             ]),
                     ])),
@@ -103,5 +101,24 @@ class AssistantConversationResource extends Resource
         return [
             'index' => ManageAssistantConversations::route('/'),
         ];
+    }
+
+    /** Under a message: its error code, or its plan card (DESIGN §37.6). */
+    private static function note(AssistantMessage $m): ?string
+    {
+        if ($m->error_code !== null) {
+            return "รหัส {$m->error_code}".($m->ai_call_id === null ? '' : " · #{$m->ai_call_id}");
+        }
+        if (! is_array($m->plan)) {
+            return null;
+        }
+        $count = count($m->plan['questions'] ?? []);
+        $target = $m->plan['target']['title'] ?? 'ยังไม่เลือกงาน';
+
+        return match ($m->plan_status) {
+            AssistantMessage::PLAN_APPLIED => "การ์ด {$count} ข้อ · สร้างแล้ว {$m->plan['result']['created']} ข้อใน «{$m->plan['result']['title']}»",
+            AssistantMessage::PLAN_REPLACED => "การ์ด {$count} ข้อ · มีการ์ดใหม่แทน",
+            default => "การ์ด {$count} ข้อ · «{$target}» · ยังไม่ได้สร้าง",
+        };
     }
 }

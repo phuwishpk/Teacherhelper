@@ -37,7 +37,7 @@ class SchoolStudentMigrationTest extends TestCase
         // (several Google courses per classroom), #71 (teacher_google_auto_approve),
         // #74 (exam code sheets), §29.4 (subject owner), §29.5 (attendance) and §29.10 (student usernames)
         // migrations run after this one, then class posts (§30), their Google copies (§30.11) assignment posts (§30.12) recipients (§30.13) the timetable (§29.12) the admin level (§29.13.1) join_open (§29.13.3), co-teachers (§29.13.4), audit logs (§29.14), account deletion (§31), google_events (§32), teacher_indicators (§34), the skill trash (§34.1), AI error codes (§36) and the assistant (§37).
-        $this->artisan('migrate:rollback', ['--step' => 25])->assertSuccessful();
+        $this->artisan('migrate:rollback', ['--step' => 26])->assertSuccessful();
         $this->assertFalse(DB::getSchemaBuilder()->hasColumn('users', 'student_code'));
         $this->assertFalse(DB::getSchemaBuilder()->hasTable('student_merges'));
         $this->artisan('migrate')->assertSuccessful();

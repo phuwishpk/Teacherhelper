@@ -60,6 +60,23 @@ class _FakeAssistant implements AssistantRepository {
     retried.add(conversationId);
     return _next();
   }
+
+  final applied = <(int, List<int>, Map<String, dynamic>?)>[];
+
+  /// The next apply results: an [AssistantMessage] or an error to throw.
+  final applyResults = <Object>[];
+
+  @override
+  Future<AssistantMessage> apply(
+    int messageId,
+    List<int> selected, {
+    Map<String, dynamic>? target,
+  }) async {
+    applied.add((messageId, selected, target));
+    final r = applyResults.removeAt(0);
+    if (r is AssistantMessage) return r;
+    throw r;
+  }
 }
 
 Map<String, dynamic> _message(
@@ -113,7 +130,7 @@ void main() {
         ? jsonDecode(request.data as String)
         : request.data;
     expect(body, {'text': 'ถาม', 'conversation_id': 7});
-    expect(request.receiveTimeout, const Duration(seconds: 90));
+    expect(request.receiveTimeout, const Duration(seconds: 120));
     expect(reply.conversation.id, 7);
     expect(reply.messages.last.content, 'ตอบ');
 
@@ -150,7 +167,7 @@ void main() {
           home: Scaffold(
             body: AssistantPanel(
               onClose: () => calls.add('close'),
-              onOpenSettings: () => calls.add('settings'),
+              onNavigate: (route) => calls.add(route),
             ),
           ),
         ),
@@ -167,7 +184,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('assistant_input')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('assistant_settings')));
-    expect(calls, ['settings']);
+    expect(calls, ['/settings']);
   });
 
   testWidgets('the AI thinks with the input locked, then answers', (
@@ -390,7 +407,7 @@ void main() {
                     width: AssistantPanel.width,
                     child: AssistantPanel(
                       onClose: () => key.currentState?.closeEndDrawer(),
-                      onOpenSettings: () {},
+                      onNavigate: (_) {},
                     ),
                   )
                 : null,

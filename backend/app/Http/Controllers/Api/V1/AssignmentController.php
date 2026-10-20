@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Assignments\AssignmentCreator;
 use App\Domain\Assignments\AssignmentPosts;
 use App\Domain\ClassPosts\AttachmentInput;
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
-use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\AssignmentCourses;
 use App\Domain\Exams\ExamImages;
 use App\Domain\Exams\ExamSettings;
@@ -71,63 +71,10 @@ class AssignmentController extends Controller
     }
 
     /** POST /api/v1/assignments -> 201 {data: assignment}; kind = exam creates an exam (DESIGN §22.1) */
-    public function store(StoreAssignmentRequest $request): JsonResponse
+    public function store(StoreAssignmentRequest $request, AssignmentCreator $creator): JsonResponse
     {
         Gate::authorize('create', Assignment::class);
-        $teacher = $request->user();
-        $classroom = Classroom::query()->findOrFail($request->validated('classroom_id'));
-        ClosedClassrooms::assertOpen($classroom); // §24.6
-        // Every new assignment belongs to a course of its classroom (§20.1).
-        $course = AssignmentCourses::courseFor($teacher, $classroom->id, $request->validated('course_id'));
-        $plan = AssignmentCourses::planFor($course, $request->validated('lesson_plan_id'));
-
-        $exam = $request->validated('kind') === Assignment::KIND_EXAM;
-        $grading = $exam ? ($request->validated('grading_method') ?? Assignment::GRADING_APP) : null;
-        $codeSheets = $exam && $request->validated('sheet_identity') === Assignment::IDENTITY_CODE; // §22.19
-        if ($exam && ($request->validated('mode') ?? Assignment::MODE_WORKSHEET) !== Assignment::MODE_WORKSHEET) {
-            throw ValidationException::withMessages(['mode' => 'ข้อสอบไม่ใช้โหมด freeform']);
-        }
-
-        $categoryId = AssignmentCategories::forNew($course->id, $exam, $request->has('gradebook_category_id'), $request->validated('gradebook_category_id'));
-        [$unitId, $topic] = AssignmentPosts::topic($course, $request->validated('unit_id'), $request->validated('topic'));
-        $attachments = AttachmentInput::parse($teacher, $request->validated('attachments') ?? []);
-
-        $assignment = Assignment::create([
-            'school_id' => $classroom->school_id,
-            'classroom_id' => $classroom->id,
-            'subject_id' => $course->subject_id,
-            'course_id' => $course->id,
-            'lesson_plan_id' => $plan?->id,
-            'created_by' => $teacher->id,
-            'title' => trim($request->validated('title')),
-            'strictness' => $request->validated('strictness') ?? 'normal',
-            'status' => Assignment::STATUS_DRAFT,
-            'due_at' => self::utc($request->validated('due_at')),
-            'mode' => $request->validated('mode') ?? Assignment::MODE_WORKSHEET,
-            'accept_late' => (bool) ($request->validated('accept_late') ?? true),
-            'score_only' => (bool) ($request->validated('score_only') ?? false),
-            'kind' => $exam ? Assignment::KIND_EXAM : Assignment::KIND_HOMEWORK,
-            'grading_method' => $grading,
-            'version_count' => $exam ? (int) ($request->validated('version_count') ?? 1) : 1,
-            'duration_minutes' => $exam ? $request->validated('duration_minutes') : null,
-            'show_key_to_students' => $exam && (bool) ($request->validated('show_key_to_students') ?? false),
-            'manual_full_marks' => $exam ? $request->validated('manual_full_marks') : null,
-            'sheet_identity' => $codeSheets ? Assignment::IDENTITY_CODE : Assignment::IDENTITY_QR,
-            'student_code_digits' => $codeSheets ? (int) $request->validated('student_code_digits') : null,
-            'gradebook_category_id' => $categoryId,
-            'excluded_from_grade' => (bool) ($request->validated('excluded_from_grade') ?? false),
-            'unit_id' => $unitId,
-            'topic' => $topic,
-            'instructions' => AssignmentPosts::text($request->validated('instructions')),
-            'send_to_google' => (bool) ($request->validated('send_to_google') ?? true),
-        ]);
-        AttachmentInput::write($assignment->attachments(), $attachments);
-        AssignmentPosts::setRecipients($assignment, AssignmentPosts::recipients($assignment, $request->validated('audience'), $request->validated('student_ids')));
-        if ($grading === Assignment::GRADING_MANUAL) {
-            // No key gate for an exam graded by hand: ready from the start (DESIGN §22.1).
-            $assignment->status = Assignment::STATUS_READY;
-            $assignment->save();
-        }
+        $assignment = $creator->create($request->user(), $request->validated(), $request->has('gradebook_category_id'));
 
         return (new AssignmentResource(self::loadDetail($assignment)))->response()->setStatusCode(201);
     }
