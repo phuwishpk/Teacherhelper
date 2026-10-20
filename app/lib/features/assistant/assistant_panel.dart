@@ -7,6 +7,7 @@ import '../../core/api/error_codes.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import 'assistant.dart';
+import 'assistant_plan_card.dart';
 
 /// "ผู้ช่วย Krucheck" (DESIGN §37): the chat, or the list of the teacher's
 /// conversations. The desktop shows it as a panel on the right
@@ -16,15 +17,16 @@ class AssistantPanel extends ConsumerStatefulWidget {
   const AssistantPanel({
     super.key,
     required this.onClose,
-    required this.onOpenSettings,
+    required this.onNavigate,
   });
 
   static const width = 420.0;
 
   final VoidCallback onClose;
 
-  /// To enter a Gemini key; the panel is closed first.
-  final VoidCallback onOpenSettings;
+  /// Opens an app route (settings, an assignment); the desktop panel is
+  /// closed first.
+  final ValueChanged<String> onNavigate;
 
   @override
   ConsumerState<AssistantPanel> createState() => _AssistantPanelState();
@@ -39,6 +41,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     'ตั้งเกณฑ์ให้คะแนนแบบไหนดี',
     'สแกนใบงานไม่ผ่าน ทำยังไง',
     'เชื่อม Google Classroom ยังไง',
+    'ช่วยออกโจทย์ปรนัยเรื่องเศษส่วน 5 ข้อ ลงการบ้าน',
   ];
 
   @override
@@ -64,7 +67,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     final Widget body;
     if (status.value case final s?) {
       body = !s.available
-          ? _NoKey(onOpenSettings: widget.onOpenSettings)
+          ? _NoKey(onOpenSettings: () => widget.onNavigate(AppRoutes.settings))
           : _showList
           ? _ConversationList(
               onOpen: (id) {
@@ -78,6 +81,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
               input: _input,
               suggestions: _suggestions,
               onSend: _send,
+              onNavigate: widget.onNavigate,
             );
     } else if (status.hasError) {
       body = _Centered(
@@ -151,6 +155,7 @@ class _Chat extends ConsumerWidget {
     required this.input,
     required this.suggestions,
     required this.onSend,
+    required this.onNavigate,
   });
 
   final AssistantChatState chat;
@@ -158,6 +163,7 @@ class _Chat extends ConsumerWidget {
   final TextEditingController input;
   final List<String> suggestions;
   final void Function([String? text]) onSend;
+  final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -202,10 +208,13 @@ class _Chat extends ConsumerWidget {
       );
     } else {
       // Newest at the bottom, kept in view as messages arrive.
+      // A plan card sits under its answer, the panel's full width.
       final items = [
         if (chat.sending) null,
-        for (final (i, m) in messages.indexed.toList().reversed)
-          (i: i, message: m),
+        for (final (i, m) in messages.indexed.toList().reversed) ...[
+          if (m.plan != null) (i: i, message: m, card: true),
+          (i: i, message: m, card: false),
+        ],
       ];
       list = LayoutBuilder(
         builder: (context, constraints) => ListView.builder(
@@ -217,6 +226,12 @@ class _Chat extends ConsumerWidget {
             final item = items[index];
             final maxWidth = constraints.maxWidth * 0.86;
             if (item == null) return _ThinkingBubble(maxWidth: maxWidth);
+            if (item.card) {
+              return AssistantPlanCard(
+                message: item.message,
+                onNavigate: onNavigate,
+              );
+            }
             final last = item.i == messages.length - 1;
             return _Bubble(
               message: item.message,
@@ -607,7 +622,7 @@ class AssistantScreen extends StatelessWidget {
       body: SafeArea(
         child: AssistantPanel(
           onClose: close,
-          onOpenSettings: () => context.push(AppRoutes.settings),
+          onNavigate: (route) => context.push(route),
         ),
       ),
     );

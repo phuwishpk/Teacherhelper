@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,8 @@ import '../../core/api/api_client.dart';
 import '../../core/api/error_codes.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/auth/session.dart';
+import '../assignments/assignments_providers.dart';
+import 'assistant_plan.dart';
 
 /// `GET /assistant/status` (DESIGN §37): whether the teacher has a Gemini
 /// key of their own (the assistant never uses the server key) and how many
@@ -67,11 +71,17 @@ class AssistantMessage {
     required this.content,
     this.errorCode,
     this.aiCallId,
+    this.plan,
+    this.planStatus,
   });
 
   static const user = 'user';
   static const assistant = 'assistant';
   static const error = 'error';
+
+  static const planProposed = 'proposed';
+  static const planApplied = 'applied';
+  static const planReplaced = 'replaced';
 
   final int? id;
   final String role;
@@ -79,8 +89,23 @@ class AssistantMessage {
   final String? errorCode;
   final int? aiCallId;
 
+  /// The card of questions to create (DESIGN §37.6), if the answer has one.
+  final AssistantPlan? plan;
+  final String? planStatus;
+
   bool get isUser => role == user;
   bool get isError => role == error;
+
+  AssistantMessage withPlan(AssistantPlan? plan, String? status) =>
+      AssistantMessage(
+        id: id,
+        role: role,
+        content: content,
+        errorCode: errorCode,
+        aiCallId: aiCallId,
+        plan: plan,
+        planStatus: status,
+      );
 
   /// "AI-QUOTA · #48213" for the error bubble.
   ErrorCode? get code => switch (errorCode) {
@@ -95,16 +120,26 @@ class AssistantMessage {
         content: json['content'] as String? ?? '',
         errorCode: json['error_code'] as String?,
         aiCallId: (json['ai_call_id'] as num?)?.toInt(),
+        plan: json['plan'] is Map
+            ? AssistantPlan.fromJson(
+                (json['plan'] as Map).cast<String, dynamic>(),
+              )
+            : null,
+        planStatus: json['plan_status'] as String?,
       );
 }
 
 /// The conversation after a question: the question and its answer, or, in
 /// the body of a failed AI call, the question and the stored failure.
 class AssistantReply {
-  const AssistantReply(this.conversation, this.messages);
+  const AssistantReply(this.conversation, this.messages, {this.applyMessageId});
 
   final AssistantConversation conversation;
   final List<AssistantMessage> messages;
+
+  /// The teacher typed a confirmation ("โอเค สร้างเลย"): the open card to
+  /// create, with the ticks it has in the app.
+  final int? applyMessageId;
 
   static AssistantReply? tryParse(Map<String, dynamic>? json) {
     final conversation = json?['conversation'];
@@ -116,6 +151,7 @@ class AssistantReply {
         for (final m in messages)
           if (m is Map) AssistantMessage.fromJson(m.cast<String, dynamic>()),
       ],
+      applyMessageId: (json?['apply_message_id'] as num?)?.toInt(),
     );
   }
 }
@@ -130,6 +166,13 @@ abstract class AssistantRepository {
   /// `conversation` and `messages` ([AssistantReply.tryParse]).
   Future<AssistantReply> send(String text, {int? conversationId});
   Future<AssistantReply> retry(int conversationId);
+
+  /// «สร้างเลย» (DESIGN §37.6): the card with its `result`.
+  Future<AssistantMessage> apply(
+    int messageId,
+    List<int> selected, {
+    Map<String, dynamic>? target,
+  });
 }
 
 class ApiAssistantRepository implements AssistantRepository {
@@ -137,8 +180,9 @@ class ApiAssistantRepository implements AssistantRepository {
 
   final Dio _dio;
 
-  /// The server waits up to a minute for Gemini; more than the default 20 s.
-  static final _slow = Options(receiveTimeout: const Duration(seconds: 90));
+  /// The server waits up to 90 s for Gemini (a card of 20 questions is a
+  /// long answer); more than the default 20 s.
+  static final _slow = Options(receiveTimeout: const Duration(seconds: 120));
 
   @override
   Future<AssistantStatus> status() async {
@@ -177,6 +221,22 @@ class ApiAssistantRepository implements AssistantRepository {
     );
     return AssistantReply.tryParse(unwrapJson(res.data)) ??
         (throw const FormatException('assistant reply'));
+  }
+
+  @override
+  Future<AssistantMessage> apply(
+    int messageId,
+    List<int> selected, {
+    Map<String, dynamic>? target,
+  }) async {
+    final res = await _dio.post<Object?>(
+      '/assistant/messages/$messageId/apply',
+      data: {'selected': selected, 'target': ?target},
+      options: _slow,
+    );
+    final message = unwrapJson(res.data)['message'];
+    if (message is! Map) throw const FormatException('assistant apply');
+    return AssistantMessage.fromJson(message.cast<String, dynamic>());
   }
 
   @override
@@ -326,10 +386,17 @@ class AssistantChatController extends Notifier<AssistantChatState> {
     try {
       final reply = await call();
       if (!ref.mounted) return;
+      final messages = [...before, ...reply.messages];
       state = AssistantChatState(
         conversation: reply.conversation,
-        messages: [...before, ...reply.messages],
+        messages: reply.messages.any((m) => m.plan != null)
+            ? _olderCardsReplaced(messages)
+            : messages,
       );
+      // "โอเค สร้างเลย": create the open card with the ticks it has here.
+      if (reply.applyMessageId case final id?) {
+        unawaited(ref.read(assistantPlansProvider.notifier).apply(id));
+      }
     } catch (e) {
       if (!ref.mounted) return;
       final stored = AssistantReply.tryParse(apiErrorBody(e));
@@ -348,6 +415,31 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         ref.invalidate(assistantConversationsProvider);
       }
     }
+  }
+
+  /// The card after «สร้างเลย».
+  void replaceMessage(AssistantMessage message) {
+    state = AssistantChatState(
+      conversation: state.conversation,
+      messages: [
+        for (final m in state.messages) m.id == message.id ? message : m,
+      ],
+      sending: state.sending,
+      loading: state.loading,
+    );
+  }
+
+  /// A new card takes the place of the open one (the server did the same).
+  static List<AssistantMessage> _olderCardsReplaced(
+    List<AssistantMessage> messages,
+  ) {
+    final last = messages.lastIndexWhere((m) => m.plan != null);
+    return [
+      for (final (i, m) in messages.indexed)
+        i != last && m.planStatus == AssistantMessage.planProposed
+            ? m.withPlan(m.plan, AssistantMessage.planReplaced)
+            : m,
+    ];
   }
 
   static AssistantMessage _localFailure(Object error) {
@@ -369,4 +461,122 @@ class AssistantChatController extends Notifier<AssistantChatState> {
 final assistantChatProvider =
     NotifierProvider<AssistantChatController, AssistantChatState>(
       AssistantChatController.new,
+    );
+
+/// What the teacher did on a card: the ticks, a changed target, and the
+/// state of «สร้างเลย».
+class PlanUi {
+  const PlanUi({
+    required this.selected,
+    this.target,
+    this.applying = false,
+    this.error,
+  });
+
+  final Set<int> selected;
+
+  /// Chosen with «เปลี่ยน»; null = the card's own target.
+  final PlanTarget? target;
+  final bool applying;
+  final String? error;
+}
+
+/// The cards' [PlanUi] by message id, kept like the chat while the teacher
+/// is signed in.
+class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
+  @override
+  Map<int, PlanUi> build() {
+    ref.watch(currentUserProvider.select((u) => u?.id));
+    return const {};
+  }
+
+  /// Ticked at first: every question with a key that fits the target.
+  static Set<int> defaultSelection(AssistantPlan plan, PlanTarget target) => {
+    for (final (i, q) in plan.questions.indexed)
+      if (q.usableFor(target.kind)) i,
+  };
+
+  PlanUi of(AssistantMessage message) {
+    final plan = message.plan!;
+    return state[message.id] ??
+        PlanUi(selected: defaultSelection(plan, plan.target));
+  }
+
+  PlanTarget targetOf(AssistantMessage message) =>
+      state[message.id]?.target ?? message.plan!.target;
+
+  void toggle(AssistantMessage message, int index) {
+    final ui = of(message);
+    final selected = {...ui.selected};
+    if (!selected.remove(index)) selected.add(index);
+    state = {
+      ...state,
+      message.id!: PlanUi(selected: selected, target: ui.target),
+    };
+  }
+
+  /// «เปลี่ยน»: the ticks start again for the new target's kind.
+  void setTarget(AssistantMessage message, PlanTarget target) {
+    state = {
+      ...state,
+      message.id!: PlanUi(
+        selected: defaultSelection(message.plan!, target),
+        target: target,
+      ),
+    };
+  }
+
+  Future<void> apply(int messageId) async {
+    final message = ref
+        .read(assistantChatProvider)
+        .messages
+        .where(
+          (m) =>
+              m.id == messageId &&
+              m.planStatus == AssistantMessage.planProposed,
+        )
+        .firstOrNull;
+    if (message == null) return;
+    final ui = of(message);
+    if (ui.applying || ui.selected.isEmpty) return;
+    state = {
+      ...state,
+      messageId: PlanUi(
+        selected: ui.selected,
+        target: ui.target,
+        applying: true,
+      ),
+    };
+    try {
+      final updated = await ref
+          .read(assistantRepositoryProvider)
+          .apply(
+            messageId,
+            ui.selected.toList()..sort(),
+            target: ui.target?.toApply(),
+          );
+      if (!ref.mounted) return;
+      ref.read(assistantChatProvider.notifier).replaceMessage(updated);
+      ref.invalidate(assignmentsProvider);
+      state = {
+        ...state,
+        messageId: PlanUi(selected: ui.selected, target: ui.target),
+      };
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = {
+        ...state,
+        messageId: PlanUi(
+          selected: ui.selected,
+          target: ui.target,
+          error: apiErrorMessage(e),
+        ),
+      };
+    }
+  }
+}
+
+final assistantPlansProvider =
+    NotifierProvider<AssistantPlansController, Map<int, PlanUi>>(
+      AssistantPlansController.new,
     );

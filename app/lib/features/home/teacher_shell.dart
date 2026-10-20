@@ -185,9 +185,9 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
               child: SafeArea(
                 child: AssistantPanel(
                   onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
-                  onOpenSettings: () {
+                  onNavigate: (route) {
                     _scaffoldKey.currentState?.closeEndDrawer();
-                    context.push(AppRoutes.settings);
+                    context.push(route);
                   },
                 ),
               ),
