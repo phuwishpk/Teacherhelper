@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assignments\RubricService;
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Gemini\AiJobFailures;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -45,6 +46,8 @@ class RubricController extends Controller
             throw new ApiException('ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', 'ai_key_missing', 422);
         }
 
+        // A new try: the screen must not see the last failure while it waits (§36.1).
+        AiJobFailures::forget(AiJobFailures::RUBRIC, (string) $question->id);
         DraftRubricJob::dispatch($question->id);
 
         return (new QuestionResource(QuestionController::loadDetail($question)))->response()->setStatusCode(202);

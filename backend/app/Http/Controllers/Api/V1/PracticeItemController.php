@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Gemini\AiJobFailures;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Practice\PracticeBank;
 use App\Exceptions\ApiException;
@@ -49,7 +50,12 @@ class PracticeItemController extends Controller
             $query->where('status', $request->validated('status'));
         }
 
-        return PracticeItemResource::collection($query->cursorPaginate(self::PER_PAGE));
+        // DESIGN §36.1: this teacher's last AI generation for the indicator failed.
+        $failure = $request->filled('skill')
+            ? AiJobFailures::get(AiJobFailures::PRACTICE, GeneratePracticeItemsJob::failureKey($request->user()->id, (int) $request->validated('skill')))
+            : null;
+
+        return PracticeItemResource::collection($query->cursorPaginate(self::PER_PAGE))->additional(['generation_error' => $failure]);
     }
 
     /**
@@ -102,6 +108,7 @@ class PracticeItemController extends Controller
         }
 
         $count = $request->count();
+        AiJobFailures::forget(AiJobFailures::PRACTICE, GeneratePracticeItemsJob::failureKey($request->user()->id, $skill->id));
         GeneratePracticeItemsJob::dispatch($skill->id, (int) $request->user()->school_id, $request->user()->id, $count);
 
         return response()->json(['data' => ['queued' => true, 'skill_id' => $skill->id, 'count' => $count]], 202);

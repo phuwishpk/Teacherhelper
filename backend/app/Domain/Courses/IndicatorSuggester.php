@@ -92,7 +92,7 @@ final class IndicatorSuggester
                     CallOutcome::INVALID_OUTPUT => GeminiException::INVALID_OUTPUT,
                     CallOutcome::KEY_INVALID => GeminiException::KEY_INVALID,
                     default => GeminiException::ERROR,
-                });
+                }, $outcome->errorCode, $outcome->aiCallId);
             }
         }
 

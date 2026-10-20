@@ -201,7 +201,9 @@ class IndicatorSuggestionTest extends TestCase
         $suggestions->process($this->work->id, lastAttempt: true);
         $this->asUser($this->teacher)->getJson($this->url())->assertOk()
             ->assertJsonPath('data.status', 'failed')
-            ->assertJsonPath('data.error.code', 'ai_failed');
+            ->assertJsonPath('data.error.code', 'ai_failed')
+            ->assertJsonPath('data.error.ai_error_code', 'AI-SERVER');
+        $this->assertNotNull($suggestions->state($this->work->id)['error']['ai_call_id']);
 
         // Invalid output twice (the gateway's one retry): failed at once, nothing written.
         $this->questions[0]->forceFill(['prompt_text' => 'ข้อ [fake:max-tokens]'])->save();

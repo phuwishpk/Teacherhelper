@@ -5,6 +5,7 @@ namespace App\Domain\Exams;
 use App\Domain\Assignments\AssignmentLocked;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
@@ -98,7 +99,7 @@ final class ExamDocuments
             && $extraction->updated_at->gt(now()->subMinutes(self::STALE_MINUTES));
         if (! $running) {
             // New, failed before, or lost: (re)queue it. The import waits for it.
-            $extraction->forceFill(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'requested_by' => $teacher->id, 'updated_at' => now()])->save();
+            $extraction->forceFill(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'error_code' => null, 'ai_call_id' => null, 'requested_by' => $teacher->id, 'updated_at' => now()])->save();
             ReadExamDocumentJob::dispatch($extraction->id, $selection->ids(), $selection->pageFrom, $selection->pageTo, $teacher->id, $exam->id);
         }
 
@@ -170,7 +171,7 @@ final class ExamDocuments
     {
         $extraction = DocumentExtraction::query()->find($extractionId);
         if ($extraction !== null && $extraction->status === DocumentExtraction::STATUS_QUEUED) {
-            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง');
+            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง', AiErrorCode::TIMEOUT);
         }
     }
 
@@ -262,7 +263,7 @@ final class ExamDocuments
     {
         $key = $this->keys->forTeacher($teacherId);
         if ($key === null) {
-            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง');
+            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', AiErrorCode::KEY_MISSING);
 
             return null;
         }
@@ -276,7 +277,7 @@ final class ExamDocuments
         try {
             $files = $selection->files();
         } catch (ApiException $e) {
-            $this->fail($extraction, $e->getMessage());
+            $this->fail($extraction, $e->getMessage(), null);
 
             return null;
         }
@@ -300,7 +301,7 @@ final class ExamDocuments
                 GeminiException::INVALID_OUTPUT => 'AI อ่านไฟล์ข้อสอบไม่สำเร็จ ลองถ่ายรูปให้ชัดขึ้น แนบไฟล์ใหม่ หรือพิมพ์ข้อในแอปเอง',
                 GeminiException::KEY_INVALID => 'Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง',
                 default => 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง',
-            });
+            }, $e->code(), $e->aiCallId);
 
             return null;
         }
@@ -310,7 +311,7 @@ final class ExamDocuments
             'result' => $result,
             'model' => Str::limit($this->gateway->client()->model(), 64, ''),
             'prompt_version' => $this->prompts->get(ExamDocumentReader::PURPOSE, 'general')->versionLabel(),
-            'error' => null,
+            'error' => null, 'error_code' => null, 'ai_call_id' => null,
         ];
     }
 
@@ -407,8 +408,9 @@ final class ExamDocuments
             ->first();
     }
 
-    private function fail(DocumentExtraction $extraction, string $message): void
+    /** $code and $callId: the AI error code and ai_calls row the teacher can quote (DESIGN §36.1). */
+    private function fail(DocumentExtraction $extraction, string $message, ?string $code = AiErrorCode::ERROR, ?int $callId = null): void
     {
-        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250)])->save();
+        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250), 'error_code' => $code, 'ai_call_id' => $callId])->save();
     }
 }

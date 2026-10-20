@@ -200,6 +200,9 @@ class GradeScanJobTest extends TestCase
         $short = $this->response('short');
         $this->assertSame(['manual', 3], [$short->grading_state, $short->attempts]);
         $this->assertSame('invalid_output', $short->manualReason());
+        // DESIGN §36.1: the code and the ai_calls row of the last try, for the review screen.
+        $this->assertSame('AI-OUTPUT', $short->fuzzy_trace['ai_error_code']);
+        $this->assertSame(AiCall::query()->where('status', 'invalid_output')->max('id'), $short->fuzzy_trace['ai_call_id']);
         $this->assertSame([1.0, 'check'], [$short->review_priority, $short->priority_band]);
         $this->assertNull($short->ai_score);
         $this->assertSame(6, AiCall::query()->where('status', 'invalid_output')->count());

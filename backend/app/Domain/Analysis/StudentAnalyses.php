@@ -144,6 +144,8 @@ final class StudentAnalyses
             $row->generated_input_hash = $inputHash;
             $row->queued_input_hash = null;
             $row->status = StudentAnalysis::STATUS_DRAFTED;
+            $row->error_code = null;
+            $row->ai_call_id = null;
             $row->generated_via = $via;
             $row->batch_id = $batchId;
             $row->generated_at = now();
@@ -159,14 +161,17 @@ final class StudentAnalyses
         });
     }
 
-    /** A row of a batch that did not produce texts: tried again next night. */
-    public function markFailed(int $analysisId, int $batchId): void
+    /**
+     * A row of a batch that did not produce texts: tried again next night.
+     * $code and $callId: the AI failure the teacher can quote (DESIGN §36.1).
+     */
+    public function markFailed(int $analysisId, int $batchId, ?string $code = null, ?int $callId = null): void
     {
         StudentAnalysis::query()
             ->whereKey($analysisId)
             ->where('batch_id', $batchId)
             ->where('status', StudentAnalysis::STATUS_QUEUED)
-            ->update(['status' => StudentAnalysis::STATUS_FAILED, 'queued_input_hash' => null, 'updated_at' => now()]);
+            ->update(['status' => StudentAnalysis::STATUS_FAILED, 'queued_input_hash' => null, 'error_code' => $code, 'ai_call_id' => $callId, 'updated_at' => now()]);
     }
 
     /**
@@ -196,6 +201,8 @@ final class StudentAnalyses
                 $row->queued_input_hash = null;
             }
             $row->status = StudentAnalysis::STATUS_DRAFTED;
+            $row->error_code = null;
+            $row->ai_call_id = null;
             $row->save();
 
             return $row;

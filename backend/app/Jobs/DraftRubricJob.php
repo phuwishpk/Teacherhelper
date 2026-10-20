@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Domain\Assignments\RubricService;
+use App\Domain\Gemini\AiErrorCode;
+use App\Domain\Gemini\AiJobFailures;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\RubricDrafter;
@@ -11,6 +13,7 @@ use App\Models\Question;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * POST /questions/{id}/rubric/draft (DESIGN §9.3, §10.4): asks Gemini for a
@@ -34,6 +37,9 @@ class DraftRubricJob implements ShouldQueue
 
     public int $timeout = 90;
 
+    /** What the rubric screen says when the draft failed. */
+    public const MESSAGE = 'AI ร่าง rubric ไม่สำเร็จ ลองกด "ให้ AI ร่าง" อีกครั้ง หรือเขียนเกณฑ์เอง';
+
     public function __construct(public readonly int $questionId)
     {
         $this->onQueue('default');
@@ -45,11 +51,13 @@ class DraftRubricJob implements ShouldQueue
         if ($question === null || ! $question->needsRubric()) {
             return;
         }
+        AiJobFailures::forget(AiJobFailures::RUBRIC, (string) $question->id);
 
         $request = RubricDraftRequest::fromQuestion($question);
         $key = $keys->forTeacher($request->teacherId);
         if ($key === null) {
             Log::warning('rubric_draft.no_ai_key', ['question_id' => $question->id]);
+            AiJobFailures::record(AiJobFailures::RUBRIC, (string) $question->id, AiErrorCode::KEY_MISSING, null, AiErrorCode::message(AiErrorCode::KEY_MISSING));
 
             return;
         }
@@ -61,11 +69,20 @@ class DraftRubricJob implements ShouldQueue
                 throw $e; // transient: the queue retries with backoff
             }
             Log::warning('rubric_draft.failed', ['question_id' => $question->id, 'status' => $e->status]);
+            AiJobFailures::record(AiJobFailures::RUBRIC, (string) $question->id, $e->code(), $e->aiCallId, self::MESSAGE);
             $this->fail($e);
 
             return;
         }
 
         $rubrics->applyDraft($question, $draft);
+    }
+
+    /** After the last try (a transient failure every time, or a crash). */
+    public function failed(Throwable $e): void
+    {
+        if (! AiJobFailures::get(AiJobFailures::RUBRIC, (string) $this->questionId)) {
+            AiJobFailures::recordThrowable(AiJobFailures::RUBRIC, (string) $this->questionId, $e, self::MESSAGE);
+        }
     }
 }

@@ -192,6 +192,7 @@ class CourseDocumentTest extends TestCase
         $this->asUser($this->teacher)->getJson("/api/v1/document-extractions/{$id}")
             ->assertOk()
             ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.ai_error_code', 'AI-OUTPUT')
             ->assertJsonPath('data.result', null)
             ->assertJsonPath('data.indicator_matches', []);
         $this->assertStringContainsString('AI อ่านเอกสารไม่สำเร็จ', (string) DocumentExtraction::query()->findOrFail($id)->error);
@@ -211,7 +212,8 @@ class CourseDocumentTest extends TestCase
             $this->assertSame(DocumentExtraction::STATUS_QUEUED, $row->refresh()->status);
         }
         app(CourseDocuments::class)->process($row->id, 'course', $broken, null, null, $this->teacher->id, lastAttempt: true);
-        $this->assertSame([DocumentExtraction::STATUS_FAILED, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง'], [$row->refresh()->status, $row->error]);
+        $this->assertSame([DocumentExtraction::STATUS_FAILED, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง', 'AI-SERVER'], [$row->refresh()->status, $row->error, $row->error_code]);
+        $this->assertNotNull($row->ai_call_id);
 
         // Without any usable key the job fails at once.
         config(['services.gemini.api_key' => '']);

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Grading;
 
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\ExplanationRequests;
 use App\Domain\Gemini\GeminiGateway;
@@ -181,20 +182,22 @@ final class GradeApplier
     public static function applyFailure(Response $response, CallOutcome $outcome): string
     {
         $response->attempts++;
+        // DESIGN §36.1: the code and the ai_calls row the teacher can quote.
+        $code = self::code($outcome->errorCode, $outcome->aiCallId);
         if ($outcome->status === CallOutcome::KEY_INVALID) {
-            self::markManual($response, ScanGrader::REASON_KEY_INVALID, $outcome->status);
+            self::markManual($response, ScanGrader::REASON_KEY_INVALID, $outcome->status, $code);
 
             return Response::STATE_MANUAL;
         }
         if ($response->attempts >= ScanGrader::MAX_ATTEMPTS) {
             $reason = $outcome->status === CallOutcome::INVALID_OUTPUT ? ScanGrader::REASON_INVALID_OUTPUT : ScanGrader::REASON_AI_ERROR;
-            self::markManual($response, $reason, $outcome->status);
+            self::markManual($response, $reason, $outcome->status, $code);
 
             return Response::STATE_MANUAL;
         }
 
         $response->grading_state = Response::STATE_FAILED;
-        $response->fuzzy_trace = ReviewFlags::carry($response->fuzzy_trace, ['last_error' => $outcome->status]);
+        $response->fuzzy_trace = ReviewFlags::carry($response->fuzzy_trace, ['last_error' => $outcome->status] + $code);
         $response->save();
 
         return Response::STATE_FAILED;
@@ -205,6 +208,12 @@ final class GradeApplier
      */
     public static function markManual(Response $response, string $reason, ?string $lastError = null, array $traceExtra = []): void
     {
+        // An answer left to the teacher for want of a usable key says so with a code too.
+        $traceExtra += match ($reason) {
+            ScanGrader::REASON_KEY_MISSING => ['ai_error_code' => AiErrorCode::KEY_MISSING],
+            ScanGrader::REASON_KEY_INVALID => ['ai_error_code' => AiErrorCode::KEY_INVALID],
+            default => [],
+        };
         $priority = ReviewPriority::manual();
         $response->forceFill([
             'grading_state' => Response::STATE_MANUAL,
@@ -213,5 +222,15 @@ final class GradeApplier
             'priority_band' => $priority->band,
             'auto_rule' => null,
         ])->save();
+    }
+
+    /**
+     * The trace keys of a failed AI call (DESIGN §36.1), without empty ones.
+     *
+     * @return array{ai_error_code?: string, ai_call_id?: int}
+     */
+    public static function code(?string $code, ?int $callId): array
+    {
+        return array_filter(['ai_error_code' => $code, 'ai_call_id' => $callId], fn ($v) => $v !== null);
     }
 }
