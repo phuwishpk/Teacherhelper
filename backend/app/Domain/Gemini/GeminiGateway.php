@@ -58,7 +58,8 @@ final class GeminiGateway
             foreach ($pending as $id => $call) {
                 $reply = $replies[$id] ?? GeminiReply::error('no reply for this request');
                 $outcome = self::judge($call, $reply);
-                $this->log($call, $reply, $outcome, $key);
+                $code = AiErrorCode::forOutcome($outcome, $reply);
+                $outcome = $outcome->logged($this->log($call, $reply, $outcome, $key, $code), $code);
 
                 if ($outcome->status === CallOutcome::INVALID_OUTPUT && $pass < $passes) {
                     $retry[$id] = $call;
@@ -82,9 +83,9 @@ final class GeminiGateway
     public function judgeBatchReply(GeminiCall $call, GeminiReply $reply, GeminiKey $key): CallOutcome
     {
         $outcome = self::judge($call, $reply);
-        $this->log($call, $reply, $outcome, $key, batch: true);
+        $code = AiErrorCode::forOutcome($outcome, $reply);
 
-        return $outcome;
+        return $outcome->logged($this->log($call, $reply, $outcome, $key, $code, batch: true), $code);
     }
 
     /** One call; throws unless the outcome is ok. */
@@ -96,7 +97,7 @@ final class GeminiGateway
                 CallOutcome::INVALID_OUTPUT => GeminiException::INVALID_OUTPUT,
                 CallOutcome::KEY_INVALID => GeminiException::KEY_INVALID,
                 default => GeminiException::ERROR,
-            });
+            }, $outcome->errorCode, $outcome->aiCallId);
         }
 
         return $outcome;
@@ -154,9 +155,10 @@ final class GeminiGateway
         return $text;
     }
 
-    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key, bool $batch = false): void
+    /** Writes the ai_calls row and returns its id. */
+    private function log(GeminiCall $call, GeminiReply $reply, CallOutcome $outcome, GeminiKey $key, ?string $errorCode, bool $batch = false): int
     {
-        AiCall::create([
+        return (int) AiCall::create([
             'purpose' => $call->request->purpose,
             'response_id' => $call->responseId,
             'question_id' => $call->questionId,
@@ -183,7 +185,10 @@ final class GeminiGateway
             'batch' => $batch,
             'teacher_guidance' => $call->guidance,
             'guidance_by' => $call->guidance === null ? null : $call->guidanceBy,
-        ]);
+            'error_code' => $errorCode,
+            'http_status' => $reply->httpStatus,
+            'user_id' => $key->userId,
+        ])->id;
     }
 
     /** Belt and braces: an error text must never carry the key. */

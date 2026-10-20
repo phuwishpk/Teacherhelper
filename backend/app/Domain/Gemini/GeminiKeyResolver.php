@@ -19,7 +19,7 @@ final class GeminiKeyResolver
 {
     public function forTeacher(?int $teacherId): ?GeminiKey
     {
-        return $this->teacherKey($teacherId) ?? $this->serverKey();
+        return $this->teacherKey($teacherId) ?? $this->serverKey($teacherId);
     }
 
     public function teacherKey(?int $teacherId): ?GeminiKey
@@ -40,14 +40,15 @@ final class GeminiKeyResolver
             return null;
         }
 
-        return $key === '' ? null : new GeminiKey($key, GeminiKey::SOURCE_TEACHER);
+        return $key === '' ? null : new GeminiKey($key, GeminiKey::SOURCE_TEACHER, $teacherId);
     }
 
-    public function serverKey(): ?GeminiKey
+    /** The server key, used for $forTeacherId when given (ai_calls.user_id). */
+    public function serverKey(?int $forTeacherId = null): ?GeminiKey
     {
         $key = trim((string) config('services.gemini.api_key'));
 
-        return $key === '' ? null : new GeminiKey($key, GeminiKey::SOURCE_SERVER);
+        return $key === '' ? null : new GeminiKey($key, GeminiKey::SOURCE_SERVER, $forTeacherId);
     }
 
     public function serverKeyAvailable(): bool

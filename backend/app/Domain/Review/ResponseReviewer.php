@@ -4,7 +4,7 @@ namespace App\Domain\Review;
 
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Exams\ExamSheetIngestor;
-use App\Domain\Gemini\CallOutcome;
+use App\Domain\Gemini\AiErrors;
 use App\Domain\Gemini\ExplanationRequests;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
@@ -281,11 +281,8 @@ final class ResponseReviewer
         );
         $outcome = $this->gateway->run(['explanation' => $call], $key)['explanation'];
 
-        if ($outcome->status === CallOutcome::KEY_INVALID) {
-            throw new ApiException('Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง', 'ai_key_invalid', 422);
-        }
         if (! $outcome->isOk()) {
-            throw new ApiException('AI เขียนคำอธิบายไม่สำเร็จ ลองใหม่อีกครั้ง หรือเขียนคำอธิบายเอง', 'ai_unavailable', 502);
+            throw AiErrors::fromOutcome($outcome, 'AI เขียนคำอธิบายไม่สำเร็จ (เขียนคำอธิบายเองได้)');
         }
 
         return ExplanationRequests::text((array) $outcome->data);

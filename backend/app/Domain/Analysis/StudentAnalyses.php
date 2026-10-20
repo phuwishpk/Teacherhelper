@@ -2,7 +2,7 @@
 
 namespace App\Domain\Analysis;
 
-use App\Domain\Gemini\CallOutcome;
+use App\Domain\Gemini\AiErrors;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
@@ -113,11 +113,8 @@ final class StudentAnalyses
         }
 
         $outcome = $this->gateway->run(['analysis' => $this->requests->call($input, self::FEATURE_NOW, $guidance, $guidanceBy)], $key)['analysis'];
-        if ($outcome->status === CallOutcome::KEY_INVALID) {
-            throw new ApiException('Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง', 'ai_key_invalid', 422);
-        }
         if (! $outcome->isOk()) {
-            throw new ApiException('AI วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง', 'ai_unavailable', 502);
+            throw AiErrors::fromOutcome($outcome, 'AI วิเคราะห์ไม่สำเร็จ');
         }
 
         return $this->applyText($row->id, (array) $outcome->data, StudentAnalysis::VIA_NOW, $input->hash(), null, $guidance) ?? $row->refresh();

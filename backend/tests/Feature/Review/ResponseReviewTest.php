@@ -275,13 +275,17 @@ class ResponseReviewTest extends TestCase
         config(['services.gemini.api_key' => null]);
         $this->asUser($this->teacher)->postJson($this->url($response, '/regenerate-explanation'))
             ->assertStatus(422)
-            ->assertJsonPath('code', 'ai_key_missing');
+            ->assertJsonPath('code', 'ai_key_missing')
+            ->assertJsonPath('ai_error_code', 'AI-KEY-MISSING');
 
         config(['services.gemini.api_key' => 'server-key-for-regenerate-000000000']);
         $this->q['q1']->update(['prompt_text' => $this->q['q1']->prompt_text.' [fake:explanation-error]']);
-        $this->asUser($this->teacher)->postJson($this->url($response, '/regenerate-explanation'))
+        $failed = $this->asUser($this->teacher)->postJson($this->url($response, '/regenerate-explanation'))
             ->assertStatus(502)
-            ->assertJsonPath('code', 'ai_unavailable');
+            ->assertJsonPath('code', 'ai_unavailable')
+            ->assertJsonPath('ai_error_code', 'AI-SERVER');
+        // The number the teacher sees is the logged call (DESIGN §36).
+        $this->assertDatabaseHas('ai_calls', ['id' => $failed->json('ai_call_id'), 'error_code' => 'AI-SERVER', 'http_status' => 500, 'user_id' => $this->teacher->id]);
         $this->assertSame('ลองตรวจการคำนวณอีกครั้งนะ', $response->refresh()->explanation, 'unchanged');
 
         config(['services.gemini.api_key' => 'server-key-google-rejected-00000000']);

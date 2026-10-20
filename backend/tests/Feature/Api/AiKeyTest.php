@@ -90,9 +90,33 @@ class AiKeyTest extends TestCase
 
         $this->asUser($teacher)->putJson('/api/v1/me/ai-key', ['gemini_api_key' => 'TESTSyGeminiUnavailable000000000000000'])
             ->assertStatus(503)
-            ->assertJsonPath('code', 'ai_unavailable');
+            ->assertJsonPath('code', 'ai_unavailable')
+            ->assertJsonPath('ai_error_code', 'AI-SERVER');
 
         $this->assertSame(0, TeacherApiKey::query()->count());
+    }
+
+    public function test_the_stored_key_is_tested_again(): void
+    {
+        $teacher = $this->makeTeacher();
+        $this->asUser($teacher)->postJson('/api/v1/me/ai-key/test')
+            ->assertStatus(422)->assertJsonPath('code', 'ai_key_missing')->assertJsonPath('ai_error_code', 'AI-KEY-MISSING');
+
+        TeacherApiKey::query()->create(['user_id' => $teacher->id, 'provider' => 'gemini', 'encrypted_key' => self::KEY, 'key_last4' => 'wxyz', 'last_verified_at' => now()->subWeek()]);
+        $this->freezeSecond();
+        $this->asUser($teacher)->postJson('/api/v1/me/ai-key/test')
+            ->assertOk()
+            ->assertJsonPath('data.configured', true)
+            ->assertJsonPath('data.last_verified_at', now()->utc()->toIso8601String());
+
+        // A key Google refuses now, and a Gemini that is down.
+        TeacherApiKey::query()->whereKey($teacher->id)->update(['encrypted_key' => encrypt('TESTSyThisKeyIsInvalid0000000000000000', false)]);
+        $this->asUser($teacher)->postJson('/api/v1/me/ai-key/test')
+            ->assertStatus(422)->assertJsonPath('code', 'ai_key_invalid')->assertJsonPath('ai_error_code', 'AI-KEY-INVALID');
+        TeacherApiKey::query()->whereKey($teacher->id)->update(['encrypted_key' => encrypt('TESTSyGeminiUnavailable000000000000000', false)]);
+        $this->asUser($teacher)->postJson('/api/v1/me/ai-key/test')
+            ->assertStatus(503)->assertJsonPath('code', 'ai_unavailable')->assertJsonPath('ai_error_code', 'AI-SERVER');
+        $this->assertSame(now()->utc()->toIso8601String(), TeacherApiKey::query()->findOrFail($teacher->id)->last_verified_at->utc()->toIso8601String(), 'a failed test changes nothing');
     }
 
     public function test_malformed_keys_fail_validation_without_calling_gemini(): void
