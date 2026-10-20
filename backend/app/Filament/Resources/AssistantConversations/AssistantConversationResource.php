@@ -134,6 +134,7 @@ class AssistantConversationResource extends Resource
             'indicators' => 'การ์ดตัวชี้วัด '.count($m->plan['items'] ?? []).' รายการ',
             'gradebook' => 'การ์ดตั้งค่าสมุดคะแนน',
             'practice' => 'การ์ดแบบฝึก '.count($m->plan['items'] ?? []).' ข้อ',
+            'file' => 'การ์ดอ่านไฟล์ ('.($m->plan['action'] ?? '').')',
             default => 'การ์ด '.count($m->plan['questions'] ?? []).' ข้อ',
         };
         $target = $m->plan['target']['title'] ?? 'ยังไม่เลือกงาน';

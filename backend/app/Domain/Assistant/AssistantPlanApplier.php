@@ -80,6 +80,7 @@ final class AssistantPlanApplier
                         AssistantPlans::CARD_RUBRIC => RubricCards::apply($teacher, $plan, $this->rubrics),
                         AssistantPlans::CARD_GRADEBOOK => GradebookCards::apply($teacher, $plan),
                         AssistantPlans::CARD_PRACTICE => PracticeCards::apply($teacher, $plan, $selected),
+                        AssistantPlans::CARD_FILE => FileCards::apply($teacher, $plan),
                         default => IndicatorCards::apply($teacher, $plan, $selected, $this->skills),
                     },
                     'at' => now()->toIso8601String(),

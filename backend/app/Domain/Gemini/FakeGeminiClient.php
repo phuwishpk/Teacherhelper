@@ -36,6 +36,8 @@ use Illuminate\Support\Str;
  *   [fake:gradebook:COURSE] assistant_chat: categories "งาน 60, สอบ 40" and cutoffs 80…50
  *   [fake:gradebook-bad:COURSE] the same with weights summing to 90
  *   [fake:practice:CODE]  assistant_chat: three practice items (mcq, short, numeric) and one without a key
+ *   [fake:need-file:ID]  assistant_chat: asks to read the attached files; with files included, a questions card for ID
+ *   [fake:file:ACTION:ID] assistant_chat: a file card for the attached files (ID = assignment, course or 0)
  *   [fake:need:SET:ID] / [fake:need-student:LABEL]  assistant_chat: asks for student data
  *                        (need_data); the second call (data attached) echoes the STUDENT DATA heading
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
@@ -215,6 +217,16 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                     'answer' => 'ผู้ช่วยทดสอบอ่านข้อมูล: '.(preg_match('/# STUDENT DATA(?! ACCESS)[^\n]*/u', $request->systemInstruction, $d) === 1 ? $d[0] : '')
                         .' | ถาม: '.trim((string) ($request->hints['question_text'] ?? '')),
                 ],
+                preg_match('/\[fake:need-file:(\d+)\]/', $markers, $m) === 1 => $request->images === []
+                    ? ['answer' => 'กำลังอ่านไฟล์…', 'need_file' => true]
+                    : self::assistantPlan([1 => $m[1]]),
+                preg_match('/\[fake:file:([a-z_]+):(\d+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอส่งไฟล์ไปอ่านในการ์ด', 'plan' => [
+                    'kind' => 'file', 'file_action' => $m[1],
+                    'document_ids' => preg_match('/# ATTACHED FILES \(.*?\n((?:- .*\n?)+)/u', $request->systemInstruction, $block) === 1
+                        && preg_match_all('/^- (\d+) \| /m', $block[1], $ids) > 0 ? array_map('intval', $ids[1]) : [],
+                    'target' => in_array($m[1], ['answer_key', 'exam'], true) && (int) $m[2] > 0 ? ['assignment_id' => (int) $m[2]] : (object) [],
+                    'course_id' => (int) $m[2],
+                ]],
                 preg_match('/\[fake:gradebook(-bad)?:(\d+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอการตั้งค่าในการ์ด', 'plan' => [
                     'kind' => 'gradebook', 'target' => (object) [], 'course_id' => (int) $m[2],
                     'categories' => [

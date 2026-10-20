@@ -44,6 +44,8 @@ final class AssistantPlans
 
     public const CARD_PRACTICE = 'practice';
 
+    public const CARD_FILE = 'file';
+
     public const KIND_WORKSHEET = 'worksheet';
 
     public const KIND_FREEFORM = 'freeform';
@@ -71,13 +73,14 @@ final class AssistantPlans
      * @param  array<string, mixed>  $raw
      * @return array<string, mixed>|null
      */
-    public static function normalise(array $raw, User $teacher): ?array
+    public static function normalise(array $raw, User $teacher, string $message = ''): ?array
     {
         return match ($raw['kind'] ?? self::CARD_QUESTIONS) {
             self::CARD_RUBRIC => RubricCards::normalise($raw, $teacher),
             self::CARD_INDICATORS => IndicatorCards::normalise($raw, $teacher),
             self::CARD_GRADEBOOK => GradebookCards::normalise($raw, $teacher),
             self::CARD_PRACTICE => PracticeCards::normalise($raw, $teacher),
+            self::CARD_FILE => FileCards::normalise($raw, $teacher, $message),
             default => self::questionCard($raw, $teacher),
         };
     }
