@@ -559,7 +559,7 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 1. Firebase console > Build > **Firestore Database** > Create database > region `asia-southeast1` (Singapore) > โหมด **production** (กฎเริ่มต้นปิดทุกอย่าง)
 2. Rules > วางเนื้อหาของ `firebase/firestore.rules` ใน repo ทั้งไฟล์ > **Publish** ทำซ้ำทุกครั้งที่ไฟล์นั้นเปลี่ยน
 3. Build > **Authentication** > Get started (ไม่ต้องเปิด provider ใด แอปเข้าด้วย custom token ที่ server ออก)
-4. Firestore Database > **Time-to-live** > เพิ่ม policy ที่ field `expires_at` ให้ collection group `notices` (และ `assignments`, `submissions` เมื่อขั้น 3 ของ DESIGN §38.3 ขึ้นใช้งาน) เอกสารหมดอายุถูกลบเองใน 90 วัน
+4. **(ไม่บังคับ แต่ต้องทำก่อนใช้กับนักเรียนจริง, DESIGN §38.1)** TTL ไม่ได้อยู่ใน Firebase console แต่อยู่ใน Google Cloud console ของ project เดียวกัน: เปิด `https://console.cloud.google.com/firestore/databases/-default-/ttl?project=<Project ID>` (Project ID ดูที่ Project settings > General เช่น `eduvision-b17aa` ไม่ใช่ชื่อที่แสดง) หรือจากแท็บ Data กด **More in Google Cloud** > Create policy > Collection group `notices` (และ `assignments`, `submissions` เมื่อขั้น 3 ของ DESIGN §38.3 ขึ้นใช้งาน) > Timestamp field `expires_at` > Create สถานะเป็น Active ในราว 10 นาที แล้วเอกสารที่เลย 90 วันจะถูกลบเอง รวมของเก่าที่เขียนไว้ก่อนตั้ง ข้ามข้อนี้ได้ ระบบทำงานครบ แค่เอกสารเก่าไม่ถูกลบ
 5. ถ้าจะใช้บนเว็บแอป: Project settings > General > **Add app** > Web > ชื่อ `Krucheck web` > จด `apiKey`, `appId`, `messagingSenderId`, `projectId` (ค่าชุดนี้ไม่ใช่ความลับ แต่ก็ไม่ commit) แล้ว Authentication > Settings > **Authorized domains** เพิ่มโดเมนของระบบ
 
 **ฝั่ง server**

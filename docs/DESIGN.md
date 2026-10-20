@@ -5352,7 +5352,7 @@ CREATE TABLE classroom_teachers (
 - **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
 - **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
 - **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
-- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp) และตั้ง TTL policy ของ Firestore ลบเองเมื่อครบ 90 วัน การลบบัญชี (§31) ลบ subtree `users/{uid}` ด้วย
+- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ยังไม่ลบ subtree `users/{uid}` (§38.7)
 - **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
 
 ### 38.2 โครงสร้างเอกสาร
@@ -5374,7 +5374,7 @@ uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`
 | ขั้น | เนื้อหา | สถานะ |
 |---|---|---|
 | 1 | โครงพื้นฐาน: `FirestoreClient` (commit แบบ batch, แปลงค่า, 401 ลองใหม่), `LiveStore`/`NullLiveStore`, `FirebaseCustomTokens`, `POST /auth/firebase-token`, `eduvision:firestore-check`, `firebase/firestore.rules` ใน repo, แอป: `firebase_auth` sign-in หลังเข้าสู่ระบบและ sign-out ตาม, Firebase บนเว็บผ่าน `--dart-define`, `LiveSession` seam, HOSTING §6.5 (§38.4–§38.6) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเปิด Firestore และ Authentication ใน Firebase console แล้ว Run Now `eduvision:firestore-check` |
-| 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` (§38.7) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องตั้ง TTL policy ที่ `expires_at` ของ collection group `notices` ใน console |
+| 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` (§38.7) | เสร็จในโค้ด 21 ต.ค. 2569 (TTL ยังไม่ตั้ง ไม่บังคับ §38.1) |
 | 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน | ยังไม่ทำ |
 | 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด (ต้องมี `members` และ rule ระดับห้อง) | ยังไม่ทำ |
 
@@ -5407,7 +5407,7 @@ service cloud.firestore {
 }
 ```
 
-`firebase/README.md` อธิบายการเปิด Firestore (region `asia-southeast1`, โหมด production), เปิด Authentication (ไม่ต้องเปิด provider ใด custom token ใช้ได้เลย), การวาง rules, TTL policy ที่ field `expires_at` ของ collection group `notices`/`assignments`/`submissions` และโควตา Spark (อ่าน 50,000 เขียน 20,000 ครั้งต่อวัน listener นับหนึ่งอ่านต่อ document ที่เปลี่ยน) ไฟล์ service account และ `google-services.json` ยัง gitignored เหมือนเดิม
+`firebase/README.md` อธิบายการเปิด Firestore (region `asia-southeast1`, โหมด production), เปิด Authentication (ไม่ต้องเปิด provider ใด custom token ใช้ได้เลย), การวาง rules, TTL policy ที่ field `expires_at` ของ collection group `notices`/`assignments`/`submissions` (ไม่บังคับ §38.1) และโควตา Spark (อ่าน 50,000 เขียน 20,000 ครั้งต่อวัน listener นับหนึ่งอ่านต่อ document ที่เปลี่ยน) ไฟล์ service account และ `google-services.json` ยัง gitignored เหมือนเดิม
 
 ### 38.6 แอป (ขั้น 1)
 
@@ -5419,8 +5419,8 @@ service cloud.firestore {
 
 ### 38.7 ขั้น 2: กล่องแจ้งเตือน
 
-- **backend**: `PushNotifier::push()` เป็น final: ตัดผู้รับซ้ำ เขียน `FirestoreInbox::record()` ก่อน แล้วค่อย `deliver()` (ชื่อใหม่ของเมธอดที่ `FcmNotifier`/`LogNotifier` implement) `AppServiceProvider` ผูก inbox ให้ notifier ทุกตัว (ผ่าน `NullLiveStore` = ไม่เขียน) หนึ่งเหตุการณ์ = หนึ่ง ULID ตัวพิมพ์เล็ก ใต้ทุกผู้รับ เก็บ 90 วัน (`expires_at`) ผู้รับเกิน 500 คนแบ่ง commit
+- **backend**: `PushNotifier::push()` เป็น final: ตัดผู้รับซ้ำ เขียน `FirestoreInbox::record()` ก่อน แล้วค่อย `deliver()` (ชื่อใหม่ของเมธอดที่ `FcmNotifier`/`LogNotifier` implement) `AppServiceProvider` ผูก inbox ให้ notifier ทุกตัว (ผ่าน `NullLiveStore` = ไม่เขียน) หนึ่งเหตุการณ์ = หนึ่ง ULID ตัวพิมพ์เล็ก ใต้ทุกผู้รับ `expires_at` = 90 วัน (มีผลเมื่อตั้ง TTL §38.1) ผู้รับเกิน 500 คนแบ่ง commit
 - **API**: `POST /me/notices/read {ids: [ulid, …]}` (role teacher|student, `firestore`, throttle `notices` 30/นาที, ไม่เกิน 100 id, id ต้องเป็น ULID ตัวพิมพ์เล็ก 26 ตัว) → 202 `{data: {queued}}` งานจริงอยู่ใน `MarkNoticesReadJob` (คิว default) ซึ่ง merge `read: true` ทีละ id ไม่มี endpoint "อ่านทั้งหมด" ฝั่ง server เพราะ server ไม่รู้ id โดยไม่ query แอปส่ง id ที่มันเห็นอยู่
 - **แอป** (`features/notices/`): `noticesProvider` (StreamProvider) ฟัง `users/{uid}/notices` เรียงใหม่สุดก่อน 100 รายการ เฉพาะเมื่อ `liveUidProvider` (จาก `FirebaseAuth.authStateChanges`) ตรงกับผู้ใช้ที่ล็อกอิน ไม่เช่นนั้นเป็น null = "ยังไม่พร้อม" `unreadNoticesProvider` นับจาก listener หน้า `NoticesScreen` (`/notices` ครู, `/student/notices` นักเรียน) แตะ = ทำเครื่องหมายอ่านในเครื่องทันที เรียก API และเปิดปลายทางเดียวกับ push (`routeForPush`) ปุ่ม "อ่านทั้งหมด" ส่ง id ที่ยังไม่อ่านทั้งหมด กระดิ่งใน shell ครูและนักเรียนขึ้นเฉพาะ build ที่ Firebase เปิด พร้อมป้ายจำนวนยังไม่อ่าน
-- **ยังไม่ทำ**: ลบ subtree `users/{uid}` เมื่อลบบัญชี (§31) ปล่อยให้ TTL ลบใน 90 วัน และหน้าตั้งค่ายังไม่แสดงสถานะชั้นข้อมูลสด
+- **ยังไม่ทำ**: ลบ subtree `users/{uid}` เมื่อลบบัญชี (§31) ตอนนี้แจ้งเตือนของบัญชีที่ถูกลบยังอยู่ใน Firestore จนกว่าจะตั้ง TTL หรือลบด้วยมือ และหน้าตั้งค่ายังไม่แสดงสถานะชั้นข้อมูลสด
 
