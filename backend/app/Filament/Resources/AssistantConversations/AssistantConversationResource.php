@@ -112,13 +112,20 @@ class AssistantConversationResource extends Resource
         if (! is_array($m->plan)) {
             return null;
         }
-        $count = count($m->plan['questions'] ?? []);
+        $what = match ($m->plan['kind'] ?? 'questions') {
+            'rubric' => 'การ์ด rubric ข้อ '.($m->plan['question']['position'] ?? '?'),
+            'indicators' => 'การ์ดตัวชี้วัด '.count($m->plan['items'] ?? []).' รายการ',
+            default => 'การ์ด '.count($m->plan['questions'] ?? []).' ข้อ',
+        };
         $target = $m->plan['target']['title'] ?? 'ยังไม่เลือกงาน';
+        $result = $m->plan['result'] ?? [];
 
         return match ($m->plan_status) {
-            AssistantMessage::PLAN_APPLIED => "การ์ด {$count} ข้อ · สร้างแล้ว {$m->plan['result']['created']} ข้อใน «{$m->plan['result']['title']}»",
-            AssistantMessage::PLAN_REPLACED => "การ์ด {$count} ข้อ · มีการ์ดใหม่แทน",
-            default => "การ์ด {$count} ข้อ · «{$target}» · ยังไม่ได้สร้าง",
+            AssistantMessage::PLAN_APPLIED => isset($result['title'], $result['created']) && ! isset($result['question_id'])
+                ? "{$what} · สร้างแล้ว {$result['created']} ข้อใน «{$result['title']}»"
+                : "{$what} · ใช้แล้ว",
+            AssistantMessage::PLAN_REPLACED => "{$what} · มีการ์ดใหม่แทน",
+            default => "{$what} · «{$target}» · ยังไม่ได้ใช้",
         };
     }
 }

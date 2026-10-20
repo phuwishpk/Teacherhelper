@@ -109,13 +109,15 @@ final class AssistantChat
     private function answer(User $teacher, AssistantConversation $conversation, AssistantMessage $question, array $history, GeminiKey $key): array
     {
         $previousTarget = null;
+        $previousCard = null;
         foreach (array_reverse($history) as $m) {
             if (is_array($m->plan)) {
                 $previousTarget = $m->plan['result']['assignment_id'] ?? $m->plan['target']['assignment_id'] ?? null;
+                $previousCard = $m->plan['kind'] ?? AssistantPlans::CARD_QUESTIONS;
                 break;
             }
         }
-        $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget);
+        $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget, $previousCard);
         $call = $this->requests->call($question->content, $history, $conversation->id, $context);
         $outcome = $this->gateway->run(['chat' => $call], $key)['chat'];
         $usage = $outcome->aiCallId === null ? null : AiCall::query()->find($outcome->aiCallId, ['input_tokens', 'output_tokens']);

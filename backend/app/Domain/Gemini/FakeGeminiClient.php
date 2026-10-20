@@ -31,6 +31,8 @@ use Illuminate\Support\Str;
  *   [fake:plan:ID]       assistant_chat: a plan card of seven questions for assignment ID (assistantPlan())
  *   [fake:plan-new:CLASSROOM:COURSE:KIND]  the same card for a new assignment
  *   [fake:confirm]       assistant_chat: "โอเค สร้างเลย" (apply_plan)
+ *   [fake:rubric:ID:N]   assistant_chat: a rubric card for question N of assignment ID (3 points, steps too)
+ *   [fake:indicators] / [fake:indicators:ID]  an indicator card (FAKE-STD, FAKE-1; for assignment ID)
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
@@ -205,6 +207,23 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                 $has('invalid') => 'not json at all {',
                 $has('confirm') => ['answer' => 'กำลังสร้างข้อที่ติ๊กไว้ในการ์ด', 'apply_plan' => true],
                 preg_match('/\[fake:plan(?::(\d+)|-new:(\d+):(\d+):([a-z]+))\]/', $markers, $m) === 1 => self::assistantPlan($m),
+                preg_match('/\[fake:rubric:(\d+):(\d+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอ rubric ร่างในการ์ดด้านล่าง', 'plan' => [
+                    'kind' => 'rubric', 'target' => ['assignment_id' => (int) $m[1]], 'question_position' => (int) $m[2],
+                    'criteria' => [
+                        ['description' => 'อธิบายความหมายของเศษส่วนที่เท่ากันได้ถูกต้อง', 'points' => 2, 'is_core' => true],
+                        ['description' => 'ยกตัวอย่างได้ 1 คู่', 'points' => 1, 'is_core' => false],
+                    ],
+                    'reference_steps' => ['ตั้งโจทย์ 24 ÷ 2', 'ได้ 12'],
+                ]],
+                preg_match('/\[fake:indicators(?::(\d+))?\]/', $markers, $m) === 1 => ['answer' => 'เสนอตัวชี้วัดในการ์ด ตัวชี้วัดที่เพิ่มเองแชร์ทั้งโรงเรียน', 'plan' => [
+                    'kind' => 'indicators', 'target' => isset($m[1]) ? ['assignment_id' => (int) $m[1]] : (object) [],
+                    'indicators' => [
+                        ['action' => 'new', 'parent_code' => 'FAKE-STD', 'name' => 'อ่านจับใจความสำคัญจากเรื่องที่อ่านได้', 'grade_level' => 5, 'reason' => 'ตรงกับเรื่องที่สอน'],
+                        ['action' => 'existing', 'code' => 'FAKE-1', 'reason' => 'ใช้กับข้อบวกเศษส่วน', 'question_positions' => [1]],
+                        ['action' => 'existing', 'code' => 'NOPE-9', 'reason' => 'ไม่มีรหัสนี้'],
+                        ['action' => 'new', 'parent_code' => 'FAKE-STD', 'code' => 'FAKE-1', 'name' => 'รหัสซ้ำ', 'reason' => ''],
+                    ],
+                ]],
                 default => ['answer' => 'ผู้ช่วยทดสอบตอบ: '.trim((string) ($request->hints['question_text'] ?? ''))
                     .' (ประวัติ '.(int) ($request->hints['history_turns'] ?? 0).' ข้อความ, คู่มือ '.(int) ($request->hints['sections'] ?? 0).' หัวข้อ)'],
             },

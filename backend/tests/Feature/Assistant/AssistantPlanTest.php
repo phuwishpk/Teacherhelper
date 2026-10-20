@@ -99,7 +99,7 @@ class AssistantPlanTest extends TestCase
         $this->assertStringContainsString('# YOUR DATA', $system);
         $this->assertStringContainsString("{$this->classroom->id} | ป.5/1 | ป.5 | courses: {$this->course->id} ค15101", $system);
         $this->assertStringContainsString("## Assignment {$homework->id} \"การบ้านเศษส่วน\" (worksheet)", $system);
-        $this->assertStringContainsString('1. short: ข้อเดิมที่มีอยู่แล้ว', $system);
+        $this->assertStringContainsString('1. short (1 pts): ข้อเดิมที่มีอยู่แล้ว', $system);
         $this->assertStringNotContainsString($student->name, $system);
         $this->assertSame(8192, $this->gemini->requests[0]->maxOutputTokens);
     }
@@ -146,8 +146,8 @@ class AssistantPlanTest extends TestCase
         $this->assertNull($confirm['messages'][1]['plan']);
         // The history tells Gemini what the cards were.
         $history = end($this->gemini->requests)->history;
-        $this->assertStringContainsString("[CARD replaced: assignment {$homework->id}", $history[1]['text']);
-        $this->assertStringContainsString('[CARD proposed', $history[3]['text']);
+        $this->assertStringContainsString("[questions CARD replaced: assignment {$homework->id}", $history[1]['text']);
+        $this->assertStringContainsString('[questions CARD proposed', $history[3]['text']);
         $this->assertStringContainsString('1. mcq: 1/2 + 1/4', $history[3]['text']);
 
         // A confirmation with no open card says so instead of the AI's words.

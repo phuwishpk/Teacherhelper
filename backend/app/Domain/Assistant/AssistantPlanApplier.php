@@ -4,12 +4,14 @@ namespace App\Domain\Assistant;
 
 use App\Domain\Assignments\AssignmentCreator;
 use App\Domain\Assignments\QuestionEditor;
+use App\Domain\Assignments\RubricService;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
 use App\Domain\Courses\IndicatorMatcher;
 use App\Domain\Courses\IndicatorScope;
 use App\Domain\Exams\ExamEditor;
 use App\Domain\Exams\NumericAnswer;
+use App\Domain\Skills\TeacherSkills;
 use App\Exceptions\ApiException;
 use App\Jobs\DraftRubricJob;
 use App\Models\Assignment;
@@ -25,7 +27,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * «สร้างเลย» on a plan card (DESIGN §37.6): the ticked questions go into
  * the target assignment through the same services as the teacher's own
- * screens, so validation, permissions and locks are theirs:
+ * screens (a rubric or an indicator card: RubricCards / IndicatorCards), so validation, permissions and locks are theirs:
  *
  * - homework: QuestionEditor::create (a ready worksheet goes back to
  *   draft); a freeform assignment loses its key approval, and an empty
@@ -52,6 +54,8 @@ final class AssistantPlanApplier
         private readonly AssignmentCreator $creator,
         private readonly QuestionEditor $questions,
         private readonly ExamEditor $exams,
+        private readonly RubricService $rubrics,
+        private readonly TeacherSkills $skills,
     ) {}
 
     /**
@@ -68,6 +72,20 @@ final class AssistantPlanApplier
             $plan = $message->plan;
             if ($message->plan_status !== AssistantMessage::PLAN_PROPOSED || ! is_array($plan)) {
                 throw new ApiException('การ์ดนี้สร้างไปแล้วหรือมีการ์ดใหม่แทนแล้ว', 'plan_not_open', 409);
+            }
+            $kind = $plan['kind'] ?? AssistantPlans::CARD_QUESTIONS;
+            if ($kind !== AssistantPlans::CARD_QUESTIONS) {
+                $plan['result'] = [
+                    ...($kind === AssistantPlans::CARD_RUBRIC
+                        ? RubricCards::apply($teacher, $plan, $this->rubrics)
+                        : IndicatorCards::apply($teacher, $plan, $selected, $this->skills)),
+                    'at' => now()->toIso8601String(),
+                ];
+                $message->plan = $plan;
+                $message->plan_status = AssistantMessage::PLAN_APPLIED;
+                $message->save();
+
+                return;
             }
             $resolved = $target === null ? $plan['target'] : AssistantPlans::target($target, $teacher);
             AssistantPlans::assertTarget($resolved);
@@ -302,7 +320,7 @@ final class AssistantPlanApplier
             }
         }
         if ($rows !== []) {
-            IndicatorSuggestion::query()->insert($rows);
+            IndicatorSuggestion::query()->insertOrIgnore($rows);
         }
     }
 
