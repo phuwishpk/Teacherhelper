@@ -48,6 +48,10 @@ class ShellAction {
 ///   the labels beside the icons and the account at the bottom; no app bar,
 ///   the page starts with the name of the tab.
 ///
+/// With a [menu] (the teacher, DESIGN §35) the sidebar shows the searchable
+/// menu of every function instead of the plain tab list, and the phone and
+/// tablet layouts open it as a drawer.
+///
 /// The tabs are bodies only: this Scaffold owns the floating action button,
 /// so a SnackBar has exactly one Scaffold to show on.
 class AdaptiveShell extends StatelessWidget {
@@ -64,6 +68,7 @@ class AdaptiveShell extends StatelessWidget {
     this.accountCaption,
     this.floatingActionButton,
     this.headerActions,
+    this.menu,
   });
 
   /// The app bar title on a phone and a tablet.
@@ -90,7 +95,24 @@ class AdaptiveShell extends StatelessWidget {
   /// passes no [floatingActionButton] then.
   final Widget? headerActions;
 
+  /// The searchable menu of every function (DESIGN §35): the desktop
+  /// sidebar shows it in place of the plain tab list, and a phone or a
+  /// tablet opens it as a drawer from the app bar.
+  final Widget Function({required bool inDrawer})? menu;
+
   static const sidebarWidth = 248.0;
+
+  Widget? _drawer() => switch (menu) {
+    final build? => Drawer(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: build(inDrawer: true),
+        ),
+      ),
+    ),
+    null => null,
+  };
 
   Widget _icon(int index, IconData data) {
     final badge = destinations[index].badge;
@@ -126,6 +148,7 @@ class AdaptiveShell extends StatelessWidget {
           title: Text(title),
           actions: [for (final a in actions) _actionButton(a)],
         ),
+        drawer: _drawer(),
         body: body,
         bottomNavigationBar: DecoratedBox(
           decoration: BoxDecoration(
@@ -155,6 +178,7 @@ class AdaptiveShell extends StatelessWidget {
           title: Text(title),
           actions: [for (final a in actions) _actionButton(a)],
         ),
+        drawer: _drawer(),
         body: Row(
           children: [
             NavigationRail(
@@ -218,22 +242,25 @@ class AdaptiveShell extends StatelessWidget {
                           label: Text(primary.tooltip),
                         ),
                       ),
-                    Expanded(
-                      child: NavigationRail(
-                        extended: true,
-                        minExtendedWidth: sidebarWidth,
-                        selectedIndex: selectedIndex,
-                        onDestinationSelected: onSelected,
-                        destinations: [
-                          for (final (i, d) in destinations.indexed)
-                            NavigationRailDestination(
-                              icon: _icon(i, d.icon),
-                              selectedIcon: _icon(i, d.selectedIcon),
-                              label: Text(d.label),
-                            ),
-                        ],
+                    if (menu case final build?)
+                      Expanded(child: build(inDrawer: false))
+                    else
+                      Expanded(
+                        child: NavigationRail(
+                          extended: true,
+                          minExtendedWidth: sidebarWidth,
+                          selectedIndex: selectedIndex,
+                          onDestinationSelected: onSelected,
+                          destinations: [
+                            for (final (i, d) in destinations.indexed)
+                              NavigationRailDestination(
+                                icon: _icon(i, d.icon),
+                                selectedIcon: _icon(i, d.selectedIcon),
+                                label: Text(d.label),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
                     const Divider(),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),

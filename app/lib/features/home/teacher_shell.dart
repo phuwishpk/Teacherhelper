@@ -7,6 +7,7 @@ import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/breakpoints.dart';
 import '../../core/widgets/adaptive_shell.dart';
+import '../../core/widgets/function_menu.dart';
 import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
 import '../auth/sign_out_action.dart';
@@ -16,12 +17,15 @@ import '../review/review_home_page.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 import 'teacher_attention.dart';
+import 'teacher_functions.dart';
 import '../../core/widgets/impersonation_banner.dart';
 
 /// Teacher-side navigation shell ([AdaptiveShell], DESIGN §27.3): a bottom
 /// NavigationBar on phones, a NavigationRail from tablet width up (the
 /// review queue is meant for tablets, DESIGN §13) and a sidebar on a desktop.
 /// Five destinations: หน้าหลัก, ห้องเรียน, การบ้าน, ตรวจทาน and ตัดเกรด (§23.9).
+/// The desktop sidebar and the drawer of a phone or a tablet hold the
+/// searchable menu of every function under those tabs (DESIGN §35).
 class TeacherShell extends ConsumerStatefulWidget {
   const TeacherShell({super.key});
 
@@ -119,8 +123,46 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
             _ => null,
           };
 
+    // The searchable menu of every function (DESIGN §35).
+    final menu = teacherMenu(
+      TeacherMenuActions(
+        openTab: _select,
+        push: (route) => context.push(route),
+        signOut: () => confirmSignOut(context, ref),
+        tabs: [
+          for (final (i, d) in _destinations.indexed)
+            (
+              label: d.label,
+              icon: d.icon,
+              selectedIcon: d.selectedIcon,
+              badge: i == 1 ? requests : 0,
+            ),
+        ],
+      ),
+      guide: (tab, where, helpTopic) {
+        _select(tab);
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(where),
+              duration: const Duration(seconds: 8),
+              action: helpTopic == null
+                  ? null
+                  : SnackBarAction(
+                      label: 'ดูวิธี',
+                      onPressed: () =>
+                          context.push(AppRoutes.helpTopic(helpTopic)),
+                    ),
+            ),
+          );
+      },
+    );
+
     return AdaptiveShell(
       title: 'Krucheck',
+      menu: ({required inDrawer}) =>
+          FunctionMenu(groups: menu, selectedGroup: _index, inDrawer: inDrawer),
       accountName: user?.name,
       accountCaption: user?.schoolName,
       destinations: [

@@ -10,9 +10,12 @@ import 'help_content.dart';
 /// notes. Phones and tablets expand topics in place, a desktop shows the
 /// topic list beside the open topic.
 class HelpScreen extends StatefulWidget {
-  const HelpScreen({super.key, required this.role});
+  const HelpScreen({super.key, required this.role, this.initialTopic});
 
   final HelpRole role;
+
+  /// The topic open at start (`/help?topic=<id>`), e.g. from the menu search.
+  final String? initialTopic;
 
   @override
   State<HelpScreen> createState() => _HelpScreenState();
@@ -20,7 +23,7 @@ class HelpScreen extends StatefulWidget {
 
 class _HelpScreenState extends State<HelpScreen> {
   final _query = TextEditingController();
-  String? _openId;
+  late String? _openId = widget.initialTopic;
 
   @override
   void dispose() {

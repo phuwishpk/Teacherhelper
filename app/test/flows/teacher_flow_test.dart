@@ -1,4 +1,5 @@
 import 'package:eduvision/core/router/app_router.dart';
+import 'package:eduvision/features/home/dashboard_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,20 +14,27 @@ void main() {
     runTeacherFlow,
   );
 
-  testWidgets('a tablet rail has the five teacher destinations and the '
+  testWidgets('the desktop sidebar menu has the five teacher tabs and the '
       'dashboard shortcut opens "ตัดเกรด"', (tester) async {
     final app = await TeacherFlowApp.start(tester);
     tester.view.physicalSize = const Size(1280, 1600);
     await tester.pumpAndSettle();
     await signInAsTeacher(tester, app);
 
-    NavigationRail rail() =>
-        tester.widget<NavigationRail>(find.byType(NavigationRail));
+    // The sidebar is the searchable function menu (DESIGN §35): the five
+    // tabs, then "ตั้งค่าและบัญชี".
+    int rail() => [
+      for (var i = 0; i < 5; i++)
+        if (tester
+            .widget<ListTile>(find.byKey(ValueKey('menu_group_$i')))
+            .selected)
+          i,
+    ].single;
     expect(find.byType(NavigationBar), findsNothing);
-    expect(rail().destinations, hasLength(5));
+    expect(find.byType(NavigationRail), findsNothing);
     expect(
       find.descendant(
-        of: find.byType(NavigationRail),
+        of: find.byKey(const ValueKey('menu_group_4')),
         matching: find.text('ตัดเกรด'),
       ),
       findsOneWidget,
@@ -38,23 +46,23 @@ void main() {
     await tester.tap(shortcut);
     await tester.pumpAndSettle();
 
-    expect(rail().selectedIndex, 4);
+    expect(rail(), 4);
     expect(find.text('ยังไม่มีรายวิชา'), findsOneWidget);
     expect(app.lastRequest('GET', '/gradebook/overview').status, 200);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byType(NavigationRail),
-        matching: find.text('หน้าหลัก'),
-      ),
-    );
+    await tester.tap(find.byKey(const ValueKey('menu_group_0')));
     await tester.pumpAndSettle();
-    expect(rail().selectedIndex, 0);
+    expect(rail(), 0);
     // The home keeps its scroll position from the shortcut above.
     await tester.scrollUntilVisible(
       find.text('สวัสดี คุณครู ครูสมศรี'),
       -300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find
+          .descendant(
+            of: find.byType(DashboardPage),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     expect(find.text('สวัสดี คุณครู ครูสมศรี'), findsOneWidget);
 
