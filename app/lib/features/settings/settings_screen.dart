@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/live/live_status_card.dart';
 import '../../core/push/push_messaging.dart';
 import '../../core/router/app_router.dart';
 import '../google_classroom/google_classroom_card.dart';
@@ -67,6 +68,8 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  const LiveStatusCard(),
                 ],
               ),
             ),

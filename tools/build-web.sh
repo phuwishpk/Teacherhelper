@@ -9,7 +9,11 @@
 # Result: $OUT_DIR/app/ (the site) and $OUT_DIR/eduvision-web.zip. Upload the
 # zip to <deployment path>/backend/public/ and extract it there, so the files
 # end up in backend/public/app/. Nothing here is secret: the build holds the
-# API address only.
+# API address and, when the FIREBASE_WEB_* variables are set, the Firebase web
+# config (public by design, DESIGN §38.8):
+#
+#   FIREBASE_WEB_API_KEY=... FIREBASE_WEB_APP_ID=... FIREBASE_PROJECT_ID=... \
+#   FIREBASE_MESSAGING_SENDER_ID=... tools/build-web.sh
 set -euo pipefail
 
 API_BASE_URL="${1:-https://teacherhelper.phuwish.com}"
@@ -27,6 +31,21 @@ esac
 # names the API origin, because the test page is served from another port.
 CONNECT_SRC="'self' https://fonts.gstatic.com"
 case "$API_BASE_URL" in http://*) CONNECT_SRC="$CONNECT_SRC $API_BASE_URL" ;; esac
+
+# Firebase on the web (DESIGN §38.8) only when the build carries its config:
+# FlutterFire loads the Firebase JS SDK from www.gstatic.com, Auth talks to
+# identitytoolkit/securetoken, Firestore to firestore.googleapis.com, and
+# Auth may open its helper iframe on <project>.firebaseapp.com.
+SCRIPT_SRC="'self' 'wasm-unsafe-eval'"
+FRAME_SRC="'none'"
+if [ -n "${FIREBASE_WEB_API_KEY:-}" ] && [ -n "${FIREBASE_WEB_APP_ID:-}" ] && [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
+  SCRIPT_SRC="$SCRIPT_SRC https://www.gstatic.com"
+  CONNECT_SRC="$CONNECT_SRC https://www.gstatic.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com"
+  FRAME_SRC="https://$FIREBASE_PROJECT_ID.firebaseapp.com"
+  echo "note: Firebase on the web for project $FIREBASE_PROJECT_ID" >&2
+else
+  echo "note: no FIREBASE_WEB_* variables, the web build runs without Firebase" >&2
+fi
 
 mkdir -p "$OUT_DIR"
 SITE="$OUT_DIR/app"
@@ -57,7 +76,7 @@ cat > "$SITE/.htaccess" <<EOF
     Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "no-referrer"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src $CONNECT_SRC; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    Header always set Content-Security-Policy "default-src 'self'; script-src $SCRIPT_SRC; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src $CONNECT_SRC; frame-src $FRAME_SRC; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
     <FilesMatch "^(index\.html|flutter_bootstrap\.js|flutter_service_worker\.js|main\.dart\.js|version\.json|manifest\.json)$">
         Header set Cache-Control "no-cache"

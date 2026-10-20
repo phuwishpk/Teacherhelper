@@ -138,7 +138,94 @@ final class FirestoreClient
     }
 
     /**
-     * @param  array<string, mixed>|null  $body
+     * The ids of the subcollections directly under a document (the document
+     * itself need not exist: users/u12 has none, only its notices).
+     *
+     * @return list<string>
+     *
+     * @throws FirestoreUnavailable
+     */
+    public function collectionIds(string $documentPath): array
+    {
+        $ids = [];
+        $pageToken = null;
+        do {
+            $body = ['pageSize' => 100] + ($pageToken !== null ? ['pageToken' => $pageToken] : []);
+            $response = $this->request('post', $this->root().'/'.trim($documentPath, '/').':listCollectionIds', $body);
+            if (! $response->successful()) {
+                throw new FirestoreUnavailable('listCollectionIds failed: '.self::describe($response));
+            }
+            foreach ((array) $response->json('collectionIds', []) as $id) {
+                if (is_string($id)) {
+                    $ids[] = $id;
+                }
+            }
+            $next = $response->json('nextPageToken');
+            $pageToken = is_string($next) && $next !== '' ? $next : null;
+        } while ($pageToken !== null);
+
+        return $ids;
+    }
+
+    /**
+     * One page of a collection's document paths (relative to root()), with
+     * the token of the next page or null.
+     *
+     * @return array{0: list<string>, 1: string|null}
+     *
+     * @throws FirestoreUnavailable
+     */
+    public function documentPaths(string $collectionPath, int $pageSize = 300, ?string $pageToken = null): array
+    {
+        $query = ['pageSize' => $pageSize, 'mask.fieldPaths' => 'read'];
+        if ($pageToken !== null) {
+            $query['pageToken'] = $pageToken;
+        }
+        $response = $this->request('get', $this->root().'/'.trim($collectionPath, '/'), $query);
+        if ($response->status() === 404) {
+            return [[], null];
+        }
+        if (! $response->successful()) {
+            throw new FirestoreUnavailable('list failed: '.self::describe($response));
+        }
+        $prefix = $this->root().'/';
+        $paths = [];
+        foreach ((array) $response->json('documents', []) as $doc) {
+            $name = is_array($doc) ? ($doc['name'] ?? null) : null;
+            if (is_string($name) && str_starts_with($name, $prefix)) {
+                $paths[] = substr($name, strlen($prefix));
+            }
+        }
+        $next = $response->json('nextPageToken');
+
+        return [$paths, is_string($next) && $next !== '' ? $next : null];
+    }
+
+    /**
+     * Deletes every document of every subcollection under $documentPath, one
+     * level deep (the live layer keeps no deeper nesting, DESIGN §38.2), in
+     * commits of up to MAX_WRITES. Returns how many documents were deleted.
+     *
+     * @throws FirestoreUnavailable
+     */
+    public function deleteSubcollections(string $documentPath): int
+    {
+        $deleted = 0;
+        foreach ($this->collectionIds($documentPath) as $collection) {
+            $collectionPath = trim($documentPath, '/').'/'.$collection;
+            // Always read the first page again: the previous one is gone.
+            do {
+                [$paths] = $this->documentPaths($collectionPath, self::MAX_WRITES);
+                $this->commit(array_map($this->deleteWrite(...), $paths));
+                $deleted += count($paths);
+            } while (count($paths) === self::MAX_WRITES);
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $body  POST body, or the query of a GET
      *
      * @throws FirestoreUnavailable
      */
@@ -165,7 +252,7 @@ final class FirestoreClient
         $pending = Http::withToken($this->tokens->get())->acceptJson()->timeout($this->timeout);
         $url = self::BASE_URL.'/'.$resource;
 
-        return $method === 'get' ? $pending->get($url) : $pending->post($url, $body ?? []);
+        return $method === 'get' ? $pending->get($url, $body ?? []) : $pending->post($url, $body ?? []);
     }
 
     private static function describe(Response $response): string

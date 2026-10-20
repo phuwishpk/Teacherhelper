@@ -2,6 +2,8 @@
 
 namespace App\Domain\Accounts;
 
+use App\Domain\Firestore\FirestoreConfig;
+use App\Jobs\PurgeLiveUserJob;
 use App\Models\AuditLog;
 use App\Models\Classroom;
 use App\Models\User;
@@ -76,6 +78,11 @@ final class AccountDeletion
             AuditLog::record($admin, AuditLog::ACCOUNT_DELETE, $target, ['purge_at' => self::purgeAt($target)?->toIso8601String()]);
         });
         Log::info('account.delete', ['admin_id' => $admin->id, 'user_id' => $target->id, 'role' => $target->role]);
+        // The live layer's copy and Firebase session go now, not after 30
+        // days: they are notification copies, rebuilt on a restore (§38.8).
+        if (FirestoreConfig::enabled()) {
+            PurgeLiveUserJob::dispatch($target->id);
+        }
     }
 
     public function restore(User $admin, User $target): void
