@@ -5361,8 +5361,7 @@ CREATE TABLE classroom_teachers (
 
 | path | เนื้อหา | ผู้เขียน | ขั้น |
 |---|---|---|---|
-| `users/{uid}/notices/{id}` | `kind` (ชื่อเหตุการณ์ใน `NoticeTexts`), `title`, `body`, `data` (map เดียวกับ `data` ของ push: ปลายทางในแอป), `read` (bool), `created_at`, `expires_at` | `FirestoreInbox` คู่กับทุก `PushMessage` ที่ `PushNotifier` สร้าง (11 เหตุการณ์) | 2 |
-| `users/{uid}/meta/inbox` | `unread` (จำนวนยังไม่อ่าน), `updated_at` | เขียนพร้อม notice ใหม่ และเมื่อแอปเรียก `POST /me/notices/read` | 2 |
+| `users/{uid}/notices/{ulid}` | `kind` (type ของ `PushMessage`), `title`, `body`, `data` (map เดียวกับ `data` ของ push: ปลายทางในแอป), `read` (bool), `created_at`, `expires_at` | `FirestoreInbox` คู่กับทุก `PushMessage` ที่ `PushNotifier` สร้าง (11 เหตุการณ์) id เดียวกันทุกผู้รับของเหตุการณ์เดียว แอปนับยังไม่อ่านเองจาก listener จึงไม่มี document ตัวนับ | 2 |
 | `users/{teacherUid}/assignments/{id}` | `title`, `queued`, `grading`, `graded`, `awaiting_review`, `awaiting_ai_key`, `updated_at`, `expires_at` | grading job ทุกครั้งที่สถานะของ submission เปลี่ยน (รวมเป็นครั้งละ 1 เขียนต่อ assignment ผ่าน `Cache::lock` แบบ `GradingNotices`) | 3 |
 | `users/{studentUid}/submissions/{id}` | `assignment_id`, `assignment_title`, `status` (`queued`/`grading`/`awaiting_review`/`published`), `updated_at`, `expires_at` **ไม่มีคะแนน** | grading job และการเผยแพร่ผล | 3 |
 | `classrooms/{id}/feed/{postId}` และ `classrooms/{id}/members/{uid}` | หัวข้อ ชนิด ชื่อผู้เขียน เวลา มีไฟล์หรือไม่ | listener ของ `ClassPostPublished` (§30) และการเข้า/ออกห้อง | 4 |
@@ -5375,7 +5374,7 @@ uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`
 | ขั้น | เนื้อหา | สถานะ |
 |---|---|---|
 | 1 | โครงพื้นฐาน: `FirestoreClient` (commit แบบ batch, แปลงค่า, 401 ลองใหม่), `LiveStore`/`NullLiveStore`, `FirebaseCustomTokens`, `POST /auth/firebase-token`, `eduvision:firestore-check`, `firebase/firestore.rules` ใน repo, แอป: `firebase_auth` sign-in หลังเข้าสู่ระบบและ sign-out ตาม, Firebase บนเว็บผ่าน `--dart-define`, `LiveSession` seam, HOSTING §6.5 (§38.4–§38.6) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเปิด Firestore และ Authentication ใน Firebase console แล้ว Run Now `eduvision:firestore-check` |
-| 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` | ยังไม่ทำ |
+| 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` (§38.7) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องตั้ง TTL policy ที่ `expires_at` ของ collection group `notices` ใน console |
 | 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน | ยังไม่ทำ |
 | 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด (ต้องมี `members` และ rule ระดับห้อง) | ยังไม่ทำ |
 
@@ -5417,3 +5416,11 @@ service cloud.firestore {
 - `core/live/live_session.dart`: `LiveSession` (`enabled`, `signIn(fetchToken)`, `signOut()`, `firestore`) ผ่าน seam `LiveAuth` (ครอบ `FirebaseAuth`) ให้ทดสอบด้วย fake ได้ `DisabledLiveSession` เป็นค่าเริ่มต้นของ provider ทุก test จึงไม่แตะ Firebase `core/live/live_token_api.dart` เรียก `POST /auth/firebase-token`
 - `SessionNotifier`: เมื่อเข้าสู่ระบบสำเร็จหรือกู้ session ได้ → `liveSession.signIn(...)` แบบไม่รอและไม่ทำให้การเข้าสู่ระบบล้ม (503 = ปิด, อื่น ๆ = log) ข้าม sign-in เมื่อ Firebase Auth มี uid เดิมอยู่แล้ว ออกจากระบบทุกทาง (`forceSignOut`) → `liveSession.signOut()`
 - ยังไม่มีหน้าจอใหม่ในขั้นนี้ หน้าแจ้งเตือนมาในขั้น 2
+
+### 38.7 ขั้น 2: กล่องแจ้งเตือน
+
+- **backend**: `PushNotifier::push()` เป็น final: ตัดผู้รับซ้ำ เขียน `FirestoreInbox::record()` ก่อน แล้วค่อย `deliver()` (ชื่อใหม่ของเมธอดที่ `FcmNotifier`/`LogNotifier` implement) `AppServiceProvider` ผูก inbox ให้ notifier ทุกตัว (ผ่าน `NullLiveStore` = ไม่เขียน) หนึ่งเหตุการณ์ = หนึ่ง ULID ตัวพิมพ์เล็ก ใต้ทุกผู้รับ เก็บ 90 วัน (`expires_at`) ผู้รับเกิน 500 คนแบ่ง commit
+- **API**: `POST /me/notices/read {ids: [ulid, …]}` (role teacher|student, `firestore`, throttle `notices` 30/นาที, ไม่เกิน 100 id, id ต้องเป็น ULID ตัวพิมพ์เล็ก 26 ตัว) → 202 `{data: {queued}}` งานจริงอยู่ใน `MarkNoticesReadJob` (คิว default) ซึ่ง merge `read: true` ทีละ id ไม่มี endpoint "อ่านทั้งหมด" ฝั่ง server เพราะ server ไม่รู้ id โดยไม่ query แอปส่ง id ที่มันเห็นอยู่
+- **แอป** (`features/notices/`): `noticesProvider` (StreamProvider) ฟัง `users/{uid}/notices` เรียงใหม่สุดก่อน 100 รายการ เฉพาะเมื่อ `liveUidProvider` (จาก `FirebaseAuth.authStateChanges`) ตรงกับผู้ใช้ที่ล็อกอิน ไม่เช่นนั้นเป็น null = "ยังไม่พร้อม" `unreadNoticesProvider` นับจาก listener หน้า `NoticesScreen` (`/notices` ครู, `/student/notices` นักเรียน) แตะ = ทำเครื่องหมายอ่านในเครื่องทันที เรียก API และเปิดปลายทางเดียวกับ push (`routeForPush`) ปุ่ม "อ่านทั้งหมด" ส่ง id ที่ยังไม่อ่านทั้งหมด กระดิ่งใน shell ครูและนักเรียนขึ้นเฉพาะ build ที่ Firebase เปิด พร้อมป้ายจำนวนยังไม่อ่าน
+- **ยังไม่ทำ**: ลบ subtree `users/{uid}` เมื่อลบบัญชี (§31) ปล่อยให้ TTL ลบใน 90 วัน และหน้าตั้งค่ายังไม่แสดงสถานะชั้นข้อมูลสด
+

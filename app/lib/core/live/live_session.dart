@@ -13,6 +13,9 @@ String liveUidOf(int userId) => 'u$userId';
 /// Seam over FirebaseAuth so the session logic runs in tests without Firebase.
 abstract class LiveAuth {
   String? get currentUid;
+
+  /// The uid Firebase holds, now and after every sign-in or sign-out.
+  Stream<String?> get uidChanges;
   Future<void> signInWithCustomToken(String token);
   Future<void> signOut();
 }
@@ -22,6 +25,10 @@ class FirebaseLiveAuth implements LiveAuth {
 
   @override
   String? get currentUid => _auth.currentUser?.uid;
+
+  @override
+  Stream<String?> get uidChanges =>
+      _auth.authStateChanges().map((user) => user?.uid);
 
   @override
   Future<void> signInWithCustomToken(String token) =>
@@ -56,6 +63,10 @@ abstract class LiveSession {
   /// The uid Firebase currently holds, if any.
   String? get currentUid;
 
+  /// [currentUid] as it changes; the live screens listen on Firestore only
+  /// while it matches the signed-in user (notices_providers.dart).
+  Stream<String?> get uidChanges;
+
   Future<LiveSignInOutcome> signIn(int userId, FetchFirebaseToken fetchToken);
 
   Future<void> signOut();
@@ -70,6 +81,8 @@ class DisabledLiveSession implements LiveSession {
   FirebaseFirestore? get firestore => null;
   @override
   String? get currentUid => null;
+  @override
+  Stream<String?> get uidChanges => Stream.value(null);
   @override
   Future<LiveSignInOutcome> signIn(
     int userId,
@@ -96,6 +109,9 @@ class FirebaseLiveSession implements LiveSession {
 
   @override
   String? get currentUid => auth.currentUid;
+
+  @override
+  Stream<String?> get uidChanges => auth.uidChanges;
 
   @override
   Future<LiveSignInOutcome> signIn(
@@ -139,4 +155,9 @@ class FirebaseLiveSession implements LiveSession {
 /// Overridden in main.dart when Firebase started; tests keep the disabled one.
 final liveSessionProvider = Provider<LiveSession>(
   (ref) => const DisabledLiveSession(),
+);
+
+/// The Firebase uid as it changes (null = not signed in to Firebase).
+final liveUidProvider = StreamProvider<String?>(
+  (ref) => ref.watch(liveSessionProvider).uidChanges,
 );

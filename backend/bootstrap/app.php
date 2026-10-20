@@ -3,8 +3,8 @@
 use App\Exceptions\ApiErrorResponse;
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureClassroomOpen;
-use App\Http\Middleware\EnsureGoogleConfigured;
 use App\Http\Middleware\EnsureFirestoreConfigured;
+use App\Http\Middleware\EnsureGoogleConfigured;
 use App\Http\Middleware\EnsureGoogleSignInConfigured;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureStudentPasswordChanged;

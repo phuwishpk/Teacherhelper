@@ -11,7 +11,7 @@ class RecordingNotifier extends PushNotifier
     /** @var list<array{0: list<int>, 1: PushMessage}> */
     public array $sent = [];
 
-    protected function push(array $userIds, PushMessage $message): void
+    protected function deliver(array $userIds, PushMessage $message): void
     {
         $this->sent[] = [array_values($userIds), $message];
     }

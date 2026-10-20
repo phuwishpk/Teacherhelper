@@ -74,7 +74,7 @@ class GradeScanJobTest extends TestCase
                 $this->log[] = [$assignment->id, $awaitingReview, $awaitingAiKey];
             }
 
-            protected function push(array $userIds, PushMessage $message): void {}
+            protected function deliver(array $userIds, PushMessage $message): void {}
         });
     }
 
@@ -549,7 +549,7 @@ class GradeScanJobTest extends TestCase
     {
         $this->app->instance(Notifier::class, new class extends PushNotifier
         {
-            protected function push(array $userIds, PushMessage $message): void
+            protected function deliver(array $userIds, PushMessage $message): void
             {
                 throw new \RuntimeException('push service down');
             }

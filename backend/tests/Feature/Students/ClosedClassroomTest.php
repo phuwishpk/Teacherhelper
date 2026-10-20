@@ -46,6 +46,7 @@ class ClosedClassroomTest extends TestCase
         'api.auth.admin-handoff' => null,
         'api.devices.store' => null,
         'api.auth.firebase-token' => null,
+        'api.me.notices.read' => null,
         'api.me.ai-key.update' => null,
         'api.me.ai-key.destroy' => null,
         'api.me.ai-key.test' => null,

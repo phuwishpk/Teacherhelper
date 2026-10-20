@@ -453,6 +453,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.devices.store' => ['POST', 'devices', self::OK, self::OK, self::OK, self::OK],
         // The Firebase custom token of the live layer (§38.4): same rule as devices.
         'api.auth.firebase-token' => ['POST', 'auth/firebase-token', self::OK, self::OK, self::OK, self::OK],
+        'api.me.notices.read' => ['POST', 'me/notices/read', self::OK, self::OK, self::OK, self::OK],
     ];
 
     /** Admin-only routes: [method, uri]. Teachers and students get 403. */

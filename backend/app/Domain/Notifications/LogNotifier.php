@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  */
 final class LogNotifier extends PushNotifier
 {
-    protected function push(array $userIds, PushMessage $message): void
+    protected function deliver(array $userIds, PushMessage $message): void
     {
         Log::info('notify.'.$message->type, [
             'user_ids' => array_values($userIds),

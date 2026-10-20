@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Domain\Firestore\FirebaseCustomTokens;
 use App\Domain\Firestore\FirestoreClient;
 use App\Domain\Firestore\FirestoreConfig;
+use App\Domain\Firestore\FirestoreInbox;
 use App\Domain\Firestore\FirestoreLiveStore;
 use App\Domain\Firestore\LiveStore;
 use App\Domain\Firestore\NullLiveStore;
@@ -65,20 +66,23 @@ class AppServiceProvider extends ServiceProvider
         // broken key file logs an error (never its contents) and falls back to
         // the log, so grading and publishing never fail over pushes.
         $this->app->singleton(Notifier::class, function () {
+            // Every push is also written to the Firestore inbox (§38 step 2;
+            // a no-op through NullLiveStore when Firestore is off).
+            $inbox = $this->app->make(FirestoreInbox::class);
             $path = trim((string) config('services.firebase.credentials'));
             if ($path === '') {
-                return new LogNotifier;
+                return (new LogNotifier)->withInbox($inbox);
             }
             try {
                 $account = ServiceAccount::fromFile($path, config('services.firebase.project_id') ?: null);
             } catch (FirebaseCredentialsInvalid $e) {
                 Log::error('fcm.credentials_invalid', ['message' => $e->getMessage()]);
 
-                return new LogNotifier;
+                return (new LogNotifier)->withInbox($inbox);
             }
             $timeout = (int) config('services.firebase.timeout', 10);
 
-            return new FcmNotifier(new FcmClient($account, new AccessTokens($account, $timeout), $timeout));
+            return (new FcmNotifier(new FcmClient($account, new AccessTokens($account, $timeout), $timeout)))->withInbox($inbox);
         });
 
         // Firestore live layer (DESIGN §38): writes go to Firestore only when
@@ -172,6 +176,7 @@ class AppServiceProvider extends ServiceProvider
         // cost the teacher's or the school's quota), and the student write
         // endpoints. Each has its own bucket per user.
         RateLimiter::for('firebase-token', fn (Request $request) => self::perUser($request, 10));
+        RateLimiter::for('notices', fn (Request $request) => self::perUser($request, 30));
         RateLimiter::for('ai-key', fn (Request $request) => self::perUser($request, 10));
         // "ผู้ช่วย Krucheck" (§37): the daily limit is AssistantChat's; this only stops bursts.
         RateLimiter::for('assistant', fn (Request $request) => self::perUser($request, 20));

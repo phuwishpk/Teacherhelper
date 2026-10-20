@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
 use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\AttendanceController;
-use App\Http\Controllers\Api\V1\FirebaseTokenController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassPostController;
 use App\Http\Controllers\Api\V1\ClassPostFileController;
@@ -32,6 +31,7 @@ use App\Http\Controllers\Api\V1\ExamImportController;
 use App\Http\Controllers\Api\V1\ExamQuestionLibraryController;
 use App\Http\Controllers\Api\V1\ExamSectionController;
 use App\Http\Controllers\Api\V1\ExamSheetController;
+use App\Http\Controllers\Api\V1\FirebaseTokenController;
 use App\Http\Controllers\Api\V1\GoogleAccountController;
 use App\Http\Controllers\Api\V1\GoogleIdentityController;
 use App\Http\Controllers\Api\V1\GoogleImportController;
@@ -54,6 +54,7 @@ use App\Http\Controllers\Api\V1\MasteryController;
 use App\Http\Controllers\Api\V1\MasterySummaryController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ModelController;
+use App\Http\Controllers\Api\V1\NoticeController;
 use App\Http\Controllers\Api\V1\PracticeItemController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\QuestionController;
@@ -162,6 +163,10 @@ Route::prefix('v1')->group(function () {
             Route::post('auth/firebase-token', FirebaseTokenController::class)
                 ->middleware(['role:teacher,student', 'firestore', 'throttle:firebase-token'])
                 ->name('api.auth.firebase-token');
+            // The notification inbox in Firestore (§38 step 2): mark notices read.
+            Route::post('me/notices/read', [NoticeController::class, 'read'])
+                ->middleware(['role:teacher,student', 'firestore', 'throttle:notices'])
+                ->name('api.me.notices.read');
 
             // The Google account every role signs in with (§24.9.5), admins included.
             Route::middleware(['role:teacher,student,admin', 'google.signin'])->group(function () {

@@ -17,7 +17,7 @@ final class FcmNotifier extends PushNotifier
 {
     public function __construct(private readonly FcmClient $client) {}
 
-    protected function push(array $userIds, PushMessage $message): void
+    protected function deliver(array $userIds, PushMessage $message): void
     {
         $devices = DeviceToken::query()->whereIn('user_id', $userIds)->orderBy('id')->get();
         $sent = 0;

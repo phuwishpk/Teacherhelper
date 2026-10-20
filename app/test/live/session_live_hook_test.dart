@@ -57,6 +57,8 @@ class _RecordingLive implements LiveSession {
   FirebaseFirestore? get firestore => null;
   @override
   String? get currentUid => null;
+  @override
+  Stream<String?> get uidChanges => Stream.value(null);
 
   @override
   Future<LiveSignInOutcome> signIn(

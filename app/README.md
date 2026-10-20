@@ -172,6 +172,9 @@ widget test ของหน้าสแกนด้วยกล้องปล�
   `POST /auth/firebase-token` แล้ว `LiveSession.signIn` เข้าสู่ระบบ Firebase ในพื้นหลัง (ไม่รอ ไม่ทำให้ login ล้ม
   server ที่ปิด Firestore ตอบ 503 หนึ่งครั้ง) ออกจากระบบทุกทางเรียก `signOut` ด้วย test ใช้ `DisabledLiveSession`
   (ค่าเริ่มต้นของ `liveSessionProvider`) และ `fake_cloud_firestore` จึงไม่แตะ Firebase
+- **กล่องแจ้งเตือน** (`features/notices/`, DESIGN §38.7): `noticesProvider` ฟัง `users/{uid}/notices` ใน Firestore
+  กระดิ่งใน shell ครูและนักเรียนขึ้นเฉพาะ build ที่ Firebase เปิด แตะรายการ = เปิดปลายทางเดียวกับ push และ
+  `POST /me/notices/read`
 - **FCM** (`core/push/`): `firebase_core` + `firebase_messaging` ทำงานเฉพาะเมื่อมี `android/app/google-services.json`
   (Gradle apply plugin `com.google.gms.google-services` เฉพาะตอนมีไฟล์ ไฟล์นี้อยู่ใน `.gitignore` ห้าม commit)
   ถ้าไม่มี `initFirebase()` ล้มแล้วแอปปิดการแจ้งเตือนเอง ทำงานต่อได้ปกติ วิธีเปิดใช้:

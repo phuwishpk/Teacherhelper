@@ -15,6 +15,9 @@ class _FakeAuth implements LiveAuth {
   final events = <String>[];
 
   @override
+  Stream<String?> get uidChanges => Stream.value(currentUid);
+
+  @override
   Future<void> signInWithCustomToken(String token) async {
     events.add('signIn:$token');
     if (failSignIn) throw StateError('invalid custom token');
