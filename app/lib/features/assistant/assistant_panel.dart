@@ -8,6 +8,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import 'assistant.dart';
 import 'assistant_plan_card.dart';
+import 'assistant_student_data.dart';
 
 /// "ผู้ช่วย Krucheck" (DESIGN §37): the chat, or the list of the teacher's
 /// conversations. The desktop shows it as a panel on the right
@@ -42,6 +43,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     'สแกนใบงานไม่ผ่าน ทำยังไง',
     'เชื่อม Google Classroom ยังไง',
     'ช่วยออกโจทย์ปรนัยเรื่องเศษส่วน 5 ข้อ ลงการบ้าน',
+    'ห้องไหนส่งงานไม่ครบบ้าง',
   ];
 
   @override
@@ -236,6 +238,8 @@ class _Chat extends ConsumerWidget {
             return _Bubble(
               message: item.message,
               maxWidth: maxWidth,
+              labels: chat.labels,
+              onNavigate: onNavigate,
               onRetry: last && chat.canRetry
                   ? () => ref.read(assistantChatProvider.notifier).retry()
                   : null,
@@ -251,8 +255,12 @@ class _Chat extends ConsumerWidget {
         Expanded(child: list),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+          child: StudentDataChip(status: status, enabled: !busy),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: Text(
-            'อย่าพิมพ์ข้อมูลส่วนตัวของนักเรียน เช่น ชื่อ เลขประจำตัว หรือคะแนนรายคน',
+            'ชื่อนักเรียนที่พิมพ์จะถูกแทนด้วยรหัสก่อนส่งให้ AI อย่าพิมพ์เลขประจำตัวหรือข้อมูลติดต่อ',
             style: muted,
           ),
         ),
@@ -301,10 +309,20 @@ class _Chat extends ConsumerWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.maxWidth, this.onRetry});
+  const _Bubble({
+    required this.message,
+    required this.maxWidth,
+    this.labels = const {},
+    this.onNavigate,
+    this.onRetry,
+  });
 
   final AssistantMessage message;
   final double maxWidth;
+
+  /// Students by label: the answer shows names, and links under it.
+  final Map<String, StudentLabel> labels;
+  final ValueChanged<String>? onNavigate;
   final VoidCallback? onRetry;
 
   @override
@@ -350,9 +368,36 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 SelectableText(
-                  message.content,
+                  message.isUser
+                      ? message.content
+                      : withNames(message.content, labels),
                   style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
                 ),
+                if (!message.isUser && onNavigate != null)
+                  if (mentioned(message.content, labels) case final students
+                      when students.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final s in students)
+                            if (s.classroomId != null)
+                              ActionChip(
+                                key: ValueKey('assistant_student_${s.label}'),
+                                avatar: const Icon(Icons.person_outline),
+                                label: Text(s.name ?? s.label),
+                                onPressed: () => onNavigate!(
+                                  AppRoutes.studentMastery(
+                                    s.classroomId!,
+                                    s.studentId,
+                                  ),
+                                ),
+                              ),
+                        ],
+                      ),
+                    ),
                 if (code != null) ErrorCodeLine(code),
                 if (onRetry != null)
                   Align(
