@@ -10,6 +10,7 @@ import '../../core/widgets/adaptive_shell.dart';
 import '../../core/widgets/function_menu.dart';
 import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
+import '../assistant/assistant_panel.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
 import '../gradebook/grades_home_page.dart';
@@ -56,6 +57,9 @@ const teacherGradesIndex = 4;
 class _TeacherShellState extends ConsumerState<TeacherShell> {
   int _index = 0;
 
+  /// Opens the desktop's assistant panel (the shell's end drawer).
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   /// "ตัดเกรด" loads only once opened, like the student's "เกรด".
   bool _gradesOpened = false;
 
@@ -96,6 +100,12 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
 
     void openScan() => context.push(AppRoutes.scan);
 
+    // "ผู้ช่วย Krucheck" (DESIGN §37): a panel on the right of a desktop,
+    // its own page on a phone or a tablet.
+    void openAssistant() => expanded
+        ? _scaffoldKey.currentState?.openEndDrawer()
+        : context.push(AppRoutes.assistant);
+
     // The tabs are bodies only and the shell's Scaffold owns their FAB, so
     // the root ScaffoldMessenger has exactly one Scaffold here to show a
     // SnackBar on (the FAB moves up for it instead of being covered).
@@ -129,6 +139,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
         openTab: _select,
         push: (route) => context.push(route),
         signOut: () => confirmSignOut(context, ref),
+        openAssistant: openAssistant,
         tabs: [
           for (final (i, d) in _destinations.indexed)
             (
@@ -160,7 +171,28 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     );
 
     return AdaptiveShell(
+      scaffoldKey: _scaffoldKey,
       title: 'Krucheck',
+      assistant: ShellAction(
+        key: const ValueKey('assistant_button'),
+        tooltip: 'ผู้ช่วย Krucheck',
+        icon: Icons.smart_toy_outlined,
+        onPressed: openAssistant,
+      ),
+      endDrawer: expanded
+          ? Drawer(
+              width: AssistantPanel.width,
+              child: SafeArea(
+                child: AssistantPanel(
+                  onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
+                  onOpenSettings: () {
+                    _scaffoldKey.currentState?.closeEndDrawer();
+                    context.push(AppRoutes.settings);
+                  },
+                ),
+              ),
+            )
+          : null,
       menu: ({required inDrawer}) =>
           FunctionMenu(groups: menu, selectedGroup: _index, inDrawer: inDrawer),
       accountName: user?.name,

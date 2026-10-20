@@ -84,6 +84,7 @@ import '../../features/scan/scan_screen.dart';
 import '../../features/help/help_content.dart';
 import '../../features/help/help_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/assistant/assistant_panel.dart';
 import '../../features/my_indicators/my_indicators_screen.dart';
 import '../../features/my_indicators/skill_trash_screen.dart';
 import '../../features/student/student_account_screen.dart';
@@ -319,6 +320,9 @@ abstract final class AppRoutes {
 
   /// Teacher settings: Gemini API key (DESIGN §10.1), later Google (§18.7).
   static const settings = '/settings';
+
+  /// "ผู้ช่วย Krucheck" as a page, on a phone or a tablet (DESIGN §37).
+  static const assistant = '/assistant';
 
   /// "ตัวชี้วัดของฉัน": the indicators the pickers show first (DESIGN §34).
   static const myIndicators = '/settings/indicators';
@@ -871,6 +875,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.timetable,
         builder: (context, state) => const TimetableScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.assistant,
+        builder: (context, state) => const AssistantScreen(),
       ),
       GoRoute(
         path: AppRoutes.courseRequests,

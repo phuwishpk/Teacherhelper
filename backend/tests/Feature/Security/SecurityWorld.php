@@ -8,6 +8,7 @@ use App\Domain\Worksheets\QrSigner;
 use App\Models\Appeal;
 use App\Models\Assignment;
 use App\Models\AssignmentGoogleLink;
+use App\Models\AssistantConversation;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceSession;
 use App\Models\ClassPost;
@@ -106,6 +107,8 @@ trait SecurityWorld
 
     /** An indicator teacher A added for school A (DESIGN §20.2, "ครูเพิ่มเอง"). */
     protected Skill $teacherSkillA;
+
+    protected AssistantConversation $assistantConversationA;
 
     /** A subject group teacher A added for themselves (DESIGN §29.4). */
     protected Subject $ownSubjectA;
@@ -225,6 +228,10 @@ trait SecurityWorld
             'code' => 'ค 1.1 ป.4/1/ค1', 'name' => 'ครู ก เพิ่มเอง', 'level' => Skill::LEVEL_SUB_INDICATOR,
             'source' => Skill::SOURCE_TEACHER, 'created_by' => $this->teacherA->id,
         ]);
+        // "ผู้ช่วย Krucheck" (§37): teacher A's conversation ends with a failed answer (retry has something to do).
+        $this->assistantConversationA = AssistantConversation::create(['user_id' => $this->teacherA->id, 'title' => 'ตั้งเกณฑ์เกรด']);
+        $this->assistantConversationA->messages()->create(['role' => 'user', 'content' => 'ตั้งเกณฑ์เกรดยังไง']);
+        $this->assistantConversationA->messages()->create(['role' => 'error', 'content' => 'x', 'error_code' => 'AI-SERVER']);
 
         $this->assignmentA = Assignment::factory()->for_classroom($this->classroomA)->create([
             'subject_id' => $this->subject->id,

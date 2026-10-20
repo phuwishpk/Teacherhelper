@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\AnswerKeyController;
 use App\Http\Controllers\Api\V1\AppealController;
 use App\Http\Controllers\Api\V1\AssignmentController;
 use App\Http\Controllers\Api\V1\AssignmentGoogleController;
+use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\ChartController;
 use App\Http\Controllers\Api\V1\ClassPostController;
@@ -177,6 +178,14 @@ Route::prefix('v1')->group(function () {
                 Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:ai-key')->name('api.me.ai-key.update');
                 Route::delete('me/ai-key', [AiKeyController::class, 'destroy'])->name('api.me.ai-key.destroy');
                 Route::post('me/ai-key/test', [AiKeyController::class, 'test'])->middleware('throttle:ai-key')->name('api.me.ai-key.test');
+
+                // "ผู้ช่วย Krucheck" (§37): the teacher's own conversations.
+                Route::get('assistant/status', [AssistantController::class, 'status'])->name('api.assistant.status');
+                Route::get('assistant/conversations', [AssistantController::class, 'index'])->name('api.assistant.conversations.index');
+                Route::get('assistant/conversations/{id}', [AssistantController::class, 'show'])->name('api.assistant.conversations.show');
+                Route::delete('assistant/conversations/{id}', [AssistantController::class, 'destroy'])->name('api.assistant.conversations.destroy');
+                Route::post('assistant/messages', [AssistantController::class, 'send'])->middleware('throttle:assistant')->name('api.assistant.messages.store');
+                Route::post('assistant/conversations/{id}/retry', [AssistantController::class, 'retry'])->middleware('throttle:assistant')->name('api.assistant.conversations.retry');
 
                 // The home screen's "รอดำเนินการ" card (§19.9).
                 Route::get('teacher/attention', TeacherAttentionController::class)->name('api.teacher.attention');

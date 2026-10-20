@@ -191,4 +191,10 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->role === self::ROLE_ADMIN && $this->isActive();
     }
+
+    /** Conversations with "ผู้ช่วย Krucheck" (DESIGN §37). @return HasMany<AssistantConversation, $this> */
+    public function assistantConversations(): HasMany
+    {
+        return $this->hasMany(AssistantConversation::class);
+    }
 }

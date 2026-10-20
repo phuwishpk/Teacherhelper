@@ -148,6 +148,8 @@ class AppServiceProvider extends ServiceProvider
         // cost the teacher's or the school's quota), and the student write
         // endpoints. Each has its own bucket per user.
         RateLimiter::for('ai-key', fn (Request $request) => self::perUser($request, 10));
+        // "ผู้ช่วย Krucheck" (§37): the daily limit is AssistantChat's; this only stops bursts.
+        RateLimiter::for('assistant', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('explanation', fn (Request $request) => self::perUser($request, 20));
         RateLimiter::for('practice-generate', fn (Request $request) => self::perUser($request, 10));
         // Answer keys read or drafted from documents (§19.5) and the uploads they read.

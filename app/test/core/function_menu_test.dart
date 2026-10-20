@@ -15,6 +15,7 @@ void main() {
       openTab: (i) => calls.add('tab $i'),
       push: (route) => calls.add('push $route'),
       signOut: () => calls.add('sign out'),
+      openAssistant: () => calls.add('assistant'),
       tabs: [
         for (final label in [
           'หน้าหลัก',

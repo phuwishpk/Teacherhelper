@@ -11,6 +11,7 @@ class TeacherMenuActions {
     required this.openTab,
     required this.push,
     required this.signOut,
+    required this.openAssistant,
     required this.tabs,
   });
 
@@ -18,6 +19,9 @@ class TeacherMenuActions {
   final void Function(int index) openTab;
   final void Function(String route) push;
   final VoidCallback signOut;
+
+  /// Opens "ผู้ช่วย Krucheck" (DESIGN §37): the panel or its page.
+  final VoidCallback openAssistant;
 
   /// The shell's five tabs: label, icons and badge.
   final List<({String label, IconData icon, IconData selectedIcon, int badge})>
@@ -518,6 +522,14 @@ List<MenuGroup> teacherMenu(
           Icons.help_outline,
           AppRoutes.help,
           keywords: ['help', 'วิธีใช้', 'คู่มือ'],
+        ),
+        MenuFunction(
+          id: 'assistant',
+          title: 'ผู้ช่วย Krucheck',
+          icon: Icons.smart_toy_outlined,
+          where: 'ถามวิธีใช้ระบบ การให้คะแนน และการตัดเกรด',
+          keywords: const ['ai', 'chat', 'แชท', 'ถาม', 'ช่วย', 'หุ่นยนต์'],
+          run: a.openAssistant,
         ),
         MenuFunction(
           id: 'sign_out',

@@ -69,6 +69,9 @@ class AdaptiveShell extends StatelessWidget {
     this.floatingActionButton,
     this.headerActions,
     this.menu,
+    this.assistant,
+    this.endDrawer,
+    this.scaffoldKey,
   });
 
   /// The app bar title on a phone and a tablet.
@@ -100,6 +103,16 @@ class AdaptiveShell extends StatelessWidget {
   /// tablet opens it as a drawer from the app bar.
   final Widget Function({required bool inDrawer})? menu;
 
+  /// "ผู้ช่วย Krucheck" (DESIGN §37): a button near the bottom of the
+  /// desktop sidebar, a small floating button at the bottom left of the
+  /// page on a phone and a tablet.
+  final ShellAction? assistant;
+
+  /// The desktop's panel on the right (the assistant), opened through
+  /// [scaffoldKey].
+  final Widget? endDrawer;
+  final GlobalKey<ScaffoldState>? scaffoldKey;
+
   static const sidebarWidth = 248.0;
 
   Widget? _drawer() => switch (menu) {
@@ -125,6 +138,27 @@ class AdaptiveShell extends StatelessWidget {
         : Icon(data);
   }
 
+  /// The page with the assistant's button over its bottom left corner.
+  Widget _withAssistant(Widget page) => switch (assistant) {
+    final a? => Stack(
+      children: [
+        Positioned.fill(child: page),
+        Positioned(
+          left: 16,
+          bottom: 16,
+          child: FloatingActionButton.small(
+            key: a.key,
+            heroTag: 'shell_assistant',
+            tooltip: a.tooltip,
+            onPressed: a.onPressed,
+            child: Icon(a.icon),
+          ),
+        ),
+      ],
+    ),
+    null => page,
+  };
+
   Widget _actionButton(ShellAction action) => IconButton(
     key: action.key,
     tooltip: action.tooltip,
@@ -144,12 +178,13 @@ class AdaptiveShell extends StatelessWidget {
 
     if (size == WindowSize.compact) {
       return Scaffold(
+        key: scaffoldKey,
         appBar: AppBar(
           title: Text(title),
           actions: [for (final a in actions) _actionButton(a)],
         ),
         drawer: _drawer(),
-        body: body,
+        body: _withAssistant(body),
         bottomNavigationBar: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: scheme.outlineVariant)),
@@ -174,6 +209,7 @@ class AdaptiveShell extends StatelessWidget {
     final primary = primaryAction;
     if (size == WindowSize.medium) {
       return Scaffold(
+        key: scaffoldKey,
         appBar: AppBar(
           title: Text(title),
           actions: [for (final a in actions) _actionButton(a)],
@@ -207,7 +243,7 @@ class AdaptiveShell extends StatelessWidget {
               ],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: body),
+            Expanded(child: _withAssistant(body)),
           ],
         ),
         floatingActionButton: floatingActionButton,
@@ -215,6 +251,8 @@ class AdaptiveShell extends StatelessWidget {
     }
 
     return Scaffold(
+      key: scaffoldKey,
+      endDrawer: endDrawer,
       body: SafeArea(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -259,6 +297,16 @@ class AdaptiveShell extends StatelessWidget {
                                 label: Text(d.label),
                               ),
                           ],
+                        ),
+                      ),
+                    if (assistant case final a?)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: FilledButton.tonalIcon(
+                          key: a.key,
+                          onPressed: a.onPressed,
+                          icon: Icon(a.icon, size: 20),
+                          label: Text(a.tooltip),
                         ),
                       ),
                     const Divider(),

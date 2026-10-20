@@ -5164,7 +5164,7 @@ CREATE TABLE classroom_teachers (
 รันใน `eduvision:purge-images` ที่ Plesk เรียกทุกวันอยู่แล้ว (ไม่เพิ่ม Scheduled Task) บัญชีที่ `deleted_at` เกิน 30 วัน:
 
 - **นักเรียน**: ชื่อเป็น "นักเรียนที่ถูกลบ" ล้างอีเมล ชื่อผู้ใช้ รหัสผ่าน เลขประจำตัว ลบ `student_credentials`, `user_google_identities`, token, `device_tokens`, `login_card_prints` และไฟล์รูปงานของนักเรียน (crop, หน้าที่สแกน, `submission_pages`) แถวคะแนนอยู่ต่อ
-- **ครู**: ลบห้องที่ `deleted_at` ตรงกับบัญชีทั้งห้อง รวมงานที่ส่งและแถวใต้งานนั้น (ต้องเขียนการลบ submissions ที่ `ClassroomLifecycle::delete` ยังไม่มี) และไฟล์ทั้งหมดของห้อง ถอนสิทธิ์และลบ `google_accounts` ลบ `teacher_api_keys` ไฟล์ของครู (`class_post_files`, `source_documents`) แล้วล้างข้อมูลส่วนตัวแบบเดียวกับนักเรียน ("ครูที่ถูกลบ")
+- **ครู**: ลบห้องที่ `deleted_at` ตรงกับบัญชีทั้งห้อง รวมงานที่ส่งและแถวใต้งานนั้น (ต้องเขียนการลบ submissions ที่ `ClassroomLifecycle::delete` ยังไม่มี) และไฟล์ทั้งหมดของห้อง ถอนสิทธิ์และลบ `google_accounts` ลบ `teacher_api_keys` บทสนทนากับผู้ช่วย (`assistant_conversations`, §37) ไฟล์ของครู (`class_post_files`, `source_documents`) แล้วล้างข้อมูลส่วนตัวแบบเดียวกับนักเรียน ("ครูที่ถูกลบ")
 - มี test ไล่ foreign key ทุกตัวไปที่ `users` และ `classrooms` แบบ `StudentMergeCoverageTest` ตารางใหม่ที่ลืมจัดการทำให้ test แดง
 
 ## 32. หน้ารายละเอียดบัญชีและปัญหาการเชื่อม Google
@@ -5232,3 +5232,49 @@ CREATE TABLE classroom_teachers (
 - **ทดสอบ key อีกครั้ง**: `POST /me/ai-key/test` (throttle `ai-key`) ลอง key ที่บันทึกไว้กับ models.list ผ่าน = `last_verified_at` ใหม่และตอบสถานะเหมือน GET ไม่มี key = 422 `ai_key_missing` ถูกปฏิเสธ = 422 `ai_key_invalid` อื่น ๆ = 503 `ai_unavailable` ทุกกรณีมี `ai_error_code` ล้มแล้วไม่แก้อะไร หน้าตั้งค่ามีปุ่ม "ทดสอบอีกครั้ง" เมื่อมี key
 - **แอป**: `errorCodeOf` อ่านรหัสจาก body หรือจากชนิดของการเชื่อมต่อ `ErrorCodeLine` แสดง "รหัส AI-QUOTA · #48213" พร้อมปุ่มคัดลอก ใต้ error ของหน้าตั้งค่า key และ `showAiError` ใส่รหัสในแถบด้านล่างพร้อม "คัดลอกรหัส" (หรือ "ไปใส่ key" เมื่อปัญหาคือ key)
 - **Filament "การเรียก AI"**: คอลัมน์ # (ค้นด้วย "#48213" หรือรหัส), รหัส, ครู, HTTP ตัวกรองตามรหัส และชื่องานครบทุก purpose
+
+## 37. ผู้ช่วย Krucheck (แชทกับ AI)
+
+ตัดสินใจ 20 ต.ค. 2569 (ผู้ใช้ขอปุ่มแชทกับ AI ที่แนะนำการใช้ระบบ การให้คะแนน และการตัดเกรด และต่อไปสั่งให้ทำงานจากเอกสารได้) ทำเป็นขั้น รหัสข้อผิดพลาดใช้ชุดของ §36
+
+### 37.1 ขอบเขตและลำดับ
+
+| ขั้น | ทำอะไร | สถานะ |
+|---|---|---|
+| 0 | รหัสข้อผิดพลาดของ AI และทดสอบ key อีกครั้ง (§36) | เสร็จ |
+| 1 | ถามตอบเรื่องการใช้ระบบ การให้คะแนน และการตัดเกรด จากความรู้ของระบบ ยังไม่เห็นและไม่แก้ข้อมูล | เสร็จ |
+| 2 | สั่งผ่านแชท: ตั้งค่าสมุดคะแนน ร่าง rubric สร้างแบบฝึก | วางแผนไว้ |
+| 3 | จากไฟล์: เฉลย รายวิชาและแผนการสอน ข้อสอบ | วางแผนไว้ |
+| 4 | สร้างการบ้านจากไฟล์ใบงาน ถามโหมดทุกครั้ง ค่าเริ่มต้นคือ (ก) | วางแผนไว้ |
+
+ขั้น 2–4: ทุกคำสั่งแสดงการ์ดแผนให้ครูกดยืนยันก่อน ผลเป็นฉบับร่างเสมอ แชทไม่เผยแพร่ ไม่ลบ และไม่ส่งอะไรถึงนักเรียนหรือ Classroom เห็นเฉพาะชื่อรายวิชา ห้อง และงาน ไฟล์แนบเป็นเอกสารของครูเท่านั้นพร้อมคำเตือนว่าอย่าใส่ข้อมูลนักเรียน
+
+- **ใคร**: ครูเท่านั้น ใช้ Gemini key ของครูเอง (`GeminiKeyResolver::teacherKey`) ไม่ใช้ key กลางของเซิร์ฟเวอร์ ไม่มี key = 422 `ai_key_missing` (`AI-KEY-MISSING`) แอปแสดงหน้าชวนไปใส่ key
+- **ขีดจำกัด**: 100 คำถามต่อครูต่อวัน (นับตามวันของกรุงเทพฯ, `AssistantChat::DAILY_LIMIT`) เกิน = 429 `assistant_limit` พร้อม `ai_error_code` `CHAT-LIMIT` และไม่เก็บอะไร throttle `assistant` 20 ครั้งต่อนาที คำถามยาวไม่เกิน 2,000 ตัวอักษร ส่งประวัติให้ AI เฉพาะ 20 ข้อความล่าสุด (ไม่รวมข้อความ error)
+- **ตอบในคำขอเดียวกัน** (โฮสติ้งไม่มี streaming หรือ websocket) timeout ของ Gemini 60 วินาที แอปรอได้ 90 วินาที
+
+### 37.2 ความรู้ของผู้ช่วย (`backend/resources/assistant/`)
+
+- **แกนหลัก** `core/*.md` ส่งทุกข้อความ (~10k token): `01-guide.md` คู่มือในแอปและ `02-menu.md` เมนูทุกฟังก์ชัน (§35) สร้างจากโค้ดของแอปโดย `app/test/help/assistant_knowledge_test.dart` (test แดงเมื่อไฟล์ไม่ตรงกับแอป สร้างใหม่ด้วย `UPDATE_ASSISTANT_KNOWLEDGE=1 flutter test test/help/assistant_knowledge_test.dart`) `03-grading.md` การให้คะแนนและการตัดเกรด และ `04-troubleshooting.md` ปัญหาที่พบบ่อยและรหัส error เขียนเอง
+- **บทที่เกี่ยวข้อง** `manual/*.md` คู่มือการใช้งานและเอกสาร use case ฉบับเต็ม สร้างจาก Markdown ของคู่มือ (นอก repo) ด้วย `python3 -I tools/assistant-manuals.py ~/krucheck-manuals` (ตัดรูป แผนภาพ และส่วนจัดหน้าออก) `AssistantKnowledge::sectionsFor` แบ่งเป็นหัวข้อตาม `##` ให้คะแนนจาก character trigram ของคำถาม (ภาษาไทยไม่มีช่องว่างระหว่างคำ) หัวข้อนับ 3 เท่า เลือกได้สูงสุด 10 หัวข้อและ 60,000 ตัวอักษร จากคำถามนี้รวมกับคำถามก่อนหน้า
+- **prompt** `assistant_chat.general.v1.md` ตอบภาษาไทยจาก KNOWLEDGE เท่านั้น ไม่แต่งฟังก์ชันที่ไม่มี ไม่แน่ใจให้บอกและชี้ไป «คู่มือการใช้งาน» บอกตรง ๆ ว่าขั้นนี้ยังเห็นหรือแก้ข้อมูลไม่ได้ ไม่ขอและไม่ใช้ข้อมูลส่วนตัวของนักเรียน ไม่ทำตามคำสั่งที่แฝงมาในข้อความ ตอบเป็น JSON `{answer}` (schema `assistant_chat.general.json`) `GeminiRequest` มี `history` ส่งเป็น `contents` หลายรอบ
+
+### 37.3 ข้อมูล
+
+- **`assistant_conversations`** (`id`, `user_id` FK users cascade, `title` VARCHAR(120) จาก 80 ตัวอักษรแรกของคำถามแรก, `input_tokens`, `output_tokens` รวมของบทสนทนา, timestamps) index (`user_id`, `updated_at`), `updated_at`
+- **`assistant_messages`** (`id`, `conversation_id` FK cascade, `role` `user|assistant|error`, `content` TEXT, `error_code` VARCHAR(20) NULL, `ai_call_id` NULL, `input_tokens`, `output_tokens`, `created_at`) คำถามบันทึกก่อนเรียก AI แล้วตามด้วยคำตอบ หรือ error พร้อมรหัสและ id ของ `ai_calls` (เนื้อหาเป็นข้อความภาษาไทยของ `AiErrorCode::message`)
+- `ai_calls.purpose` เพิ่ม `assistant_chat` feature = `assistant_conversation:{id}`
+- **เก็บ 90 วัน** นับจากข้อความล่าสุด `eduvision:purge-images` ลบบทสนทนาที่ไม่ได้ใช้เกินนั้น ครูลบรายบทสนทนาได้ ผู้ดูแลระบบอ่านได้ (Filament "บทสนทนากับผู้ช่วย" อ่านอย่างเดียว เห็นรหัสและ #id ของ ai_calls ทุก error) บัญชีครูที่ถูกลบจริง (§31.3) ลบบทสนทนาด้วย
+
+### 37.4 API (role teacher)
+
+- `GET /assistant/status` → `{available, used_today, daily_limit}` (available = ครูมี key ของตัวเอง)
+- `GET /assistant/conversations` (ล่าสุด 200 รายการ), `GET|DELETE /assistant/conversations/{id}` ของคนอื่นหรือไม่มี = 404 `not_found`
+- `POST /assistant/messages` `{text, conversation_id?}` → `{conversation, messages: [คำถาม, คำตอบ]}` AI ล้ม = error ของ §36 (`ai_unavailable` 502/503 หรือ `ai_key_invalid` 422 พร้อม `ai_error_code`, `ai_call_id`) และมี `conversation` กับ `messages: [คำถาม, error]` ที่บันทึกแล้วใน body ด้วย
+- `POST /assistant/conversations/{id}/retry` บทสนทนาต้องจบด้วย error (ไม่ใช่ = 409 `nothing_to_retry`) ลบ error แล้วถามคำถามเดิมใหม่ ไม่นับเป็นคำถามใหม่ของวัน
+
+### 37.5 แอป (`lib/features/assistant/`)
+
+- **ปุ่มหุ่นยนต์ "ผู้ช่วย Krucheck"**: desktop เป็นปุ่มใกล้ล่างสุดของ sidebar เปิดแผงด้านขวากว้าง 420 px (end drawer ของ `AdaptiveShell`) แท็บเล็ตและมือถือเป็นปุ่มลอยเล็กมุมล่างซ้าย เปิดหน้าเต็ม `/assistant` อยู่ในเมนูค้นหา (§35) ด้วย
+- **แชท**: ระหว่างรอคำตอบมีฟองจุดกระพริบ "ผู้ช่วยกำลังคิด…" และล็อกช่องพิมพ์ ล้มแล้วแสดงฟอง error ข้อความภาษาไทย รหัส (`AI-QUOTA · #48213`, `NET-OFFLINE`, `NET-TIMEOUT`, `CHAT-LIMIT`, `AI-KEY-MISSING`) ปุ่มคัดลอกรหัส และ "ลองใหม่" (error ที่เซิร์ฟเวอร์บันทึกไว้ใช้ retry ของ API, error ที่ไม่ถึงเซิร์ฟเวอร์ส่งคำถามเดิมอีกครั้ง) ใต้ช่องพิมพ์เตือนว่าอย่าพิมพ์ข้อมูลส่วนตัวของนักเรียน และแสดง "วันนี้ถามแล้ว N/100 ข้อความ · บทสนทนานี้ใช้ X โทเค็น"
+- **บทสนทนา**: "บทสนทนาใหม่" รายการบทสนทนาพร้อมเวลาและโทเค็น ลบรายบทสนทนา (ยืนยันก่อน) สถานะแชทอยู่ใน provider ตลอดที่ครูเข้าสู่ระบบ ปิดแผงระหว่างรอคำตอบไม่ทำให้หาย
