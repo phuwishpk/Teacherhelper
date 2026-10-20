@@ -86,7 +86,8 @@ class AssistantController extends Controller
     /**
      * POST /assistant/messages/{id}/apply {selected: [index], target?:
      * {assignment_id} | {new: {classroom_id, course_id?, title, kind}}}
-     * -> {data: {message}} (DESIGN §37.6).
+     * -> {data: {message}} (DESIGN §37.6, §37.7). selected indexes the
+     * questions or the indicator items; a rubric card needs none.
      */
     public function apply(Request $request, int $id, AssistantPlanApplier $applier): JsonResponse
     {
@@ -98,9 +99,11 @@ class AssistantController extends Controller
         if ($message === null) {
             throw new ApiException('ไม่พบการ์ดนี้', 'not_found', 404);
         }
-        $count = count($message->plan['questions'] ?? []);
+        // A rubric card has nothing to tick; a question or indicator card does.
+        $rubric = ($message->plan['kind'] ?? null) === AssistantPlans::CARD_RUBRIC;
+        $count = count($message->plan['questions'] ?? $message->plan['items'] ?? []);
         $data = $request->validate([
-            'selected' => ['required', 'array', 'min:1', 'max:'.AssistantPlans::MAX_QUESTIONS],
+            'selected' => [$rubric ? 'sometimes' : 'required', 'array', $rubric ? 'min:0' : 'min:1', 'max:'.AssistantPlans::MAX_QUESTIONS],
             'selected.*' => ['integer', 'distinct', 'min:0', 'max:'.max(0, $count - 1)],
             'target' => ['sometimes', 'nullable', 'array'],
             'target.assignment_id' => ['sometimes', 'integer'],
@@ -114,7 +117,7 @@ class AssistantController extends Controller
             'selected.min' => 'เลือกข้อที่จะสร้างอย่างน้อย 1 ข้อ',
             'target.new.title.required_with' => 'ตั้งชื่องานใหม่ก่อน',
         ]);
-        $selected = array_values(array_map('intval', $data['selected']));
+        $selected = array_values(array_map('intval', $data['selected'] ?? []));
         sort($selected);
         $message = $applier->apply($request->user(), $message, $selected, $data['target'] ?? null);
 

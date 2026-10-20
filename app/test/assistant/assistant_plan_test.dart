@@ -408,4 +408,183 @@ void main() {
     expect(find.text('B. 3/4'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  AssistantMessage message(int id, Map<String, dynamic> plan, String status) =>
+      AssistantMessage.fromJson({
+        'id': id,
+        'role': 'assistant',
+        'content': 'เสนอในการ์ด',
+        'plan': plan,
+        'plan_status': status,
+      });
+
+  Map<String, dynamic> rubricPlan({
+    String? problem,
+    Map<String, dynamic>? result,
+  }) => {
+    'kind': 'rubric',
+    'target': {
+      'assignment_id': 88,
+      'title': 'การบ้านเรียงความ',
+      'kind': 'worksheet',
+    },
+    'question': {
+      'id': 5,
+      'position': 1,
+      'type': 'open',
+      'prompt': 'เขียนเรียงความเรื่องครอบครัว',
+      'max_points': 3,
+      'rubric_status': 'approved',
+    },
+    'criteria': [
+      {'description': 'เนื้อหาตรงเรื่อง', 'points': 2, 'is_core': true},
+      {'description': 'ใช้ภาษาถูกต้อง', 'points': 1, 'is_core': false},
+    ],
+    'reference_steps': const [],
+    'problem': ?problem,
+    'result': ?result,
+  };
+
+  testWidgets('a rubric card saves a draft and links to the rubric screen', (
+    tester,
+  ) async {
+    repo.replies.add(
+      _reply([_question1, message(2, rubricPlan(), 'proposed')]),
+    );
+    repo.applyResults.add(
+      message(
+        2,
+        rubricPlan(
+          result: {
+            'assignment_id': 88,
+            'title': 'การบ้านเรียงความ',
+            'question_id': 5,
+            'position': 1,
+          },
+        ),
+        'applied',
+      ),
+    );
+    await pump(tester);
+    await ask(tester, 'ทำ rubric ข้อ 1');
+
+    expect(find.text('ร่าง rubric ข้อ 1'), findsOneWidget);
+    expect(find.text('เกณฑ์หลัก'), findsOneWidget);
+    expect(find.text('2 คะแนน'), findsOneWidget);
+    expect(find.textContaining('ร่างนี้จะแทนที่'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_apply_2')));
+    await tester.pumpAndSettle();
+    expect(applied().$2, isEmpty);
+    expect(find.text('บันทึก rubric ร่างของข้อ 1 แล้ว'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_open')));
+    expect(routes, ['/assignments/88/questions/5/rubric']);
+  });
+
+  testWidgets('a rubric card with a problem cannot be saved', (tester) async {
+    repo.replies.add(
+      _reply([
+        _question1,
+        message(
+          2,
+          rubricPlan(problem: 'เกณฑ์ต้องมีเกณฑ์หลัก 1 ข้อ'),
+          'proposed',
+        ),
+      ]),
+    );
+    await pump(tester);
+    await ask(tester, 'ทำ rubric ข้อ 1');
+    expect(find.text('เกณฑ์ต้องมีเกณฑ์หลัก 1 ข้อ'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('assistant_plan_apply_2')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('an indicator card ticks what can be done', (tester) async {
+    Map<String, dynamic> plan({Map<String, dynamic>? result}) => {
+      'kind': 'indicators',
+      'target': {'assignment_id': 9, 'title': 'สอบเศษส่วน', 'kind': 'exam'},
+      'items': [
+        {
+          'action': 'new',
+          'code': '',
+          'name': 'อ่านจับใจความสำคัญได้',
+          'parent': {'id': 1, 'code': 'ท 1.1', 'name': 'มาตรฐานการอ่าน'},
+          'reason': 'ตรงกับเรื่องที่สอน',
+          'question_positions': const [],
+          'flags': const [],
+        },
+        {
+          'action': 'existing',
+          'code': 'ค 1.1 ป.5/1',
+          'skill_id': 7,
+          'name': 'บวกเศษส่วน',
+          'reason': '',
+          'question_positions': [1, 2],
+          'flags': const [],
+        },
+        {
+          'action': 'existing',
+          'code': 'NOPE-9',
+          'name': '',
+          'reason': '',
+          'question_positions': const [],
+          'flags': ['not_found'],
+        },
+      ],
+      'result': ?result,
+    };
+    repo.replies.add(_reply([_question1, message(2, plan(), 'proposed')]));
+    repo.applyResults.add(
+      message(
+        2,
+        plan(
+          result: {
+            'created': 1,
+            'added_mine': 1,
+            'mapped': 2,
+            'skipped': const [],
+            'assignment_id': 9,
+          },
+        ),
+        'applied',
+      ),
+    );
+    await pump(tester);
+    await ask(tester, 'แนะนำตัวชี้วัด');
+
+    expect(find.text('ตัวชี้วัดที่เสนอ 3 รายการ'), findsOneWidget);
+    expect(
+      find.text('ตัวชี้วัดที่เพิ่มเองจะแชร์ให้ครูทุกคนในโรงเรียน'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('ใหม่: (ระบบตั้งรหัสให้) อ่านจับใจความสำคัญได้'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('เสนอให้ข้อ 1, 2'), findsOneWidget);
+    expect(find.text('ไม่พบรหัสนี้ในหลักสูตร'), findsOneWidget);
+    expect(
+      [ticked(tester, 0), ticked(tester, 1), ticked(tester, 2)],
+      [true, true, false],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_apply_2')));
+    await tester.pumpAndSettle();
+    expect(applied().$2, [0, 1]);
+    expect(
+      find.text(
+        'เพิ่มตัวชี้วัดใหม่ 1 ตัว · เพิ่มลงตัวชี้วัดของฉัน 1 ตัว · เสนอให้ข้อ 2 รายการ',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_open_mapping')));
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_open')));
+    expect(routes, ['/assignments/9/indicators', '/settings/indicators']);
+  });
 }

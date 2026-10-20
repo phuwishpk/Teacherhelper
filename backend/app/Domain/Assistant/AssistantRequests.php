@@ -113,13 +113,23 @@ final class AssistantRequests
             return '';
         }
         $target = $plan['target'] ?? [];
-        $lines = ["\n[CARD {$m->plan_status}: ".(isset($target['assignment_id']) ? "assignment {$target['assignment_id']}" : 'new assignment')
-            .' "'.($target['title'] ?? '').'" ('.($target['kind'] ?? '?').')'];
+        $kind = $plan['kind'] ?? AssistantPlans::CARD_QUESTIONS;
+        $where = isset($target['assignment_id']) ? "assignment {$target['assignment_id']}" : (isset($target['new']) ? 'new assignment' : 'no assignment');
+        $lines = ["\n[{$kind} CARD {$m->plan_status}: {$where}".(isset($target['title']) ? ' "'.$target['title'].'"' : '')];
         foreach ($plan['questions'] ?? [] as $i => $q) {
             $lines[] = ($i + 1).". {$q['type']}: ".mb_substr((string) $q['prompt_text'], 0, 60);
         }
+        if ($kind === AssistantPlans::CARD_RUBRIC) {
+            $lines[] = 'question '.($plan['question']['position'] ?? '?').': '.implode('; ', array_map(
+                fn (array $c) => ($c['is_core'] ? '[core] ' : '')."{$c['description']} ({$c['points']})",
+                $plan['criteria'] ?? [],
+            )).implode(' → ', $plan['reference_steps'] ?? []);
+        }
+        foreach ($plan['items'] ?? [] as $i => $item) {
+            $lines[] = ($i + 1).". {$item['action']} {$item['code']} ".mb_substr((string) $item['name'], 0, 60);
+        }
         if (isset($plan['result'])) {
-            $lines[] = "created {$plan['result']['created']} questions";
+            $lines[] = 'applied';
         }
 
         return implode("\n", $lines).']';

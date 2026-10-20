@@ -1,22 +1,49 @@
-/// The plan card of an assistant answer (DESIGN §37.6): questions the
-/// assistant proposes for an assignment, created when the teacher presses
-/// «สร้างเลย». The rules of [PlanQuestion.unsupportedFor] and the key check
-/// mirror the server's AssistantPlans, so the ticks follow a changed target.
+/// The plan card of an assistant answer: questions to create (DESIGN
+/// §37.6), a rubric draft for one question, or indicators (§37.7). It is
+/// applied when the teacher presses the card's button. The rules of
+/// [PlanQuestion.unsupportedFor] and the key check mirror the server's
+/// AssistantPlans, so the ticks follow a changed target.
 class AssistantPlan {
   const AssistantPlan({
+    this.kind = questionsCard,
     required this.target,
-    required this.questions,
+    this.questions = const [],
+    this.question,
+    this.criteria = const [],
+    this.referenceSteps = const [],
+    this.problem,
+    this.items = const [],
     this.result,
   });
 
+  static const questionsCard = 'questions';
+  static const rubricCard = 'rubric';
+  static const indicatorsCard = 'indicators';
+
+  final String kind;
   final PlanTarget target;
   final List<PlanQuestion> questions;
+
+  /// A rubric card: the question, and its criteria (open) or steps
+  /// (show_work); [problem] says why it cannot be saved.
+  final RubricQuestion? question;
+  final List<RubricCriterion> criteria;
+  final List<String> referenceSteps;
+  final String? problem;
+
+  /// An indicator card's items.
+  final List<IndicatorItem> items;
   final PlanResult? result;
+
+  /// What the ticks index: the questions or the indicator items.
+  int get tickable => kind == indicatorsCard ? items.length : questions.length;
 
   factory AssistantPlan.fromJson(Map<String, dynamic> json) {
     final target = json['target'];
     final result = json['result'];
+    final question = json['question'];
     return AssistantPlan(
+      kind: json['kind'] as String? ?? questionsCard,
       target: PlanTarget.fromJson(
         target is Map ? target.cast<String, dynamic>() : const {},
       ),
@@ -24,9 +51,115 @@ class AssistantPlan {
         for (final q in json['questions'] as List? ?? const [])
           if (q is Map) PlanQuestion.fromJson(q.cast<String, dynamic>()),
       ],
+      question: question is Map
+          ? RubricQuestion.fromJson(question.cast<String, dynamic>())
+          : null,
+      criteria: [
+        for (final c in json['criteria'] as List? ?? const [])
+          if (c is Map)
+            (
+              description: c['description'] as String? ?? '',
+              points: (c['points'] as num?)?.toDouble() ?? 0,
+              isCore: c['is_core'] == true,
+            ),
+      ],
+      referenceSteps: [
+        for (final s in json['reference_steps'] as List? ?? const []) '$s',
+      ],
+      problem: json['problem'] as String?,
+      items: [
+        for (final i in json['items'] as List? ?? const [])
+          if (i is Map) IndicatorItem.fromJson(i.cast<String, dynamic>()),
+      ],
       result: result is Map
           ? PlanResult.fromJson(result.cast<String, dynamic>())
           : null,
+    );
+  }
+}
+
+typedef RubricCriterion = ({String description, double points, bool isCore});
+
+/// The question of a rubric card, as it was when the card was made.
+class RubricQuestion {
+  const RubricQuestion({
+    required this.id,
+    required this.position,
+    required this.type,
+    required this.prompt,
+    required this.maxPoints,
+    required this.rubricStatus,
+  });
+
+  final int id;
+  final int position;
+  final String type;
+  final String prompt;
+  final double maxPoints;
+  final String rubricStatus;
+
+  factory RubricQuestion.fromJson(Map<String, dynamic> json) => RubricQuestion(
+    id: (json['id'] as num).toInt(),
+    position: (json['position'] as num?)?.toInt() ?? 0,
+    type: json['type'] as String? ?? 'open',
+    prompt: json['prompt'] as String? ?? '',
+    maxPoints: (json['max_points'] as num?)?.toDouble() ?? 0,
+    rubricStatus: json['rubric_status'] as String? ?? 'draft',
+  );
+}
+
+/// One item of an indicator card: a new indicator of the teacher's own, or
+/// an existing one to add to «ตัวชี้วัดของฉัน».
+class IndicatorItem {
+  const IndicatorItem({
+    required this.action,
+    required this.code,
+    required this.name,
+    this.gradeLevel,
+    this.skillId,
+    this.parentCode,
+    this.parentName,
+    this.reason = '',
+    this.questionPositions = const [],
+    this.flags = const [],
+  });
+
+  static const flagNotFound = 'not_found';
+  static const flagCodeTaken = 'code_taken';
+  static const flagAlreadyMine = 'already_mine';
+  static const flagNotInScope = 'not_in_scope';
+
+  final String action;
+  final String code;
+  final String name;
+  final int? gradeLevel;
+  final int? skillId;
+  final String? parentCode;
+  final String? parentName;
+  final String reason;
+  final List<int> questionPositions;
+  final List<String> flags;
+
+  bool get isNew => action == 'new';
+  bool get blocked =>
+      flags.contains(flagNotFound) || flags.contains(flagCodeTaken);
+
+  factory IndicatorItem.fromJson(Map<String, dynamic> json) {
+    final parent = json['parent'];
+    return IndicatorItem(
+      action: json['action'] as String? ?? 'existing',
+      code: json['code'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      gradeLevel: (json['grade_level'] as num?)?.toInt(),
+      skillId: (json['skill_id'] as num?)?.toInt(),
+      parentCode: parent is Map ? parent['code'] as String? : null,
+      parentName: parent is Map ? parent['name'] as String? : null,
+      reason: json['reason'] as String? ?? '',
+      questionPositions: [
+        for (final p in json['question_positions'] as List? ?? const [])
+          if (p is num) p.toInt(),
+      ],
+      flags: [for (final f in json['flags'] as List? ?? const []) '$f'],
     );
   }
 }
@@ -201,26 +334,42 @@ class PlanQuestion {
   }
 }
 
+/// What applying a card did: questions created in an assignment, a rubric
+/// draft saved for [questionId], or indicators created ([created]), added
+/// to «ตัวชี้วัดของฉัน» ([addedMine]) and suggested for questions
+/// ([mapped]).
 class PlanResult {
   const PlanResult({
-    required this.assignmentId,
-    required this.title,
-    required this.kind,
-    required this.created,
+    this.assignmentId,
+    this.title = '',
+    this.kind = PlanKind.worksheet,
+    this.created = 0,
+    this.questionId,
+    this.position,
+    this.addedMine = 0,
+    this.mapped = 0,
     this.skipped = const [],
   });
 
-  final int assignmentId;
+  final int? assignmentId;
   final String title;
   final String kind;
   final int created;
+  final int? questionId;
+  final int? position;
+  final int addedMine;
+  final int mapped;
   final List<({int index, String reason})> skipped;
 
   factory PlanResult.fromJson(Map<String, dynamic> json) => PlanResult(
-    assignmentId: (json['assignment_id'] as num).toInt(),
+    assignmentId: (json['assignment_id'] as num?)?.toInt(),
     title: json['title'] as String? ?? '',
     kind: json['kind'] as String? ?? PlanKind.worksheet,
     created: (json['created'] as num?)?.toInt() ?? 0,
+    questionId: (json['question_id'] as num?)?.toInt(),
+    position: (json['position'] as num?)?.toInt(),
+    addedMine: (json['added_mine'] as num?)?.toInt() ?? 0,
+    mapped: (json['mapped'] as num?)?.toInt() ?? 0,
     skipped: [
       for (final s in json['skipped'] as List? ?? const [])
         if (s is Map)

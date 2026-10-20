@@ -33,6 +33,13 @@ final class AssistantPlans
 {
     public const MAX_QUESTIONS = 20;
 
+    /** The kinds of card (DESIGN §37.6, §37.7). */
+    public const CARD_QUESTIONS = 'questions';
+
+    public const CARD_RUBRIC = 'rubric';
+
+    public const CARD_INDICATORS = 'indicators';
+
     public const KIND_WORKSHEET = 'worksheet';
 
     public const KIND_FREEFORM = 'freeform';
@@ -62,6 +69,19 @@ final class AssistantPlans
      */
     public static function normalise(array $raw, User $teacher): ?array
     {
+        return match ($raw['kind'] ?? self::CARD_QUESTIONS) {
+            self::CARD_RUBRIC => RubricCards::normalise($raw, $teacher),
+            self::CARD_INDICATORS => IndicatorCards::normalise($raw, $teacher),
+            default => self::questionCard($raw, $teacher),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $raw
+     * @return array<string, mixed>|null
+     */
+    private static function questionCard(array $raw, User $teacher): ?array
+    {
         $target = self::target(is_array($raw['target'] ?? null) ? $raw['target'] : [], $teacher);
         $questions = [];
         foreach (array_slice(is_array($raw['questions'] ?? null) ? $raw['questions'] : [], 0, self::MAX_QUESTIONS) as $q) {
@@ -77,7 +97,7 @@ final class AssistantPlans
             $question['flags'] = self::flags($question, $kind);
         }
 
-        return ['target' => $target, 'questions' => $questions];
+        return ['kind' => self::CARD_QUESTIONS, 'target' => $target, 'questions' => $questions];
     }
 
     /**

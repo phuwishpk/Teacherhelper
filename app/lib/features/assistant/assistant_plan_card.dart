@@ -35,13 +35,25 @@ class AssistantPlanCard extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        child: switch (message.planStatus) {
-          AssistantMessage.planApplied when plan.result != null => _Applied(
+        child: switch ((message.planStatus, plan.kind, plan.result)) {
+          (AssistantMessage.planReplaced, _, _) => _Replaced(plan: plan),
+          (AssistantMessage.planApplied, AssistantPlan.rubricCard, final r?) =>
+            _RubricApplied(result: r, onNavigate: onNavigate),
+          (
+            AssistantMessage.planApplied,
+            AssistantPlan.indicatorsCard,
+            final r?,
+          ) =>
+            _IndicatorsApplied(plan: plan, result: r, onNavigate: onNavigate),
+          (AssistantMessage.planApplied, _, final r?) => _Applied(
             plan: plan,
-            result: plan.result!,
+            result: r,
             onNavigate: onNavigate,
           ),
-          AssistantMessage.planReplaced => _Replaced(plan: plan),
+          (_, AssistantPlan.rubricCard, _) => _OpenRubric(message: message),
+          (_, AssistantPlan.indicatorsCard, _) => _OpenIndicators(
+            message: message,
+          ),
           _ => _Open(message: message),
         },
       ),
@@ -63,7 +75,11 @@ class _Replaced extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'การ์ด ${plan.questions.length} ข้อนี้ถูกแทนด้วยการ์ดใหม่',
+            '${switch (plan.kind) {
+              AssistantPlan.rubricCard => 'การ์ด rubric',
+              AssistantPlan.indicatorsCard => 'การ์ดตัวชี้วัด ${plan.items.length} รายการ',
+              _ => 'การ์ด ${plan.questions.length} ข้อ',
+            }}นี้ถูกแทนด้วยการ์ดใหม่',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -138,8 +154,8 @@ class _Applied extends StatelessWidget {
             key: const ValueKey('assistant_plan_open'),
             onPressed: () => onNavigate(
               exam
-                  ? AppRoutes.exam(result.assignmentId)
-                  : AppRoutes.assignment(result.assignmentId),
+                  ? AppRoutes.exam(result.assignmentId!)
+                  : AppRoutes.assignment(result.assignmentId!),
             ),
             icon: const Icon(Icons.open_in_new),
             label: Text(exam ? 'เปิดข้อสอบ' : 'เปิดการบ้าน'),
@@ -644,6 +660,398 @@ class _TargetDialogState extends ConsumerState<_TargetDialog> {
             },
             child: const Text('ใช้งานนี้'),
           ),
+      ],
+    );
+  }
+}
+
+/// The error, the spinner and the button at the bottom of an open card.
+class _Footer extends ConsumerWidget {
+  const _Footer({
+    required this.message,
+    required this.label,
+    required this.icon,
+    required this.enabled,
+  });
+
+  final AssistantMessage message;
+  final String label;
+  final IconData icon;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final plans = ref.watch(assistantPlansProvider.notifier);
+    ref.watch(assistantPlansProvider);
+    final ui = plans.of(message);
+    final busy = ui.applying || ref.watch(assistantChatProvider).sending;
+    final id = message.id!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (ui.error case final error?)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              error,
+              key: ValueKey('assistant_plan_error_$id'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (ui.applying)
+              const Padding(
+                padding: EdgeInsets.only(right: 12),
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            FilledButton.icon(
+              key: ValueKey('assistant_plan_apply_$id'),
+              onPressed: enabled && !busy ? () => plans.apply(id) : null,
+              icon: Icon(icon),
+              label: Text(label),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+String _points(double p) => p == p.roundToDouble() ? '${p.toInt()}' : '$p';
+
+class _OpenRubric extends StatelessWidget {
+  const _OpenRubric({required this.message});
+
+  final AssistantMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final plan = message.plan!;
+    final q = plan.question;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.rule, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                q == null ? 'ร่าง rubric' : 'ร่าง rubric ข้อ ${q.position}',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        if (q != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'ใน «${plan.target.title ?? ''}» · '
+            '${q.type == 'open' ? 'อัตนัย' : 'แสดงวิธีทำ'} · '
+            '${_points(q.maxPoints)} คะแนน',
+            style: muted,
+          ),
+          Text(q.prompt, style: theme.textTheme.bodyMedium),
+          if (q.rubricStatus == 'approved')
+            Text(
+              'ข้อนี้มี rubric ที่อนุมัติแล้ว ร่างนี้จะแทนที่ และต้องอนุมัติใหม่',
+              style: muted,
+            ),
+        ],
+        const Divider(height: 16),
+        for (final c in plan.criteria)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(c.description, style: theme.textTheme.bodyMedium),
+                ),
+                if (c.isCore)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Text(
+                      'เกณฑ์หลัก',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                Text(
+                  '${_points(c.points)} คะแนน',
+                  style: theme.textTheme.labelMedium,
+                ),
+              ],
+            ),
+          ),
+        for (final (i, step) in plan.referenceSteps.indexed)
+          Text('${i + 1}. $step', style: theme.textTheme.bodyMedium),
+        if (plan.problem case final problem?)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              problem,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'บันทึกเป็นร่าง แล้วไปตรวจและกด «อนุมัติ» ในหน้า rubric',
+              style: muted,
+            ),
+          ),
+        _Footer(
+          message: message,
+          label: 'บันทึกเป็นร่าง',
+          icon: Icons.save_outlined,
+          enabled: plan.problem == null && q != null,
+        ),
+      ],
+    );
+  }
+}
+
+class _RubricApplied extends StatelessWidget {
+  const _RubricApplied({required this.result, required this.onNavigate});
+
+  final PlanResult result;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'บันทึก rubric ร่างของข้อ ${result.position} แล้ว',
+                key: const ValueKey('assistant_plan_done'),
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          'ไปตรวจและกด «อนุมัติ» ในหน้า rubric ก่อนใช้ตรวจงาน',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            key: const ValueKey('assistant_plan_open'),
+            onPressed: () => onNavigate(
+              AppRoutes.rubric(result.assignmentId!, result.questionId!),
+            ),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('เปิดหน้า rubric'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OpenIndicators extends ConsumerWidget {
+  const _OpenIndicators({required this.message});
+
+  final AssistantMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final plans = ref.watch(assistantPlansProvider.notifier);
+    final ui =
+        ref.watch(assistantPlansProvider)[message.id] ?? plans.of(message);
+    final busy = ui.applying || ref.watch(assistantChatProvider).sending;
+    final plan = message.plan!;
+    final id = message.id;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.checklist, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'ตัวชี้วัดที่เสนอ ${plan.items.length} รายการ',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        if (plan.target.title case final title?)
+          Text('สำหรับข้อใน «$title»', style: muted),
+        if (plan.items.any((i) => i.isNew))
+          Text('ตัวชี้วัดที่เพิ่มเองจะแชร์ให้ครูทุกคนในโรงเรียน', style: muted),
+        const Divider(height: 16),
+        for (final (i, item) in plan.items.indexed)
+          Padding(
+            key: ValueKey('assistant_plan_q_${id}_$i'),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: ui.selected.contains(i),
+                  onChanged: item.blocked || busy
+                      ? null
+                      : (_) => plans.toggle(message, i),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.isNew
+                            ? 'ใหม่: ${item.code.isEmpty ? '(ระบบตั้งรหัสให้)' : item.code} ${item.name}'
+                            : '${item.code} ${item.name}',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      Text(
+                        item.isNew
+                            ? 'ใต้ ${item.parentCode ?? '?'} ${item.parentName ?? ''}'
+                            : 'เพิ่มลง «ตัวชี้วัดของฉัน»',
+                        style: muted,
+                      ),
+                      if (item.questionPositions.isNotEmpty)
+                        Text(
+                          item.flags.contains(IndicatorItem.flagNotInScope)
+                              ? 'เสนอให้ข้อ ${item.questionPositions.join(', ')} ไม่ได้: ไม่อยู่ในแผนหรือรายวิชาของงานนี้'
+                              : 'เสนอให้ข้อ ${item.questionPositions.join(', ')} (ยืนยันในหน้าจับคู่ตัวชี้วัด)',
+                          style: muted,
+                        ),
+                      if (item.reason.isNotEmpty)
+                        Text('เหตุผล: ${item.reason}', style: muted),
+                      for (final (flag, label) in [
+                        (IndicatorItem.flagNotFound, 'ไม่พบรหัสนี้ในหลักสูตร'),
+                        (IndicatorItem.flagCodeTaken, 'รหัสนี้มีอยู่แล้ว'),
+                        (
+                          IndicatorItem.flagAlreadyMine,
+                          'อยู่ในตัวชี้วัดของฉันแล้ว',
+                        ),
+                      ])
+                        if (item.flags.contains(flag))
+                          Text(
+                            label,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: flag == IndicatorItem.flagAlreadyMine
+                                  ? scheme.onSurfaceVariant
+                                  : scheme.error,
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _Footer(
+          message: message,
+          label: 'ทำตามที่เลือก (${ui.selected.length})',
+          icon: Icons.add_task,
+          enabled: ui.selected.isNotEmpty,
+        ),
+      ],
+    );
+  }
+}
+
+class _IndicatorsApplied extends StatelessWidget {
+  const _IndicatorsApplied({
+    required this.plan,
+    required this.result,
+    required this.onNavigate,
+  });
+
+  final AssistantPlan plan;
+  final PlanResult result;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final done = [
+      if (result.created > 0) 'เพิ่มตัวชี้วัดใหม่ ${result.created} ตัว',
+      if (result.addedMine > 0)
+        'เพิ่มลงตัวชี้วัดของฉัน ${result.addedMine} ตัว',
+      if (result.mapped > 0) 'เสนอให้ข้อ ${result.mapped} รายการ',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                done.isEmpty ? 'ไม่มีอะไรเปลี่ยน' : done.join(' · '),
+                key: const ValueKey('assistant_plan_done'),
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        for (final s in result.skipped)
+          Text(
+            'ข้าม ${plan.items.elementAtOrNull(s.index)?.code ?? '${s.index + 1}'}: ${s.reason}',
+            style: muted,
+          ),
+        if (result.mapped > 0)
+          Text('ไปยืนยันการจับคู่ในหน้าจับคู่ตัวชี้วัด', style: muted),
+        Wrap(
+          alignment: WrapAlignment.end,
+          children: [
+            TextButton.icon(
+              key: const ValueKey('assistant_plan_open'),
+              onPressed: () => onNavigate(AppRoutes.myIndicators),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('เปิดตัวชี้วัดของฉัน'),
+            ),
+            if (result.mapped > 0 && result.assignmentId != null)
+              TextButton.icon(
+                key: const ValueKey('assistant_plan_open_mapping'),
+                onPressed: () => onNavigate(
+                  AppRoutes.indicatorMapping(result.assignmentId!),
+                ),
+                icon: const Icon(Icons.link),
+                label: const Text('เปิดหน้าจับคู่ตัวชี้วัด'),
+              ),
+          ],
+        ),
       ],
     );
   }

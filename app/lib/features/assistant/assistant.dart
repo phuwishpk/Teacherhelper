@@ -490,11 +490,23 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
     return const {};
   }
 
-  /// Ticked at first: every question with a key that fits the target.
-  static Set<int> defaultSelection(AssistantPlan plan, PlanTarget target) => {
-    for (final (i, q) in plan.questions.indexed)
-      if (q.usableFor(target.kind)) i,
-  };
+  /// Ticked at first: every question with a key that fits the target, or
+  /// every indicator item that can be done and is not "mine" already. A
+  /// rubric card has nothing to tick.
+  static Set<int> defaultSelection(AssistantPlan plan, PlanTarget target) =>
+      switch (plan.kind) {
+        AssistantPlan.indicatorsCard => {
+          for (final (i, item) in plan.items.indexed)
+            if (!item.blocked &&
+                !item.flags.contains(IndicatorItem.flagAlreadyMine))
+              i,
+        },
+        AssistantPlan.rubricCard => const {},
+        _ => {
+          for (final (i, q) in plan.questions.indexed)
+            if (q.usableFor(target.kind)) i,
+        },
+      };
 
   PlanUi of(AssistantMessage message) {
     final plan = message.plan!;
@@ -538,7 +550,8 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
         .firstOrNull;
     if (message == null) return;
     final ui = of(message);
-    if (ui.applying || ui.selected.isEmpty) return;
+    final rubric = message.plan!.kind == AssistantPlan.rubricCard;
+    if (ui.applying || (ui.selected.isEmpty && !rubric)) return;
     state = {
       ...state,
       messageId: PlanUi(
