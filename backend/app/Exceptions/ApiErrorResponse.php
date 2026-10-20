@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use App\Domain\Gemini\AiErrorCode;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -42,6 +43,13 @@ final class ApiErrorResponse
      */
     public static function make(string $message, string $code, int $status, array $errors = [], array $headers = [], array $extra = []): JsonResponse
     {
+        // Every "no key" or "key refused" error says so in the AI code too (DESIGN §36),
+        // whichever of the many places threw it.
+        $aiCode = ['ai_key_missing' => AiErrorCode::KEY_MISSING, 'ai_key_invalid' => AiErrorCode::KEY_INVALID][$code] ?? null;
+        if ($aiCode !== null && ! array_key_exists('ai_error_code', $extra)) {
+            $extra['ai_error_code'] = $aiCode;
+        }
+
         return response()->json([
             'message' => $message,
             'errors' => (object) $errors,

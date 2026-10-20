@@ -74,6 +74,9 @@ class AiCall extends Model
         'batch',
         'teacher_guidance',
         'guidance_by',
+        'error_code',
+        'http_status',
+        'user_id',
     ];
 
     /**
@@ -110,5 +113,11 @@ class AiCall extends Model
     public function skill(): BelongsTo
     {
         return $this->belongsTo(Skill::class);
+    }
+
+    /** The teacher the call was made for (DESIGN §36), when known. @return \Illuminate\Database\Eloquent\Relations\BelongsTo<User, $this> */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

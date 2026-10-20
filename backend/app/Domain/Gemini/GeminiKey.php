@@ -13,9 +13,13 @@ final readonly class GeminiKey
 
     public const SOURCE_SERVER = 'server';
 
+    /**
+     * @param  int|null  $userId  the teacher the call is made for (ai_calls.user_id, DESIGN §36)
+     */
     public function __construct(
         #[\SensitiveParameter] public string $apiKey,
         public string $source,
+        public ?int $userId = null,
     ) {}
 
     public function last4(): string

@@ -53,6 +53,22 @@ final class TeacherAiKeys
         );
     }
 
+    /**
+     * "ทดสอบอีกครั้ง" (DESIGN §36): the stored key against models.list; a
+     * key that works gets a new last_verified_at.
+     *
+     * @throws GeminiException key_missing (none stored or it no longer decrypts), key_invalid, error
+     */
+    public function retest(User $teacher): void
+    {
+        $key = $this->keys->teacherKey($teacher->id);
+        if ($key === null) {
+            throw new GeminiException('no teacher key', GeminiException::KEY_MISSING, AiErrorCode::KEY_MISSING);
+        }
+        $this->client->listModels($key->apiKey);
+        TeacherApiKey::query()->whereKey($teacher->id)->update(['last_verified_at' => now()]);
+    }
+
     public function delete(User $teacher): void
     {
         TeacherApiKey::query()->whereKey($teacher->id)->delete();

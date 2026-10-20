@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Gemini\AiErrorCode;
+use App\Domain\Gemini\AiErrors;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\TeacherAiKeys;
 use App\Exceptions\ApiException;
@@ -45,7 +47,30 @@ class AiKeyController extends Controller
                 $message = 'Gemini ไม่ยอมรับ key นี้ ตรวจว่าคัดลอกมาครบ และเปิดใช้ Generative Language API แล้ว';
                 throw new ApiException($message, 'ai_key_invalid', 422, ['gemini_api_key' => [$message]]);
             }
-            throw new ApiException('ตรวจสอบ key กับ Gemini ไม่ได้ในขณะนี้ ลองใหม่อีกครั้งภายหลัง', 'ai_unavailable', 503);
+            throw new ApiException('ตรวจสอบ key กับ Gemini ไม่ได้ในขณะนี้: '.AiErrorCode::message($e->code()), 'ai_unavailable', 503, [], ['ai_error_code' => $e->code()]);
+        }
+
+        return response()->json(['data' => $this->keys->status($request->user())]);
+    }
+
+    /**
+     * POST /api/v1/me/ai-key/test (DESIGN §36): tries the stored key again.
+     * Works -> 200 with a new last_verified_at; none stored -> 422
+     * ai_key_missing; refused -> 422 ai_key_invalid; anything else -> 503
+     * ai_unavailable. Each error carries ai_error_code.
+     */
+    public function test(Request $request): JsonResponse
+    {
+        Gate::authorize('manage', TeacherApiKey::class);
+
+        try {
+            $this->keys->retest($request->user());
+        } catch (GeminiException $e) {
+            $code = $e->code();
+            $error = AiErrors::make($code, null, 'ทดสอบ key ไม่ผ่าน');
+            throw $code === AiErrorCode::KEY_MISSING || $code === AiErrorCode::KEY_INVALID
+                ? $error
+                : new ApiException($error->getMessage(), 'ai_unavailable', 503, [], $error->extra);
         }
 
         return response()->json(['data' => $this->keys->status($request->user())]);

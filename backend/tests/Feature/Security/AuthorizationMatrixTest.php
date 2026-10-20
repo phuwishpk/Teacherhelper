@@ -66,6 +66,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.me.ai-key.show' => ['GET', 'me/ai-key', self::OK, self::OK],
         'api.me.ai-key.update' => ['PUT', 'me/ai-key', self::OK, self::OK],
         'api.me.ai-key.destroy' => ['DELETE', 'me/ai-key', self::OK, self::OK],
+        'api.me.ai-key.test' => ['POST', 'me/ai-key/test', self::OK, self::OK],
         'api.me.indicators.show' => ['GET', 'me/indicators', self::OK, self::OK],
         'api.me.indicators.update' => ['PUT', 'me/indicators', self::OK, self::OK],
         'api.classrooms.index' => ['GET', 'classrooms', self::OK, self::OK],

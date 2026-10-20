@@ -176,6 +176,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('me/ai-key', [AiKeyController::class, 'show'])->name('api.me.ai-key.show');
                 Route::put('me/ai-key', [AiKeyController::class, 'update'])->middleware('throttle:ai-key')->name('api.me.ai-key.update');
                 Route::delete('me/ai-key', [AiKeyController::class, 'destroy'])->name('api.me.ai-key.destroy');
+                Route::post('me/ai-key/test', [AiKeyController::class, 'test'])->middleware('throttle:ai-key')->name('api.me.ai-key.test');
 
                 // The home screen's "รอดำเนินการ" card (§19.9).
                 Route::get('teacher/attention', TeacherAttentionController::class)->name('api.teacher.attention');

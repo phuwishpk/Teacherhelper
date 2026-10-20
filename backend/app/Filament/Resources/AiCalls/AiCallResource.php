@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AiCalls;
 
+use App\Domain\Gemini\AiErrorCode;
 use App\Filament\Resources\AiCalls\Pages\ManageAiCalls;
 use App\Models\AiCall;
 use BackedEnum;
@@ -36,9 +37,17 @@ class AiCallResource extends Resource
 
     public const PURPOSE_LABELS = [
         'extract' => 'สกัดข้อมูล',
+        'extract_batch' => 'สกัดข้อมูล (หลายข้อ)',
+        'extract_page' => 'ตรวจทั้งหน้า',
         'rubric_draft' => 'ร่าง rubric',
         'explanation' => 'คำอธิบาย',
         'practice_gen' => 'สร้างแบบฝึก',
+        'answer_key_read' => 'อ่านเฉลย',
+        'answer_key_draft' => 'ร่างเฉลย',
+        'document_read' => 'อ่านเอกสารรายวิชา',
+        'indicator_suggest' => 'เสนอตัวชี้วัด',
+        'student_analysis' => 'วิเคราะห์นักเรียน',
+        'exam_read' => 'อ่านข้อสอบ',
     ];
 
     public const STATUS_LABELS = [
@@ -56,6 +65,13 @@ class AiCallResource extends Resource
     {
         return $table
             ->columns([
+                // The "#48213" a teacher reports with the error code (DESIGN §36).
+                TextColumn::make('id')
+                    ->label('#')
+                    ->sortable()
+                    ->searchable(query: fn (Builder $query, string $search) => ctype_digit($id = ltrim(trim($search), '#'))
+                        ? $query->whereKey((int) $id)
+                        : $query->where('error_code', 'like', '%'.strtoupper(trim($search)).'%')),
                 TextColumn::make('created_at')
                     ->label('เวลา')
                     ->dateTime('d/m/Y H:i:s', 'Asia/Bangkok')
@@ -73,6 +89,9 @@ class AiCallResource extends Resource
                         AiCall::STATUS_INVALID_OUTPUT => 'warning',
                         default => 'danger',
                     }),
+                TextColumn::make('error_code')->label('รหัส')->badge()->color('danger')->placeholder('—'),
+                TextColumn::make('user.name')->label('ครู')->placeholder('—')->toggleable(),
+                TextColumn::make('http_status')->label('HTTP')->placeholder('—')->toggleable(),
                 TextColumn::make('model')->label('รุ่น')->fontFamily('mono')->toggleable(),
                 TextColumn::make('prompt_version')->label('prompt')->fontFamily('mono')->toggleable(),
                 TextColumn::make('key_source')
@@ -95,6 +114,7 @@ class AiCallResource extends Resource
             ->filters([
                 SelectFilter::make('purpose')->label('งาน')->options(self::PURPOSE_LABELS),
                 SelectFilter::make('status')->label('ผล')->options(self::STATUS_LABELS),
+                SelectFilter::make('error_code')->label('รหัส')->options(array_combine(AiErrorCode::ALL, AiErrorCode::ALL)),
                 SelectFilter::make('key_source')->label('key')->options([AiCall::KEY_SOURCE_TEACHER => 'ครู', AiCall::KEY_SOURCE_SERVER => 'server']),
                 Filter::make('today')
                     ->label('วันนี้')
@@ -102,6 +122,11 @@ class AiCallResource extends Resource
             ])
             ->recordActions([])
             ->paginated([25, 50, 100]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('user:id,name');
     }
 
     public static function canCreate(): bool

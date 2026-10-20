@@ -21,9 +21,28 @@ class GeminiException extends RuntimeException
 
     public const KEY_MISSING = 'key_missing';
 
-    public function __construct(string $message, public readonly string $status = self::ERROR)
-    {
+    /**
+     * @param  string|null  $errorCode  AiErrorCode of the failure (DESIGN §36)
+     * @param  int|null  $aiCallId  the ai_calls row of the failed call, when one was logged
+     */
+    public function __construct(
+        string $message,
+        public readonly string $status = self::ERROR,
+        public readonly ?string $errorCode = null,
+        public readonly ?int $aiCallId = null,
+    ) {
         parent::__construct($message);
+    }
+
+    /** The code to show: the one given, else the one of the status. */
+    public function code(): string
+    {
+        return $this->errorCode ?? match ($this->status) {
+            self::KEY_INVALID => AiErrorCode::KEY_INVALID,
+            self::KEY_MISSING => AiErrorCode::KEY_MISSING,
+            self::INVALID_OUTPUT => AiErrorCode::OUTPUT,
+            default => AiErrorCode::forTransport(null, $this->getMessage()),
+        };
     }
 
     public static function invalidOutput(string $message): self

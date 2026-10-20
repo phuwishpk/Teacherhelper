@@ -6,6 +6,7 @@ namespace App\Domain\Gemini;
  * Result of one Gemini call after validation (GeminiGateway). status:
  * ok (data holds the validated, normalised JSON), error, invalid_output
  * (still invalid after the one retry) or key_invalid (Google rejected the key).
+ * A failure carries its error code (AiErrorCode) and the ai_calls id.
  */
 final readonly class CallOutcome
 {
@@ -24,7 +25,15 @@ final readonly class CallOutcome
         public string $status,
         public ?array $data = null,
         public ?string $error = null,
+        public ?string $errorCode = null,
+        public ?int $aiCallId = null,
     ) {}
+
+    /** The same outcome with its ai_calls row and error code (DESIGN §36). */
+    public function logged(int $aiCallId, ?string $errorCode): self
+    {
+        return new self($this->status, $this->data, $this->error, $errorCode, $aiCallId);
+    }
 
     public function isOk(): bool
     {
