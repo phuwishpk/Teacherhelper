@@ -28,6 +28,9 @@ use Illuminate\Support\Str;
  *   [fake:max-tokens]    any purpose: a cut-off answer, finishReason MAX_TOKENS
  *   [fake:quota]         assistant_chat: HTTP 429
  *   [fake:error-once]    assistant_chat: HTTP 503 the first time, an answer on the retry
+ *   [fake:plan:ID]       assistant_chat: a plan card of seven questions for assignment ID (assistantPlan())
+ *   [fake:plan-new:CLASSROOM:COURSE:KIND]  the same card for a new assignment
+ *   [fake:confirm]       assistant_chat: "โอเค สร้างเลย" (apply_plan)
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
@@ -200,6 +203,8 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                 $has('error-once') && $this->seen[$signature] === 1 => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('quota') => GeminiReply::error('HTTP 429: Resource has been exhausted', 0, 429),
                 $has('invalid') => 'not json at all {',
+                $has('confirm') => ['answer' => 'กำลังสร้างข้อที่ติ๊กไว้ในการ์ด', 'apply_plan' => true],
+                preg_match('/\[fake:plan(?::(\d+)|-new:(\d+):(\d+):([a-z]+))\]/', $markers, $m) === 1 => self::assistantPlan($m),
                 default => ['answer' => 'ผู้ช่วยทดสอบตอบ: '.trim((string) ($request->hints['question_text'] ?? ''))
                     .' (ประวัติ '.(int) ($request->hints['history_turns'] ?? 0).' ข้อความ, คู่มือ '.(int) ($request->hints['sections'] ?? 0).' หัวข้อ)'],
             },
@@ -518,6 +523,34 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
      *
      * @return array<string, mixed>|string|GeminiReply
      */
+    /**
+     * A plan card (DESIGN §37.6) with every type, so a homework keeps four
+     * and an exam three of the first six; the seventh has no key and needs
+     * a figure.
+     *
+     * @param  array<int, string>  $m  the [fake:plan…] match
+     * @return array<string, mixed>
+     */
+    private static function assistantPlan(array $m): array
+    {
+        $target = ($m[1] ?? '') !== ''
+            ? ['assignment_id' => (int) $m[1]]
+            : ['new_classroom_id' => (int) $m[2], 'new_course_id' => (int) $m[3], 'new_title' => 'แบบฝึกเศษส่วน', 'new_kind' => $m[4]];
+
+        return [
+            'answer' => 'เสนอ 7 ข้อในการ์ดด้านล่าง ตรวจแล้วกด «สร้างเลย»',
+            'plan' => ['target' => $target, 'questions' => [
+                ['type' => 'mcq', 'prompt_text' => '1/2 + 1/4 เท่ากับเท่าไร', 'options' => ['1/6', '3/4', '2/6', '1'], 'correct_options' => [2], 'points' => 1, 'explanation' => '2/4 + 1/4 = 3/4', 'indicator_codes' => ['FAKE-1', 'ไม่มีรหัสนี้']],
+                ['type' => 'short', 'prompt_text' => 'ครึ่งหนึ่งเขียนเป็นทศนิยมได้เท่าไร', 'accepted_answers' => ['0.5', '1/2'], 'numeric_value' => '0.5', 'points' => 1, 'explanation' => '1 ÷ 2 = 0.5'],
+                ['type' => 'show_work', 'prompt_text' => 'แม่มีส้ม 24 ผล แบ่งให้ลูก 2 คนเท่า ๆ กัน ได้คนละกี่ผล', 'accepted_answers' => ['12'], 'numeric_value' => '12', 'reference_steps' => ['24 ÷ 2', '= 12'], 'points' => 2, 'explanation' => '24 ÷ 2 = 12'],
+                ['type' => 'open', 'prompt_text' => 'อธิบายว่าเศษส่วนที่เท่ากันคืออะไร', 'model_answer' => 'เศษส่วนที่มีค่าเท่ากัน เช่น 1/2 กับ 2/4', 'points' => 3, 'explanation' => ''],
+                ['type' => 'true_false', 'prompt_text' => '2/4 เท่ากับ 1/2', 'correct_options' => [1], 'points' => 1, 'explanation' => 'ทอนเป็นอย่างต่ำได้ 1/2'],
+                ['type' => 'numeric', 'prompt_text' => '25 ÷ 2 เท่ากับเท่าไร', 'numeric_value' => '12.5', 'points' => 1, 'explanation' => '25 ÷ 2 = 12.5'],
+                ['type' => 'mcq', 'prompt_text' => 'จากภาพ ส่วนที่แรเงาคือเศษเท่าไร', 'options' => ['1/5', '2/5', '3/5', '4/5', '1'], 'correct_options' => [], 'points' => 1, 'explanation' => '', 'needs_figure' => true],
+            ]],
+        ];
+    }
+
     private static function answerKey(GeminiRequest $request): array|string|GeminiReply
     {
         $questions = array_values((array) ($request->hints['questions'] ?? []));

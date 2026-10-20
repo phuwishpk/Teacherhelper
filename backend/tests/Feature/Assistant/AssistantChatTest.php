@@ -150,12 +150,16 @@ class AssistantChatTest extends TestCase
         $conversation = AssistantConversation::create(['user_id' => $this->teacher->id, 'title' => 'ถามเรื่องสแกน']);
         $conversation->messages()->create(['role' => 'user', 'content' => 'สแกนไม่ผ่าน']);
         $conversation->messages()->create(['role' => 'error', 'content' => 'Google ขัดข้อง', 'error_code' => 'AI-SERVER', 'ai_call_id' => 77]);
+        $conversation->messages()->create(['role' => 'assistant', 'content' => 'เสนอการ์ด', 'plan_status' => 'applied', 'plan' => [
+            'target' => ['assignment_id' => 5, 'title' => 'การบ้านเศษส่วน'], 'questions' => [[], []],
+            'result' => ['assignment_id' => 5, 'title' => 'การบ้านเศษส่วน', 'created' => 2, 'skipped' => []],
+        ]]);
 
         $this->actingAs($this->makeAdmin());
         Livewire::test(ManageAssistantConversations::class)
             ->assertCanSeeTableRecords([$conversation])
             ->mountAction(TestAction::make('view')->table($conversation))
-            ->assertMountedActionModalSee(['สแกนไม่ผ่าน', 'รหัส AI-SERVER · #77']);
+            ->assertMountedActionModalSee(['สแกนไม่ผ่าน', 'รหัส AI-SERVER · #77', 'การ์ด 2 ข้อ · สร้างแล้ว 2 ข้อใน «การบ้านเศษส่วน»']);
         $this->assertFalse($this->teacher->can('viewAny', AssistantConversation::class));
     }
 }

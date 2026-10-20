@@ -186,6 +186,7 @@ Route::prefix('v1')->group(function () {
                 Route::delete('assistant/conversations/{id}', [AssistantController::class, 'destroy'])->name('api.assistant.conversations.destroy');
                 Route::post('assistant/messages', [AssistantController::class, 'send'])->middleware('throttle:assistant')->name('api.assistant.messages.store');
                 Route::post('assistant/conversations/{id}/retry', [AssistantController::class, 'retry'])->middleware('throttle:assistant')->name('api.assistant.conversations.retry');
+                Route::post('assistant/messages/{id}/apply', [AssistantController::class, 'apply'])->middleware('throttle:assistant')->name('api.assistant.messages.apply');
 
                 // The home screen's "รอดำเนินการ" card (§19.9).
                 Route::get('teacher/attention', TeacherAttentionController::class)->name('api.teacher.attention');

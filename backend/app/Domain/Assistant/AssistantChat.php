@@ -35,6 +35,12 @@ final class AssistantChat
 
     public const MAX_MESSAGE_LENGTH = 2000;
 
+    /** The answer to a typed confirmation while a card is open (DESIGN §37.6). */
+    public const APPLYING = 'กำลังสร้างข้อที่ติ๊กไว้ในการ์ด ดูผลที่การ์ดด้านบน';
+
+    /** The answer to a typed confirmation with no open card. */
+    public const NO_OPEN_CARD = 'ตอนนี้ไม่มีการ์ดที่รอสร้าง บอกได้เลยว่าอยากให้ออกข้ออะไร ลงงานไหน';
+
     /** Not an AI failure: the teacher's messages of the day are used up. */
     public const LIMIT_CODE = 'CHAT-LIMIT';
 
@@ -55,7 +61,7 @@ final class AssistantChat
     }
 
     /**
-     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>}
+     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id: int|null}
      *
      * @throws ApiException 422 ai_key_missing, 429 assistant_limit, 4xx/5xx of a failed AI call
      */
@@ -77,7 +83,7 @@ final class AssistantChat
      * "ลองใหม่": the conversation ends with a failure; its question is asked
      * again and the failure is replaced by the new answer (or failure).
      *
-     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>}
+     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id: int|null}
      *
      * @throws ApiException 409 nothing_to_retry, and those of send()
      */
@@ -98,21 +104,44 @@ final class AssistantChat
 
     /**
      * @param  list<AssistantMessage>  $history
-     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>}
+     * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id: int|null}
      */
     private function answer(User $teacher, AssistantConversation $conversation, AssistantMessage $question, array $history, GeminiKey $key): array
     {
-        $call = $this->requests->call($question->content, $history, $conversation->id);
+        $previousTarget = null;
+        foreach (array_reverse($history) as $m) {
+            if (is_array($m->plan)) {
+                $previousTarget = $m->plan['result']['assignment_id'] ?? $m->plan['target']['assignment_id'] ?? null;
+                break;
+            }
+        }
+        $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget);
+        $call = $this->requests->call($question->content, $history, $conversation->id, $context);
         $outcome = $this->gateway->run(['chat' => $call], $key)['chat'];
         $usage = $outcome->aiCallId === null ? null : AiCall::query()->find($outcome->aiCallId, ['input_tokens', 'output_tokens']);
         $input = (int) ($usage->input_tokens ?? 0);
         $output = (int) ($usage->output_tokens ?? 0);
 
-        $reply = DB::transaction(function () use ($conversation, $outcome, $input, $output) {
+        $plan = $outcome->isOk() && is_array($outcome->data['plan'] ?? null) ? AssistantPlans::normalise($outcome->data['plan'], $teacher) : null;
+        // "โอเค สร้างเลย": the app applies the latest open card with its ticks.
+        // The wording is fixed, so the answer never claims a result it has not seen.
+        $applyId = null;
+        $content = (string) ($outcome->data['answer'] ?? '');
+        if ($plan === null && ($outcome->data['apply_plan'] ?? false) === true) {
+            $applyId = $conversation->messages()->where('plan_status', AssistantMessage::PLAN_PROPOSED)->max('id');
+            $content = $applyId === null ? self::NO_OPEN_CARD : self::APPLYING;
+        }
+
+        $reply = DB::transaction(function () use ($conversation, $outcome, $input, $output, $plan, $content) {
+            if ($plan !== null) {
+                $conversation->messages()->where('plan_status', AssistantMessage::PLAN_PROPOSED)->update(['plan_status' => AssistantMessage::PLAN_REPLACED]);
+            }
             $reply = $conversation->messages()->create($outcome->isOk()
                 ? [
                     'role' => AssistantMessage::ROLE_ASSISTANT,
-                    'content' => (string) ($outcome->data['answer'] ?? ''),
+                    'content' => $content,
+                    'plan' => $plan,
+                    'plan_status' => $plan === null ? null : AssistantMessage::PLAN_PROPOSED,
                     'ai_call_id' => $outcome->aiCallId,
                     'input_tokens' => $input,
                     'output_tokens' => $output,
@@ -138,7 +167,7 @@ final class AssistantChat
             throw self::failure($outcome, $conversation, $question, $reply);
         }
 
-        return ['conversation' => $conversation->refresh(), 'messages' => [$question, $reply]];
+        return ['conversation' => $conversation->refresh(), 'messages' => [$question, $reply], 'apply_message_id' => $applyId === null ? null : (int) $applyId];
     }
 
     private static function failure(CallOutcome $outcome, AssistantConversation $conversation, AssistantMessage $question, AssistantMessage $reply): ApiException

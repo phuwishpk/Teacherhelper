@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Assistant\AssistantChat;
+use App\Domain\Assistant\AssistantPlanApplier;
+use App\Domain\Assistant\AssistantPlans;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\AssistantConversation;
@@ -10,6 +12,7 @@ use App\Models\AssistantMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 
 /**
  * "ผู้ช่วย Krucheck", step 1 (DESIGN §37), the teacher's own conversations:
@@ -80,12 +83,51 @@ class AssistantController extends Controller
         return self::result($this->chat->retry($request->user(), self::own($request, $id)));
     }
 
-    /** @param  array{conversation: AssistantConversation, messages: list<AssistantMessage>}  $result */
+    /**
+     * POST /assistant/messages/{id}/apply {selected: [index], target?:
+     * {assignment_id} | {new: {classroom_id, course_id?, title, kind}}}
+     * -> {data: {message}} (DESIGN §37.6).
+     */
+    public function apply(Request $request, int $id, AssistantPlanApplier $applier): JsonResponse
+    {
+        $message = AssistantMessage::query()
+            ->where('role', AssistantMessage::ROLE_ASSISTANT)
+            ->whereNotNull('plan')
+            ->whereIn('conversation_id', AssistantConversation::query()->select('id')->where('user_id', $request->user()->id))
+            ->find($id);
+        if ($message === null) {
+            throw new ApiException('ไม่พบการ์ดนี้', 'not_found', 404);
+        }
+        $count = count($message->plan['questions'] ?? []);
+        $data = $request->validate([
+            'selected' => ['required', 'array', 'min:1', 'max:'.AssistantPlans::MAX_QUESTIONS],
+            'selected.*' => ['integer', 'distinct', 'min:0', 'max:'.max(0, $count - 1)],
+            'target' => ['sometimes', 'nullable', 'array'],
+            'target.assignment_id' => ['sometimes', 'integer'],
+            'target.new' => ['sometimes', 'array'],
+            'target.new.classroom_id' => ['required_with:target.new', 'integer'],
+            'target.new.course_id' => ['sometimes', 'nullable', 'integer'],
+            'target.new.title' => ['required_with:target.new', 'string', 'max:255'],
+            'target.new.kind' => ['required_with:target.new', 'string', Rule::in(AssistantPlans::KINDS)],
+        ], [
+            'selected.required' => 'เลือกข้อที่จะสร้างอย่างน้อย 1 ข้อ',
+            'selected.min' => 'เลือกข้อที่จะสร้างอย่างน้อย 1 ข้อ',
+            'target.new.title.required_with' => 'ตั้งชื่องานใหม่ก่อน',
+        ]);
+        $selected = array_values(array_map('intval', $data['selected']));
+        sort($selected);
+        $message = $applier->apply($request->user(), $message, $selected, $data['target'] ?? null);
+
+        return response()->json(['data' => ['message' => $message->toApi()]]);
+    }
+
+    /** @param  array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id?: int|null}  $result */
     private static function result(array $result): JsonResponse
     {
         return response()->json(['data' => [
             'conversation' => AssistantChat::conversationApi($result['conversation']),
             'messages' => array_map(fn (AssistantMessage $m) => $m->toApi(), $result['messages']),
+            'apply_message_id' => $result['apply_message_id'] ?? null,
         ]]);
     }
 
