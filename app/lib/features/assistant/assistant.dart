@@ -18,18 +18,85 @@ class AssistantStatus {
     required this.available,
     this.usedToday = 0,
     this.dailyLimit = 100,
+    this.studentDataAllowed = true,
+    this.studentDataAcknowledged = false,
   });
 
   final bool available;
   final int usedToday;
   final int dailyLimit;
 
-  factory AssistantStatus.fromJson(Map<String, dynamic> json) =>
-      AssistantStatus(
-        available: json['available'] == true,
-        usedToday: (json['used_today'] as num?)?.toInt() ?? 0,
-        dailyLimit: (json['daily_limit'] as num?)?.toInt() ?? 100,
-      );
+  /// Students' results (DESIGN §37.8): the admin allows it for the school,
+  /// and the teacher pressed "เข้าใจแล้ว" on the notice.
+  final bool studentDataAllowed;
+  final bool studentDataAcknowledged;
+
+  factory AssistantStatus.fromJson(Map<String, dynamic> json) {
+    final data = json['student_data'];
+    return AssistantStatus(
+      available: json['available'] == true,
+      usedToday: (json['used_today'] as num?)?.toInt() ?? 0,
+      dailyLimit: (json['daily_limit'] as num?)?.toInt() ?? 100,
+      studentDataAllowed: data is! Map || data['allowed'] != false,
+      studentDataAcknowledged: data is Map && data['acknowledged'] == true,
+    );
+  }
+}
+
+/// A student as Gemini sees them in one conversation ("S1"); the app shows
+/// the name (DESIGN §37.8).
+class StudentLabel {
+  const StudentLabel({
+    required this.label,
+    required this.studentId,
+    this.name,
+    this.classroomId,
+  });
+
+  final String label;
+  final int studentId;
+  final String? name;
+  final int? classroomId;
+
+  factory StudentLabel.fromJson(Map<String, dynamic> json) => StudentLabel(
+    label: json['label'] as String? ?? '',
+    studentId: (json['student_id'] as num).toInt(),
+    name: json['name'] as String?,
+    classroomId: (json['classroom_id'] as num?)?.toInt(),
+  );
+}
+
+/// The student data the teacher chose to ask about: a classroom, a student
+/// or an assignment (the server's AssistantStudentData sets).
+class DataScope {
+  const DataScope.classroom(int this.classroomId, this.title)
+    : set = 'classroom_summary',
+      studentId = null,
+      assignmentId = null;
+
+  const DataScope.student(int this.studentId, int this.classroomId, this.title)
+    : set = 'student_history',
+      assignmentId = null;
+
+  const DataScope.assignment(int this.assignmentId, this.title)
+    : set = 'assignment_analysis',
+      classroomId = null,
+      studentId = null;
+
+  final String set;
+  final int? classroomId;
+  final int? studentId;
+  final int? assignmentId;
+
+  /// What the chip says: the classroom, the student's name or the title.
+  final String title;
+
+  Map<String, dynamic> toJson() => {
+    'set': set,
+    'classroom_id': ?classroomId,
+    'student_id': ?studentId,
+    'assignment_id': ?assignmentId,
+  };
 }
 
 /// One conversation of the list, with the tokens it has used.
@@ -132,7 +199,12 @@ class AssistantMessage {
 /// The conversation after a question: the question and its answer, or, in
 /// the body of a failed AI call, the question and the stored failure.
 class AssistantReply {
-  const AssistantReply(this.conversation, this.messages, {this.applyMessageId});
+  const AssistantReply(
+    this.conversation,
+    this.messages, {
+    this.applyMessageId,
+    this.labels = const [],
+  });
 
   final AssistantConversation conversation;
   final List<AssistantMessage> messages;
@@ -140,6 +212,9 @@ class AssistantReply {
   /// The teacher typed a confirmation ("โอเค สร้างเลย"): the open card to
   /// create, with the ticks it has in the app.
   final int? applyMessageId;
+
+  /// Every student label of the conversation so far.
+  final List<StudentLabel> labels;
 
   static AssistantReply? tryParse(Map<String, dynamic>? json) {
     final conversation = json?['conversation'];
@@ -152,6 +227,10 @@ class AssistantReply {
           if (m is Map) AssistantMessage.fromJson(m.cast<String, dynamic>()),
       ],
       applyMessageId: (json?['apply_message_id'] as num?)?.toInt(),
+      labels: [
+        for (final l in json?['labels'] as List? ?? const [])
+          if (l is Map) StudentLabel.fromJson(l.cast<String, dynamic>()),
+      ],
     );
   }
 }
@@ -164,7 +243,14 @@ abstract class AssistantRepository {
 
   /// A failed AI call is a DioException whose body also carries the stored
   /// `conversation` and `messages` ([AssistantReply.tryParse]).
-  Future<AssistantReply> send(String text, {int? conversationId});
+  Future<AssistantReply> send(
+    String text, {
+    int? conversationId,
+    DataScope? scope,
+  });
+
+  /// "เข้าใจแล้ว" on the student-data notice (DESIGN §37.8).
+  Future<AssistantStatus> acknowledgeStudentData();
   Future<AssistantReply> retry(int conversationId);
 
   /// «สร้างเลย» (DESIGN §37.6): the card with its `result`.
@@ -213,10 +299,18 @@ class ApiAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Future<AssistantReply> send(String text, {int? conversationId}) async {
+  Future<AssistantReply> send(
+    String text, {
+    int? conversationId,
+    DataScope? scope,
+  }) async {
     final res = await _dio.post<Object?>(
       '/assistant/messages',
-      data: {'text': text, 'conversation_id': ?conversationId},
+      data: {
+        'text': text,
+        'conversation_id': ?conversationId,
+        'scope': ?scope?.toJson(),
+      },
       options: _slow,
     );
     return AssistantReply.tryParse(unwrapJson(res.data)) ??
@@ -237,6 +331,12 @@ class ApiAssistantRepository implements AssistantRepository {
     final message = unwrapJson(res.data)['message'];
     if (message is! Map) throw const FormatException('assistant apply');
     return AssistantMessage.fromJson(message.cast<String, dynamic>());
+  }
+
+  @override
+  Future<AssistantStatus> acknowledgeStudentData() async {
+    final res = await _dio.post<Object?>('/assistant/student-data/ack');
+    return AssistantStatus.fromJson(unwrapJson(res.data));
   }
 
   @override
@@ -276,12 +376,16 @@ class AssistantChatState {
     this.messages = const [],
     this.sending = false,
     this.loading = false,
+    this.labels = const {},
   });
 
   final AssistantConversation? conversation;
   final List<AssistantMessage> messages;
   final bool sending;
   final bool loading;
+
+  /// The conversation's students by label (DESIGN §37.8).
+  final Map<String, StudentLabel> labels;
 
   /// The last message failed and nothing is running: "ลองใหม่" can go.
   bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
@@ -313,6 +417,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       state = AssistantChatState(
         conversation: c.conversation,
         messages: c.messages,
+        labels: _labels(c.labels),
       );
     } catch (e) {
       if (!ref.mounted) return;
@@ -341,10 +446,16 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         AssistantMessage(role: AssistantMessage.user, content: question),
       ],
       sending: true,
+      labels: state.labels,
     );
+    final scope = ref.read(assistantScopeProvider);
     await _ask(
       before,
-      () => _repo.send(question, conversationId: state.conversation?.id),
+      () => _repo.send(
+        question,
+        conversationId: state.conversation?.id,
+        scope: scope,
+      ),
     );
   }
 
@@ -361,6 +472,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         conversation: conversation,
         messages: messages.sublist(0, messages.length - 1),
         sending: true,
+        labels: state.labels,
       );
       await _ask(before, () => _repo.retry(conversation.id));
       return;
@@ -374,6 +486,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         0,
         messages.length - (question == null ? 1 : 2),
       ),
+      labels: state.labels,
     );
     if (question != null && question.isUser) await send(question.content);
   }
@@ -392,6 +505,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         messages: reply.messages.any((m) => m.plan != null)
             ? _olderCardsReplaced(messages)
             : messages,
+        labels: _labels(reply.labels),
       );
       // "โอเค สร้างเลย": create the open card with the ticks it has here.
       if (reply.applyMessageId case final id?) {
@@ -404,10 +518,14 @@ class AssistantChatController extends Notifier<AssistantChatState> {
           ? AssistantChatState(
               conversation: stored.conversation,
               messages: [...before, ...stored.messages],
+              labels: stored.labels.isEmpty
+                  ? state.labels
+                  : _labels(stored.labels),
             )
           : AssistantChatState(
               conversation: state.conversation,
               messages: [...state.messages, _localFailure(e)],
+              labels: state.labels,
             );
     } finally {
       if (ref.mounted) {
@@ -426,8 +544,13 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       ],
       sending: state.sending,
       loading: state.loading,
+      labels: state.labels,
     );
   }
+
+  static Map<String, StudentLabel> _labels(List<StudentLabel> labels) => {
+    for (final l in labels) l.label: l,
+  };
 
   /// A new card takes the place of the open one (the server did the same).
   static List<AssistantMessage> _olderCardsReplaced(
@@ -592,4 +715,21 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
 final assistantPlansProvider =
     NotifierProvider<AssistantPlansController, Map<int, PlanUi>>(
       AssistantPlansController.new,
+    );
+
+/// The student data the next questions are about (DESIGN §37.8), chosen
+/// with «ข้อมูลนักเรียน»; null = none (the assistant may ask for some).
+class AssistantScopeController extends Notifier<DataScope?> {
+  @override
+  DataScope? build() {
+    ref.watch(currentUserProvider.select((u) => u?.id));
+    return null;
+  }
+
+  void choose(DataScope? scope) => state = scope;
+}
+
+final assistantScopeProvider =
+    NotifierProvider<AssistantScopeController, DataScope?>(
+      AssistantScopeController.new,
     );

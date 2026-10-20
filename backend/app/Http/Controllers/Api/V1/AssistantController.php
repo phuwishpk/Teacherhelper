@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Assistant\AssistantChat;
 use App\Domain\Assistant\AssistantPlanApplier;
 use App\Domain\Assistant\AssistantPlans;
+use App\Domain\Assistant\AssistantStudentData;
+use App\Domain\Assistant\AssistantStudents;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\AssistantConversation;
@@ -54,7 +56,16 @@ class AssistantController extends Controller
         return response()->json(['data' => [
             'conversation' => AssistantChat::conversationApi($conversation),
             'messages' => $conversation->messages()->get()->map(fn (AssistantMessage $m) => $m->toApi())->values(),
+            'labels' => AssistantStudents::api($conversation),
         ]]);
+    }
+
+    /** POST /assistant/student-data/ack: "เข้าใจแล้ว" (DESIGN §37.8) -> {data: status} */
+    public function acknowledge(Request $request): JsonResponse
+    {
+        $this->chat->acknowledge($request->user());
+
+        return response()->json(['data' => $this->chat->status($request->user()->refresh())]);
     }
 
     public function destroy(Request $request, int $id): Response
@@ -69,13 +80,19 @@ class AssistantController extends Controller
         $data = $request->validate([
             'text' => ['required', 'string', 'max:'.AssistantChat::MAX_MESSAGE_LENGTH],
             'conversation_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            // The student data the teacher chose (DESIGN §37.8).
+            'scope' => ['sometimes', 'nullable', 'array'],
+            'scope.set' => ['required_with:scope', 'string', Rule::in(AssistantStudentData::SETS)],
+            'scope.classroom_id' => ['sometimes', 'nullable', 'integer'],
+            'scope.student_id' => ['sometimes', 'nullable', 'integer'],
+            'scope.assignment_id' => ['sometimes', 'nullable', 'integer'],
         ], [
             'text.required' => 'พิมพ์คำถามก่อน',
             'text.max' => 'ข้อความยาวเกิน '.AssistantChat::MAX_MESSAGE_LENGTH.' ตัวอักษร',
         ]);
         $conversation = isset($data['conversation_id']) ? self::own($request, (int) $data['conversation_id']) : null;
 
-        return self::result($this->chat->send($request->user(), $conversation, (string) $data['text']));
+        return self::result($this->chat->send($request->user(), $conversation, (string) $data['text'], $data['scope'] ?? null));
     }
 
     public function retry(Request $request, int $id): JsonResponse
@@ -131,6 +148,7 @@ class AssistantController extends Controller
             'conversation' => AssistantChat::conversationApi($result['conversation']),
             'messages' => array_map(fn (AssistantMessage $m) => $m->toApi(), $result['messages']),
             'apply_message_id' => $result['apply_message_id'] ?? null,
+            'labels' => AssistantStudents::api($result['conversation']),
         ]]);
     }
 

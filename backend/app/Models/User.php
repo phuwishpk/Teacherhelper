@@ -30,6 +30,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int|null $merged_into_id this account was merged into that one (DESIGN §24.5)
  * @property Carbon|null $deleted_at an admin deleted the account; restorable for 30 days (DESIGN §31)
  * @property int|null $deleted_by
+ * @property Carbon|null $assistant_data_ack_at the teacher pressed "เข้าใจแล้ว" for student data in the assistant (DESIGN §37.8)
  */
 class User extends Authenticatable implements FilamentUser
 {
@@ -75,6 +76,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'password' => 'hashed',
             'deleted_at' => 'datetime',
+            'assistant_data_ack_at' => 'datetime',
         ];
     }
 

@@ -87,7 +87,7 @@ final class AssistantRequests
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{answer: string, plan: array<string, mixed>|null, apply_plan: bool}
+     * @return array{answer: string, plan: array<string, mixed>|null, apply_plan: bool, need_data: array<string, mixed>|null}
      *
      * @throws GeminiException invalid_output
      */
@@ -102,6 +102,7 @@ final class AssistantRequests
             'answer' => $answer,
             'plan' => is_array($data['plan'] ?? null) ? $data['plan'] : null,
             'apply_plan' => ($data['apply_plan'] ?? false) === true,
+            'need_data' => is_array($data['need_data'] ?? null) ? $data['need_data'] : null,
         ];
     }
 

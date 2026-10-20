@@ -47,10 +47,17 @@ class _FakeAssistant implements AssistantRepository {
   ]);
 
   @override
+  Future<AssistantStatus> acknowledgeStudentData() async =>
+      const AssistantStatus(available: true, studentDataAcknowledged: true);
+  @override
   Future<void> delete(int id) async => deleted.add(id);
 
   @override
-  Future<AssistantReply> send(String text, {int? conversationId}) {
+  Future<AssistantReply> send(
+    String text, {
+    int? conversationId,
+    DataScope? scope,
+  }) {
     sent.add((text, conversationId));
     return _next();
   }

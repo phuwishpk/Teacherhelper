@@ -58,6 +58,10 @@ class SchoolResource extends Resource
                 Toggle::make('allow_training_data')
                     ->label('ยินยอมให้ใช้ลายมือที่ครูตรวจแล้วไปเทรนโมเดล (allow_training_data)')
                     ->default(false),
+                Toggle::make('assistant_student_data')
+                    ->label('ให้ครูถามผู้ช่วย Krucheck เรื่องคะแนนนักเรียนได้ (assistant_student_data)')
+                    ->helperText('ส่งคะแนนแบบไม่ระบุตัวไปที่ Gemini ด้วย key ของครู ปิดแล้วผู้ช่วยตอบได้แค่เรื่องการใช้ระบบ (DESIGN §37.8)')
+                    ->default(true),
                 DatePicker::make('crop_retention_until')
                     ->label('เก็บภาพ crop ถึงวันที่ (crop_retention_until)')
                     ->helperText('ว่าง = ยังไม่กำหนด ภาพ crop จะถูกลบหลังวันนี้ (DESIGN §7.3)')
@@ -108,6 +112,7 @@ class SchoolResource extends Resource
                     ->label('ห้องเรียน')
                     ->counts('classrooms'),
                 IconColumn::make('allow_training_data')->label('ยินยอมเทรน')->boolean(),
+                IconColumn::make('assistant_student_data')->label('ผู้ช่วยดูคะแนน')->boolean()->toggleable(),
                 TextColumn::make('crop_retention_until')
                     ->label('เก็บภาพถึง')
                     ->date('d/m/Y')

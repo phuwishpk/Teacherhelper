@@ -75,6 +75,7 @@ class AuthorizationMatrixTest extends TestCase
         'api.assistant.messages.store' => ['POST', 'assistant/messages', self::OK, self::OK],
         'api.assistant.conversations.retry' => ['POST', 'assistant/conversations/{assistant_conversation}/retry', 404, 404],
         'api.assistant.messages.apply' => ['POST', 'assistant/messages/{assistant_message}/apply', 404, 404],
+        'api.assistant.student-data.ack' => ['POST', 'assistant/student-data/ack', self::OK, self::OK],
         'api.me.indicators.show' => ['GET', 'me/indicators', self::OK, self::OK],
         'api.me.indicators.update' => ['PUT', 'me/indicators', self::OK, self::OK],
         'api.classrooms.index' => ['GET', 'classrooms', self::OK, self::OK],

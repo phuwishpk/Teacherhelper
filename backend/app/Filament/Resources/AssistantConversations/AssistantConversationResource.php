@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AssistantConversations;
 
+use App\Domain\Assistant\AssistantStudents;
 use App\Filament\Resources\AssistantConversations\Pages\ManageAssistantConversations;
 use App\Models\AssistantConversation;
 use App\Models\AssistantMessage;
@@ -10,6 +11,7 @@ use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -80,6 +82,21 @@ class AssistantConversationResource extends Resource
                                     ->columnSpan(3)
                                     ->helperText(fn (AssistantMessage $record) => self::note($record)),
                                 TextEntry::make('created_at')->hiddenLabel()->dateTime('d/m H:i', 'Asia/Bangkok'),
+                            ]),
+                        // Names only when the admin opens the table (DESIGN §37.8).
+                        Section::make('ตารางป้ายนักเรียน')
+                            ->description('ผู้ช่วยเห็นเฉพาะป้าย เปิดเพื่อดูว่าป้ายไหนคือใคร')
+                            ->collapsible()
+                            ->collapsed()
+                            ->visible(fn (AssistantConversation $record) => $record->labels()->exists())
+                            ->schema([
+                                TextEntry::make('label_table')
+                                    ->hiddenLabel()
+                                    ->state(fn (AssistantConversation $record) => array_map(
+                                        fn (array $l) => "{$l['label']} = ".($l['name'] ?? 'บัญชีที่ถูกลบ'),
+                                        AssistantStudents::api($record),
+                                    ))
+                                    ->listWithLineBreaks(),
                             ]),
                     ])),
             ])

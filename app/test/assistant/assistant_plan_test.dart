@@ -27,12 +27,18 @@ class _Fake implements AssistantRepository {
   @override
   Future<AssistantReply> conversation(int id) => throw UnimplementedError();
   @override
+  Future<AssistantStatus> acknowledgeStudentData() async =>
+      const AssistantStatus(available: true, studentDataAcknowledged: true);
+  @override
   Future<void> delete(int id) async {}
   @override
   Future<AssistantReply> retry(int id) => throw UnimplementedError();
   @override
-  Future<AssistantReply> send(String text, {int? conversationId}) async =>
-      replies.removeAt(0);
+  Future<AssistantReply> send(
+    String text, {
+    int? conversationId,
+    DataScope? scope,
+  }) async => replies.removeAt(0);
   @override
   Future<AssistantMessage> apply(
     int messageId,
