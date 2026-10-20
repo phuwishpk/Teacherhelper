@@ -43,7 +43,9 @@
           "enum": [
             "questions",
             "rubric",
-            "indicators"
+            "indicators",
+            "gradebook",
+            "practice"
           ]
         },
         "target": {
@@ -250,11 +252,108 @@
               "action"
             ]
           }
+        },
+        "course_id": {
+          "type": "integer"
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "drop_lowest": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "is_homework_default": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "weight"
+            ]
+          }
+        },
+        "cutoffs": {
+          "type": "array",
+          "maxItems": 7,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "skill_code": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "practice_items": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "properties": {
+              "answer_type": {
+                "type": "string",
+                "enum": [
+                  "numeric",
+                  "short",
+                  "mcq"
+                ]
+              },
+              "prompt_text": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "options": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {
+                  "type": "string",
+                  "maxLength": 255
+                }
+              },
+              "correct_option": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6
+              },
+              "accepted_answers": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {
+                  "type": "string",
+                  "maxLength": 255
+                }
+              },
+              "numeric_value": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "explanation": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "answer_type",
+              "prompt_text"
+            ]
+          }
         }
-      },
-      "required": [
-        "target"
-      ]
+      }
     }
   },
   "required": [

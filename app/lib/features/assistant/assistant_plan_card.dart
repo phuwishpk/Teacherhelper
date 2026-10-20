@@ -45,12 +45,44 @@ class AssistantPlanCard extends ConsumerWidget {
             final r?,
           ) =>
             _IndicatorsApplied(plan: plan, result: r, onNavigate: onNavigate),
+          (
+            AssistantMessage.planApplied,
+            AssistantPlan.gradebookCard,
+            final r?,
+          ) =>
+            _SimpleApplied(
+              text: 'บันทึกการตั้งค่าสมุดคะแนนของ «${r.title}» แล้ว',
+              note: 'ถ้าประกาศเกรดไว้แล้ว ต้องประกาศอีกครั้งให้เป็นค่าใหม่',
+              button: 'เปิดตั้งค่าหมวดคะแนน',
+              route: AppRoutes.gradebookSettings(r.courseId!),
+              onNavigate: onNavigate,
+            ),
+          (
+            AssistantMessage.planApplied,
+            AssistantPlan.practiceCard,
+            final r?,
+          ) =>
+            _SimpleApplied(
+              text: 'บันทึกแบบฝึก ${r.created} ข้อเป็นร่างแล้ว',
+              note: [
+                'ไปตรวจและกดอนุมัติใน «คลังแบบฝึก» นักเรียนจึงจะเห็น',
+                for (final s in r.skipped)
+                  'ข้ามข้อ ${s.index + 1}: ${s.reason}',
+              ].join('\n'),
+              button: 'เปิดคลังแบบฝึก',
+              route: AppRoutes.practiceBank,
+              onNavigate: onNavigate,
+            ),
           (AssistantMessage.planApplied, _, final r?) => _Applied(
             plan: plan,
             result: r,
             onNavigate: onNavigate,
           ),
           (_, AssistantPlan.rubricCard, _) => _OpenRubric(message: message),
+          (_, AssistantPlan.gradebookCard, _) => _OpenGradebook(
+            message: message,
+          ),
+          (_, AssistantPlan.practiceCard, _) => _OpenPractice(message: message),
           (_, AssistantPlan.indicatorsCard, _) => _OpenIndicators(
             message: message,
           ),
@@ -78,6 +110,8 @@ class _Replaced extends StatelessWidget {
             '${switch (plan.kind) {
               AssistantPlan.rubricCard => 'การ์ด rubric',
               AssistantPlan.indicatorsCard => 'การ์ดตัวชี้วัด ${plan.items.length} รายการ',
+              AssistantPlan.gradebookCard => 'การ์ดตั้งค่าสมุดคะแนน',
+              AssistantPlan.practiceCard => 'การ์ดแบบฝึก ${plan.practiceItems.length} ข้อ',
               _ => 'การ์ด ${plan.questions.length} ข้อ',
             }}นี้ถูกแทนด้วยการ์ดใหม่',
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -1051,6 +1085,258 @@ class _IndicatorsApplied extends StatelessWidget {
                 label: const Text('เปิดหน้าจับคู่ตัวชี้วัด'),
               ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// After a gradebook or practice card: what was saved and where to look.
+class _SimpleApplied extends StatelessWidget {
+  const _SimpleApplied({
+    required this.text,
+    required this.note,
+    required this.button,
+    required this.route,
+    required this.onNavigate,
+  });
+
+  final String text;
+  final String note;
+  final String button;
+  final String route;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                key: const ValueKey('assistant_plan_done'),
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          note,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            key: const ValueKey('assistant_plan_open'),
+            onPressed: () => onNavigate(route),
+            icon: const Icon(Icons.open_in_new),
+            label: Text(button),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _weight(double w) => w == w.roundToDouble() ? '${w.toInt()}' : '$w';
+
+class _OpenGradebook extends StatelessWidget {
+  const _OpenGradebook({required this.message});
+
+  final AssistantMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final plan = message.plan!;
+    final g = plan.gradebook ?? const GradebookProposal();
+    String rows(List<GradebookCategoryRow> list) => list
+        .map(
+          (c) =>
+              '${c.name} ${_weight(c.weight)}%'
+              '${c.dropLowest > 0 ? ' (ตัด ${c.dropLowest} ต่ำสุด)' : ''}'
+              '${c.homeworkDefault ? ' · หมวดตั้งต้นของการบ้าน' : ''}',
+        )
+        .join('\n');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.tune, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'ตั้งค่าสมุดคะแนน',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        Text(plan.target.title ?? plan.target.error ?? '', style: muted),
+        const Divider(height: 16),
+        if (g.categories case final categories?) ...[
+          Text('หมวดคะแนนใหม่', style: theme.textTheme.labelLarge),
+          Text(rows(categories), style: theme.textTheme.bodyMedium),
+          if (g.currentCategories.isNotEmpty)
+            Text(
+              'เดิม: ${rows(g.currentCategories).replaceAll('\n', ' · ')}',
+              style: muted,
+            ),
+          for (final r in g.removed)
+            Text(
+              'หมวด «${r.name}» จะถูกเอาออก'
+              '${r.itemCount > 0 ? ' งาน ${r.itemCount} ชิ้นในหมวดนี้จะเป็น "ยังไม่ระบุหมวด"' : ''}',
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          const SizedBox(height: 8),
+        ],
+        if (g.cutoffs case final cutoffs?) ...[
+          Text('เกณฑ์เกรด (4 ถึง 1)', style: theme.textTheme.labelLarge),
+          Text(cutoffs.join(' / '), style: theme.textTheme.bodyMedium),
+          if (g.currentCutoffs.isNotEmpty)
+            Text('เดิม: ${g.currentCutoffs.join(' / ')}', style: muted),
+        ],
+        if (plan.problem case final problem?)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              problem,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'ถ้าประกาศเกรดไว้แล้ว หลังบันทึกต้องประกาศอีกครั้ง',
+              style: muted,
+            ),
+          ),
+        _Footer(
+          message: message,
+          label: 'บันทึกการตั้งค่า',
+          icon: Icons.save_outlined,
+          enabled: plan.problem == null && plan.target.error == null,
+        ),
+      ],
+    );
+  }
+}
+
+class _OpenPractice extends ConsumerWidget {
+  const _OpenPractice({required this.message});
+
+  final AssistantMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final plans = ref.watch(assistantPlansProvider.notifier);
+    final ui =
+        ref.watch(assistantPlansProvider)[message.id] ?? plans.of(message);
+    final busy = ui.applying || ref.watch(assistantChatProvider).sending;
+    final plan = message.plan!;
+    final id = message.id;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.fitness_center, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'แบบฝึกที่เสนอ ${plan.practiceItems.length} ข้อ',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          plan.target.title ?? plan.target.error ?? '',
+          style: plan.target.error == null
+              ? muted
+              : theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+        ),
+        const Divider(height: 16),
+        for (final (i, item) in plan.practiceItems.indexed)
+          Padding(
+            key: ValueKey('assistant_plan_q_${id}_$i'),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: ui.selected.contains(i),
+                  onChanged: item.error != null || busy
+                      ? null
+                      : (_) => plans.toggle(message, i),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ข้อ ${i + 1} · ${item.typeLabel}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(item.promptText, style: theme.textTheme.bodyMedium),
+                      for (final o in item.options)
+                        Text(
+                          '${o.key}. ${o.text}',
+                          style: o.key == item.answer
+                              ? theme.textTheme.titleSmall?.copyWith(
+                                  color: scheme.primary,
+                                )
+                              : theme.textTheme.bodyMedium,
+                        ),
+                      if (item.answerType != 'mcq' && item.answer != null)
+                        Text(
+                          'เฉลย: ${item.answer}',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: scheme.primary,
+                          ),
+                        ),
+                      if (item.explanation.isNotEmpty)
+                        Text('คำอธิบาย: ${item.explanation}', style: muted),
+                      if (item.error case final error?)
+                        Text(
+                          error,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.error,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Text('บันทึกเป็นร่าง แล้วไปอนุมัติใน «คลังแบบฝึก»', style: muted),
+        _Footer(
+          message: message,
+          label: 'บันทึกเป็นร่าง (${ui.selected.length})',
+          icon: Icons.save_outlined,
+          enabled: ui.selected.isNotEmpty && plan.target.error == null,
         ),
       ],
     );

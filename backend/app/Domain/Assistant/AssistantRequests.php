@@ -127,7 +127,13 @@ final class AssistantRequests
             )).implode(' → ', $plan['reference_steps'] ?? []);
         }
         foreach ($plan['items'] ?? [] as $i => $item) {
-            $lines[] = ($i + 1).". {$item['action']} {$item['code']} ".mb_substr((string) $item['name'], 0, 60);
+            $lines[] = $kind === AssistantPlans::CARD_PRACTICE
+                ? ($i + 1).". {$item['answer_type']}: ".mb_substr((string) $item['prompt_text'], 0, 60)
+                : ($i + 1).". {$item['action']} {$item['code']} ".mb_substr((string) $item['name'], 0, 60);
+        }
+        if ($kind === AssistantPlans::CARD_GRADEBOOK) {
+            $lines[] = 'categories: '.implode('; ', array_map(fn (array $c) => "{$c['name']} {$c['weight']}", $plan['categories'] ?? []))
+                .' cutoffs: '.implode(',', $plan['cutoffs'] ?? []);
         }
         if (isset($plan['result'])) {
             $lines[] = 'applied';
