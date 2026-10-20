@@ -76,9 +76,12 @@ final class AssistantPlanApplier
             $kind = $plan['kind'] ?? AssistantPlans::CARD_QUESTIONS;
             if ($kind !== AssistantPlans::CARD_QUESTIONS) {
                 $plan['result'] = [
-                    ...($kind === AssistantPlans::CARD_RUBRIC
-                        ? RubricCards::apply($teacher, $plan, $this->rubrics)
-                        : IndicatorCards::apply($teacher, $plan, $selected, $this->skills)),
+                    ...match ($kind) {
+                        AssistantPlans::CARD_RUBRIC => RubricCards::apply($teacher, $plan, $this->rubrics),
+                        AssistantPlans::CARD_GRADEBOOK => GradebookCards::apply($teacher, $plan),
+                        AssistantPlans::CARD_PRACTICE => PracticeCards::apply($teacher, $plan, $selected),
+                        default => IndicatorCards::apply($teacher, $plan, $selected, $this->skills),
+                    },
                     'at' => now()->toIso8601String(),
                 ];
                 $message->plan = $plan;

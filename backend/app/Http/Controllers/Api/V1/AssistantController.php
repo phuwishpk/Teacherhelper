@@ -116,8 +116,8 @@ class AssistantController extends Controller
         if ($message === null) {
             throw new ApiException('ไม่พบการ์ดนี้', 'not_found', 404);
         }
-        // A rubric card has nothing to tick; a question or indicator card does.
-        $rubric = ($message->plan['kind'] ?? null) === AssistantPlans::CARD_RUBRIC;
+        // A rubric or gradebook card has nothing to tick; the others do.
+        $rubric = in_array($message->plan['kind'] ?? null, [AssistantPlans::CARD_RUBRIC, AssistantPlans::CARD_GRADEBOOK], true);
         $count = count($message->plan['questions'] ?? $message->plan['items'] ?? []);
         $data = $request->validate([
             'selected' => [$rubric ? 'sometimes' : 'required', 'array', $rubric ? 'min:0' : 'min:1', 'max:'.AssistantPlans::MAX_QUESTIONS],

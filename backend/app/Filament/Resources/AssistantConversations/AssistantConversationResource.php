@@ -132,6 +132,8 @@ class AssistantConversationResource extends Resource
         $what = match ($m->plan['kind'] ?? 'questions') {
             'rubric' => 'การ์ด rubric ข้อ '.($m->plan['question']['position'] ?? '?'),
             'indicators' => 'การ์ดตัวชี้วัด '.count($m->plan['items'] ?? []).' รายการ',
+            'gradebook' => 'การ์ดตั้งค่าสมุดคะแนน',
+            'practice' => 'การ์ดแบบฝึก '.count($m->plan['items'] ?? []).' ข้อ',
             default => 'การ์ด '.count($m->plan['questions'] ?? []).' ข้อ',
         };
         $target = $m->plan['target']['title'] ?? 'ยังไม่เลือกงาน';

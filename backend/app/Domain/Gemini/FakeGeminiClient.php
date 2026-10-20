@@ -33,6 +33,9 @@ use Illuminate\Support\Str;
  *   [fake:confirm]       assistant_chat: "โอเค สร้างเลย" (apply_plan)
  *   [fake:rubric:ID:N]   assistant_chat: a rubric card for question N of assignment ID (3 points, steps too)
  *   [fake:indicators] / [fake:indicators:ID]  an indicator card (FAKE-STD, FAKE-1; for assignment ID)
+ *   [fake:gradebook:COURSE] assistant_chat: categories "งาน 60, สอบ 40" and cutoffs 80…50
+ *   [fake:gradebook-bad:COURSE] the same with weights summing to 90
+ *   [fake:practice:CODE]  assistant_chat: three practice items (mcq, short, numeric) and one without a key
  *   [fake:need:SET:ID] / [fake:need-student:LABEL]  assistant_chat: asks for student data
  *                        (need_data); the second call (data attached) echoes the STUDENT DATA heading
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
@@ -212,6 +215,23 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                     'answer' => 'ผู้ช่วยทดสอบอ่านข้อมูล: '.(preg_match('/# STUDENT DATA(?! ACCESS)[^\n]*/u', $request->systemInstruction, $d) === 1 ? $d[0] : '')
                         .' | ถาม: '.trim((string) ($request->hints['question_text'] ?? '')),
                 ],
+                preg_match('/\[fake:gradebook(-bad)?:(\d+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอการตั้งค่าในการ์ด', 'plan' => [
+                    'kind' => 'gradebook', 'target' => (object) [], 'course_id' => (int) $m[2],
+                    'categories' => [
+                        ['name' => 'งาน', 'weight' => 60, 'drop_lowest' => 1, 'is_homework_default' => true],
+                        ['name' => 'สอบ', 'weight' => $m[1] === '-bad' ? 30 : 40],
+                    ],
+                    'cutoffs' => [80, 75, 70, 65, 60, 55, 50],
+                ]],
+                preg_match('/\[fake:practice:([^\]]+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอแบบฝึกในการ์ด', 'plan' => [
+                    'kind' => 'practice', 'target' => (object) [], 'skill_code' => strtoupper($m[1]),
+                    'practice_items' => [
+                        ['answer_type' => 'mcq', 'prompt_text' => '1/2 + 1/4 = ?', 'options' => ['1/6', '3/4', '2/6'], 'correct_option' => 2, 'explanation' => 'ทำส่วนให้เท่ากัน'],
+                        ['answer_type' => 'short', 'prompt_text' => 'ครึ่งหนึ่งเขียนเป็นเศษส่วนได้อย่างไร', 'accepted_answers' => ['1/2'], 'explanation' => 'แบ่งสองส่วนเท่ากัน'],
+                        ['answer_type' => 'numeric', 'prompt_text' => '0.5 + 0.25 = ?', 'numeric_value' => '0.75', 'explanation' => 'บวกทศนิยม'],
+                        ['answer_type' => 'short', 'prompt_text' => 'ไม่มีเฉลย', 'explanation' => 'x'],
+                    ],
+                ]],
                 preg_match('/\[fake:need:([a-z_]+):(\d+)\]/', $markers, $m) === 1 => ['answer' => 'กำลังดูข้อมูล…', 'need_data' => [
                     'set' => $m[1], ...($m[1] === 'assignment_analysis' ? ['assignment_id' => (int) $m[2]] : ['classroom_id' => (int) $m[2]]),
                 ]],

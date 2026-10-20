@@ -4,6 +4,7 @@ namespace App\Domain\Assistant;
 
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Courses\IndicatorScope;
+use App\Domain\Gradebook\GradebookSettings;
 use App\Domain\Skills\TeacherIndicators;
 use App\Models\Assignment;
 use App\Models\Classroom;
@@ -43,7 +44,10 @@ final class AssistantContext
     public const MAX_SUBJECT_GRADES = 3;
 
     /** Words that make a message about indicators. */
-    private const INDICATOR_WORDS = ['ตัวชี้วัด', 'มาตรฐาน', 'indicator', 'สมรรถนะ', 'ผลการเรียนรู้'];
+    private const INDICATOR_WORDS = ['ตัวชี้วัด', 'มาตรฐาน', 'indicator', 'สมรรถนะ', 'ผลการเรียนรู้', 'แบบฝึก', 'practice'];
+
+    /** Words that make a message about gradebook settings. */
+    private const GRADEBOOK_WORDS = ['สมุดคะแนน', 'หมวด', 'น้ำหนัก', 'เกณฑ์เกรด', 'ตัดเกรด', 'คะแนนเก็บ', 'กลางภาค', 'ปลายภาค', 'จิตพิสัย', 'gradebook'];
 
     /** Share of an assignment title's trigrams the message must contain. */
     private const TITLE_MATCH = 0.6;
@@ -81,12 +85,12 @@ final class AssistantContext
         foreach (self::targets($assignments->all(), $message, $previousTarget) as $target) {
             array_push($lines, '', ...self::details($target));
         }
-        $aboutIndicators = $previousCard === AssistantPlans::CARD_INDICATORS;
-        foreach (self::INDICATOR_WORDS as $word) {
-            $aboutIndicators = $aboutIndicators || mb_stripos($message, $word) !== false;
-        }
-        if ($aboutIndicators) {
+        $about = fn (array $words) => array_filter($words, fn (string $w) => mb_stripos($message, $w) !== false) !== [];
+        if (in_array($previousCard, [AssistantPlans::CARD_INDICATORS, AssistantPlans::CARD_PRACTICE], true) || $about(self::INDICATOR_WORDS)) {
             array_push($lines, '', ...self::indicators($teacher, $courses->pluck('id')->all()));
+        }
+        if ($previousCard === AssistantPlans::CARD_GRADEBOOK || $about(self::GRADEBOOK_WORDS)) {
+            array_push($lines, '', ...self::gradebooks($teacher));
         }
 
         return implode("\n", $lines);
@@ -183,6 +187,29 @@ final class AssistantContext
             if ($skills->count() > self::MAX_SKILL_LINES) {
                 $lines[] = '(more not listed)';
             }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The gradebook settings of the teacher's own courses (DESIGN §37.9).
+     *
+     * @return list<string>
+     */
+    private static function gradebooks(User $teacher): array
+    {
+        $lines = ['Gradebook settings of your courses (course id | categories: name weight drop-lowest [items] | grade cutoffs for 4,3.5,3,2.5,2,1.5,1):'];
+        $courses = Course::query()->where('created_by', $teacher->id)->where('school_id', $teacher->school_id)->latest('id')->limit(8)->get();
+        foreach ($courses as $course) {
+            $p = GradebookSettings::payload($course);
+            $categories = $p['configured']
+                ? implode('; ', array_map(fn (array $c) => "{$c['name']} ".GradebookSettings::formatWeight((float) $c['weight']).($c['drop_lowest'] > 0 ? " drop {$c['drop_lowest']}" : '')." [{$c['item_count']}]".($c['is_homework_default'] ? ' (homework default)' : ''), $p['categories']))
+                : 'not set yet';
+            $lines[] = "- {$course->id} {$course->code} {$course->name} | {$categories} | ".implode(',', $p['cutoffs']);
+        }
+        if ($courses->isEmpty()) {
+            $lines[] = '(no course yet)';
         }
 
         return $lines;
