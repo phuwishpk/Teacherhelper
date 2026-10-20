@@ -12,6 +12,7 @@ import 'assignments_providers.dart';
 import 'indicator_mapping.dart';
 import 'question.dart';
 import 'skills_picker.dart';
+import '../../core/api/error_codes.dart';
 
 /// "จับคู่ข้อกับตัวชี้วัด" (DESIGN §20.3): every question with its
 /// indicators and what Gemini suggests from the linked lesson plan (or, for
@@ -371,6 +372,7 @@ class _PlanCard extends StatelessWidget {
                 key: const ValueKey('mapping_failed'),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
+              if (state.aiCode case final code?) ErrorCodeLine(code),
             ] else if (state.status == SuggestStatus.done) ...[
               const SizedBox(height: 12),
               Text(

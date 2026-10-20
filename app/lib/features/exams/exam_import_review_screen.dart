@@ -18,6 +18,7 @@ import 'exam_import_repository.dart';
 import 'exam_models.dart';
 import 'exam_page_renders.dart';
 import 'exam_providers.dart';
+import '../../core/api/error_codes.dart';
 
 /// "ตรวจข้อที่อ่านจากไฟล์" (DESIGN §22.4): waits for a queued read, renders
 /// the pages the figures are cropped from, then lists every draft question
@@ -345,8 +346,12 @@ class _ExamImportReviewScreenState
         child: ListTile(
           leading: Icon(Icons.error_outline, color: theme.colorScheme.error),
           title: const Text('อ่านไฟล์ไม่สำเร็จ'),
-          subtitle: Text(
-            read.error ?? 'ลองส่งใหม่อีกครั้ง หรือแนบไฟล์ที่ชัดขึ้น',
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(read.error ?? 'ลองส่งใหม่อีกครั้ง หรือแนบไฟล์ที่ชัดขึ้น'),
+              if (read.errorCode case final code?) ErrorCodeLine(code),
+            ],
           ),
         ),
       );

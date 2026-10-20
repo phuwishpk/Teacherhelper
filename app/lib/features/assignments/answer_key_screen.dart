@@ -19,6 +19,7 @@ import 'class_regrade.dart';
 import 'document_read_screen.dart';
 import 'key_document_sources.dart';
 import 'question.dart';
+import '../../core/api/error_codes.dart';
 
 /// "เฉลย" of an assignment (DESIGN §19.5, §19.11): three ways to give the
 /// key (type it, photograph it, attach a file), AI drafting when the
@@ -573,6 +574,7 @@ class _ExtractionCard extends StatelessWidget {
                 'ลองส่งใหม่อีกครั้ง',
                 style: TextStyle(color: theme.colorScheme.onErrorContainer),
               ),
+              if (extraction.errorCode case final code?) ErrorCodeLine(code),
               if (guidance != null) ...[
                 const SizedBox(height: 8),
                 GuidanceUsedNote(
