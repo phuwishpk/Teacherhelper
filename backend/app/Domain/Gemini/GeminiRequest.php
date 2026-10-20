@@ -25,6 +25,7 @@ final readonly class GeminiRequest
      * @param  list<GeminiImage>  $images
      * @param  array<string, mixed>|null  $responseSchema  JSON Schema of the expected output (DESIGN §10.3)
      * @param  array<string, mixed>  $hints
+     * @param  list<array{role: 'user'|'model', text: string}>  $history  earlier turns of a conversation, oldest first (DESIGN §37); userText is the new turn
      */
     public function __construct(
         public string $purpose,
@@ -39,5 +40,6 @@ final readonly class GeminiRequest
         public ?int $timeout = null,
         public ?string $thinkingLevel = null,
         public ?int $maxOutputTokens = null,
+        public array $history = [],
     ) {}
 }

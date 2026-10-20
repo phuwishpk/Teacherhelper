@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Assistant\AssistantChat;
 use App\Domain\Documents\SourceDocuments;
 use App\Domain\Exams\ExamFigures;
 use App\Domain\Google\GoogleEvents;
@@ -26,7 +27,8 @@ use Illuminate\Support\Facades\Log;
  *   Gemini read from them stays in document_extractions;
  * - exam page images the figures were cropped from (§22.17): with the
  *   documents; the cropped figures stay as long as the exam;
- * - google_events rows (and the Google e-mails in them) after 30 days (§32).
+ * - google_events rows (and the Google e-mails in them) after 30 days (§32);
+ * - "ผู้ช่วย Krucheck" conversations 90 days after their last message (§37).
  */
 class PurgeImagesCommand extends Command
 {
@@ -41,8 +43,9 @@ class PurgeImagesCommand extends Command
         $documents = SourceDocuments::purge();
         $examPages = ExamFigures::purge();
         $googleEvents = GoogleEvents::purge();
+        $assistant = AssistantChat::purge();
 
-        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages, 'google_events' => $googleEvents]);
+        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages, 'google_events' => $googleEvents, 'assistant_conversations' => $assistant]);
         $this->info("Worksheet prints expired: {$worksheets}");
         $this->info("Page images deleted (published): {$scans['page_images']}");
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
@@ -52,6 +55,7 @@ class PurgeImagesCommand extends Command
         $this->info("Teacher documents deleted (past retention): {$documents}");
         $this->info("Exam page images deleted (past retention): {$examPages}");
         $this->info("Google events deleted (older than 30 days): {$googleEvents}");
+        $this->info("Assistant conversations deleted (no message for 90 days): {$assistant}");
 
         return self::SUCCESS;
     }

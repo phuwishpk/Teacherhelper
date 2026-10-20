@@ -26,6 +26,8 @@ use Illuminate\Support\Str;
  *   [fake:error]         HTTP 503, every time
  *   [fake:explanation-error] / [fake:explanation-invalid]   for `explanation`
  *   [fake:max-tokens]    any purpose: a cut-off answer, finishReason MAX_TOKENS
+ *   [fake:quota]         assistant_chat: HTTP 429
+ *   [fake:error-once]    assistant_chat: HTTP 503 the first time, an answer on the retry
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
@@ -191,6 +193,15 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('invalid') => 'not json at all {',
                 default => self::analysis($request, $has('weak-word') || ($has('weak-word-once') && $this->seen[$signature] === 1)),
+            },
+            // "ผู้ช่วย Krucheck" (DESIGN §37): echoes what it got, so tests see the history and the knowledge.
+            'assistant_chat' => match (true) {
+                $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('error-once') && $this->seen[$signature] === 1 => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('quota') => GeminiReply::error('HTTP 429: Resource has been exhausted', 0, 429),
+                $has('invalid') => 'not json at all {',
+                default => ['answer' => 'ผู้ช่วยทดสอบตอบ: '.trim((string) ($request->hints['question_text'] ?? ''))
+                    .' (ประวัติ '.(int) ($request->hints['history_turns'] ?? 0).' ข้อความ, คู่มือ '.(int) ($request->hints['sections'] ?? 0).' หัวข้อ)'],
             },
             'check' => ['ok' => true, 'word_th' => 'สวัสดี'], // eduvision:gemini-check --generate
             default => GeminiReply::error("the fake does not answer {$request->purpose}", 0, 501),

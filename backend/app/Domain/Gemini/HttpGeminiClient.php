@@ -146,9 +146,14 @@ final class HttpGeminiClient implements GeminiBatchClient, GeminiClient
             $parts[] = $part;
         }
 
+        $contents = [];
+        foreach ($request->history as $turn) {
+            $contents[] = ['role' => $turn['role'], 'parts' => [['text' => $turn['text']]]];
+        }
+        $contents[] = ['role' => 'user', 'parts' => $parts];
         $body = [
             'systemInstruction' => ['parts' => [['text' => $request->systemInstruction]]],
-            'contents' => [['role' => 'user', 'parts' => $parts]],
+            'contents' => $contents,
         ];
 
         $config = [];
