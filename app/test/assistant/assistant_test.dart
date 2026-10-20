@@ -57,6 +57,7 @@ class _FakeAssistant implements AssistantRepository {
     String text, {
     int? conversationId,
     DataScope? scope,
+    List<int> documentIds = const [],
   }) {
     sent.add((text, conversationId));
     return _next();

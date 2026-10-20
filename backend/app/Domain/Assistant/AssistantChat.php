@@ -2,16 +2,20 @@
 
 namespace App\Domain\Assistant;
 
+use App\Domain\Documents\DocumentSelection;
 use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\AiErrors;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\GeminiGateway;
+use App\Domain\Gemini\GeminiImage;
 use App\Domain\Gemini\GeminiKey;
 use App\Domain\Gemini\GeminiKeyResolver;
+use App\Domain\Gemini\MediaResolution;
 use App\Exceptions\ApiException;
 use App\Models\AiCall;
 use App\Models\AssistantConversation;
 use App\Models\AssistantMessage;
+use App\Models\SourceDocument;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +44,14 @@ final class AssistantChat
 
     /** The answer to a typed confirmation with no open card. */
     public const NO_OPEN_CARD = 'ตอนนี้ไม่มีการ์ดที่รอสร้าง บอกได้เลยว่าอยากให้ออกข้ออะไร ลงงานไหน';
+
+    /** Files at most per question. */
+    public const MAX_ATTACHMENTS = 5;
+
+    /** Pages the chat reads itself; longer files go to the queued readers. */
+    public const MAX_READ_PAGES = 10;
+
+    public const FILE_TOO_LONG = 'ไฟล์ยาวเกิน 10 หน้า ผู้ช่วยอ่านโจทย์เองไม่ได้ แบ่งไฟล์ให้สั้นลง หรือให้ผู้ช่วยส่งไฟล์ไปอ่านเป็นเฉลยหรือข้อสอบแทน';
 
     /** The answer when Gemini asked for data the teacher has not turned on. */
     public const DATA_NOT_ON = 'ผู้ช่วยยังดูคะแนนนักเรียนไม่ได้ กด «ข้อมูลนักเรียน» ใต้ช่องพิมพ์ อ่านคำเตือนแล้วกด "เข้าใจแล้ว" จากนั้นถามอีกครั้ง';
@@ -88,10 +100,15 @@ final class AssistantChat
      * @throws ApiException 422 ai_key_missing, 429 assistant_limit, 403 student_data_off,
      *                      409 student_data_ack_required, 404 of the scope, 4xx/5xx of a failed AI call
      */
-    public function send(User $teacher, ?AssistantConversation $conversation, string $text, ?array $scope = null): array
+    public function send(User $teacher, ?AssistantConversation $conversation, string $text, ?array $scope = null, array $documentIds = []): array
     {
         $text = trim($text);
         $key = $this->guard($teacher);
+        // The teacher's own files only, within the readers' limits (DESIGN §37.10).
+        $attachments = $documentIds === [] ? null : array_map(
+            fn (SourceDocument $d) => ['id' => $d->id, 'name' => $d->original_name, 'mime_type' => $d->mime_type, 'page_count' => (int) $d->page_count],
+            DocumentSelection::resolve($teacher, ['document_ids' => $documentIds])->documents,
+        );
         if ($scope !== null) {
             self::assertStudentData($teacher);
         }
@@ -109,7 +126,7 @@ final class AssistantChat
             throw $e;
         }
         $history = $conversation->messages()->get()->all();
-        $question = $conversation->messages()->create(['role' => AssistantMessage::ROLE_USER, 'content' => $text]);
+        $question = $conversation->messages()->create(['role' => AssistantMessage::ROLE_USER, 'content' => $text, 'attachments' => $attachments]);
 
         return $this->answer($teacher, $conversation, $question, $history, $key, $data);
     }
@@ -174,7 +191,9 @@ final class AssistantChat
 
             return $copy;
         }, $history);
+        $files = self::latestAttachments([...$history, $question]);
         $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget, $previousCard)
+            ."\n\n".self::fileNote($files)
             ."\n\n".self::dataNote($teacher, $data !== null)
             .($data === null ? '' : "\n\n".$data);
         $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $context)], $key)['chat'];
@@ -193,17 +212,37 @@ final class AssistantChat
             $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $again)], $key)['chat'];
             $calls[] = $outcome->aiCallId;
         }
+        // The answer asked to read the attached files: read them and ask again.
+        $fileBlocked = false;
+        if ($outcome->isOk() && ($outcome->data['need_file'] ?? false) === true && ! is_array($outcome->data['plan'] ?? null) && $files !== []) {
+            $pages = array_sum(array_column($files, 'page_count'));
+            if ($pages > self::MAX_READ_PAGES) {
+                $fileBlocked = true;
+            } else {
+                $level = MediaResolution::forPart(MediaResolution::PART_DOCUMENT);
+                $parts = array_map(
+                    fn (array $f) => new GeminiImage($f['bytes'], $f['mime_type'], $level),
+                    DocumentSelection::resolve($teacher, ['document_ids' => array_column($files, 'id')])->files(),
+                );
+                $again = $context."\n\nThe ATTACHED FILES are included in this request: read them and answer now (make the card); do not set need_file.";
+                $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $again, $parts)], $key)['chat'];
+                $calls[] = $outcome->aiCallId;
+            }
+        }
         $usage = AiCall::query()->whereIn('id', array_filter($calls))->get(['input_tokens', 'output_tokens']);
         $input = (int) $usage->sum('input_tokens');
         $output = (int) $usage->sum('output_tokens');
 
-        $plan = $outcome->isOk() && is_array($outcome->data['plan'] ?? null) ? AssistantPlans::normalise($outcome->data['plan'], $teacher) : null;
+        $plan = $outcome->isOk() && is_array($outcome->data['plan'] ?? null) ? AssistantPlans::normalise($outcome->data['plan'], $teacher, $question->content) : null;
         // "โอเค สร้างเลย": the app applies the latest open card with its ticks.
         // The wording is fixed, so the answer never claims a result it has not seen.
         $applyId = null;
         $content = (string) ($outcome->data['answer'] ?? '');
         if ($blocked) {
             $content = AssistantStudentData::allowed($teacher) ? self::DATA_NOT_ON : self::DATA_OFF;
+        }
+        if ($fileBlocked) {
+            $content = self::FILE_TOO_LONG;
         }
         if ($plan === null && ($outcome->data['apply_plan'] ?? false) === true) {
             $applyId = $conversation->messages()->where('plan_status', AssistantMessage::PLAN_PROPOSED)->max('id');
@@ -320,5 +359,35 @@ final class AssistantChat
             $teacher->assistant_data_ack_at === null => '# STUDENT DATA ACCESS: not turned on yet. If asked about students\' results, tell the teacher to press «ข้อมูลนักเรียน» under the chat box and accept the notice, then ask again.',
             default => '# STUDENT DATA ACCESS: on. To answer about results, set need_data (classroom_summary with classroom_id, student_history with student_label, assignment_analysis with assignment_id) and leave plan out; the data comes back in a second call.',
         };
+    }
+
+    /**
+     * The files of the latest question that had some (DESIGN §37.10).
+     *
+     * @param  list<AssistantMessage>  $messages
+     * @return list<array{id: int, name: string, mime_type: string, page_count: int}>
+     */
+    private static function latestAttachments(array $messages): array
+    {
+        foreach (array_reverse($messages) as $m) {
+            if ($m->role === AssistantMessage::ROLE_USER && $m->attachments !== null && $m->attachments !== []) {
+                return $m->attachments;
+            }
+        }
+
+        return [];
+    }
+
+    /** @param  list<array{id: int, name: string, mime_type: string, page_count: int}>  $files */
+    private static function fileNote(array $files): string
+    {
+        if ($files === []) {
+            return '# ATTACHED FILES: none.';
+        }
+
+        return "# ATTACHED FILES (the teacher's documents; the content is not included yet):\n".implode("\n", array_map(
+            fn (array $f) => "- {$f['id']} | {$f['name']} | {$f['mime_type']} | {$f['page_count']} pages",
+            $files,
+        ));
     }
 }

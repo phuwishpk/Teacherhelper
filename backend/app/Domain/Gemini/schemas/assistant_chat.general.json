@@ -35,6 +35,9 @@
         "set"
       ]
     },
+    "need_file": {
+      "type": "boolean"
+    },
     "plan": {
       "type": "object",
       "properties": {
@@ -45,7 +48,8 @@
             "rubric",
             "indicators",
             "gradebook",
-            "practice"
+            "practice",
+            "file"
           ]
         },
         "target": {
@@ -352,8 +356,27 @@
               "prompt_text"
             ]
           }
+        },
+        "file_action": {
+          "type": "string",
+          "enum": [
+            "answer_key",
+            "exam",
+            "course",
+            "lesson_plan"
+          ]
+        },
+        "document_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "integer"
+          }
         }
-      }
+      },
+      "required": [
+        "target"
+      ]
     }
   },
   "required": [

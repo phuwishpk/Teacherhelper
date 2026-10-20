@@ -97,6 +97,20 @@ final class AssistantContext
     }
 
     /**
+     * The not-closed assignment the teacher manages whose title the message
+     * names best, or null (a file card without a target, DESIGN §37.10).
+     */
+    public static function namedAssignment(User $teacher, string $message): ?int
+    {
+        $assignments = ClassroomAccess::managedAssignments($teacher)
+            ->where('assignments.status', '!=', Assignment::STATUS_CLOSED)
+            ->latest('assignments.updated_at')->limit(self::MAX_ASSIGNMENTS)->get(['assignments.id', 'assignments.title']);
+        $match = self::targets($assignments->all(), $message, null);
+
+        return $match[0]->id ?? null;
+    }
+
+    /**
      * @param  list<Assignment>  $assignments
      * @return list<Assignment>
      */

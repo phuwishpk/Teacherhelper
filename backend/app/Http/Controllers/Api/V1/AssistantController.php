@@ -86,13 +86,16 @@ class AssistantController extends Controller
             'scope.classroom_id' => ['sometimes', 'nullable', 'integer'],
             'scope.student_id' => ['sometimes', 'nullable', 'integer'],
             'scope.assignment_id' => ['sometimes', 'nullable', 'integer'],
+            // The teacher's files (POST /documents) attached to the question (DESIGN §37.10).
+            'document_ids' => ['sometimes', 'nullable', 'array', 'max:'.AssistantChat::MAX_ATTACHMENTS],
+            'document_ids.*' => ['integer', 'distinct'],
         ], [
             'text.required' => 'พิมพ์คำถามก่อน',
             'text.max' => 'ข้อความยาวเกิน '.AssistantChat::MAX_MESSAGE_LENGTH.' ตัวอักษร',
         ]);
         $conversation = isset($data['conversation_id']) ? self::own($request, (int) $data['conversation_id']) : null;
 
-        return self::result($this->chat->send($request->user(), $conversation, (string) $data['text'], $data['scope'] ?? null));
+        return self::result($this->chat->send($request->user(), $conversation, (string) $data['text'], $data['scope'] ?? null, array_map('intval', $data['document_ids'] ?? [])));
     }
 
     public function retry(Request $request, int $id): JsonResponse
@@ -117,7 +120,7 @@ class AssistantController extends Controller
             throw new ApiException('ไม่พบการ์ดนี้', 'not_found', 404);
         }
         // A rubric or gradebook card has nothing to tick; the others do.
-        $rubric = in_array($message->plan['kind'] ?? null, [AssistantPlans::CARD_RUBRIC, AssistantPlans::CARD_GRADEBOOK], true);
+        $rubric = in_array($message->plan['kind'] ?? null, [AssistantPlans::CARD_RUBRIC, AssistantPlans::CARD_GRADEBOOK, AssistantPlans::CARD_FILE], true);
         $count = count($message->plan['questions'] ?? $message->plan['items'] ?? []);
         $data = $request->validate([
             'selected' => [$rubric ? 'sometimes' : 'required', 'array', $rubric ? 'min:0' : 'min:1', 'max:'.AssistantPlans::MAX_QUESTIONS],

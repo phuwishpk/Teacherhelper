@@ -4,6 +4,7 @@ namespace App\Domain\Assistant;
 
 use App\Domain\Gemini\GeminiCall;
 use App\Domain\Gemini\GeminiException;
+use App\Domain\Gemini\GeminiImage;
 use App\Domain\Gemini\GeminiRequest;
 use App\Domain\Gemini\PromptRepository;
 use App\Domain\Gemini\ResponseSchemas;
@@ -37,14 +38,15 @@ final class AssistantRequests
     /**
      * @param  list<AssistantMessage>  $history  earlier messages, oldest first (errors are skipped)
      * @param  string  $context  AssistantContext::build()
+     * @param  list<GeminiImage>  $files  the teacher's attached files, when Gemini asked to read them
      */
-    public function call(string $message, array $history, int $conversationId, string $context = ''): GeminiCall
+    public function call(string $message, array $history, int $conversationId, string $context = '', array $files = []): GeminiCall
     {
         $prompt = $this->prompts->get(self::PURPOSE, self::TYPE);
         $turns = [];
         foreach ($history as $m) {
             if ($m->role === AssistantMessage::ROLE_USER || $m->role === AssistantMessage::ROLE_ASSISTANT) {
-                $turns[] = ['role' => $m->role === AssistantMessage::ROLE_USER ? 'user' : 'model', 'text' => $m->content.self::cardSummary($m)];
+                $turns[] = ['role' => $m->role === AssistantMessage::ROLE_USER ? 'user' : 'model', 'text' => $m->content.self::cardSummary($m).self::attachmentSummary($m)];
             }
         }
         $turns = array_slice($turns, -self::HISTORY_TURNS);
@@ -79,6 +81,7 @@ final class AssistantRequests
                 thinkingLevel: $prompt->thinking,
                 maxOutputTokens: $prompt->maxOutputTokens,
                 history: $turns,
+                images: $files,
             ),
             check: fn (array $data) => self::check($data),
             feature: 'assistant_conversation:'.$conversationId,
@@ -87,7 +90,7 @@ final class AssistantRequests
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{answer: string, plan: array<string, mixed>|null, apply_plan: bool, need_data: array<string, mixed>|null}
+     * @return array{answer: string, plan: array<string, mixed>|null, apply_plan: bool, need_data: array<string, mixed>|null, need_file: bool}
      *
      * @throws GeminiException invalid_output
      */
@@ -103,7 +106,17 @@ final class AssistantRequests
             'plan' => is_array($data['plan'] ?? null) ? $data['plan'] : null,
             'apply_plan' => ($data['apply_plan'] ?? false) === true,
             'need_data' => is_array($data['need_data'] ?? null) ? $data['need_data'] : null,
+            'need_file' => ($data['need_file'] ?? false) === true,
         ];
+    }
+
+    /** "[ATTACHED …]" after a question that had files. */
+    private static function attachmentSummary(AssistantMessage $m): string
+    {
+        return $m->attachments === null || $m->attachments === [] ? '' : "\n[ATTACHED: ".implode(', ', array_map(
+            fn (array $a) => "{$a['id']} {$a['name']} ({$a['page_count']} p.)",
+            $m->attachments,
+        )).']';
     }
 
     /** "[การ์ด …]" after an answer that had a card: its state, target and questions in short. */

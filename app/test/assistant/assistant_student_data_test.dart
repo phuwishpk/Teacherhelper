@@ -48,6 +48,7 @@ class _Fake implements AssistantRepository {
     String text, {
     int? conversationId,
     DataScope? scope,
+    List<int> documentIds = const [],
   }) async {
     scopes.add(scope);
     return AssistantReply(
