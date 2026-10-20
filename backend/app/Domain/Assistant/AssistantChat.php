@@ -41,6 +41,12 @@ final class AssistantChat
     /** The answer to a typed confirmation with no open card. */
     public const NO_OPEN_CARD = 'ตอนนี้ไม่มีการ์ดที่รอสร้าง บอกได้เลยว่าอยากให้ออกข้ออะไร ลงงานไหน';
 
+    /** The answer when Gemini asked for data the teacher has not turned on. */
+    public const DATA_NOT_ON = 'ผู้ช่วยยังดูคะแนนนักเรียนไม่ได้ กด «ข้อมูลนักเรียน» ใต้ช่องพิมพ์ อ่านคำเตือนแล้วกด "เข้าใจแล้ว" จากนั้นถามอีกครั้ง';
+
+    /** The admin switched student data off for the teacher's workspace. */
+    public const DATA_OFF = 'ผู้ดูแลระบบปิดการถามข้อมูลนักเรียนกับผู้ช่วยไว้สำหรับโรงเรียนนี้';
+
     /** Not an AI failure: the teacher's messages of the day are used up. */
     public const LIMIT_CODE = 'CHAT-LIMIT';
 
@@ -48,6 +54,8 @@ final class AssistantChat
         private readonly GeminiKeyResolver $keys,
         private readonly GeminiGateway $gateway,
         private readonly AssistantRequests $requests,
+        private readonly AssistantStudents $students,
+        private readonly AssistantStudentData $data,
     ) {}
 
     /** @return array{available: bool, used_today: int, daily_limit: int} */
@@ -57,26 +65,64 @@ final class AssistantChat
             'available' => $this->keys->teacherKey($teacher->id) !== null,
             'used_today' => self::usedToday($teacher),
             'daily_limit' => self::DAILY_LIMIT,
+            'student_data' => [
+                'allowed' => AssistantStudentData::allowed($teacher),
+                'acknowledged' => $teacher->assistant_data_ack_at !== null,
+            ],
         ];
     }
 
+    /** "เข้าใจแล้ว" on the student-data notice (DESIGN §37.8). */
+    public function acknowledge(User $teacher): void
+    {
+        if (! AssistantStudentData::allowed($teacher)) {
+            throw new ApiException(self::DATA_OFF, 'student_data_off', 403);
+        }
+        $teacher->forceFill(['assistant_data_ack_at' => $teacher->assistant_data_ack_at ?? now()])->save();
+    }
+
     /**
+     * @param  array<string, mixed>|null  $scope  the student data the teacher chose (AssistantStudentData::build)
      * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id: int|null}
      *
-     * @throws ApiException 422 ai_key_missing, 429 assistant_limit, 4xx/5xx of a failed AI call
+     * @throws ApiException 422 ai_key_missing, 429 assistant_limit, 403 student_data_off,
+     *                      409 student_data_ack_required, 404 of the scope, 4xx/5xx of a failed AI call
      */
-    public function send(User $teacher, ?AssistantConversation $conversation, string $text): array
+    public function send(User $teacher, ?AssistantConversation $conversation, string $text, ?array $scope = null): array
     {
         $text = trim($text);
         $key = $this->guard($teacher);
+        if ($scope !== null) {
+            self::assertStudentData($teacher);
+        }
+        $new = $conversation === null;
         $conversation ??= AssistantConversation::create([
             'user_id' => $teacher->id,
             'title' => Str::limit(preg_replace('/\s+/u', ' ', $text) ?? $text, 80, '…'),
         ]);
+        try {
+            $data = $scope === null ? null : $this->data->build($teacher, $conversation, $scope);
+        } catch (ApiException $e) {
+            if ($new) {
+                $conversation->delete();
+            }
+            throw $e;
+        }
         $history = $conversation->messages()->get()->all();
         $question = $conversation->messages()->create(['role' => AssistantMessage::ROLE_USER, 'content' => $text]);
 
-        return $this->answer($teacher, $conversation, $question, $history, $key);
+        return $this->answer($teacher, $conversation, $question, $history, $key, $data);
+    }
+
+    /** @throws ApiException 403 student_data_off, 409 student_data_ack_required */
+    private static function assertStudentData(User $teacher): void
+    {
+        if (! AssistantStudentData::allowed($teacher)) {
+            throw new ApiException(self::DATA_OFF, 'student_data_off', 403);
+        }
+        if ($teacher->assistant_data_ack_at === null) {
+            throw new ApiException('กด "เข้าใจแล้ว" ที่คำเตือนเรื่องข้อมูลนักเรียนก่อน', 'student_data_ack_required', 409);
+        }
     }
 
     /**
@@ -106,7 +152,7 @@ final class AssistantChat
      * @param  list<AssistantMessage>  $history
      * @return array{conversation: AssistantConversation, messages: list<AssistantMessage>, apply_message_id: int|null}
      */
-    private function answer(User $teacher, AssistantConversation $conversation, AssistantMessage $question, array $history, GeminiKey $key): array
+    private function answer(User $teacher, AssistantConversation $conversation, AssistantMessage $question, array $history, GeminiKey $key, ?string $data = null): array
     {
         $previousTarget = null;
         $previousCard = null;
@@ -117,18 +163,48 @@ final class AssistantChat
                 break;
             }
         }
-        $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget, $previousCard);
-        $call = $this->requests->call($question->content, $history, $conversation->id, $context);
-        $outcome = $this->gateway->run(['chat' => $call], $key)['chat'];
-        $usage = $outcome->aiCallId === null ? null : AiCall::query()->find($outcome->aiCallId, ['input_tokens', 'output_tokens']);
-        $input = (int) ($usage->input_tokens ?? 0);
-        $output = (int) ($usage->output_tokens ?? 0);
+        // Gemini sees labels, never the names the teacher typed (DESIGN §37.8).
+        $asked = $this->students->pseudonymise($teacher, $conversation, $question->content);
+        $turns = array_map(function (AssistantMessage $m) use ($teacher, $conversation) {
+            if ($m->role !== AssistantMessage::ROLE_USER) {
+                return $m;
+            }
+            $copy = clone $m;
+            $copy->content = $this->students->pseudonymise($teacher, $conversation, $m->content);
+
+            return $copy;
+        }, $history);
+        $context = AssistantContext::build($teacher, $question->content, $previousTarget === null ? null : (int) $previousTarget, $previousCard)
+            ."\n\n".self::dataNote($teacher, $data !== null)
+            .($data === null ? '' : "\n\n".$data);
+        $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $context)], $key)['chat'];
+        $calls = [$outcome->aiCallId];
+
+        // The answer asked for data: fetch it and ask again, one message for the teacher.
+        $need = $outcome->isOk() && $data === null && ! is_array($outcome->data['plan'] ?? null) ? ($outcome->data['need_data'] ?? null) : null;
+        $blocked = is_array($need) && ! AssistantStudentData::enabled($teacher);
+        if (is_array($need) && in_array($need['set'] ?? null, AssistantStudentData::SETS, true) && ! $blocked) {
+            try {
+                $fetched = $this->data->build($teacher, $conversation, $need);
+            } catch (ApiException $e) {
+                $fetched = "# STUDENT DATA\n(not available: {$e->getMessage()})";
+            }
+            $again = $context."\n\n".$fetched."\n\nThe STUDENT DATA above is what you asked for: answer the teacher now and do not set need_data.";
+            $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $again)], $key)['chat'];
+            $calls[] = $outcome->aiCallId;
+        }
+        $usage = AiCall::query()->whereIn('id', array_filter($calls))->get(['input_tokens', 'output_tokens']);
+        $input = (int) $usage->sum('input_tokens');
+        $output = (int) $usage->sum('output_tokens');
 
         $plan = $outcome->isOk() && is_array($outcome->data['plan'] ?? null) ? AssistantPlans::normalise($outcome->data['plan'], $teacher) : null;
         // "โอเค สร้างเลย": the app applies the latest open card with its ticks.
         // The wording is fixed, so the answer never claims a result it has not seen.
         $applyId = null;
         $content = (string) ($outcome->data['answer'] ?? '');
+        if ($blocked) {
+            $content = AssistantStudentData::allowed($teacher) ? self::DATA_NOT_ON : self::DATA_OFF;
+        }
         if ($plan === null && ($outcome->data['apply_plan'] ?? false) === true) {
             $applyId = $conversation->messages()->where('plan_status', AssistantMessage::PLAN_PROPOSED)->max('id');
             $content = $applyId === null ? self::NO_OPEN_CARD : self::APPLYING;
@@ -179,6 +255,7 @@ final class AssistantChat
         return new ApiException($error->getMessage(), $error->errorCode, $error->status, [], $error->extra + [
             'conversation' => self::conversationApi($conversation->refresh()),
             'messages' => [$question->toApi(), $reply->toApi()],
+            'labels' => AssistantStudents::api($conversation),
         ]);
     }
 
@@ -232,5 +309,16 @@ final class AssistantChat
         return AssistantConversation::query()
             ->where('updated_at', '<', now()->subDays(AssistantConversation::RETENTION_DAYS))
             ->delete();
+    }
+
+    /** What Gemini is told about student data in this answer. */
+    private static function dataNote(User $teacher, bool $attached): string
+    {
+        return match (true) {
+            $attached => '# STUDENT DATA ACCESS: the teacher chose the data below; answer from it.',
+            ! AssistantStudentData::allowed($teacher) => '# STUDENT DATA ACCESS: off, the admin switched it off for this school. If asked about students\' results, say so and point to the screens (สมุดคะแนน, วิเคราะห์รายคน).',
+            $teacher->assistant_data_ack_at === null => '# STUDENT DATA ACCESS: not turned on yet. If asked about students\' results, tell the teacher to press «ข้อมูลนักเรียน» under the chat box and accept the notice, then ask again.',
+            default => '# STUDENT DATA ACCESS: on. To answer about results, set need_data (classroom_summary with classroom_id, student_history with student_label, assignment_analysis with assignment_id) and leave plan out; the data comes back in a second call.',
+        };
     }
 }

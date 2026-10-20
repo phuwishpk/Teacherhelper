@@ -181,6 +181,7 @@ Route::prefix('v1')->group(function () {
 
                 // "ผู้ช่วย Krucheck" (§37): the teacher's own conversations.
                 Route::get('assistant/status', [AssistantController::class, 'status'])->name('api.assistant.status');
+                Route::post('assistant/student-data/ack', [AssistantController::class, 'acknowledge'])->name('api.assistant.student-data.ack');
                 Route::get('assistant/conversations', [AssistantController::class, 'index'])->name('api.assistant.conversations.index');
                 Route::get('assistant/conversations/{id}', [AssistantController::class, 'show'])->name('api.assistant.conversations.show');
                 Route::delete('assistant/conversations/{id}', [AssistantController::class, 'destroy'])->name('api.assistant.conversations.destroy');

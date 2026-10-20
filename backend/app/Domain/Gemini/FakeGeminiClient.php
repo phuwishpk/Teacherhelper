@@ -33,6 +33,8 @@ use Illuminate\Support\Str;
  *   [fake:confirm]       assistant_chat: "โอเค สร้างเลย" (apply_plan)
  *   [fake:rubric:ID:N]   assistant_chat: a rubric card for question N of assignment ID (3 points, steps too)
  *   [fake:indicators] / [fake:indicators:ID]  an indicator card (FAKE-STD, FAKE-1; for assignment ID)
+ *   [fake:need:SET:ID] / [fake:need-student:LABEL]  assistant_chat: asks for student data
+ *                        (need_data); the second call (data attached) echoes the STUDENT DATA heading
  *   [fake:rubric-invalid]     a rubric draft with two core criteria
  *   [fake:practice-bad-key]   (in the skill name) practice items whose mcq key is not an option
  *
@@ -206,6 +208,14 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
                 $has('quota') => GeminiReply::error('HTTP 429: Resource has been exhausted', 0, 429),
                 $has('invalid') => 'not json at all {',
                 $has('confirm') => ['answer' => 'กำลังสร้างข้อที่ติ๊กไว้ในการ์ด', 'apply_plan' => true],
+                str_contains($request->systemInstruction, '# STUDENT DATA:') || str_contains($request->systemInstruction, "# STUDENT DATA\n") => [
+                    'answer' => 'ผู้ช่วยทดสอบอ่านข้อมูล: '.(preg_match('/# STUDENT DATA(?! ACCESS)[^\n]*/u', $request->systemInstruction, $d) === 1 ? $d[0] : '')
+                        .' | ถาม: '.trim((string) ($request->hints['question_text'] ?? '')),
+                ],
+                preg_match('/\[fake:need:([a-z_]+):(\d+)\]/', $markers, $m) === 1 => ['answer' => 'กำลังดูข้อมูล…', 'need_data' => [
+                    'set' => $m[1], ...($m[1] === 'assignment_analysis' ? ['assignment_id' => (int) $m[2]] : ['classroom_id' => (int) $m[2]]),
+                ]],
+                preg_match('/\[fake:need-student:(s\d+)\]/', $markers, $m) === 1 => ['answer' => 'กำลังดูข้อมูล…', 'need_data' => ['set' => 'student_history', 'student_label' => strtoupper($m[1])]],
                 preg_match('/\[fake:plan(?::(\d+)|-new:(\d+):(\d+):([a-z]+))\]/', $markers, $m) === 1 => self::assistantPlan($m),
                 preg_match('/\[fake:rubric:(\d+):(\d+)\]/', $markers, $m) === 1 => ['answer' => 'เสนอ rubric ร่างในการ์ดด้านล่าง', 'plan' => [
                     'kind' => 'rubric', 'target' => ['assignment_id' => (int) $m[1]], 'question_position' => (int) $m[2],

@@ -53,6 +53,7 @@ class ClosedClassroomTest extends TestCase
         'api.assistant.conversations.retry' => null,
         // The target's classroom is checked by AssistantPlanApplier (AssistantPlanTest).
         'api.assistant.messages.apply' => null,
+        'api.assistant.student-data.ack' => null,
         'api.me.indicators.update' => null,
         'api.classrooms.store' => null,
         'api.classrooms.import-google' => null,

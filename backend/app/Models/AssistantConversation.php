@@ -41,4 +41,10 @@ class AssistantConversation extends Model
     {
         return $this->hasMany(AssistantMessage::class, 'conversation_id')->orderBy('id');
     }
+
+    /** @return HasMany<AssistantStudentLabel, $this> */
+    public function labels(): HasMany
+    {
+        return $this->hasMany(AssistantStudentLabel::class, 'conversation_id')->orderBy('id');
+    }
 }

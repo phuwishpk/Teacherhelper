@@ -9,6 +9,32 @@
     "apply_plan": {
       "type": "boolean"
     },
+    "need_data": {
+      "type": "object",
+      "properties": {
+        "set": {
+          "type": "string",
+          "enum": [
+            "classroom_summary",
+            "student_history",
+            "assignment_analysis"
+          ]
+        },
+        "classroom_id": {
+          "type": "integer"
+        },
+        "student_label": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "assignment_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "set"
+      ]
+    },
     "plan": {
       "type": "object",
       "properties": {
