@@ -624,7 +624,11 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
                 !item.flags.contains(IndicatorItem.flagAlreadyMine))
               i,
         },
-        AssistantPlan.rubricCard => const {},
+        AssistantPlan.practiceCard => {
+          for (final (i, item) in plan.practiceItems.indexed)
+            if (item.error == null) i,
+        },
+        AssistantPlan.rubricCard || AssistantPlan.gradebookCard => const {},
         _ => {
           for (final (i, q) in plan.questions.indexed)
             if (q.usableFor(target.kind)) i,
@@ -673,7 +677,10 @@ class AssistantPlansController extends Notifier<Map<int, PlanUi>> {
         .firstOrNull;
     if (message == null) return;
     final ui = of(message);
-    final rubric = message.plan!.kind == AssistantPlan.rubricCard;
+    final rubric = const [
+      AssistantPlan.rubricCard,
+      AssistantPlan.gradebookCard,
+    ].contains(message.plan!.kind);
     if (ui.applying || (ui.selected.isEmpty && !rubric)) return;
     state = {
       ...state,

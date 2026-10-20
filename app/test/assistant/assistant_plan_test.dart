@@ -593,4 +593,147 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('assistant_plan_open')));
     expect(routes, ['/assignments/9/indicators', '/settings/indicators']);
   });
+
+  testWidgets('a gradebook card shows the change and what goes away', (
+    tester,
+  ) async {
+    Map<String, dynamic> plan({
+      String? problem,
+      Map<String, dynamic>? result,
+    }) => {
+      'kind': 'gradebook',
+      'target': {'course_id': 4, 'title': 'ค15101 คณิตศาสตร์ 5'},
+      'categories': [
+        {
+          'name': 'งาน',
+          'weight': 60,
+          'drop_lowest': 1,
+          'is_homework_default': true,
+        },
+        {
+          'name': 'สอบ',
+          'weight': 40,
+          'drop_lowest': 0,
+          'is_homework_default': false,
+        },
+      ],
+      'cutoffs': [80, 75, 70, 65, 60, 55, 50],
+      'current': {
+        'categories': [
+          {'name': 'งาน', 'weight': 50, 'drop_lowest': 0, 'item_count': 3},
+          {'name': 'จิตพิสัย', 'weight': 50, 'drop_lowest': 0, 'item_count': 2},
+        ],
+        'cutoffs': [80, 75, 70, 65, 60, 55, 50],
+      },
+      'removed': [
+        {'name': 'จิตพิสัย', 'item_count': 2},
+      ],
+      'problem': ?problem,
+      'result': ?result,
+    };
+    repo.replies.add(_reply([_question1, message(2, plan(), 'proposed')]));
+    repo.applyResults.add(
+      message(
+        2,
+        plan(
+          result: {
+            'course_id': 4,
+            'title': 'ค15101 คณิตศาสตร์ 5',
+            'categories': 2,
+            'cutoffs': true,
+          },
+        ),
+        'applied',
+      ),
+    );
+    await pump(tester);
+    await ask(tester, 'ตั้งหมวดคะแนน');
+
+    expect(
+      find.text('งาน 60% (ตัด 1 ต่ำสุด) · หมวดตั้งต้นของการบ้าน\nสอบ 40%'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'หมวด «จิตพิสัย» จะถูกเอาออก งาน 2 ชิ้นในหมวดนี้จะเป็น "ยังไม่ระบุหมวด"',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('80 / 75 / 70 / 65 / 60 / 55 / 50'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_apply_2')));
+    await tester.pumpAndSettle();
+    expect(applied().$2, isEmpty);
+    expect(
+      find.text('บันทึกการตั้งค่าสมุดคะแนนของ «ค15101 คณิตศาสตร์ 5» แล้ว'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_open')));
+    expect(routes, ['/courses/4/gradebook/settings']);
+  });
+
+  testWidgets('a practice card ticks the items with a key', (tester) async {
+    Map<String, dynamic> plan({Map<String, dynamic>? result}) => {
+      'kind': 'practice',
+      'target': {'skill_id': 7, 'code': 'ค 1.1', 'title': 'ค 1.1 บวกเศษส่วน'},
+      'items': [
+        {
+          'answer_type': 'mcq',
+          'prompt_text': '1/2 + 1/4 = ?',
+          'options': [
+            {'key': 'A', 'text': '1/6'},
+            {'key': 'B', 'text': '3/4'},
+          ],
+          'answer_key': {'correct': 'B'},
+          'explanation': 'ทำส่วนให้เท่ากัน',
+        },
+        {
+          'answer_type': 'numeric',
+          'prompt_text': '0.5 + 0.25 = ?',
+          'answer_key': {
+            'numeric': {'value': 0.75, 'abs_tol': 0},
+          },
+          'explanation': 'บวกทศนิยม',
+        },
+        {
+          'answer_type': 'short',
+          'prompt_text': 'ไม่มีเฉลย',
+          'answer_key': {'accepted': const []},
+          'explanation': 'x',
+          'error': 'ใส่คำตอบที่ยอมรับอย่างน้อย 1 คำตอบ',
+        },
+      ],
+      'result': ?result,
+    };
+    repo.replies.add(_reply([_question1, message(2, plan(), 'proposed')]));
+    repo.applyResults.add(
+      message(
+        2,
+        plan(
+          result: {
+            'skill_id': 7,
+            'title': 'ค 1.1 บวกเศษส่วน',
+            'created': 2,
+            'skipped': const [],
+          },
+        ),
+        'applied',
+      ),
+    );
+    await pump(tester);
+    await ask(tester, 'ขอแบบฝึก');
+
+    expect(find.text('แบบฝึกที่เสนอ 3 ข้อ'), findsOneWidget);
+    expect(find.text('เฉลย: 0.75'), findsOneWidget);
+    expect(find.text('ใส่คำตอบที่ยอมรับอย่างน้อย 1 คำตอบ'), findsOneWidget);
+    expect(
+      [ticked(tester, 0), ticked(tester, 1), ticked(tester, 2)],
+      [true, true, false],
+    );
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_apply_2')));
+    await tester.pumpAndSettle();
+    expect(applied().$2, [0, 1]);
+    expect(find.text('บันทึกแบบฝึก 2 ข้อเป็นร่างแล้ว'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('assistant_plan_open')));
+    expect(routes, ['/practice-bank']);
+  });
 }

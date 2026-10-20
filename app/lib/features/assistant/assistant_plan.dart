@@ -13,12 +13,16 @@ class AssistantPlan {
     this.referenceSteps = const [],
     this.problem,
     this.items = const [],
+    this.gradebook,
+    this.practiceItems = const [],
     this.result,
   });
 
   static const questionsCard = 'questions';
   static const rubricCard = 'rubric';
   static const indicatorsCard = 'indicators';
+  static const gradebookCard = 'gradebook';
+  static const practiceCard = 'practice';
 
   final String kind;
   final PlanTarget target;
@@ -33,17 +37,29 @@ class AssistantPlan {
 
   /// An indicator card's items.
   final List<IndicatorItem> items;
+
+  /// A gradebook card (DESIGN §37.9).
+  final GradebookProposal? gradebook;
+
+  /// A practice card's items (DESIGN §37.9).
+  final List<PracticeCardItem> practiceItems;
   final PlanResult? result;
 
-  /// What the ticks index: the questions or the indicator items.
-  int get tickable => kind == indicatorsCard ? items.length : questions.length;
+  /// What the ticks index: the questions, the indicator or practice items.
+  int get tickable => switch (kind) {
+    indicatorsCard => items.length,
+    practiceCard => practiceItems.length,
+    _ => questions.length,
+  };
 
   factory AssistantPlan.fromJson(Map<String, dynamic> json) {
     final target = json['target'];
     final result = json['result'];
     final question = json['question'];
+    final kind = json['kind'] as String? ?? questionsCard;
+    final rawItems = json['items'] as List? ?? const [];
     return AssistantPlan(
-      kind: json['kind'] as String? ?? questionsCard,
+      kind: kind,
       target: PlanTarget.fromJson(
         target is Map ? target.cast<String, dynamic>() : const {},
       ),
@@ -67,10 +83,22 @@ class AssistantPlan {
         for (final s in json['reference_steps'] as List? ?? const []) '$s',
       ],
       problem: json['problem'] as String?,
-      items: [
-        for (final i in json['items'] as List? ?? const [])
-          if (i is Map) IndicatorItem.fromJson(i.cast<String, dynamic>()),
-      ],
+      items: kind == practiceCard
+          ? const []
+          : [
+              for (final i in rawItems)
+                if (i is Map) IndicatorItem.fromJson(i.cast<String, dynamic>()),
+            ],
+      practiceItems: kind == practiceCard
+          ? [
+              for (final i in rawItems)
+                if (i is Map)
+                  PracticeCardItem.fromJson(i.cast<String, dynamic>()),
+            ]
+          : const [],
+      gradebook: kind == gradebookCard
+          ? GradebookProposal.fromJson(json)
+          : null,
       result: result is Map
           ? PlanResult.fromJson(result.cast<String, dynamic>())
           : null,
@@ -79,6 +107,127 @@ class AssistantPlan {
 }
 
 typedef RubricCriterion = ({String description, double points, bool isCore});
+
+typedef GradebookCategoryRow = ({
+  String name,
+  double weight,
+  int dropLowest,
+  bool homeworkDefault,
+  int itemCount,
+});
+
+/// A gradebook card: the course's settings now and the proposed ones; a
+/// null [categories] or [cutoffs] stays as it is.
+class GradebookProposal {
+  const GradebookProposal({
+    this.categories,
+    this.cutoffs,
+    this.currentCategories = const [],
+    this.currentCutoffs = const [],
+    this.removed = const [],
+  });
+
+  final List<GradebookCategoryRow>? categories;
+  final List<int>? cutoffs;
+  final List<GradebookCategoryRow> currentCategories;
+  final List<int> currentCutoffs;
+
+  /// Current categories left out, with how much work becomes uncategorised.
+  final List<({String name, int itemCount})> removed;
+
+  static List<GradebookCategoryRow> _rows(Object? list) => [
+    for (final c in list is List ? list : const [])
+      if (c is Map)
+        (
+          name: c['name'] as String? ?? '',
+          weight: (c['weight'] as num?)?.toDouble() ?? 0,
+          dropLowest: (c['drop_lowest'] as num?)?.toInt() ?? 0,
+          homeworkDefault: c['is_homework_default'] == true,
+          itemCount: (c['item_count'] as num?)?.toInt() ?? 0,
+        ),
+  ];
+
+  static List<int> _ints(Object? list) => [
+    for (final v in list is List ? list : const [])
+      if (v is num) v.toInt(),
+  ];
+
+  factory GradebookProposal.fromJson(Map<String, dynamic> json) {
+    final current = json['current'];
+    return GradebookProposal(
+      categories: json['categories'] is List ? _rows(json['categories']) : null,
+      cutoffs: json['cutoffs'] is List ? _ints(json['cutoffs']) : null,
+      currentCategories: current is Map
+          ? _rows(current['categories'])
+          : const [],
+      currentCutoffs: current is Map ? _ints(current['cutoffs']) : const [],
+      removed: [
+        for (final r in json['removed'] as List? ?? const [])
+          if (r is Map)
+            (
+              name: r['name'] as String? ?? '',
+              itemCount: (r['item_count'] as num?)?.toInt() ?? 0,
+            ),
+      ],
+    );
+  }
+}
+
+/// One item of a practice card, in the practice bank's shape.
+class PracticeCardItem {
+  const PracticeCardItem({
+    required this.answerType,
+    required this.promptText,
+    this.options = const [],
+    this.answerKey = const {},
+    this.explanation = '',
+    this.error,
+  });
+
+  final String answerType;
+  final String promptText;
+  final List<({String key, String text})> options;
+  final Map<String, dynamic> answerKey;
+  final String explanation;
+
+  /// Why it cannot be saved; it cannot be ticked then.
+  final String? error;
+
+  String get typeLabel => switch (answerType) {
+    'mcq' => 'ปรนัย',
+    'numeric' => 'ตัวเลข',
+    _ => 'ตอบสั้น',
+  };
+
+  /// The key as the teacher reads it: the option, the accepted answers or
+  /// the number.
+  String? get answer => switch (answerType) {
+    'mcq' => answerKey['correct'] as String?,
+    'numeric' => switch (answerKey['numeric']) {
+      final Map n => '${n['value']}',
+      _ => null,
+    },
+    _ => switch (answerKey['accepted']) {
+      List l when l.isNotEmpty => l.join(' หรือ '),
+      _ => null,
+    },
+  };
+
+  factory PracticeCardItem.fromJson(Map<String, dynamic> json) =>
+      PracticeCardItem(
+        answerType: json['answer_type'] as String? ?? 'short',
+        promptText: json['prompt_text'] as String? ?? '',
+        options: [
+          for (final o in json['options'] as List? ?? const [])
+            if (o is Map) (key: '${o['key']}', text: '${o['text']}'),
+        ],
+        answerKey: json['answer_key'] is Map
+            ? (json['answer_key'] as Map).cast<String, dynamic>()
+            : const {},
+        explanation: json['explanation'] as String? ?? '',
+        error: json['error'] as String?,
+      );
+}
 
 /// The question of a rubric card, as it was when the card was made.
 class RubricQuestion {
@@ -348,6 +497,8 @@ class PlanResult {
     this.position,
     this.addedMine = 0,
     this.mapped = 0,
+    this.courseId,
+    this.skillId,
     this.skipped = const [],
   });
 
@@ -359,6 +510,10 @@ class PlanResult {
   final int? position;
   final int addedMine;
   final int mapped;
+
+  /// A gradebook card's course; a practice card's indicator.
+  final int? courseId;
+  final int? skillId;
   final List<({int index, String reason})> skipped;
 
   factory PlanResult.fromJson(Map<String, dynamic> json) => PlanResult(
@@ -370,6 +525,8 @@ class PlanResult {
     position: (json['position'] as num?)?.toInt(),
     addedMine: (json['added_mine'] as num?)?.toInt() ?? 0,
     mapped: (json['mapped'] as num?)?.toInt() ?? 0,
+    courseId: (json['course_id'] as num?)?.toInt(),
+    skillId: (json['skill_id'] as num?)?.toInt(),
     skipped: [
       for (final s in json['skipped'] as List? ?? const [])
         if (s is Map)
