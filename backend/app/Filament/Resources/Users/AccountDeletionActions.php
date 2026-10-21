@@ -72,6 +72,10 @@ final class AccountDeletionActions
     /** The status badge of a deleted account. */
     public static function statusLabel(User $user): string
     {
+        if (! AccountDeletion::restorable($user)) {
+            return 'ลบถาวรแล้ว';
+        }
+
         return 'ลบแล้ว (กู้คืนได้ถึง '.self::date($user).')';
     }
 

@@ -49,10 +49,10 @@ class UserPolicy
         return $this->isAdmin($user) && AccountDeletion::deletable($user, $target);
     }
 
-    /** "กู้คืนบัญชี" within the 30 days (DESIGN §31). */
+    /** "กู้คืนบัญชี" within the 30 days (DESIGN §31); after them the data is gone (§31.3). */
     public function restoreAccount(User $user, User $target): bool
     {
-        return $this->isAdmin($user) && $target->isDeleted();
+        return $this->isAdmin($user) && $target->isDeleted() && AccountDeletion::restorable($target);
     }
 
     /** Filament "approve": a pending or disabled teacher becomes active. */
