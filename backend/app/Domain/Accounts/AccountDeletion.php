@@ -44,6 +44,14 @@ final class AccountDeletion
         return $user->deleted_at?->copy()->addDays(self::RESTORE_DAYS);
     }
 
+    /** Deleted, and the 30 days to restore are not over (AccountPurge runs after them, §31.3). */
+    public static function restorable(User $user): bool
+    {
+        $purgeAt = self::purgeAt($user);
+
+        return $purgeAt !== null && $purgeAt->isFuture();
+    }
+
     /**
      * What the deletion takes away with a teacher: their own classrooms,
      * the students in them and the hand-ins there (for the confirmation).
@@ -88,7 +96,7 @@ final class AccountDeletion
     public function restore(User $admin, User $target): void
     {
         $deletedAt = $target->deleted_at;
-        if ($deletedAt === null) {
+        if ($deletedAt === null || ! self::restorable($target)) {
             return;
         }
         DB::transaction(function () use ($admin, $target, $deletedAt) {

@@ -30,6 +30,9 @@ class AuditLog extends Model
 
     public const ACCOUNT_RESTORE = 'account.restore';
 
+    /** The 30 days are over and the personal data went (DESIGN §31.3); meta = what went. */
+    public const ACCOUNT_PURGE = 'account.purge';
+
     public $timestamps = false;
 
     protected $fillable = ['actor_id', 'action', 'target_user_id', 'meta', 'created_at'];

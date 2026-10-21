@@ -26,6 +26,10 @@ class PrivacyPageTest extends TestCase
 
         $page->assertSee('Google API Services User Data Policy');
         $page->assertSee('Limited Use requirements');
+        // Retention matches what the code does (DESIGN §31.3, §38).
+        $page->assertSee('เมื่อครบ 30 วัน ระบบลบข้อมูลต่อไปนี้อย่างถาวร');
+        $page->assertSee('"ครูที่ถูกลบ"', false);
+        $page->assertSee('Cloud Firestore');
         $page->assertSee('https://developers.google.com/terms/api-services-user-data-policy', false);
     }
 

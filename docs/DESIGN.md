@@ -5157,15 +5157,19 @@ CREATE TABLE classroom_teachers (
 | ขั้น | งาน | สถานะ |
 |---|---|---|
 | 1 | ลบ กู้คืน บล็อกการเข้าสู่ระบบ ปิดห้องของครู (§31.1) | เสร็จ 16 ต.ค. 2569 |
-| 2 | ลบจริงเมื่อครบ 30 วัน (§31.3) และแก้หน้า `/privacy` | ยังไม่ทำ |
+| 2 | ลบจริงเมื่อครบ 30 วัน (§31.3) และแก้หน้า `/privacy` | เสร็จ 22 ต.ค. 2569 |
 
-### 31.3 ลบจริงเมื่อครบ 30 วัน (ขั้น 2 วางแผนไว้)
+### 31.3 ลบจริงเมื่อครบ 30 วัน (ขั้น 2)
 
-รันใน `eduvision:purge-images` ที่ Plesk เรียกทุกวันอยู่แล้ว (ไม่เพิ่ม Scheduled Task) บัญชีที่ `deleted_at` เกิน 30 วัน:
+รันใน `eduvision:purge-images` ที่ Plesk เรียกทุกวัน 02:00 อยู่แล้ว (ไม่เพิ่ม Scheduled Task) `AccountPurge::purgeDue` เลือกครูและนักเรียนที่ `deleted_at` เกิน 30 วันและยังไม่มีแถว `audit_logs` `account.purge` ทำทีละบัญชี บัญชีที่ล้มถูก log `account.purge_failed` แล้วข้ามไป วันถัดไปลองใหม่ เมื่อสำเร็จบันทึก `account.purge` (actor = admin ที่ลบ, meta = จำนวนที่ลบ) แถว `users` ไม่ถูกลบ เพราะ foreign key RESTRICT ราว 70 จุดและแถวคะแนนต้องมีเจ้าของ
 
-- **นักเรียน**: ชื่อเป็น "นักเรียนที่ถูกลบ" ล้างอีเมล ชื่อผู้ใช้ รหัสผ่าน เลขประจำตัว ลบ `student_credentials`, `user_google_identities`, token, `device_tokens`, `login_card_prints` และไฟล์รูปงานของนักเรียน (crop, หน้าที่สแกน, `submission_pages`) แถวคะแนนอยู่ต่อ
-- **ครู**: ลบห้องที่ `deleted_at` ตรงกับบัญชีทั้งห้อง รวมงานที่ส่งและแถวใต้งานนั้น (ต้องเขียนการลบ submissions ที่ `ClassroomLifecycle::delete` ยังไม่มี) และไฟล์ทั้งหมดของห้อง ถอนสิทธิ์และลบ `google_accounts` ลบ `teacher_api_keys` บทสนทนากับผู้ช่วย (`assistant_conversations`, §37) ไฟล์ของครู (`class_post_files`, `source_documents`) แล้วล้างข้อมูลส่วนตัวแบบเดียวกับนักเรียน ("ครูที่ถูกลบ")
-- มี test ไล่ foreign key ทุกตัวไปที่ `users` และ `classrooms` แบบ `StudentMergeCoverageTest` ตารางใหม่ที่ลืมจัดการทำให้ test แดง
+- **เลยวันแล้วกู้คืนไม่ได้** แม้ task ยังไม่รัน: `AccountDeletion::restorable` (ยังไม่ถึง `purgeAt`) คุม `UserPolicy::restoreAccount` และ `restore()` สถานะในตารางเป็น "ลบถาวรแล้ว"
+- **ทั้งสองบทบาท** (`forgetPerson`): ชื่อเป็น "นักเรียนที่ถูกลบ" หรือ "ครูที่ถูกลบ" ล้างอีเมล ชื่อผู้ใช้ เลขประจำตัว ชื่อโรงเรียน `remember_token` `assistant_data_ack_at` รหัสผ่านเป็นค่าสุ่มที่ไม่มีใครรู้ ลบ token, `device_tokens`, `user_google_identities` และ `google_events` (มีอีเมลของบัญชี Google)
+- **นักเรียน**: ลบไฟล์ crop (`responses.crop_path`/`final_crop_path`), ภาพหน้าที่สแกน (`scans.page_image_path`), ไฟล์งานทั้งหน้า (`submission_pages.file_path`) แล้วตั้งคอลัมน์เป็น null ลบ `training_samples` ของคำตอบเหล่านั้นพร้อมไฟล์ ลบ `login_card_prints` (พร้อม PDF) และ `student_credentials` แถวคะแนน การส่งงาน การเข้าเรียน และสมาชิกห้องอยู่ต่อ
+- **ครู**: ห้องที่ `deleted_at` ตรงกับบัญชี (ห้องที่การลบปิด) ถูกลบทั้งห้องด้วย `ClassroomLifecycle::purge` ซึ่งต่างจาก `delete` ตรงที่ไม่ดู blocker: เก็บ path ของไฟล์ทั้งหมดก่อน ลบจากล่างขึ้นบนตาม `PURGED_EXPLICITLY` (คำขอตรวจใหม่ ประวัติคะแนน skill observation ข้อมูลฝึกโมเดล คำตอบ grade conflict การนำเข้าจาก Classroom สแกน หน้าที่ส่ง งานที่ส่ง การอ่านกระดาษคำตอบ PDF ใบงาน งาน) แล้วลบห้อง (ส่วนที่เหลือ CASCADE) จากนั้นลบไฟล์ โฟลเดอร์ข้อสอบ (`ExamImages::deleteExam` รูปโจทย์และรูปตัวเลือก) และคำนวณ mastery ของคู่ (นักเรียน, ตัวชี้วัด) ที่เสีย observation ใหม่ ต่อมาถอนสิทธิ์และลบ `google_accounts` (`GoogleAccounts::disconnect`) ลบ `classroom_google_links` ที่ครูเป็นเจ้าของ ที่นั่งครูร่วมสอนในห้องอื่น (`classroom_teachers`) `teacher_api_keys` `teacher_indicators` บทสนทนากับผู้ช่วย โพสต์ที่ครูเขียนในห้องที่ยังอยู่ ไฟล์ของครู (`class_post_files` หลังลบแถวที่แนบไฟล์นั้น) และ `source_documents` (ไฟล์เก็บตามเนื้อหา จึงลบไฟล์เฉพาะเมื่อไม่มีแถวของคนอื่นใช้ไฟล์เดียวกัน) **อยู่ต่อ**: รายวิชา หน่วย แผน ตัวชี้วัดที่ครูเพิ่ม วิชาของครู งานที่ครูสร้างในห้องของคนอื่น และประวัติว่าใครทำอะไร
+- **ข้อมูลสด (§38.8)** ถูกลบตั้งแต่วันที่ลบบัญชี ไม่รอ 30 วัน
+- **test ไล่ foreign key** (`AccountPurgeCoverageTest`): ทุกคอลัมน์ที่ชี้ไป `users` ต้องอยู่ใน `AccountPurge::USER_COLUMNS` (delete / keep / teacher data / staff) และทุก foreign key แบบ RESTRICT หรือ NO ACTION ที่ชี้เข้าแถวที่การลบห้องลบ ต้องอยู่ใน `ClassroomLifecycle::PURGED_EXPLICITLY` ตารางใหม่ที่ลืมจัดการทำให้ test แดง `AccountPurgeTest` ใช้โลกของ security test (ห้องที่มีครบทุกอย่าง) ตรวจทั้งแถวและไฟล์
+- หน้า `/privacy` ข้อ 5 บอกรายการที่ลบเมื่อครบ 30 วันของแต่ละบทบาท และข้อ 1, 3 บอกเรื่องสำเนาแจ้งเตือนใน Firestore (§38)
 
 ## 32. หน้ารายละเอียดบัญชีและปัญหาการเชื่อม Google
 

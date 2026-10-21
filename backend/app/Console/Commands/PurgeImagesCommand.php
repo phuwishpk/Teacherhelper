@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Accounts\AccountPurge;
 use App\Domain\Assistant\AssistantChat;
 use App\Domain\Documents\SourceDocuments;
 use App\Domain\Exams\ExamFigures;
@@ -44,8 +45,10 @@ class PurgeImagesCommand extends Command
         $examPages = ExamFigures::purge();
         $googleEvents = GoogleEvents::purge();
         $assistant = AssistantChat::purge();
+        // Accounts deleted 30 days ago lose their personal data (DESIGN §31.3).
+        $accounts = app(AccountPurge::class)->purgeDue();
 
-        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages, 'google_events' => $googleEvents, 'assistant_conversations' => $assistant]);
+        Log::info('purge.files', ['worksheet_prints_expired' => $worksheets, ...$scans, 'documents' => $documents, 'exam_page_images' => $examPages, 'google_events' => $googleEvents, 'assistant_conversations' => $assistant, 'accounts_purged' => $accounts]);
         $this->info("Worksheet prints expired: {$worksheets}");
         $this->info("Page images deleted (published): {$scans['page_images']}");
         $this->info("Crop images deleted (past crop_retention_until): {$scans['crops']}");
@@ -56,6 +59,7 @@ class PurgeImagesCommand extends Command
         $this->info("Exam page images deleted (past retention): {$examPages}");
         $this->info("Google events deleted (older than 30 days): {$googleEvents}");
         $this->info("Assistant conversations deleted (no message for 90 days): {$assistant}");
+        $this->info("Deleted accounts purged (30 days over): {$accounts['students']} students, {$accounts['teachers']} teachers".($accounts['failed'] > 0 ? ", {$accounts['failed']} failed (see the log)" : ''));
 
         return self::SUCCESS;
     }
