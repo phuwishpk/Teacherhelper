@@ -36,6 +36,12 @@ case "$API_BASE_URL" in http://*) CONNECT_SRC="$CONNECT_SRC $API_BASE_URL" ;; es
 # FlutterFire loads the Firebase JS SDK from www.gstatic.com, Auth talks to
 # identitytoolkit/securetoken, Firestore to firestore.googleapis.com, and
 # Auth may open its helper iframe on <project>.firebaseapp.com.
+# Values pasted into the GitHub variables page can carry a trailing newline or
+# carriage return, which breaks the flutter command line: strip all whitespace.
+for var in FIREBASE_WEB_API_KEY FIREBASE_WEB_APP_ID FIREBASE_PROJECT_ID FIREBASE_MESSAGING_SENDER_ID; do
+  printf -v "$var" '%s' "$(printf '%s' "${!var:-}" | tr -d '[:space:]')"
+done
+
 SCRIPT_SRC="'self' 'wasm-unsafe-eval'"
 FRAME_SRC="'none'"
 if [ -n "${FIREBASE_WEB_API_KEY:-}" ] && [ -n "${FIREBASE_WEB_APP_ID:-}" ] && [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
