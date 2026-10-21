@@ -571,7 +571,11 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 **ฝั่งแอป (เครื่องผู้พัฒนา)**
 
 - Android: ใช้ `google-services.json` ตัวเดิม ไม่ต้องทำอะไรเพิ่ม
-- เว็บ: build ด้วย `--dart-define=FIREBASE_WEB_API_KEY=... --dart-define=FIREBASE_WEB_APP_ID=... --dart-define=FIREBASE_PROJECT_ID=... --dart-define=FIREBASE_MESSAGING_SENDER_ID=...` (ค่าจากข้อ 5; `tools/build-web.sh` อ่านจากตัวแปรสภาพแวดล้อมชื่อเดียวกัน) ไม่ใส่ = เว็บแอปไม่ต่อ Firestore และทำงานแบบเดิม
+- เว็บ (DESIGN §38.8): workflow `deploy` build เว็บเองทุกครั้งที่ push main ใส่ค่าจากข้อ 5 ใน GitHub > repo > Settings > Secrets and variables > Actions > แท็บ **Variables** > New repository variable สี่ตัว: `FIREBASE_WEB_API_KEY` (= `apiKey`), `FIREBASE_WEB_APP_ID` (= `appId`), `FIREBASE_PROJECT_ID` (= `projectId` เช่น `eduvision-b17aa`), `FIREBASE_MESSAGING_SENDER_ID` (= `messagingSenderId`) แล้ว Actions > deploy > **Run workflow** หนึ่งครั้ง (build ด้วยมือใช้ตัวแปรสภาพแวดล้อมชื่อเดียวกันกับ `tools/build-web.sh`) ไม่ใส่ = เว็บแอปไม่ต่อ Firestore และทำงานแบบเดิม
+- **จำกัด API key ของเว็บ** (ค่านี้อยู่ใน JS ที่ใครก็โหลดได้ และอยู่ใน branch `deploy` ที่ public): Google Cloud console > APIs & Services > Credentials > key ชื่อ "Browser key (auto created by Firebase)" > Application restrictions = **Websites** ใส่ `https://teacherhelper.phuwish.com/*` (และ `http://localhost:5173/*` ถ้าใช้ทดสอบในเครื่อง) > API restrictions = **Restrict key** เลือก Identity Toolkit API, Token Service API, Cloud Firestore API > Save ถ้า GitHub แจ้ง secret scanning alert ของ key นี้ใน branch `deploy` ให้ปิดเป็น "False positive" หลังจำกัด key แล้ว
+- ตรวจในเบราว์เซอร์: เปิดเว็บแอป ล็อกอิน ไปที่ ตั้งค่า > การ์ด "ข้อมูลสด (Firestore)" ต้องขึ้น "เชื่อมต่อแล้ว" ถ้าไม่ขึ้น เปิด DevTools > Console ดูว่ามีข้อความ `Content Security Policy` หรือไม่ แล้วแจ้งผู้พัฒนา
+
+ลบบัญชีใน Filament = ลบเอกสารใต้ `users/{uid}` และผู้ใช้ใน Firebase Authentication ของบัญชีนั้นทันทีผ่านคิว (DESIGN §38.8; service account ของ FCM ที่สร้างจาก Firebase มีสิทธิ์อยู่แล้ว ถ้าใน log มี `firestore.user_purge_failed` พร้อม `PERMISSION_DENIED` ให้เพิ่ม role **Firebase Authentication Admin** ให้ service account ใน Google Cloud IAM)
 
 ปิดเมื่อไรก็ได้ด้วย `FIRESTORE_ENABLED=false` ข้อมูลใน Firestore ลบทิ้งได้ทั้งหมดโดยไม่กระทบระบบ (สร้างใหม่จาก MariaDB ได้)
 

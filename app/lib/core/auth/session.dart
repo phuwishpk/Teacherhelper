@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
+import '../live/live_connection.dart';
 import '../live/live_session.dart';
-import '../live/live_token_api.dart';
 import 'auth_repository.dart';
 import 'local_user_data.dart';
 import 'token_storage.dart';
@@ -159,9 +159,8 @@ class SessionNotifier extends Notifier<SessionState> {
   /// background, never awaited, never able to fail the sign-in. A server
   /// without Firestore answers 503 once and the live screens stay off.
   void _startLive(User user) {
-    final live = ref.read(liveSessionProvider);
-    if (!live.enabled) return;
-    unawaited(live.signIn(user.id, ref.read(liveTokenApiProvider).fetch));
+    if (!ref.read(liveSessionProvider).enabled) return;
+    unawaited(ref.read(liveConnectionProvider.notifier).connect(user.id));
   }
 
   /// The local database may still hold a previous user's roster cache and
@@ -197,6 +196,7 @@ class SessionNotifier extends Notifier<SessionState> {
   /// left for [_claimLocalData] to keep or wipe at the next sign-in.
   Future<void> forceSignOut() async {
     await ref.read(liveSessionProvider).signOut();
+    ref.read(liveConnectionProvider.notifier).reset();
     await ref.read(tokenStorageProvider).clear();
     _restoredOffline = false;
     state = const SignedOut();

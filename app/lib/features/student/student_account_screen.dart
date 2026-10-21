@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:go_router/go_router.dart';
 
+import '../../core/live/live_status_card.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/content_column.dart';
@@ -47,6 +48,8 @@ class StudentAccountScreen extends ConsumerWidget {
             ),
           const SizedBox(height: 8),
           const GoogleIdentityCard(),
+          const SizedBox(height: 8),
+          const LiveStatusCard(),
           const SizedBox(height: 8),
           const ThemeModeSection(),
           const SizedBox(height: 24),
