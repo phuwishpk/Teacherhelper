@@ -67,22 +67,6 @@ final class QaCatalog
         'fail' => ['ไม่เป็นตามที่เขียน', 'danger'],
     ];
 
-    /** The team's Thai wording of Brooke's SUS (1996), as in KICKOFF part 5. */
-    public const SUS = [
-        'ฉันคิดว่าฉันอยากใช้แอปนี้บ่อย ๆ',
-        'ฉันรู้สึกว่าแอปนี้ซับซ้อนเกินความจำเป็น',
-        'ฉันคิดว่าแอปนี้ใช้งานง่าย',
-        'ฉันคิดว่าฉันต้องมีคนคอยช่วยจึงจะใช้แอปนี้ได้',
-        'ฉันรู้สึกว่าฟังก์ชันต่าง ๆ ในแอปนี้ทำงานเข้ากันได้ดี',
-        'ฉันรู้สึกว่าแอปนี้มีความไม่สอดคล้องกันมากเกินไป',
-        'ฉันคิดว่าคนส่วนใหญ่จะเรียนรู้การใช้แอปนี้ได้อย่างรวดเร็ว',
-        'ฉันรู้สึกว่าแอปนี้ใช้งานยุ่งยาก',
-        'ฉันรู้สึกมั่นใจเมื่อใช้แอปนี้',
-        'ฉันต้องเรียนรู้หลายอย่างก่อนจึงจะเริ่มใช้แอปนี้ได้',
-    ];
-
-    public const SUS_BENCHMARK = 68;
-
     /**
      * @return list<array{code: string, kind: string, area: string, title: string, detail: string, workflow?: string, refs?: list<string>, why?: string, steps?: list<string>, expect?: string, role?: string, done?: string, measure?: string}>
      */
@@ -146,23 +130,6 @@ final class QaCatalog
     public static function statusesFor(string $kind): array
     {
         return self::isUsability($kind) ? self::USABILITY_STATUSES : self::MANUAL_STATUSES;
-    }
-
-    /** SUS 0–100: odd items (answer − 1), even items (5 − answer), sum × 2.5; null unless 10 answers of 1–5. */
-    public static function susScore(array $answers): ?float
-    {
-        if (count($answers) !== 10) {
-            return null;
-        }
-        $sum = 0;
-        foreach (array_values($answers) as $i => $a) {
-            if (! is_int($a) || $a < 1 || $a > 5) {
-                return null;
-            }
-            $sum += $i % 2 === 0 ? $a - 1 : 5 - $a;
-        }
-
-        return $sum * 2.5;
     }
 
     /** @return list<array<string, mixed>> */

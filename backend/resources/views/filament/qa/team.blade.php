@@ -13,7 +13,7 @@
     <x-filament::section>
         <x-slot name="heading">ความคืบหน้าของแต่ละคน</x-slot>
         <div class="qa-table-wrap"><table class="qa-table">
-            <thead><tr><th>ผู้ทดสอบ</th>@foreach ($kinds as $k => $label)<th class="qa-num">{{ $label }}</th>@endforeach<th class="qa-num">SUS</th></tr></thead>
+            <thead><tr><th>ผู้ทดสอบ</th>@foreach ($kinds as $k => $label)<th class="qa-num">{{ $label }}</th>@endforeach</tr></thead>
             <tbody>
             @foreach ($testers as $t)
                 <tr>
@@ -21,7 +21,6 @@
                     @foreach ($kinds as $k => $label)
                         <td class="qa-num">{{ $board->filled($t->id, $k) }}/{{ count(QaCatalog::ofKind($k)) }}</td>
                     @endforeach
-                    <td class="qa-num">{{ $board->sus($t->id)?->score ?? '–' }}</td>
                 </tr>
             @endforeach
             </tbody>

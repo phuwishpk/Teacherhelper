@@ -24,9 +24,9 @@ final class QaBoard
 
     public function __construct()
     {
-        $this->testers = QaTester::query()->orderBy('name')->get();
+        $this->testers = QaTester::query()->where('role', QaTester::ROLE_TESTER)->orderBy('name')->get();
         $this->results = QaResult::query()->get();
-        $this->sus = QaSusResponse::query()->get()->keyBy('qa_tester_id');
+        $this->sus = QaSusResponse::query()->get();
     }
 
     /** @return Collection<int, QaTester> */
@@ -44,11 +44,6 @@ final class QaBoard
     public function resultsFor(string $code): Collection
     {
         return $this->results->filter(fn (QaResult $r) => $r->case_code === $code && $r->status !== null)->values();
-    }
-
-    public function sus(int $testerId): ?QaSusResponse
-    {
-        return $this->sus->get($testerId);
     }
 
     /**
@@ -140,10 +135,23 @@ final class QaBoard
         return ['attempts' => $rows->count(), 'success' => $rows->where('status', 'success')->count()];
     }
 
-    /** @return array{mean: float|null, n: int} */
-    public function susSummary(): array
+    /**
+     * SUS statistics of the evaluators (DESIGN §39.7), for one role of the
+     * app or all together.
+     *
+     * @return array{n: int, mean: float|null, sd: float|null, median: float|null, min: float|null, max: float|null, ci_low: float|null, ci_high: float|null}
+     */
+    public function susStats(?string $role = null): array
     {
-        return ['mean' => $this->sus->isEmpty() ? null : round((float) $this->sus->avg('score'), 1), 'n' => $this->sus->count()];
+        $rows = $role === null ? $this->sus : $this->sus->where('role', $role);
+
+        return QaSus::stats($rows->pluck('score')->map(fn ($s) => (float) $s)->values()->all());
+    }
+
+    /** @return Collection<int, QaSusResponse> */
+    public function susResponses(?string $role = null): Collection
+    {
+        return ($role === null ? $this->sus : $this->sus->where('role', $role))->values();
     }
 
     /**
