@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../hand_in/hand_in_fakes.dart';
 import '../helpers/pump_screen.dart';
 import 'student_fixtures.dart';
 
@@ -23,6 +24,7 @@ import 'student_fixtures.dart';
 /// it, so the shell keeps five tabs.
 void main() {
   _bellTests();
+  _liveRefreshTests();
   testWidgets('opens on "วิชาของฉัน" and switches tabs', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.7;
@@ -88,6 +90,40 @@ class _Live implements LiveSession {
   ) async => LiveSignInOutcome.alreadySignedIn;
   @override
   Future<void> signOut() async {}
+}
+
+void _liveRefreshTests() {
+  testWidgets('a hand-in that changes status refetches the lists', (
+    tester,
+  ) async {
+    final db = FakeFirebaseFirestore();
+    await db.doc('users/u11/submissions/5').set({'status': 'grading'});
+    final handIn = FakeHandIn(assignments: assignmentsFixture());
+    await pumpScreen(
+      tester,
+      const StudentShell(),
+      overrides: [
+        ...studentViewOverrides(handIn: handIn),
+        currentUserProvider.overrideWithValue(
+          const User(id: 11, name: 'ด.ญ. เอ', role: 'student'),
+        ),
+        practiceRecommendationsProvider.overrideWith((ref) async => const []),
+        myMasteryProvider.overrideWith(
+          (ref) async => const MasteryList(rows: []),
+        ),
+        myAnalysesProvider.overrideWith((ref) async => const []),
+        myCoursesProvider.overrideWith((ref) async => const []),
+        liveSessionProvider.overrideWithValue(_Live(db)),
+      ],
+    );
+    await tester.pumpAndSettle();
+    final before = handIn.listCalls;
+
+    await db.doc('users/u11/submissions/5').set({'status': 'published'});
+    await tester.pumpAndSettle();
+
+    expect(handIn.listCalls, greaterThan(before));
+  });
 }
 
 void _bellTests() {

@@ -7,12 +7,16 @@ import '../../core/live/live_session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/adaptive_shell.dart';
 import '../auth/sign_out_action.dart';
+import '../hand_in/hand_in_repository.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
 import '../notices/notices_providers.dart';
 import '../practice/practice_page.dart';
 import '../results/results_page.dart';
+import '../results/results_repository.dart';
+import 'live_refresh.dart';
 import 'my_subjects_page.dart';
+import 'student_overview.dart';
 import '../../core/widgets/impersonation_banner.dart';
 
 class _Destination {
@@ -66,6 +70,14 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       const PracticePage(),
       MasteryPage(onPractice: () => setState(() => _index = _practiceIndex)),
     ];
+
+    // A hand-in changed status (DESIGN §38.9): refetch what shows it.
+    ref.listen(liveSubmissionTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(studentAssignmentsProvider);
+      ref.invalidate(studentResultsProvider);
+      ref.invalidate(studentOverviewProvider);
+    });
 
     return AdaptiveShell(
       title: user == null ? 'Krucheck' : 'สวัสดี ${user.name}',

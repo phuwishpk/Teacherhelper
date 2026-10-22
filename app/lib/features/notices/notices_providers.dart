@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/auth/session.dart';
-import '../../core/live/live_session.dart';
+import '../../core/live/live_scope.dart';
 import 'notice.dart';
 
 /// How many notices the inbox lists (the TTL drops the rest server-side).
@@ -12,13 +11,9 @@ const noticesLimit = 100;
 /// off in this build, the server without Firestore, or the Firebase session
 /// not (yet) the signed-in user's.
 final noticesProvider = StreamProvider<List<Notice>?>((ref) {
-  final live = ref.watch(liveSessionProvider);
-  final user = ref.watch(currentUserProvider);
-  final uid = ref.watch(liveUidProvider).value;
-  final db = live.firestore;
-  if (db == null || user == null || uid == null || uid != liveUidOf(user.id)) {
-    return Stream.value(null);
-  }
+  final scope = liveUserScope(ref);
+  if (scope == null) return Stream.value(null);
+  final (:db, :uid) = scope;
   return db
       .collection('users/$uid/notices')
       .orderBy('created_at', descending: true)

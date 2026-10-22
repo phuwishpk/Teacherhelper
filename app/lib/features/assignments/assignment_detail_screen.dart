@@ -19,6 +19,7 @@ import 'assignments_providers.dart';
 import 'assignments_repository.dart';
 import 'indicator_mapping.dart';
 import 'indicator_mapping_screen.dart';
+import 'live_grading_progress.dart';
 import 'question.dart';
 
 class AssignmentDetailScreen extends ConsumerWidget {
@@ -208,6 +209,7 @@ class AssignmentDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  LiveGradingProgressCard(assignmentId: assignmentId),
                   const SizedBox(height: 12),
                   _AnswerKeyCard(assignment: a),
                   if (!a.isFreeform && a.canManage) ...[
