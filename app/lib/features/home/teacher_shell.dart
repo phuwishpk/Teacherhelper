@@ -11,12 +11,15 @@ import '../../core/widgets/adaptive_shell.dart';
 import '../../core/widgets/function_menu.dart';
 import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
+import '../assignments/assignments_providers.dart';
 import '../assistant/assistant_panel.dart';
 import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
 import '../gradebook/grades_home_page.dart';
 import '../notices/notices_providers.dart';
 import '../review/review_home_page.dart';
+import '../review/review_providers.dart';
+import '../student/live_refresh.dart';
 import '../upload_queue/upload_queue_providers.dart';
 import 'dashboard_page.dart';
 import 'teacher_attention.dart';
@@ -81,6 +84,13 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    // An assignment's grading counts changed (DESIGN §38.9): the lists that
+    // show "รอตรวจทาน" refetch on their own.
+    ref.listen(liveAssignmentTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(assignmentsProvider);
+      ref.invalidate(reviewQueueProvider);
+    });
     // From tablet width the scan button lives in the rail or the sidebar.
     final wide = context.windowSize != WindowSize.compact;
     // On a desktop the tab's actions are buttons next to its title.

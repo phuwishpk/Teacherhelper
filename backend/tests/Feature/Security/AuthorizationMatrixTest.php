@@ -523,6 +523,8 @@ class AuthorizationMatrixTest extends TestCase
         $this->fakeGoogle([
             'classroom.googleapis.com/*' => Http::response(['courses' => [], 'students' => [], 'studentSubmissions' => []]),
             'www.googleapis.com/*' => Http::response([]),
+            // The live layer is on here (§38): mirror jobs run on the sync queue.
+            'firestore.googleapis.com/*' => Http::response(['writeResults' => []]),
         ]);
     }
 
