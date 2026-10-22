@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\QaTester;
 use App\Models\User;
 
 return [
@@ -42,6 +43,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Krucheck Test Lab at /qa (DESIGN §39): its own accounts, never users.
+        'qa' => [
+            'driver' => 'session',
+            'provider' => 'qa_testers',
+        ],
     ],
 
     /*
@@ -65,6 +72,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', User::class),
+        ],
+
+        'qa_testers' => [
+            'driver' => 'eloquent',
+            'model' => QaTester::class,
         ],
 
         // 'users' => [

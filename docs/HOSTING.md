@@ -327,6 +327,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | ตรวจว่าโมเดลจริงจับ prompt injection ได้ | `eduvision:gemini-check --injection` | ส่งภาพตัวอย่าง 5 ภาพใน `backend/tests/fixtures/injection` (ภาพสังเคราะห์ ไม่มีข้อมูลนักเรียน) = 5 request; ทุกภาพต้องขึ้น `ok` และบรรทัดสุดท้าย `injection: 5/5 as expected` ถ้ามี `MISMATCH` แจ้งผู้พัฒนาเพื่อปรับ prompt |
 | ตรวจ FCM | `eduvision:fcm-check` | §6.2 |
 | ตรวจ Firestore | `eduvision:firestore-check` | §6.5 |
+| สร้างดัชนีชื่อ test ของ Test Lab | `eduvision:qa-index` | ไม่ต้องรันบน server: workflow deploy สร้างให้ทุกครั้ง (DESIGN §39.5) |
 | ลงทะเบียนโมเดล | `eduvision:register-model <path เต็มของโฟลเดอร์โมเดล>` | §7 |
 | import ตัวชี้วัดจาก CSV | `eduvision:import-skills <path เต็มของไฟล์ csv>` | §8 (หรือใช้หน้า Filament) |
 | export ข้อมูลสำหรับ notebook | `eduvision:export-observations --output=<path เต็ม>` | ดู `php artisan eduvision:export-observations --help` |
@@ -580,6 +581,15 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 ปิดเมื่อไรก็ได้ด้วย `FIRESTORE_ENABLED=false` ข้อมูลใน Firestore ลบทิ้งได้ทั้งหมดโดยไม่กระทบระบบ (สร้างใหม่จาก MariaDB ได้)
 
 ---
+
+### 6.6 Krucheck Test Lab (`/qa`, DESIGN §39)
+
+ส่วนสำหรับทดสอบระบบ แยกจากผู้ใช้จริง ขึ้นมากับ deploy เอง (migration `create_qa_tables` รันโดย task auto-deploy) ไม่ต้องตั้งค่าเพิ่ม
+
+1. เข้า `/admin` ด้วยบัญชี admin > เมนู **ผู้ทดสอบระบบ (Test Lab)** > **เพิ่มผู้ทดสอบ** สร้าง 4 บัญชี: หัวหน้าทดสอบ 1 คน (เปิด "หัวหน้าทดสอบ") และผู้ทดสอบ 3 คน ใช้อีเมลจริงของแต่ละคนและรหัสผ่านอย่างน้อย 8 ตัว ส่งรหัสให้แต่ละคนเอง
+2. ผู้ทดสอบเข้า `https://<โดเมน>/qa` แล้วล็อกอินด้วยอีเมลกับรหัสผ่านนั้น บัญชีนี้เปิด `/admin` หรือแอปไม่ได้ และบัญชีของ Krucheck ก็เปิด `/qa` ไม่ได้
+3. หน้าภาพรวมอ่านผล CI จาก GitHub (ต้องเรียก `https://api.github.com` ได้) ถ้าขึ้น "อ่านผล CI จาก GitHub ไม่ได้ตอนนี้" ตลอด ให้ตรวจว่า hosting ออก HTTPS ไป api.github.com ได้ ระบบลองใหม่ทุก 1 นาที
+4. หน้ารายละเอียดของรายการอัตโนมัติแสดงรายชื่อ test จาก `backend/resources/qa/test-index.json` ที่ deploy สร้าง ถ้าขึ้น "เซิร์ฟเวอร์นี้ไม่มีรายชื่อ test" แปลว่า deploy รอบนั้นไม่ได้สร้างไฟล์ ให้ Run workflow deploy อีกครั้ง
 
 ## 7. ลงทะเบียนโมเดลอ่านตัวเลข (`model_versions`)
 

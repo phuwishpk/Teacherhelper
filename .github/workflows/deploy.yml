@@ -83,6 +83,9 @@ jobs:
           out="$RUNNER_TEMP/deploy"
           mkdir -p "$out"
           rsync -a --exclude tests --exclude .phpunit.cache --exclude '*.log' backend/ "$out/backend/"
+          # The Test Lab at /qa lists the tests behind each automated case
+          # (DESIGN §39); the deploy tree has no tests/, so index them here.
+          php backend/artisan eduvision:qa-index --output="$out/backend/resources/qa/test-index.json"
           rm -rf "$out/backend/public/app"
           cp -R "$RUNNER_TEMP/web/app" "$out/backend/public/app"
           # The top-level ignore file would hide vendor/ and public/app from git;
@@ -92,6 +95,7 @@ jobs:
           du -sh "$out/backend/vendor" "$out/backend/public/app"
           test -f "$out/backend/public/app/.htaccess"
           test -f "$out/backend/vendor/autoload.php"
+          test -s "$out/backend/resources/qa/test-index.json"
 
       - name: Publish to the deploy branch
         uses: peaceiris/actions-gh-pages@v4
