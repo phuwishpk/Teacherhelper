@@ -96,6 +96,9 @@ class QaLabTest extends TestCase
     public function test_without_the_files_the_index_reads_the_deploy_manifest(): void
     {
         $manifest = base_path(TestIndex::MANIFEST);
+        if (! is_dir(dirname($manifest))) {
+            mkdir(dirname($manifest), 0775, true);
+        }
         $had = is_file($manifest) ? file_get_contents($manifest) : null;
         try {
             file_put_contents($manifest, json_encode(['refs' => ['backend/tests/Feature/Gone/GoneTest.php' => ['from the manifest']]]));
