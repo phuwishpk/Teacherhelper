@@ -51,12 +51,47 @@ final class QaBoard
         return $this->sus->get($testerId);
     }
 
-    /** How many cases of one kind the tester has a status for. */
-    public function filled(int $testerId, string $kind): int
+    /**
+     * How many cases of the kinds the tester has a status for ("skip" counts:
+     * the tester decided).
+     *
+     * @param  string|list<string>  $kinds
+     */
+    public function filled(int $testerId, string|array $kinds): int
     {
-        $codes = array_column(QaCatalog::ofKind($kind), 'code');
+        $codes = array_column(QaCatalog::ofKinds((array) $kinds), 'code');
 
         return $this->results->filter(fn (QaResult $r) => $r->qa_tester_id === $testerId && $r->status !== null && in_array($r->case_code, $codes, true))->count();
+    }
+
+    /** The tester's status of one case, or null. */
+    public function statusOf(int $testerId, string $code): ?string
+    {
+        return $this->result($testerId, $code)?->status;
+    }
+
+    /**
+     * Per usability group: how many tasks, how many someone has tried
+     * (not skipped), and the success / assisted / fail attempts.
+     *
+     * @return array<string, array{tasks: int, tried: int, success: int, assisted: int, fail: int}>
+     */
+    public function groupSummary(): array
+    {
+        $out = [];
+        foreach (QaCatalog::usabilityGroups() as $group => $count) {
+            $codes = array_column(QaCatalog::inGroup($group), 'code');
+            $rows = $this->results->filter(fn (QaResult $r) => in_array($r->case_code, $codes, true) && in_array($r->status, ['success', 'assisted', 'fail'], true));
+            $out[$group] = [
+                'tasks' => $count,
+                'tried' => $rows->pluck('case_code')->unique()->count(),
+                'success' => $rows->where('status', 'success')->count(),
+                'assisted' => $rows->where('status', 'assisted')->count(),
+                'fail' => $rows->where('status', 'fail')->count(),
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -82,7 +117,7 @@ final class QaBoard
     /** @return array{n: int, success: int, assisted: int, fail: int, avg_time: float|null, avg_errors: float|null} */
     public function usability(string $code): array
     {
-        $rows = $this->resultsFor($code);
+        $rows = $this->resultsFor($code)->filter(fn (QaResult $r) => $r->status !== 'skip')->values();
         $times = $rows->filter(fn (QaResult $r) => $r->status !== 'fail' && $r->time_sec !== null)->pluck('time_sec');
         $errors = $rows->filter(fn (QaResult $r) => $r->error_count !== null)->pluck('error_count');
 
@@ -99,8 +134,8 @@ final class QaBoard
     /** @return array{attempts: int, success: int} every usability result together */
     public function usabilityTotals(): array
     {
-        $codes = array_column(QaCatalog::ofKind(QaCatalog::USABILITY), 'code');
-        $rows = $this->results->filter(fn (QaResult $r) => $r->status !== null && in_array($r->case_code, $codes, true));
+        $codes = array_column(QaCatalog::ofKinds(QaCatalog::USABILITY_KINDS), 'code');
+        $rows = $this->results->filter(fn (QaResult $r) => in_array($r->status, ['success', 'assisted', 'fail'], true) && in_array($r->case_code, $codes, true));
 
         return ['attempts' => $rows->count(), 'success' => $rows->where('status', 'success')->count()];
     }

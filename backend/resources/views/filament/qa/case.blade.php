@@ -1,18 +1,22 @@
 {{-- One test case in full (DESIGN §39). --}}
 @use('App\Domain\Qa\QaBoard')
 @use('App\Domain\Qa\QaCatalog')
+@use('App\Domain\Qa\QaText')
 @use('App\Filament\Qa\Pages\TestPlan')
 <x-filament-panels::page>
     @include('filament.qa._styles')
     @php
         $c = $case;
         $board = $this->board();
-        $kindLabel = [QaCatalog::AUTO => 'อัตโนมัติ', QaCatalog::MANUAL => 'ทำมือ', QaCatalog::USABILITY => 'usability'];
+        $kindLabel = QaCatalog::KIND_LABELS;
+        $usability = QaCatalog::isUsability($c['kind']);
     @endphp
 
     <div class="qa-row">
-        <x-filament::badge :color="$c['kind'] === QaCatalog::AUTO ? 'info' : ($c['kind'] === QaCatalog::USABILITY ? 'warning' : 'gray')">{{ $kindLabel[$c['kind']] }}</x-filament::badge>
+        <x-filament::badge :color="$c['kind'] === QaCatalog::AUTO ? 'info' : ($usability ? 'warning' : 'gray')">{{ $kindLabel[$c['kind']] }}</x-filament::badge>
+        @if (isset($c['group']))<x-filament::badge color="gray">{{ $c['group'] }}</x-filament::badge>@endif
         <x-filament::badge color="gray">{{ $c['area'] }}</x-filament::badge>
+        @if (! empty($c['platforms']))<span class="qa-small qa-muted">ใช้ได้บน: {{ $c['platforms'] }}</span>@endif
         <a class="qa-link qa-small" href="{{ TestPlan::getUrl() }}">กลับไปแผนทดสอบ</a>
     </div>
 
@@ -61,12 +65,39 @@
         </x-filament::section>
     @else
         <x-filament::section>
-            <x-slot name="heading">งานของผู้ทดสอบ ({{ $c['role'] }})</x-slot>
-            <p>{{ $c['title'] }}</p>
-            <p style="margin-top:8px;"><span style="font-weight:600;">เกณฑ์สำเร็จ:</span> {{ $c['done'] }}</p>
-            <p><span style="font-weight:600;">สังเกตเพิ่ม:</span> {{ $c['measure'] }}</p>
-            <p class="qa-small qa-muted" style="margin-top:8px;">บันทึก: สำเร็จเอง / สำเร็จเมื่อมีคนช่วย / ไม่สำเร็จ, เวลาเป็นวินาทีตั้งแต่อ่านโจทย์จบ, จำนวนครั้งที่ทำผิด, สิ่งที่ผู้ทดสอบพูดขณะทำ</p>
+            <x-slot name="heading">งานของผู้ทดสอบ ({{ $c['actor'] }})</x-slot>
+            <div class="qa-grid" style="gap:8px;">
+                <p><span style="font-weight:600;">เป้าหมาย:</span> {{ $c['goal'] }}</p>
+                @if (! empty($c['pre']))<p><span style="font-weight:600;">เตรียมก่อนเริ่ม:</span> {{ QaText::render($c['pre']) }}</p>@endif
+                <div>
+                    <p style="font-weight:600;">ขั้นตอน</p>
+                    <ol class="qa-ol">@foreach ($c['steps'] as $step)<li>{{ QaText::render($step) }}</li>@endforeach</ol>
+                </div>
+                <p><span style="font-weight:600;">เกณฑ์สำเร็จ:</span> {{ QaText::render($c['done']) }}</p>
+                @if (! empty($c['ucs']))<p class="qa-small"><span style="font-weight:600;">use case ที่ผ่าน:</span> {{ QaText::render(implode(' → ', $c['ucs'])) }}</p>@endif
+                <p class="qa-small qa-muted">บันทึก: สำเร็จเอง / สำเร็จเมื่อมีคนช่วย / ไม่สำเร็จ / ข้าม, เวลาเป็นวินาทีตั้งแต่อ่านโจทย์จบ, จำนวนครั้งที่ทำผิด, สิ่งที่ผู้ทดสอบพูดขณะทำ</p>
+            </div>
         </x-filament::section>
+        @if (! empty($c['alts']))
+            <x-filament::section>
+                <x-slot name="heading">กรณีอื่น ({{ count($c['alts']) }})</x-slot>
+                <div class="qa-table-wrap"><table class="qa-table">
+                    <thead><tr><th>กรณี</th><th>สิ่งที่ควรเกิด</th>@foreach ($board->testers() as $t)<th>{{ $t->name }}</th>@endforeach</tr></thead>
+                    <tbody>
+                    @foreach ($c['alts'] as $alt)
+                        <tr>
+                            <td class="qa-code">{{ $alt['label'] }}</td>
+                            <td class="qa-small">{{ QaText::render($alt['text']) }}</td>
+                            @foreach ($board->testers() as $t)
+                                @php $v = $board->result($t->id, $c['code'])?->checks[$alt['label']] ?? null; $cs = $v ? QaCatalog::CHECK_STATUSES[$v] ?? null : null; @endphp
+                                <td>@if ($cs)<x-filament::badge :color="$cs[1]" size="sm">{{ $cs[0] }}</x-filament::badge>@else<span class="qa-muted">–</span>@endif</td>
+                            @endforeach
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table></div>
+            </x-filament::section>
+        @endif
     @endif
 
     @if ($c['kind'] !== QaCatalog::AUTO)
@@ -77,14 +108,14 @@
                 <p class="qa-muted qa-small">ยังไม่มีผู้ทดสอบ</p>
             @else
                 <div class="qa-table-wrap"><table class="qa-table">
-                    <thead><tr><th>ผู้ทดสอบ</th><th>ผล</th>@if ($c['kind'] === QaCatalog::USABILITY)<th class="qa-num">เวลา</th><th class="qa-num">ทำผิด</th>@endif<th>บันทึก</th><th>เมื่อ</th></tr></thead>
+                    <thead><tr><th>ผู้ทดสอบ</th><th>ผล</th>@if ($usability)<th class="qa-num">เวลา</th><th class="qa-num">ทำผิด</th>@endif<th>บันทึก</th><th>เมื่อ</th></tr></thead>
                     <tbody>
                     @foreach ($board->testers() as $t)
                         @php $r = $board->result($t->id, $c['code']); $st = $r?->status ? $statuses[$r->status] ?? null : null; @endphp
                         <tr>
                             <td>{{ $t->name }}</td>
                             <td>@if ($st)<x-filament::badge :color="$st[1]" size="sm">{{ $st[0] }}</x-filament::badge>@else<span class="qa-muted">ยังไม่ทำ</span>@endif</td>
-                            @if ($c['kind'] === QaCatalog::USABILITY)
+                            @if ($usability)
                                 <td class="qa-num">{{ $r?->time_sec !== null ? $r->time_sec.' วิ' : '–' }}</td>
                                 <td class="qa-num">{{ $r?->error_count ?? '–' }}</td>
                             @endif

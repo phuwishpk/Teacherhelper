@@ -1,6 +1,7 @@
 {{-- Test Lab overview (DESIGN §39). --}}
 @use('App\Domain\Qa\QaBoard')
 @use('App\Domain\Qa\QaCatalog')
+@use('App\Filament\Qa\Pages\TeamBoard')
 @use('App\Filament\Qa\Pages\TestCaseDetail')
 <x-filament-panels::page>
     @include('filament.qa._styles')
@@ -11,7 +12,9 @@
         $testers = $board->testers();
         $auto = $this->cases(QaCatalog::AUTO);
         $manual = $this->cases(QaCatalog::MANUAL);
-        $ux = $this->cases(QaCatalog::USABILITY);
+        $ux = QaCatalog::ofKinds(QaCatalog::USABILITY_KINDS);
+        $processes = $this->cases(QaCatalog::PROCESS);
+        $groups = $board->groupSummary();
         $autoPass = collect($auto)->filter(fn ($c) => QaBoard::autoVerdict($ci, $c['workflow'])[0] === 'pass')->count();
         $manualVerdicts = collect($manual)->mapWithKeys(fn ($c) => [$c['code'] => $board->manualVerdict($c['code'])]);
         $manualPass = $manualVerdicts->filter(fn ($v) => $v[0] === 'pass')->count();
@@ -77,7 +80,7 @@
                     <tr>
                         <td>{{ $t->name }} @if ($t->is_lead)<x-filament::badge color="primary" size="sm">หัวหน้าทดสอบ</x-filament::badge>@endif</td>
                         <td class="qa-num">{{ $board->filled($t->id, QaCatalog::MANUAL) }}/{{ count($manual) }}</td>
-                        <td class="qa-num">{{ $board->filled($t->id, QaCatalog::USABILITY) }}/{{ count($ux) }}</td>
+                        <td class="qa-num">{{ $board->filled($t->id, QaCatalog::USABILITY_KINDS) }}/{{ count($ux) }}</td>
                         <td class="qa-num">{{ $s?->score ?? '–' }}</td>
                         <td>{{ $s ? ($s->role === 'teacher' ? 'ครู' : 'นักเรียน') : '–' }}</td>
                     </tr>
@@ -134,16 +137,16 @@
     </x-filament::section>
 
     <x-filament::section>
-        <x-slot name="heading">Usability test</x-slot>
-        <x-slot name="description">แถบ: เขียว = สำเร็จเอง, เหลือง = สำเร็จเมื่อมีคนช่วย, แดง = ไม่สำเร็จ เวลาเป็นค่าเฉลี่ยของคนที่สำเร็จ</x-slot>
+        <x-slot name="heading">Usability: กระบวนการตั้งแต่ต้นจนจบ</x-slot>
+        <x-slot name="description">แถบ: เขียว = สำเร็จเอง, เหลือง = สำเร็จเมื่อมีคนช่วย, แดง = ไม่สำเร็จ ("ข้าม" ไม่นับ) เวลาเป็นค่าเฉลี่ยของคนที่สำเร็จ</x-slot>
         <div class="qa-table-wrap"><table class="qa-table">
-            <thead><tr><th>รหัส</th><th>งาน</th><th>ผล</th><th class="qa-num">เวลาเฉลี่ย</th><th class="qa-num">ทำผิดเฉลี่ย</th></tr></thead>
+            <thead><tr><th>รหัส</th><th>สถานการณ์</th><th>ผล</th><th class="qa-num">เวลาเฉลี่ย</th><th class="qa-num">ทำผิดเฉลี่ย</th></tr></thead>
             <tbody>
-            @foreach ($ux as $c)
+            @foreach ($processes as $c)
                 @php $u = $board->usability($c['code']); $pct = fn ($n) => $u['n'] ? round($n / $u['n'] * 100, 1) : 0; @endphp
                 <tr>
                     <td class="qa-code"><a class="qa-link" href="{{ $caseUrl($c['code']) }}">{{ $c['code'] }}</a></td>
-                    <td>{{ $c['title'] }} <span class="qa-muted">({{ $c['role'] }})</span></td>
+                    <td>{{ $c['title'] }} <span class="qa-muted qa-small">({{ $c['actor'] }})</span></td>
                     <td>
                         @if ($u['n'])
                             <div class="qa-bar" role="img" aria-label="สำเร็จเอง {{ $u['success'] }} สำเร็จเมื่อช่วย {{ $u['assisted'] }} ไม่สำเร็จ {{ $u['fail'] }}">
@@ -156,6 +159,32 @@
                     </td>
                     <td class="qa-num">{{ $u['avg_time'] === null ? '–' : round($u['avg_time']).' วิ' }}</td>
                     <td class="qa-num">{{ $u['avg_errors'] === null ? '–' : number_format($u['avg_errors'], 1) }}</td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table></div>
+    </x-filament::section>
+
+    <x-filament::section>
+        <x-slot name="heading">Usability: ทุกฟังก์ชันแยกตามหมวด</x-slot>
+        <x-slot name="description">ลองแล้ว = มีอย่างน้อยหนึ่งคนบันทึกผลที่ไม่ใช่ "ข้าม" กดชื่อหมวดเพื่อดูผลของทุกคนรายข้อในหน้าสถานะทีม</x-slot>
+        <div class="qa-table-wrap"><table class="qa-table">
+            <thead><tr><th>หมวด</th><th class="qa-num">ลองแล้ว</th><th>ผลทั้งหมด</th></tr></thead>
+            <tbody>
+            @foreach ($groups as $group => $g)
+                @continue($group === QaCatalog::PROCESS_GROUP)
+                @php $n = $g['success'] + $g['assisted'] + $g['fail']; $pct = fn ($x) => $n ? round($x / $n * 100, 1) : 0; @endphp
+                <tr>
+                    <td><a class="qa-link" href="{{ TeamBoard::getUrl(['section' => $group]) }}">{{ $group }}</a></td>
+                    <td class="qa-num">{{ $g['tried'] }}/{{ $g['tasks'] }}</td>
+                    <td>
+                        @if ($n)
+                            <div class="qa-bar"><i class="qa-ok" style="width: {{ $pct($g['success']) }}%"></i><i class="qa-warn" style="width: {{ $pct($g['assisted']) }}%"></i><i class="qa-bad" style="width: {{ $pct($g['fail']) }}%"></i></div>
+                            <span class="qa-small qa-muted">{{ $g['success'] }} / {{ $g['assisted'] }} / {{ $g['fail'] }} จาก {{ $n }} ครั้ง</span>
+                        @else
+                            <span class="qa-muted">ยังไม่มีผล</span>
+                        @endif
+                    </td>
                 </tr>
             @endforeach
             </tbody>
