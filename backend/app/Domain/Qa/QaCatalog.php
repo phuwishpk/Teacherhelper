@@ -12,9 +12,14 @@ namespace App\Domain\Qa;
  *   manual    integration tests a person runs against the real thing,
  *             because they need a paid or OAuth-only service, real devices
  *             or the production host
- *   usability task-based usability tests, observed and timed
+ *   process   end-to-end usability scenarios that cross many functions
+ *             (DESIGN §39.6), observed and timed
+ *   function  one usability task per use case of the use case document,
+ *             with its steps, success criterion and alternative paths,
+ *             loaded from resources/qa/usability.json
+ *             (tools/qa-usability.py builds it from the manuals)
  *
- * QaCatalogTest checks that every ref exists in the repository.
+ * QaLabTest checks that every ref exists in the repository.
  */
 final class QaCatalog
 {
@@ -22,7 +27,24 @@ final class QaCatalog
 
     public const MANUAL = 'manual';
 
-    public const USABILITY = 'usability';
+    public const PROCESS = 'process';
+
+    public const FUNCTION = 'function';
+
+    /** Both usability levels. */
+    public const USABILITY_KINDS = [self::PROCESS, self::FUNCTION];
+
+    public const KIND_LABELS = [
+        self::AUTO => 'Integration อัตโนมัติ',
+        self::MANUAL => 'Integration ทำมือ',
+        self::PROCESS => 'Usability: กระบวนการ',
+        self::FUNCTION => 'Usability: ฟังก์ชัน',
+    ];
+
+    public const USABILITY_JSON = 'resources/qa/usability.json';
+
+    /** @var list<array<string, mixed>>|null */
+    private static ?array $functions = null;
 
     /** Statuses a tester records, per kind: value => [label, tone]. */
     public const MANUAL_STATUSES = [
@@ -36,6 +58,13 @@ final class QaCatalog
         'success' => ['สำเร็จเอง', 'success'],
         'assisted' => ['สำเร็จเมื่อมีคนช่วย', 'warning'],
         'fail' => ['ไม่สำเร็จ', 'danger'],
+        'skip' => ['ข้าม (ไม่ได้รับมอบหมาย)', 'gray'],
+    ];
+
+    /** One alternative path of a function task: label => [label text, tone]. */
+    public const CHECK_STATUSES = [
+        'pass' => ['เป็นตามที่เขียน', 'success'],
+        'fail' => ['ไม่เป็นตามที่เขียน', 'danger'],
     ];
 
     /** The team's Thai wording of Brooke's SUS (1996), as in KICKOFF part 5. */
@@ -59,7 +88,40 @@ final class QaCatalog
      */
     public static function cases(): array
     {
-        return [...self::auto(), ...self::manual(), ...self::usability()];
+        return [...self::auto(), ...self::manual(), ...self::processes(), ...self::functions()];
+    }
+
+    public static function isUsability(string $kind): bool
+    {
+        return in_array($kind, self::USABILITY_KINDS, true);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function ofKinds(array $kinds): array
+    {
+        return array_values(array_filter(self::cases(), fn (array $c) => in_array($c['kind'], $kinds, true)));
+    }
+
+    /**
+     * The usability groups in order: the processes first, then the chapters
+     * of the use case document.
+     *
+     * @return array<string, int> group => number of tasks
+     */
+    public static function usabilityGroups(): array
+    {
+        $groups = [];
+        foreach (self::ofKinds(self::USABILITY_KINDS) as $case) {
+            $groups[$case['group']] = ($groups[$case['group']] ?? 0) + 1;
+        }
+
+        return $groups;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function inGroup(string $group): array
+    {
+        return array_values(array_filter(self::ofKinds(self::USABILITY_KINDS), fn (array $c) => $c['group'] === $group));
     }
 
     /** @return array<string, mixed>|null */
@@ -83,7 +145,7 @@ final class QaCatalog
     /** @return array<string, array{0: string, 1: string}> */
     public static function statusesFor(string $kind): array
     {
-        return $kind === self::USABILITY ? self::USABILITY_STATUSES : self::MANUAL_STATUSES;
+        return self::isUsability($kind) ? self::USABILITY_STATUSES : self::MANUAL_STATUSES;
     }
 
     /** SUS 0–100: odd items (answer − 1), even items (5 − answer), sum × 2.5; null unless 10 answers of 1–5. */
@@ -212,27 +274,106 @@ final class QaCatalog
         ];
     }
 
-    /** @return list<array<string, mixed>> */
-    private static function usability(): array
+    public const PROCESS_GROUP = 'กระบวนการตั้งแต่ต้นจนจบ';
+
+    /**
+     * End-to-end scenarios (DESIGN §39.6): each crosses several use cases in
+     * the order a real teacher, student or admin meets them.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function processes(): array
     {
-        $c = fn (string $code, string $role, string $title, string $done, string $measure) => [
-            'code' => $code, 'kind' => self::USABILITY, 'area' => $role, 'role' => $role, 'title' => $title, 'detail' => "เกณฑ์สำเร็จ: {$done}", 'done' => $done, 'measure' => $measure,
+        $c = fn (string $code, string $actor, string $title, string $goal, array $steps, string $done, array $ucs) => [
+            'code' => $code, 'kind' => self::PROCESS, 'group' => self::PROCESS_GROUP, 'area' => $actor, 'actor' => $actor,
+            'title' => $title, 'detail' => $goal, 'goal' => $goal, 'steps' => $steps, 'done' => $done, 'outcome' => $done, 'ucs' => $ucs,
         ];
 
         return [
-            $c('UT-1', 'ครู', 'สมัครบัญชีครู แล้วเข้าสู่ระบบหลัง admin อนุมัติ', 'เห็นหน้าหลักของครู', 'เข้าใจข้อความ "รออนุมัติ" หรือไม่'),
-            $c('UT-2', 'ครู', 'สร้างห้องเรียน แล้วให้นักเรียน 3 คนเข้าห้องด้วยรหัสห้องหรือ QR', 'รายชื่อในห้องมี 3 คน', 'หาปุ่ม "แสดง QR" เจอหรือไม่'),
-            $c('UT-3', 'ครู', 'สร้างการบ้าน 4 ข้อ 4 ประเภท และอนุมัติ rubric ที่ AI ร่าง', 'การบ้านพร้อมพิมพ์', 'จุดที่สับสน'),
-            $c('UT-4', 'ครู', 'พิมพ์ใบงาน แล้วสแกนกระดาษที่เตรียมไว้ 3 แผ่น', 'สแกนขึ้นครบ 3 แผ่น', 'สแกนซ้ำกี่ครั้ง'),
-            $c('UT-5', 'ครู', 'ตรวจทานคิว แก้คะแนน 1 ข้อพร้อมเหตุผล แล้วเผยแพร่', 'ผลถูกเผยแพร่', 'เข้าใจเหตุผลของคะแนนที่ AI ให้หรือไม่'),
-            $c('UT-6', 'ครู', 'โพสต์ประกาศในห้องพร้อมไฟล์แนบ', 'นักเรียนเห็นโพสต์', 'แนบไฟล์ได้ในครั้งแรกหรือไม่'),
-            $c('UT-7', 'ครู', 'ให้ผู้ช่วย Krucheck สร้างข้อ 2 ข้อ แล้วเพิ่มเข้าการบ้าน', 'ข้อใหม่อยู่ในการบ้าน', 'เชื่อใจคำตอบของผู้ช่วยหรือไม่'),
-            $c('UT-8', 'ครู', 'ตั้งเกณฑ์เกรดของรายวิชา แล้วดูสมุดคะแนน', 'เห็นเกรดของนักเรียน', 'หาเมนูเจอเองหรือไม่'),
-            $c('US-1', 'นักเรียน', 'เปิดลิงก์เข้าห้อง แล้วเข้าสู่ระบบด้วยชื่อผู้ใช้', 'เห็นวิชาของฉัน', 'เวลา'),
-            $c('US-2', 'นักเรียน', 'ส่งการบ้านด้วยรูปถ่าย', 'สถานะงานเป็นส่งแล้ว', 'ถ่ายใหม่กี่ครั้ง'),
-            $c('US-3', 'นักเรียน', 'อ่านคำอธิบายข้อที่ผิด แล้วขอให้ครูตรวจใหม่ 1 ข้อ', 'คำขอถึงครู', 'เข้าใจคำอธิบายหรือไม่'),
-            $c('US-4', 'นักเรียน', 'เปิดกล่องแจ้งเตือน แล้วไปที่โพสต์ใหม่', 'เปิดโพสต์ได้', 'สังเกตกระดิ่งเองหรือไม่'),
-            $c('US-5', 'นักเรียน', 'ทำแบบฝึกซ่อม 3 ข้อ', 'เห็นผลทันที', 'ความรู้สึกหลังทำ'),
+            $c('PR-01', 'ครู นักเรียน ผู้ดูแลระบบ', 'ครูใหม่เริ่มใช้ Krucheck จนนักเรียนเข้าห้องได้',
+                'ครูที่ไม่เคยใช้ระบบสมัคร ได้รับอนุมัติ ตั้งค่า แล้วพานักเรียน 3 คนเข้าห้อง',
+                ['ครูสมัครบัญชีจากหน้าเข้าสู่ระบบ', 'ผู้ดูแลระบบอนุมัติบัญชีใน /admin', 'ครูเข้าสู่ระบบ ตั้งชื่อโรงเรียน และใส่ Gemini API key', 'ครูสร้างห้อง ป.5/1 แล้วกด "แสดง QR"', 'นักเรียน 3 คนสแกน QR หรือพิมพ์รหัสห้อง เข้าห้อง และตั้งรหัสผ่านของตัวเอง'],
+                'รายชื่อในห้องมีนักเรียน 3 คน และนักเรียนทุกคนเห็นวิชาของฉัน', ['UC-T01', 'UC-A02', 'UC-T02', 'UC-T04', 'UC-T05', 'UC-T10', 'UC-T14', 'UC-S04', 'UC-S01', 'UC-S02']),
+            $c('PR-02', 'ครู นักเรียน', 'การบ้านแบบใบงานของแอปครบวงจร',
+                'จากการบ้านที่ยังไม่มีจนถึงนักเรียนเห็นผลและขอให้ครูตรวจใหม่',
+                ['สร้างการบ้าน 4 ข้อ 4 ประเภท ผูกตัวชี้วัด และอนุมัติ rubric ที่ AI ร่าง', 'สร้าง layout แล้วพิมพ์ใบงาน', 'สแกนใบงานที่เขียนคำตอบแล้ว 3 แผ่น และดูคิวอัปโหลดจนส่งครบ', 'รอ AI ตรวจ ดูการแจ้งเตือน "ตรวจเสร็จ"', 'ตรวจทานในคิว แก้คะแนน 1 ข้อพร้อมเหตุผล แก้คำอธิบาย 1 ข้อ อนุมัติกลุ่มมั่นใจ', 'เผยแพร่ผล', 'นักเรียนเปิดกล่องแจ้งเตือน ดูผล อ่านคำอธิบาย แล้วขอตรวจใหม่ 1 ข้อ', 'ครูตอบคำขอตรวจใหม่'],
+                'นักเรียนเห็นคะแนนที่ครูแก้ และเห็นคำตอบของคำขอตรวจใหม่', ['UC-T27', 'UC-T28', 'UC-T29', 'UC-T31', 'UC-T30', 'UC-T33', 'UC-T34', 'UC-X01', 'UC-X07', 'UC-T40', 'UC-T41', 'UC-T42', 'UC-T43', 'UC-S21', 'UC-S11', 'UC-S12', 'UC-T44']),
+            $c('PR-03', 'ครู นักเรียน', 'การบ้านที่ไม่ใช้ใบงาน ส่งเป็นรูปในแอป',
+                'ครูสั่งงานจากใบงานของตัวเอง นักเรียนถ่ายรูปส่ง AI ตรวจทั้งหน้า',
+                ['ครูสร้างการบ้านแบบไม่ใช้ใบงาน อัปโหลดใบโจทย์และเฉลย แล้วอนุมัติเฉลย', 'นักเรียน 2 คนส่งงานเป็นรูปถ่ายในแอป อีก 1 คนครูอัปโหลดรูปแทน', 'ครูดูการ์ด "ความคืบหน้าการตรวจ" ระหว่าง AI ตรวจ', 'ครูแก้เฉลย 1 ข้อแล้วตรวจใหม่ทั้งห้อง', 'ตรวจทานแล้วเผยแพร่', 'นักเรียนดูผล'],
+                'ทั้ง 3 คนเห็นผลที่ตรวจตามเฉลยใหม่', ['UC-T36', 'UC-T37', 'UC-S10', 'UC-T39', 'UC-X01', 'UC-T38', 'UC-T40', 'UC-T43', 'UC-S11']),
+            $c('PR-04', 'ครู นักเรียน', 'ข้อสอบกระดาษตั้งแต่ออกข้อสอบจนวิเคราะห์ผล',
+                'สอบกลางภาคด้วยข้อสอบสองชุดและกระดาษคำตอบของระบบ',
+                ['สร้างข้อสอบ อ่านข้อจากไฟล์ด้วย AI แล้วแก้ให้ถูก', 'ผูกตัวชี้วัด กรอกเฉลย และอนุมัติเฉลย', 'จัด 2 ชุด แล้วพิมพ์เล่มข้อสอบ กระดาษคำตอบ และกระดาษเฉลย', 'ฝนกระดาษคำตอบ 3 แผ่นแล้วสแกน', 'ตรวจทานแผ่นที่ระบบไม่แน่ใจ แล้วประกาศผล', 'ดูการวิเคราะห์ตัวเลือก', 'นักเรียนดูผลสอบ'],
+                'นักเรียนเห็นคะแนนสอบ และครูเห็นข้อที่ควรปรับ', ['UC-T47', 'UC-T48', 'UC-T49', 'UC-T51', 'UC-T52', 'UC-T53', 'UC-T54', 'UC-T55', 'UC-X02', 'UC-T56', 'UC-T57', 'UC-S11']),
+            $c('PR-05', 'ครู นักเรียน', 'ปลายภาค: รวมคะแนนและตัดเกรด',
+                'รวมคะแนนทั้งภาค ใส่เกรดพิเศษ ประกาศเกรด และส่งออก',
+                ['สร้างรายวิชา เลือกตัวชี้วัด แล้วเริ่มสมุดคะแนน', 'ตั้งหมวดคะแนนและเกณฑ์เกรด เพิ่มรายการคะแนนจิตพิสัย', 'กรอกคะแนน และเปิดคะแนนการเข้าเรียน', 'ใส่ ร ให้นักเรียน 1 คน', 'ประกาศเกรด', 'นักเรียนดูเกรด', 'ส่งออก CSV'],
+                'เกรดที่นักเรียนเห็นตรงกับไฟล์ CSV', ['UC-T22', 'UC-T23', 'UC-T59', 'UC-T60', 'UC-T61', 'UC-T87', 'UC-T62', 'UC-T63', 'UC-S15', 'UC-T64']),
+            $c('PR-06', 'ครู นักเรียน', 'ทำงานคู่กับ Google Classroom',
+                'ห้องที่ใช้ Classroom อยู่แล้วย้ายมาตรวจด้วย Krucheck โดยไม่ทิ้ง Classroom',
+                ['เชื่อมบัญชี Google แล้วนำเข้าห้องจากคอร์สทดลอง', 'จับคู่นักเรียนและซิงก์รายชื่อ', 'โพสต์การบ้านและประกาศไป Classroom', 'นักเรียนส่งงานใน Classroom รอการซิงก์', 'จัดการงานที่ส่ง ตรวจ แล้วส่งคะแนนและประกาศผลรายคนกลับ Classroom'],
+                'คะแนนใน Classroom ตรงกับ Krucheck', ['UC-T72', 'UC-T73', 'UC-T74', 'UC-T75', 'UC-T76', 'UC-T83', 'UC-X03', 'UC-T77', 'UC-T78']),
+            $c('PR-07', 'ครู 2 คน', 'สอนร่วมห้องเดียวกัน',
+                'ครูประจำชั้นเชิญครูวิชาอื่นมาสอนห้องของตน',
+                ['ครู ก เชิญครู ข ด้วยอีเมล', 'ครู ข ตอบรับ', 'ครู ข สร้างรายวิชาของตัวเองและผูกกับห้อง', 'ครู ข สั่งการบ้านและเผยแพร่ผล', 'ครู ก เห็นงานและคะแนนของวิชาครู ข', 'ครู ข เลิกสอนร่วม'],
+                'หลังเลิกสอนร่วม ครู ข ไม่เห็นห้องนั้นอีก และงานเดิมยังอยู่กับห้อง', ['UC-T19', 'UC-T20', 'UC-T22', 'UC-T27', 'UC-T43', 'UC-T21']),
+            $c('PR-08', 'ครู', 'ขึ้นปีการศึกษาใหม่',
+                'ปิดห้องปีก่อน สร้างห้องใหม่ และพานักเรียนเดิมขึ้นชั้น',
+                ['ปิดห้องปีก่อน ตรวจว่าเปิดอ่านได้แต่แก้ไม่ได้', 'สร้างห้องใหม่และนำนักเรียนจากห้องเดิม', 'แก้เลขที่และรีเซ็ตรหัสผ่านนักเรียน 1 คน', 'รวมบัญชีนักเรียนที่ซ้ำ 1 คู่'],
+                'ห้องใหม่มีนักเรียนเดิมพร้อมประวัติ ห้องเก่าอ่านได้อย่างเดียว', ['UC-T18', 'UC-T10', 'UC-T13', 'UC-T15', 'UC-T17']),
+            $c('PR-09', 'ครู นักเรียน', 'หนึ่งวันในห้องเรียน',
+                'ตารางสอน เช็คชื่อ และประกาศในวันเดียว',
+                ['จัดตารางสอน 3 คาบ', 'เช็คชื่อคาบแรก มีคนขาดและสาย', 'เขียนประกาศพร้อมไฟล์แนบ ตั้งเวลาเผยแพร่อีก 5 นาที', 'รอโพสต์เผยแพร่เอง', 'นักเรียนเห็นแจ้งเตือน อ่านโพสต์ ดูตารางเรียนและการเข้าเรียนของตัวเอง', 'ครูดูสรุปการเข้าเรียน'],
+                'นักเรียนเห็นโพสต์ตรงเวลา และเห็นสถานะเข้าเรียนตรงกับที่ครูเช็ค', ['UC-T84', 'UC-T85', 'UC-T80', 'UC-T82', 'UC-X05', 'UC-X07', 'UC-S21', 'UC-S07', 'UC-S08', 'UC-S09', 'UC-T86']),
+            $c('PR-10', 'ครู', 'ทำงานร่วมกับผู้ช่วย Krucheck',
+                'ใช้ผู้ช่วยสร้างงานจากไฟล์และถามผลนักเรียน',
+                ['ถามผู้ช่วยว่าจะตัดเกรดอย่างไร', 'แนบไฟล์ใบงานให้ผู้ช่วยอ่าน แล้วให้สร้างข้อ 3 ข้อเข้าการบ้าน', 'ให้ผู้ช่วยร่าง rubric และเสนอตัวชี้วัด แล้วยืนยัน', 'ให้ผู้ช่วยตั้งหมวดคะแนนและสร้างแบบฝึก', 'ถามว่านักเรียนคนไหนอ่อนตัวชี้วัดใด', 'เปลี่ยนชื่อและลบบทสนทนา'],
+                'ข้อ rubric หมวดคะแนน และแบบฝึกที่ยืนยันแล้วอยู่ในระบบจริง', ['UC-T92', 'UC-T97', 'UC-T93', 'UC-T94', 'UC-T95', 'UC-T96', 'UC-T98']),
+            $c('PR-11', 'นักเรียน ครู', 'เรียนซ่อมจากจุดที่ยังไม่เข้าใจ',
+                'นักเรียนรู้ว่าอ่อนเรื่องใด ฝึก แล้วเห็นตัวเองดีขึ้น',
+                ['ครูเพิ่มแบบฝึกและลิงก์ทบทวนให้ตัวชี้วัดหนึ่งข้อ', 'ครูให้ AI วิเคราะห์รายคนและอนุมัติข้อความ', 'นักเรียนดูทักษะ ข้อความจากครู และกราฟความเข้าใจ', 'นักเรียนทำแบบฝึก 3 ข้อและเปิดลิงก์ทบทวน', 'ครูดูทักษะของนักเรียนคนนั้นอีกครั้ง'],
+                'ค่าความเข้าใจของนักเรียนเปลี่ยนตามแบบฝึกที่ทำ', ['UC-T70', 'UC-T71', 'UC-T69', 'UC-X04', 'UC-S13', 'UC-S16', 'UC-S14', 'UC-T67']),
+            $c('PR-12', 'ผู้ดูแลระบบ', 'ดูแลระบบหนึ่งรอบ',
+                'งานประจำของผู้ดูแลระบบตั้งแต่อนุมัติครูจนลบบัญชี',
+                ['เข้าหน้าผู้ดูแลระบบ อนุมัติครู และเพิ่มผู้ใช้ 1 คน', 'ตั้งรหัสผ่านใหม่ให้ครู ระงับแล้วเปิดใช้บัญชี', 'เข้าใช้แทนครูเพื่อดูปัญหา แล้วกลับ', 'ดูปัญหาการเชื่อม Google บันทึกการใช้งาน และการเรียก AI', 'อ่านบทสนทนากับผู้ช่วยของครู', 'ลบบัญชีทดลองแล้วกู้คืน'],
+                'ทุกขั้นสำเร็จโดยไม่ต้องใช้ฐานข้อมูลโดยตรง และบันทึกการใช้งานมีครบ', ['UC-A01', 'UC-A02', 'UC-A03', 'UC-A04', 'UC-A05', 'UC-A08', 'UC-A10', 'UC-A11', 'UC-A16', 'UC-A17', 'UC-A09']),
         ];
+    }
+
+    /**
+     * One usability task per use case (DESIGN §39.6), from the JSON that
+     * tools/qa-usability.py writes. The use case's outcome is the success
+     * criterion; its alternative paths are extra checks.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function functions(): array
+    {
+        if (self::$functions !== null) {
+            return self::$functions;
+        }
+        $json = json_decode((string) @file_get_contents(base_path(self::USABILITY_JSON)), true);
+        $out = [];
+        foreach (is_array($json['cases'] ?? null) ? $json['cases'] : [] as $uc) {
+            $out[] = [
+                'code' => (string) $uc['code'],
+                'kind' => self::FUNCTION,
+                'group' => (string) $uc['chapter'],
+                'area' => (string) $uc['actor'],
+                'actor' => (string) $uc['actor'],
+                'title' => (string) $uc['title'],
+                'detail' => (string) ($uc['goal'] ?? ''),
+                'goal' => (string) ($uc['goal'] ?? ''),
+                'pre' => (string) ($uc['pre'] ?? ''),
+                'outcome' => (string) ($uc['outcome'] ?? ''),
+                'done' => (string) ($uc['outcome'] ?? ''),
+                'platforms' => (string) ($uc['platforms'] ?? ''),
+                'steps' => array_values(array_map('strval', $uc['steps'] ?? [])),
+                'alts' => array_values(array_map(fn ($a) => ['label' => (string) $a['label'], 'text' => (string) $a['text']], $uc['alts'] ?? [])),
+            ];
+        }
+
+        return self::$functions = $out;
     }
 }

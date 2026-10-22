@@ -5,7 +5,9 @@ namespace App\Providers\Filament;
 use App\Filament\Qa\Pages\MyResults;
 use App\Filament\Qa\Pages\QaOverview;
 use App\Filament\Qa\Pages\SusSurvey;
+use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\TestCaseDetail;
+use App\Filament\Qa\Pages\Testers;
 use App\Filament\Qa\Pages\TestPlan;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -43,6 +45,8 @@ class QaPanelProvider extends PanelProvider
                 TestCaseDetail::class,
                 MyResults::class,
                 SusSurvey::class,
+                TeamBoard::class,
+                Testers::class,
             ])
             ->middleware([
                 EncryptCookies::class,

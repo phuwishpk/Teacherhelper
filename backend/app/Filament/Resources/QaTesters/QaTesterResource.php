@@ -57,7 +57,7 @@ class QaTesterResource extends Resource
 
     public static function table(Table $table): Table
     {
-        $manual = count(QaCatalog::ofKind(QaCatalog::MANUAL)) + count(QaCatalog::ofKind(QaCatalog::USABILITY));
+        $manual = count(QaCatalog::ofKinds([QaCatalog::MANUAL, ...QaCatalog::USABILITY_KINDS]));
 
         return $table
             ->columns([

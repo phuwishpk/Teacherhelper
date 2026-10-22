@@ -16,14 +16,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $time_sec
  * @property int|null $error_count
  * @property string|null $note
+ * @property array<string, string>|null $checks alternative path label => pass|fail
  */
 class QaResult extends Model
 {
-    protected $fillable = ['qa_tester_id', 'case_code', 'status', 'time_sec', 'error_count', 'note'];
+    protected $fillable = ['qa_tester_id', 'case_code', 'status', 'time_sec', 'error_count', 'note', 'checks'];
 
     protected function casts(): array
     {
-        return ['time_sec' => 'integer', 'error_count' => 'integer'];
+        return ['time_sec' => 'integer', 'error_count' => 'integer', 'checks' => 'array'];
     }
 
     /** @return BelongsTo<QaTester, $this> */

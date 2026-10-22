@@ -22,7 +22,7 @@ class TestPlan extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
 
     #[Url]
     public string $kind = 'all';
@@ -36,10 +36,22 @@ class TestPlan extends Page
     /** @return array<string, int> */
     public function counts(): array
     {
+        $out = [];
+        foreach (array_keys(QaCatalog::KIND_LABELS) as $kind) {
+            $out[$kind] = count(QaCatalog::ofKind($kind));
+        }
+
+        return $out;
+    }
+
+    /** @return array{steps: int, alts: int} the size of the function-level usability set */
+    public function functionSize(): array
+    {
+        $functions = QaCatalog::ofKind(QaCatalog::FUNCTION);
+
         return [
-            QaCatalog::AUTO => count(QaCatalog::ofKind(QaCatalog::AUTO)),
-            QaCatalog::MANUAL => count(QaCatalog::ofKind(QaCatalog::MANUAL)),
-            QaCatalog::USABILITY => count(QaCatalog::ofKind(QaCatalog::USABILITY)),
+            'steps' => array_sum(array_map(fn (array $c) => count($c['steps']), $functions)),
+            'alts' => array_sum(array_map(fn (array $c) => count($c['alts']), $functions)),
         ];
     }
 }
