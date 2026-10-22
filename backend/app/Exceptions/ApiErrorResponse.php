@@ -1,0 +1,83 @@
+<?php
+
+namespace App\Exceptions;
+
+use App\Domain\Gemini\AiErrorCode;
+use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+
+/**
+ * Builds the uniform API error body {message, errors, code} (DESIGN §9).
+ *
+ * Framework-raised HTTP errors (404 unknown route, 405, 429 throttle, abort())
+ * are mapped to a stable snake_case code and a Thai message here; errors the
+ * app must handle by code should be thrown as ApiException instead.
+ */
+final class ApiErrorResponse
+{
+    private const CODES = [
+        400 => 'bad_request',
+        403 => 'forbidden',
+        404 => 'not_found',
+        405 => 'method_not_allowed',
+        409 => 'conflict',
+        413 => 'payload_too_large',
+        415 => 'unsupported_media_type',
+        429 => 'too_many_requests',
+        503 => 'service_unavailable',
+    ];
+
+    private const MESSAGES = [
+        403 => 'คุณไม่มีสิทธิ์ทำรายการนี้',
+        404 => 'ไม่พบข้อมูลที่ร้องขอ',
+        405 => 'ไม่รองรับวิธีเรียกนี้',
+        413 => 'ไฟล์หรือข้อมูลใหญ่เกินกำหนด',
+        429 => 'ส่งคำขอบ่อยเกินไป กรุณาลองใหม่ในอีกสักครู่',
+        503 => 'ระบบปิดปรับปรุงชั่วคราว กรุณาลองใหม่ภายหลัง',
+    ];
+
+    /**
+     * @param  array<string, array<int, string>>  $errors
+     * @param  array<string, string>  $headers
+     * @param  array<string, mixed>  $extra  fields after {message, errors, code} (ApiException::$extra)
+     */
+    public static function make(string $message, string $code, int $status, array $errors = [], array $headers = [], array $extra = []): JsonResponse
+    {
+        // Every "no key" or "key refused" error says so in the AI code too (DESIGN §36),
+        // whichever of the many places threw it.
+        $aiCode = ['ai_key_missing' => AiErrorCode::KEY_MISSING, 'ai_key_invalid' => AiErrorCode::KEY_INVALID][$code] ?? null;
+        if ($aiCode !== null && ! array_key_exists('ai_error_code', $extra)) {
+            $extra['ai_error_code'] = $aiCode;
+        }
+
+        return response()->json([
+            'message' => $message,
+            'errors' => (object) $errors,
+            'code' => $code,
+            ...$extra,
+        ], $status, $headers);
+    }
+
+    public static function fromHttpException(HttpExceptionInterface $e): JsonResponse
+    {
+        $status = $e->getStatusCode();
+
+        return self::make(
+            self::MESSAGES[$status] ?? ($e->getMessage() !== '' ? $e->getMessage() : 'เกิดข้อผิดพลาด'),
+            self::codeFor($status),
+            $status,
+            [],
+            $e->getHeaders(), // keeps Retry-After / X-RateLimit-* from the throttle middleware
+        );
+    }
+
+    public static function codeFor(int $status): string
+    {
+        return self::CODES[$status] ?? 'http_'.$status;
+    }
+
+    public static function messageFor(int $status): ?string
+    {
+        return self::MESSAGES[$status] ?? null;
+    }
+}

@@ -1,0 +1,38 @@
+{
+  "dictionary": "DICT_4X4_50",
+  "marker_bits": 4,
+  "border_bits": 1,
+  "image_px": 600,
+  "cell_px": 75,
+  "marker_px": 450,
+  "quiet_zone_px": 75,
+  "print": {
+    "marker_size_mm": 12.0,
+    "image_size_mm": 16.0,
+    "quiet_zone_mm": 2.0,
+    "note": "Place the image so its centre sits on the layout frame corner; the image is larger than marker_size_mm because the quiet zone is inside the PNG."
+  },
+  "markers": [
+    {
+      "id": 0,
+      "file": "0.png",
+      "corner": "top_left"
+    },
+    {
+      "id": 1,
+      "file": "1.png",
+      "corner": "top_right"
+    },
+    {
+      "id": 2,
+      "file": "2.png",
+      "corner": "bottom_right"
+    },
+    {
+      "id": 3,
+      "file": "3.png",
+      "corner": "bottom_left"
+    }
+  ],
+  "generator": "ml/tools/gen_aruco.py"
+}
