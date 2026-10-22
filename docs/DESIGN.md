@@ -5444,3 +5444,43 @@ service cloud.firestore {
 - `core/live/live_scope.dart`: `liveUserScope` (Firestore + uid เมื่อ uid ตรงกับผู้ใช้ที่ล็อกอิน) และ `liveChangeTicks` ใช้ร่วมกับกล่องแจ้งเตือน (§38.7)
 - rules ไม่เปลี่ยน (ยังอยู่ใต้ `users/{uid}`) TTL ถ้าตั้ง ให้เพิ่ม collection group `assignments` และ `submissions` (HOSTING §6.5 ข้อ 4)
 
+
+## 39. Krucheck Test Lab (`/qa`)
+
+ตัดสินใจ 22 ต.ค. 2569 (ผู้ใช้ขอ: ออกแบบ integration test และ usability test สำหรับผู้ดูแล 1 คนกับผู้ทดสอบ 3 คน แยกว่าอันไหนอัตโนมัติ อันไหนทำมือ ทำเป็นหน้าเว็บที่ล็อกอินเข้าไปกรอก และอยู่ในเว็บของโปรเจกต์เป็นอีกส่วนหนึ่ง พร้อมแสดงการทดสอบโดยละเอียด) แทนหน้า artifact ที่ทำไว้ก่อนในวันเดียวกัน
+
+### 39.1 หลัก
+
+- **แยกจากระบบจริง**: Filament panel ที่สอง `qa` ที่ `/qa` (`QaPanelProvider`) ใช้ guard `qa` กับ provider `qa_testers` (model `QaTester`) บัญชีผู้ทดสอบไม่ใช่ `users` จึงเปิดได้แค่ `/qa` และไม่เห็นข้อมูลโรงเรียนหรือนักเรียน บัญชีของ Krucheck (admin ด้วย) เปิด `/qa` ไม่ได้ panel admin ยังใช้ guard `web`
+- **แผนอยู่ในโค้ด ผลอยู่ในฐานข้อมูล**: `App\Domain\Qa\QaCatalog` เก็บทุกรายการ (รหัส ชนิด ส่วนของระบบ สิ่งที่ตรวจ ไฟล์ test ขั้นตอน ผลที่คาดหวัง เหตุผลที่ทำมือ) review ไปพร้อมโค้ดที่มันทดสอบ ผลของผู้ทดสอบอยู่ใน `qa_results` อ้างด้วย `case_code`
+- **อัตโนมัติ vs ทำมือ**: อัตโนมัติเมื่อผลแน่นอน จำลองบริการภายนอกได้ (Gemini, Classroom, Drive, FCM, Firestore ด้วย HTTP จำลอง) ไม่ต้องใช้อุปกรณ์หรือบัญชีจริง ซึ่งรันใน GitHub Actions ทุก push และ PR อยู่แล้ว ทำมือเมื่อใช้บริการจริงที่มีค่าใช้จ่ายหรือผลไม่คงที่ ต้องผ่าน OAuth จริง ต้องใช้กล้อง เครื่องพิมพ์ หรือมือถือจริง ขึ้นกับ hosting จริง หรือวัดความรู้สึกคน (usability และ SUS)
+
+### 39.2 รายการ (16 + 13 + 13)
+
+- **อัตโนมัติ IT-A01–A16** แต่ละรายการชี้ไฟล์ test จริง (`backend/tests/Feature/…`, `app/test/flows/…`, `.github/workflows/…`) และ workflow ที่ผลนับ (`backend`, `app`, `deploy`) ครอบคลุมบัญชีและสิทธิ์ ห้องเรียน การบ้านถึง PDF สแกนถึงคะแนน ส่งทั้งหน้า ตรวจทานถึงขอตรวจใหม่ Classroom ข้อสอบกระดาษ สมุดคะแนน แจ้งเตือนและข้อมูลสด ผู้ช่วย ความปลอดภัย การลบบัญชี flow ของแอป build APK และ deploy
+- **ทำมือ IT-M01–M13**: Gemini จริง, กล้องจริงในแสงต่างกัน, ออฟไลน์แล้วซิงก์, push จริงบน Android, กล่องแจ้งเตือนและข้อมูลสดบนเว็บจริง, ความคืบหน้าการตรวจสองเครื่อง, Classroom จริง, เข้าสู่ระบบด้วย Google จริง, ข้อสอบพิมพ์จริง, deploy ถึง Hostatom, งานตามเวลาบน Plesk, เว็บบนมือถือ, integration_test บน emulator (อัตโนมัติแต่ CI ไม่มี emulator) ผล: ผ่าน / ไม่ผ่าน / ทำไม่ได้ / ไม่ได้รับมอบหมาย
+- **Usability UT-1–8 (ครู) และ US-1–5 (นักเรียน)** ปรับจาก KICKOFF ส่วนที่ 5 งานที่ 3 ให้ตรงกับระบบครูอิสระ (§29: รหัสห้องแทนรหัสโรงเรียน ชื่อผู้ใช้แทน PIN) และเพิ่มโพสต์ ผู้ช่วย สมุดคะแนน กล่องแจ้งเตือน ผล: สำเร็จเอง / สำเร็จเมื่อมีคนช่วย / ไม่สำเร็จ พร้อมเวลา (วินาที) จำนวนครั้งที่ทำผิด และบันทึก think-aloud
+- **SUS** 10 ข้อของทีม (KICKOFF) คะแนน = (ข้อคี่ − 1) + (5 − ข้อคู่) รวม × 2.5 ค่าอ้างอิง 68 คำนวณใน `QaCatalog::susScore`
+
+### 39.3 ตาราง
+
+- `qa_testers`: `name`, `email` UNIQUE, `password` (hash), `is_lead` (หัวหน้าทดสอบ: กด "อ่านผล CI ใหม่" ได้), `remember_token`
+- `qa_results`: `qa_tester_id` (FK cascade), `case_code` VARCHAR(20), `status` VARCHAR(20) NULL, `time_sec` INT UNSIGNED NULL, `error_count` SMALLINT UNSIGNED NULL, `note` TEXT NULL; UNIQUE (`qa_tester_id`, `case_code`)
+- `qa_sus_responses`: `qa_tester_id` (FK cascade, UNIQUE), `role` (`teacher`/`student`), `answers` JSON, `score` DECIMAL(5,1), `comment`
+- ไม่มีตารางใดชี้ไป `users` จึงไม่กระทบ §31.3
+
+### 39.4 หน้า
+
+- **ภาพรวม `/qa`** (`QaOverview`): ตัวเลข 4 ช่อง (อัตโนมัติผ่าน/ทั้งหมด, ทำมือผ่าน/ทั้งหมด, usability สำเร็จเอง %, SUS เฉลี่ยเทียบ 68), "รุ่นที่ใช้งานอยู่" (`DEPLOY-COMMIT.txt` ของ deploy tree เทียบ commit ล่าสุดของ main), ผู้ทดสอบกับความคืบหน้า, ตารางอัตโนมัติพร้อมผล workflow และลิงก์ไป GitHub, ตารางทำมือรายคนพร้อมสถานะรวม (มีคนไม่ผ่าน = ไม่ผ่าน), usability พร้อมแถบสำเร็จ/ช่วย/ไม่สำเร็จ เวลาเฉลี่ย และจำนวนผิดเฉลี่ย
+- **แผนทดสอบ `/qa/plan`**: กติกาเลือกอัตโนมัติหรือทำมือ ขั้นตอนการทดสอบ และทุกรายการ กรองตามชนิดได้
+- **รายละเอียด `/qa/cases/{code}`** (`TestCaseDetail`): อัตโนมัติแสดงสิ่งที่ตรวจ ผล workflow ล่าสุดพร้อม commit และเวลา และ**ทุกไฟล์ test พร้อมรายชื่อ test ทุกตัวในไฟล์** (ลิงก์ไปไฟล์บน GitHub) ทำมือแสดงเหตุผล ขั้นตอน ผลที่คาดหวัง usability แสดงงาน เกณฑ์ สิ่งที่สังเกต และทั้งสองแบบแสดงผลของผู้ทดสอบทุกคนพร้อมบันทึกและเวลา
+- **กรอกผล `/qa/run`** (`MyResults`): การ์ดของทุกรายการทำมือและ usability แต่ละใบบันทึกเอง (`save(code)` ตรวจ status ตามชนิด รายการอัตโนมัติไม่รับ เขียนเฉพาะแถวของผู้ล็อกอิน)
+- **แบบประเมิน SUS `/qa/sus`**: 10 ข้อ คะแนนขึ้นทันทีเมื่อตอบครบ หนึ่งคำตอบต่อคน
+- **admin `/admin/qa-testers`** "ผู้ทดสอบระบบ (Test Lab)": admin ของ Krucheck สร้าง แก้ ลบบัญชีผู้ทดสอบ (ลบแล้วผลของคนนั้นหายด้วย) และปุ่มเปิด Test Lab
+
+### 39.5 รายชื่อ test และผล CI
+
+- `TestIndex` อ่านชื่อ test จากไฟล์จริงเมื่อมี (`function test_*` ของ PHP, `test(`/`testWidgets(` ของ Dart รวม string ติดกันแบบ Dart, `name:` ของ job ใน workflow) production ไม่มีโฟลเดอร์ tests (deploy ตัดออก) จึงอ่าน `backend/resources/qa/test-index.json` ที่ workflow `deploy` สร้างด้วย `php backend/artisan eduvision:qa-index --output=…` จาก checkout เต็ม (ไฟล์นี้ gitignored และ deploy ตรวจว่าไม่ว่าง)
+- `CiStatus` อ่าน `GET https://api.github.com/repos/{QA_GITHUB_REPO}/actions/runs?branch=main` (repo public ไม่ต้องใช้ token จำกัด 60 ครั้งต่อชั่วโมงต่อ IP) เก็บ cache 10 นาที ล้มเหลวเก็บ 1 นาที เลือก run ล่าสุดของแต่ละ workflow (`backend`, `app`, `deploy`, `secrets`) สถานะ: success = ผ่าน, ยังไม่มี conclusion = กำลังรัน, อื่น ๆ = ไม่ผ่าน
+- `.env`: `QA_GITHUB_REPO` (ค่าเริ่มต้น `phuwishpk/Teacherhelper`)
+- test: `tests/Feature/Qa/QaLabTest.php` (ทุกไฟล์ใน catalog มีจริงและมี test, SUS, parser, manifest, คำสั่ง, GitHub จำลองและ cache, guard แยกทั้งสองทาง, ทุกหน้าแสดงรายละเอียด, บันทึกเฉพาะของตัวเอง, SUS ครบทุกข้อ, เฉพาะหัวหน้ารีเฟรช CI, หน้า admin)

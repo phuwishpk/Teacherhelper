@@ -197,4 +197,12 @@ return [
     'privacy' => [
         'contact_email' => env('PRIVACY_CONTACT_EMAIL'),
     ],
+
+    /*
+    | Krucheck Test Lab at /qa (DESIGN §39): the public repository whose
+    | GitHub Actions results the automated cases show.
+    */
+    'qa' => [
+        'github_repo' => env('QA_GITHUB_REPO', 'phuwishpk/Teacherhelper'),
+    ],
 ];
