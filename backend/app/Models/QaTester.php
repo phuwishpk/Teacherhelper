@@ -12,7 +12,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * Someone who tests Krucheck (DESIGN §39). Not a Krucheck user. A `tester`
  * signs in to the Test Lab at /qa (guard `qa`) and records integration and
  * usability results; `is_lead` marks the person running the tests. An
- * `evaluator` signs in to /sus (guard `sus`) and only answers the SUS
+ * `evaluator` signs in to the separate SUS pages at /sus (guard `sus`, plain
+ * pages of their own look, not a Filament panel) and only answers the SUS
  * questionnaire (§39.7).
  *
  * @property int $id
@@ -45,14 +46,10 @@ class QaTester extends Authenticatable implements FilamentUser, HasName
         ];
     }
 
-    /** A tester opens the Test Lab, an evaluator the SUS page; never both. */
+    /** Only testers open the Test Lab; evaluators use the SUS pages (/sus, not a panel). */
     public function canAccessPanel(Panel $panel): bool
     {
-        return match ($panel->getId()) {
-            'qa' => $this->role === self::ROLE_TESTER,
-            'sus' => $this->role === self::ROLE_EVALUATOR,
-            default => false,
-        };
+        return $panel->getId() === 'qa' && $this->role === self::ROLE_TESTER;
     }
 
     public function isEvaluator(): bool

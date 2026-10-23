@@ -58,7 +58,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // no redirect at all (null), so the AuthenticationException below renders the
         // JSON 401 even when the client sends no Accept: application/json header.
         $middleware->redirectGuestsTo(
-            fn (Request $request) => $request->is('api/*') ? null : route('filament.admin.auth.login'),
+            fn (Request $request) => match (true) {
+                $request->is('api/*') => null,
+                // The SUS questionnaire has its own sign-in page (DESIGN §39.7).
+                $request->is('sus', 'sus/*') => route('sus.login'),
+                default => route('filament.admin.auth.login'),
+            },
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
