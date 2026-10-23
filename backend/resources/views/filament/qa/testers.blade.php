@@ -11,6 +11,7 @@
 
     <x-filament::section>
         <x-slot name="heading">ทีมทดสอบ ({{ $board->testers()->count() }} คน)</x-slot>
+        <x-slot name="description">ผู้ทดสอบทำ integration test และ usability test ใน Test Lab ไม่ทำแบบประเมิน SUS</x-slot>
         <div class="qa-table-wrap"><table class="qa-table">
             <thead><tr><th>ชื่อ</th><th>อีเมล</th><th class="qa-num">บันทึกแล้ว</th><th>ความคืบหน้า</th>@if ($me->is_lead)<th></th>@endif</tr></thead>
             <tbody>
@@ -36,9 +37,38 @@
     </x-filament::section>
 
     <x-filament::section>
-        <x-slot name="heading">เพิ่มผู้ทดสอบ</x-slot>
-        <x-slot name="description">บัญชีนี้เข้าได้เฉพาะ Test Lab ไม่เห็นข้อมูลนักเรียน ส่งอีเมลและรหัสผ่านให้เขาเอง แล้วให้เข้าที่ {{ url('/qa') }}</x-slot>
+        <x-slot name="heading">ผู้ประเมิน SUS ({{ $this->evaluators()->count() }} คน)</x-slot>
+        <x-slot name="description">ผู้ประเมินตอบแบบประเมิน SUS ที่ {{ url('/sus') }} อย่างเดียว ไม่เห็น Test Lab ควรเป็นผู้ใช้ที่ไม่ได้อยู่ในทีมพัฒนาหรือทีมทดสอบ</x-slot>
+        @if ($this->evaluators()->isEmpty())
+            <p class="qa-muted qa-small">ยังไม่มีผู้ประเมิน</p>
+        @else
+            <div class="qa-table-wrap"><table class="qa-table">
+                <thead><tr><th>ชื่อ</th><th>อีเมล</th><th class="qa-num">ประเมินแล้ว</th>@if ($me->is_lead)<th></th>@endif</tr></thead>
+                <tbody>
+                @foreach ($this->evaluators() as $e)
+                    <tr wire:key="evaluator-{{ $e->id }}">
+                        <td>{{ $e->name }}</td>
+                        <td class="qa-small">{{ $e->email }}</td>
+                        <td class="qa-num">{{ $e->sus_responses_count }} ฝั่ง</td>
+                        @if ($me->is_lead)
+                            <td><x-filament::button size="xs" color="danger" wire:click="removeTester({{ $e->id }})" wire:confirm="ลบ {{ $e->name }} และคำตอบ SUS ของเขา?">ลบ</x-filament::button></td>
+                        @endif
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        @endif
+    </x-filament::section>
+
+    <x-filament::section>
+        <x-slot name="heading">เพิ่มผู้ทดสอบหรือผู้ประเมิน</x-slot>
+        <x-slot name="description">บัญชีเหล่านี้ไม่เห็นข้อมูลนักเรียน ผู้ทดสอบเข้าที่ {{ url('/qa') }} ผู้ประเมิน SUS เข้าที่ {{ url('/sus') }} ส่งอีเมลและรหัสผ่านให้เขาเอง</x-slot>
         <form wire:submit="addTester" class="qa-grid">
+            <div class="qa-seg" role="radiogroup" aria-label="บทบาท">
+                @foreach (\App\Models\QaTester::ROLES as $value => $label)
+                    <label><input type="radio" value="{{ $value }}" wire:model.live="role" id="new-role-{{ $value }}"><span>{{ $label }}</span></label>
+                @endforeach
+            </div>
             <div class="qa-fields">
                 <div class="qa-field">
                     <label for="new-name">ชื่อ</label>
@@ -56,10 +86,10 @@
                     @error('password')<span class="qa-small" style="color:rgb(220 38 38);">{{ $message }}</span>@enderror
                 </div>
             </div>
-            @if ($me->is_lead)
+            @if ($me->is_lead && $role === \App\Models\QaTester::ROLE_TESTER)
                 <label class="qa-row qa-small" style="cursor:pointer;"><input type="checkbox" wire:model="isLead" id="new-lead"> <span>เป็นหัวหน้าทดสอบ</span></label>
             @endif
-            <div><x-filament::button type="submit">เพิ่มผู้ทดสอบ</x-filament::button></div>
+            <div><x-filament::button type="submit">{{ $role === \App\Models\QaTester::ROLE_EVALUATOR ? 'เพิ่มผู้ประเมิน SUS' : 'เพิ่มผู้ทดสอบ' }}</x-filament::button></div>
         </form>
     </x-filament::section>
 </x-filament-panels::page>

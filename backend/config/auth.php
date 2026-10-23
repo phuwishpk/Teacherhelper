@@ -49,6 +49,12 @@ return [
             'driver' => 'session',
             'provider' => 'qa_testers',
         ],
+
+        // The SUS page at /sus (DESIGN §39.7): the same accounts, role evaluator.
+        'sus' => [
+            'driver' => 'session',
+            'provider' => 'qa_testers',
+        ],
     ],
 
     /*

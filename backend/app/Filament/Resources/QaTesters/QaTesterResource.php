@@ -8,6 +8,7 @@ use App\Models\QaTester;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -49,6 +50,12 @@ class QaTesterResource extends Resource
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn (?string $state) => filled($state))
                 ->helperText('อย่างน้อย 8 ตัว ตอนแก้ไขเว้นว่างไว้ = ใช้รหัสเดิม'),
+            Select::make('role')
+                ->label('บทบาท')
+                ->options(QaTester::ROLES)
+                ->default(QaTester::ROLE_TESTER)
+                ->required()
+                ->helperText('ผู้ทดสอบเข้า /qa ผู้ประเมิน SUS เข้า /sus อย่างเดียว'),
             Toggle::make('is_lead')
                 ->label('หัวหน้าทดสอบ')
                 ->helperText('อ่านผล CI จาก GitHub ใหม่ได้ทันทีในหน้าภาพรวม'),
@@ -63,12 +70,13 @@ class QaTesterResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('ชื่อ')->searchable()->sortable(),
                 TextColumn::make('email')->label('อีเมล')->searchable(),
+                TextColumn::make('role')->label('บทบาท')->formatStateUsing(fn (string $state) => QaTester::ROLES[$state] ?? $state)->badge(),
                 IconColumn::make('is_lead')->label('หัวหน้า')->boolean(),
                 TextColumn::make('results_count')
                     ->label('ผลที่กรอก')
                     ->counts(['results' => fn ($q) => $q->whereNotNull('status')])
                     ->formatStateUsing(fn ($state) => "{$state}/{$manual}"),
-                TextColumn::make('sus.score')->label('SUS')->placeholder('–'),
+                TextColumn::make('sus_responses_count')->label('SUS ที่ส่ง')->counts('susResponses'),
                 TextColumn::make('created_at')->label('สร้างเมื่อ')->dateTime('d/m/Y H:i', 'Asia/Bangkok'),
             ])
             ->recordActions([

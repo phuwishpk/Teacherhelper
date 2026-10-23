@@ -1,6 +1,8 @@
 {{-- Test Lab overview (DESIGN §39). --}}
 @use('App\Domain\Qa\QaBoard')
 @use('App\Domain\Qa\QaCatalog')
+@use('App\Domain\Qa\QaSus')
+@use('App\Filament\Qa\Pages\SusResults')
 @use('App\Filament\Qa\Pages\TeamBoard')
 @use('App\Filament\Qa\Pages\TestCaseDetail')
 <x-filament-panels::page>
@@ -20,7 +22,7 @@
         $manualPass = $manualVerdicts->filter(fn ($v) => $v[0] === 'pass')->count();
         $manualFail = $manualVerdicts->filter(fn ($v) => $v[0] === 'fail')->count();
         $uxTotals = $board->usabilityTotals();
-        $sus = $board->susSummary();
+        $sus = $board->susStats();
         $caseUrl = fn (string $code) => TestCaseDetail::getUrl(['code' => $code]);
     @endphp
 
@@ -40,11 +42,11 @@
             <span class="v">{{ $uxTotals['attempts'] ? round($uxTotals['success'] / $uxTotals['attempts'] * 100).'%' : '–' }}</span>
             <span class="s">{{ $uxTotals['attempts'] ? "{$uxTotals['success']} จาก {$uxTotals['attempts']} ครั้งที่ทำ" : 'ยังไม่มีผล' }}</span>
         </div>
-        <div class="qa-stat">
-            <span class="k">SUS เฉลี่ย</span>
-            <span class="v">{{ $sus['mean'] ?? '–' }}</span>
-            <span class="s">{{ $sus['n'] ? "{$sus['n']} คน · ค่าอ้างอิง ".QaCatalog::SUS_BENCHMARK : 'ค่าอ้างอิง '.QaCatalog::SUS_BENCHMARK }}</span>
-        </div>
+        <a class="qa-stat" href="{{ SusResults::getUrl() }}">
+            <span class="k">SUS เฉลี่ย (ผู้ประเมิน)</span>
+            <span class="v">{{ $sus['mean'] ?? '–' }}@if ($sus['mean'] !== null) <span style="font-size:1rem;">เกรด {{ QaSus::grade($sus['mean']) }}</span>@endif</span>
+            <span class="s">{{ $sus['n'] ? "{$sus['n']} คำตอบ · ค่าอ้างอิง ".QaSus::BENCHMARK : 'ยังไม่มีผู้ประเมิน · ค่าอ้างอิง '.QaSus::BENCHMARK }}</span>
+        </a>
     </div>
 
     <x-filament::section>
@@ -73,16 +75,13 @@
             <p class="qa-muted qa-small">ยังไม่มีบัญชีผู้ทดสอบ admin ของ Krucheck สร้างได้ที่ /admin เมนู "ผู้ทดสอบระบบ"</p>
         @else
             <div class="qa-table-wrap"><table class="qa-table">
-                <thead><tr><th>ผู้ทดสอบ</th><th class="qa-num">Integration ทำมือ</th><th class="qa-num">Usability</th><th class="qa-num">SUS</th><th>บทบาทที่ประเมิน</th></tr></thead>
+                <thead><tr><th>ผู้ทดสอบ</th><th class="qa-num">Integration ทำมือ</th><th class="qa-num">Usability</th></tr></thead>
                 <tbody>
                 @foreach ($testers as $t)
-                    @php $s = $board->sus($t->id); @endphp
                     <tr>
                         <td>{{ $t->name }} @if ($t->is_lead)<x-filament::badge color="primary" size="sm">หัวหน้าทดสอบ</x-filament::badge>@endif</td>
                         <td class="qa-num">{{ $board->filled($t->id, QaCatalog::MANUAL) }}/{{ count($manual) }}</td>
                         <td class="qa-num">{{ $board->filled($t->id, QaCatalog::USABILITY_KINDS) }}/{{ count($ux) }}</td>
-                        <td class="qa-num">{{ $s?->score ?? '–' }}</td>
-                        <td>{{ $s ? ($s->role === 'teacher' ? 'ครู' : 'นักเรียน') : '–' }}</td>
                     </tr>
                 @endforeach
                 </tbody>

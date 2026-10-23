@@ -157,6 +157,8 @@ class AppServiceProvider extends ServiceProvider
         // capped per address (it has no login, a bad token only redirects).
         RateLimiter::for('admin-handoff', fn (Request $request) => self::perUser($request, 10));
         RateLimiter::for('admin-handoff-link', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
+        // The SUS sign-in (DESIGN §39.7): per IP and email, like a login form.
+        RateLimiter::for('sus-login', fn (Request $request) => Limit::perMinute(5)->by($request->ip().'|'.mb_strtolower((string) $request->input('email'))));
         // The web app redeems an impersonation ticket once (§29.14): a bad one only answers 422.
         RateLimiter::for('impersonate', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
 

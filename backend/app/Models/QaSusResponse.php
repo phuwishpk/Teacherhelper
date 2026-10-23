@@ -6,8 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A tester's System Usability Scale answers (DESIGN §39): ten answers 1–5,
- * the role they tested (teacher/student) and the 0–100 score.
+ * An evaluator's System Usability Scale answers (DESIGN §39.7) for one role
+ * of the app (teacher/student): ten answers 1–5, the 0–100 score, Bangor's
+ * 1–7 adjective rating, the platform and whether it was their first use.
  *
  * @property list<int> $answers
  * @property float $score
@@ -15,11 +16,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class QaSusResponse extends Model
 {
-    protected $fillable = ['qa_tester_id', 'role', 'answers', 'score', 'comment'];
+    protected $fillable = ['qa_tester_id', 'role', 'answers', 'score', 'adjective', 'platform', 'experience', 'comment'];
 
     protected function casts(): array
     {
-        return ['answers' => 'array', 'score' => 'float'];
+        return ['answers' => 'array', 'score' => 'float', 'adjective' => 'integer'];
     }
 
     /** @return BelongsTo<QaTester, $this> */
