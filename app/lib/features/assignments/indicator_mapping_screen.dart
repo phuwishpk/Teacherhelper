@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -491,7 +492,7 @@ class _QuestionCard extends StatelessWidget {
                   trailing: ids.contains(s.skill.id)
                       ? Icon(
                           Icons.check_circle,
-                          color: Colors.green.shade700,
+                          color: theme.colorScheme.success,
                           semanticLabel: 'ใช้แล้ว',
                         )
                       : TextButton(

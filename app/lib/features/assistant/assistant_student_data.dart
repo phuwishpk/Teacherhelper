@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/message_dialog.dart';
 import '../assignments/assignment.dart';
 import '../assignments/assignments_repository.dart';
 import '../classrooms/classroom.dart';
@@ -20,9 +21,24 @@ class StudentDataChip extends ConsumerWidget {
 
   Future<void> _choose(BuildContext context, WidgetRef ref) async {
     if (!status.studentDataAcknowledged) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => const _Notice(),
+      final ok = await showMessageDialog<bool>(
+        context,
+        title: 'ถามผู้ช่วยเรื่องข้อมูลนักเรียน',
+        message:
+            'ผู้ช่วยจะส่งคะแนน การส่งงาน ผลรายข้อ ตัวชี้วัด และการเข้าเรียนของ'
+            'นักเรียนในห้องที่ครูสอนไปให้ Gemini โดยแทนนักเรียนด้วยรหัส เช่น S1 '
+            'ไม่ส่งชื่อ เลขที่ หรือเลขประจำตัว ชื่อที่ครูพิมพ์ก็ถูกแทนด้วยรหัสก่อนส่ง\n\n'
+            'คำขอใช้ Gemini key ของครู ถ้าเป็น key ฟรี Google อาจนำข้อมูลไป'
+            'ปรับปรุงบริการ บทสนทนาเก็บ 90 วัน และผู้ดูแลระบบเปิดอ่านได้',
+        actions: const [
+          DialogAction('ยกเลิก', value: false),
+          DialogAction(
+            'เข้าใจแล้ว',
+            value: true,
+            key: ValueKey('assistant_data_ack'),
+            primary: true,
+          ),
+        ],
       );
       if (ok != true || !context.mounted) return;
       try {
@@ -72,33 +88,6 @@ class StudentDataChip extends ConsumerWidget {
   }
 }
 
-class _Notice extends StatelessWidget {
-  const _Notice();
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('ถามผู้ช่วยเรื่องข้อมูลนักเรียน'),
-    content: const Text(
-      'ผู้ช่วยจะส่งคะแนน การส่งงาน ผลรายข้อ ตัวชี้วัด และการเข้าเรียนของ'
-      'นักเรียนในห้องที่ครูสอนไปให้ Gemini โดยแทนนักเรียนด้วยรหัส เช่น S1 '
-      'ไม่ส่งชื่อ เลขที่ หรือเลขประจำตัว ชื่อที่ครูพิมพ์ก็ถูกแทนด้วยรหัสก่อนส่ง\n\n'
-      'คำขอใช้ Gemini key ของครู ถ้าเป็น key ฟรี Google อาจนำข้อมูลไป'
-      'ปรับปรุงบริการ บทสนทนาเก็บ 90 วัน และผู้ดูแลระบบเปิดอ่านได้',
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(false),
-        child: const Text('ยกเลิก'),
-      ),
-      FilledButton(
-        key: const ValueKey('assistant_data_ack'),
-        onPressed: () => Navigator.of(context).pop(true),
-        child: const Text('เข้าใจแล้ว'),
-      ),
-    ],
-  );
-}
-
 enum _Kind { classroom, student, assignment }
 
 class _ScopeDialog extends ConsumerStatefulWidget {
@@ -139,7 +128,7 @@ class _ScopeDialogState extends ConsumerState<_ScopeDialog> {
             if (data == null) {
               return const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               );
             }
             final (classrooms, assignments) = data;
@@ -233,7 +222,9 @@ class _ScopeDialogState extends ConsumerState<_ScopeDialog> {
                           ),
                           _ => const Padding(
                             padding: EdgeInsets.all(16),
-                            child: Center(child: CircularProgressIndicator()),
+                            child: Center(
+                              child: CircularProgressIndicator.adaptive(),
+                            ),
                           ),
                         },
                       ),

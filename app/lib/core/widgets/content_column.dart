@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
+import 'message_dialog.dart';
 
 /// Centers page content and caps its width so forms and lists stay readable
 /// on a tablet and a desktop (DESIGN §6.1, §27.2). Without [padding] the
@@ -145,7 +146,8 @@ void showMessage(BuildContext context, String text) {
     ..showSnackBar(SnackBar(content: Text(text)));
 }
 
-/// Yes/no dialog; resolves to true when the user confirms.
+/// Yes/no dialog; resolves to true when the user confirms. An iOS alert on
+/// iOS (DESIGN §27.7).
 Future<bool> confirm(
   BuildContext context, {
   required String title,
@@ -153,33 +155,26 @@ Future<bool> confirm(
   String confirmLabel = 'ตกลง',
   bool destructive = false,
 }) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('ยกเลิก'),
-        ),
-        FilledButton(
-          style: destructive
-              ? FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
-                )
-              : null,
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(confirmLabel),
-        ),
-      ],
-    ),
+  final result = await showMessageDialog<bool>(
+    context,
+    title: title,
+    message: message,
+    actions: [
+      const DialogAction('ยกเลิก', value: false),
+      DialogAction(
+        confirmLabel,
+        value: true,
+        primary: true,
+        destructive: destructive,
+      ),
+    ],
   );
   return result ?? false;
 }
 
-/// Small colored label for a status value.
+/// Small colored label for a status value. The label is [color] taken a
+/// fifth of the way to the text colour, so it reads at 4.5 : 1 on its tint
+/// for every role of the scheme except `outline` (DESIGN §27.5).
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.label, this.color});
 
@@ -193,13 +188,13 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.15),
+        color: c.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: c,
+          color: Color.lerp(c, scheme.onSurface, 0.2),
           fontWeight: FontWeight.w600,
         ),
       ),

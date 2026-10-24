@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
@@ -504,7 +505,7 @@ class _StatusCard extends StatelessWidget {
                       : 'อนุมัติเฉลยแล้ว',
                   color: approvedAt == null
                       ? Theme.of(context).colorScheme.secondary
-                      : Colors.green.shade700,
+                      : Theme.of(context).colorScheme.success,
                 ),
                 Text(key.mode.label),
               ],
@@ -734,7 +735,7 @@ class _KeyQuestionCard extends StatelessWidget {
                         StatusChip(
                           label: complete ? 'ครบ' : 'ยังไม่ครบ',
                           color: complete
-                              ? Colors.green.shade700
+                              ? theme.colorScheme.success
                               : theme.colorScheme.error,
                         ),
                         if (aiDrafted)

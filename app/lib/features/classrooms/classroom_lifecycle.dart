@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/message_dialog.dart';
 import 'classroom.dart';
 import 'classrooms_providers.dart';
 
@@ -149,29 +150,19 @@ Future<void> deleteClassroom(
       showMessage(context, apiErrorMessage(e));
       return;
     }
-    final closeInstead = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        key: const ValueKey('classroom_has_data'),
-        title: const Text('ลบห้องนี้ไม่ได้'),
-        content: Text(
-          [
-            apiErrorMessage(e),
-            ...classroomDataLines(apiErrorBody(e)?['counts']),
-          ].join('\n'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ตกลง'),
-          ),
-          if (!classroom.isClosed)
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('ปิดห้องแทน'),
-            ),
-        ],
-      ),
+    final closeInstead = await showMessageDialog<bool>(
+      context,
+      key: const ValueKey('classroom_has_data'),
+      title: 'ลบห้องนี้ไม่ได้',
+      message: [
+        apiErrorMessage(e),
+        ...classroomDataLines(apiErrorBody(e)?['counts']),
+      ].join('\n'),
+      actions: [
+        const DialogAction('ตกลง', value: false),
+        if (!classroom.isClosed)
+          const DialogAction('ปิดห้องแทน', value: true, primary: true),
+      ],
     );
     if (closeInstead == true && context.mounted) {
       await closeClassroom(context, ref, classroom);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'pdf_files.dart';
 import 'print_job.dart';
 import 'print_job_poller.dart';
@@ -33,11 +34,7 @@ Future<void> runPrintFlow(
           valueListenable: status,
           builder: (_, text, _) => Row(
             children: [
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              const SmallSpinner(size: 24),
               const SizedBox(width: 16),
               Expanded(child: Text(text)),
             ],

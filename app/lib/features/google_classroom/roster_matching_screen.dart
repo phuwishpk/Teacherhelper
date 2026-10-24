@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'google_models.dart';
@@ -44,7 +45,7 @@ class GoogleRosterScreen extends ConsumerWidget {
         courseName: classroom?.googleLink?.courseName,
       );
     } else {
-      body = const Center(child: CircularProgressIndicator());
+      body = const Center(child: CircularProgressIndicator.adaptive());
     }
 
     return Scaffold(
@@ -217,10 +218,7 @@ class _RosterMatchingFormState extends ConsumerState<RosterMatchingForm> {
                 key: const ValueKey('roster_save'),
                 onPressed: _saving || duplicates.isNotEmpty ? null : _save,
                 icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 16)
                     : const Icon(Icons.save_outlined),
                 label: const Text('บันทึกการจับคู่'),
               ),

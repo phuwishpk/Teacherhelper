@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/auth_layout.dart';
+import '../../core/widgets/message_dialog.dart';
 import '../../core/widgets/password_field.dart';
 import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_flow.dart';
@@ -94,22 +95,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (!mounted) return;
       // New accounts are `pending` until an admin approves them (DESIGN
       // §7.4), so login only works after that.
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('สมัครสำเร็จ'),
-          content: Text(
+      await showMessageDialog<void>(
+        context,
+        title: 'สมัครสำเร็จ',
+        message:
             'บัญชีของคุณอยู่ระหว่างรอผู้ดูแลระบบอนุมัติ '
             'เมื่ออนุมัติแล้วจึงจะเข้าสู่ระบบได้'
             '${_linkTicket == null ? '' : ' ทั้งด้วยรหัสผ่านและปุ่ม "เข้าสู่ระบบด้วย Google"'}',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('รับทราบ'),
-            ),
-          ],
-        ),
+        actions: const [DialogAction('รับทราบ', primary: true)],
       );
       if (!mounted) return;
       context.go(AppRoutes.login);

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
@@ -781,7 +782,7 @@ class _WaitingView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
+          const CircularProgressIndicator.adaptive(),
           const SizedBox(height: 16),
           const Text(
             'AI กำลังอ่านเอกสาร อาจใช้เวลา 1–2 นาที',
@@ -853,7 +854,7 @@ class _IndicatorMatchTile extends StatelessWidget {
       return ListTile(
         contentPadding: EdgeInsets.zero,
         dense: true,
-        leading: Icon(Icons.check_circle, color: Colors.green.shade700),
+        leading: Icon(Icons.check_circle, color: theme.colorScheme.success),
         title: Row(
           children: [
             Flexible(child: Text(s.code == code ? code : '$code → ${s.code}')),

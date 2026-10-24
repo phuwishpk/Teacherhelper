@@ -69,7 +69,8 @@ class QuestionEditScreen extends ConsumerWidget {
           freeform: freeform ?? a.isFreeform,
         );
       },
-      loading: () => message(const Center(child: CircularProgressIndicator())),
+      loading: () =>
+          message(const Center(child: CircularProgressIndicator.adaptive())),
       error: (e, _) => message(
         ErrorView(
           message: apiErrorMessage(e),
@@ -479,7 +480,7 @@ class _QuestionFormScreenState extends ConsumerState<QuestionFormScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          SwitchListTile(
+          SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             title: const Text('คำตอบเป็นตัวเลข'),
             subtitle: const Text('ให้โมเดลอ่านตัวเลขในเครื่องช่วยตรวจซ้ำ'),

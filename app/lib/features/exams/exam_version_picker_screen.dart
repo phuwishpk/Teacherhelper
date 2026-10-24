@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/scan_page_image.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'exam_models.dart';
 import 'exam_scan_repository.dart';
 
@@ -143,10 +144,7 @@ class _ExamVersionPickerScreenState
                 key: const ValueKey('version_save'),
                 onPressed: _busy ? null : _save,
                 icon: _busy
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 16)
                     : const Icon(Icons.check),
                 label: const Text('ใช้ชุดนี้และคิดคะแนน'),
               ),

@@ -7,6 +7,7 @@ import '../../core/widgets/password_field.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../google_signin/google_signin_flow.dart';
 import '../google_signin/google_signin_models.dart';
 import 'student_login_form.dart';
@@ -103,10 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     value: LoginTab.student,
                     label: Text('นักเรียน'),
                   ),
-                  ButtonSegment(
-                    value: LoginTab.teacher,
-                    label: Text('ครู'),
-                  ),
+                  ButtonSegment(value: LoginTab.teacher, label: Text('ครู')),
                 ],
                 selected: {_tab},
                 onSelectionChanged: (s) => _select(s.single),
@@ -212,11 +210,7 @@ class _TeacherLoginFormState extends ConsumerState<_TeacherLoginForm> {
           FilledButton(
             onPressed: _busy ? null : _submit,
             child: _busy
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 20)
                 : const Text('เข้าสู่ระบบ'),
           ),
           TextButton(

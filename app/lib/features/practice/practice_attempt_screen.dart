@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../mastery/mastery_models.dart';
 import '../mastery/mastery_repository.dart';
 import '../mastery/mastery_widgets.dart';
@@ -186,10 +188,7 @@ class _AttemptBodyState extends ConsumerState<_AttemptBody> {
                 key: const ValueKey('practice_submit'),
                 onPressed: _sending ? null : _submit,
                 icon: _sending
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 18)
                     : const Icon(Icons.send),
                 label: const Text('ส่งคำตอบ'),
               )
@@ -303,9 +302,9 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (icon, title, color) = result.correct
-        ? (Icons.check_circle, 'ถูกต้อง เก่งมาก', Colors.green.shade700)
+        ? (Icons.check_circle, 'ถูกต้อง เก่งมาก', theme.colorScheme.success)
         : result.partlyCorrect
-        ? (Icons.adjust, 'ถูกบางส่วน', Colors.orange.shade800)
+        ? (Icons.adjust, 'ถูกบางส่วน', theme.colorScheme.warning)
         : (Icons.cancel, 'ยังไม่ถูก', theme.colorScheme.error);
     final explanation = (result.explanation?.trim().isNotEmpty ?? false)
         ? result.explanation!.trim()

@@ -43,7 +43,7 @@ class AssignmentEditScreen extends ConsumerWidget {
       data: (a) => AssignmentFormScreen(existing: a),
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('แก้ไขการบ้าน')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('แก้ไขการบ้าน')),
@@ -444,7 +444,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 style: theme.textTheme.bodySmall,
               ),
             if (linkedCourse != null)
-              CheckboxListTile(
+              CheckboxListTile.adaptive(
                 key: const ValueKey('assignment_send_google'),
                 value: _sendToGoogle,
                 contentPadding: EdgeInsets.zero,
@@ -515,7 +515,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                     ),
               onTap: _pickDue,
             ),
-            SwitchListTile(
+            SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               title: const Text('รับงานส่งช้า'),
               subtitle: Text(
@@ -527,7 +527,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               value: _acceptLate,
               onChanged: (v) => setState(() => _acceptLate = v),
             ),
-            SwitchListTile(
+            SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               title: const Text('เฉพาะคะแนน'),
               subtitle: const Text(

@@ -180,4 +180,68 @@ void main() {
       expect(card.width, lessThanOrEqualTo(440));
     }
   });
+
+  testWidgets('large text (200 %) fits the phone shell and the sign-in card', (
+    tester,
+  ) async {
+    // DESIGN §27.7: the system text size (Dynamic Type, Android font size)
+    // is never capped, so the frame must hold it at the narrowest width.
+    Widget large(Widget home) => MaterialApp(
+      theme: AppTheme.light(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: const TextScaler.linear(2)),
+        child: child!,
+      ),
+      home: home,
+    );
+    await pumpAt(
+      tester,
+      360,
+      large(
+        AdaptiveShell(
+          title: 'Krucheck',
+          destinations: const [
+            ShellDestination('หน้าหลัก', Icons.home_outlined, Icons.home),
+            ShellDestination('ห้องเรียน', Icons.groups_outlined, Icons.groups),
+            ShellDestination(
+              'การบ้าน',
+              Icons.assignment_outlined,
+              Icons.assignment,
+            ),
+            ShellDestination(
+              'ตรวจทาน',
+              Icons.rate_review_outlined,
+              Icons.rate_review,
+            ),
+            ShellDestination('ตัดเกรด', Icons.grading_outlined, Icons.grading),
+          ],
+          selectedIndex: 0,
+          onSelected: (_) {},
+          body: const Center(child: Text('เนื้อหา')),
+        ),
+      ),
+    );
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await pumpAt(
+      tester,
+      360,
+      large(
+        const Scaffold(
+          body: AuthLayout(
+            child: Column(
+              children: [
+                Text('เข้าสู่ระบบ'),
+                ListTile(title: Text('สแกนบัตร QR')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

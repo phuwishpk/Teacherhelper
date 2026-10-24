@@ -398,7 +398,7 @@ class _Cell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelSmall;
-    final faint = theme.colorScheme.outline;
+    final faint = theme.colorScheme.onSurfaceVariant;
     Widget label(String text, Color? color, {FontStyle? style}) => Text(
       text,
       textAlign: TextAlign.center,
@@ -418,7 +418,7 @@ class _Cell extends StatelessWidget {
         theme.colorScheme.error,
       ),
       CellState.notDue => label('ยังไม่ถึงกำหนด', faint),
-      CellState.pending => label('รอประกาศผล', Colors.orange.shade800),
+      CellState.pending => label('รอประกาศผล', theme.colorScheme.warning),
       CellState.excused => label('ยกเว้น', faint, style: FontStyle.italic),
       CellState.notAssigned => label(
         'ไม่ได้รับมอบ',

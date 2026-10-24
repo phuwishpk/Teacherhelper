@@ -36,7 +36,7 @@ class CourseEditScreen extends ConsumerWidget {
       data: (c) => CourseFormScreen(existing: c),
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('แก้ไขรายวิชา')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('แก้ไขรายวิชา')),

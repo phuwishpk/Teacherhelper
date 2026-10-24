@@ -47,7 +47,7 @@ class ExamQuestionScreen extends ConsumerWidget {
       skipLoadingOnRefresh: true,
       loading: () => Scaffold(
         appBar: AppBar(title: Text(title)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: Text(title)),
@@ -326,7 +326,10 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (status == FigureStatus.missing)
-          StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.outline),
+          StatusChip(
+            label: 'ยังไม่มีภาพประกอบ',
+            color: scheme.onSurfaceVariant,
+          ),
         if (status == FigureStatus.cropping)
           StatusChip(label: 'กำลังตัดภาพประกอบ', color: scheme.secondary),
         if (canCrop)
@@ -446,7 +449,7 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
                   ),
                 ),
               const SizedBox(height: 8),
-              SwitchListTile(
+              SwitchListTile.adaptive(
                 key: const ValueKey('exam_question_lock'),
                 contentPadding: EdgeInsets.zero,
                 title: const Text('ห้ามสลับตัวเลือก'),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -20,8 +21,8 @@ String assignmentStatusLabel(String status) => switch (status) {
 Color assignmentStatusColor(BuildContext context, String status) {
   final scheme = Theme.of(context).colorScheme;
   return switch (status) {
-    'ready' => Colors.green.shade700,
-    'closed' => scheme.outline,
+    'ready' => scheme.success,
+    'closed' => scheme.onSurfaceVariant,
     _ => scheme.secondary,
   };
 }

@@ -70,7 +70,7 @@ class SkillResourcesScreen extends ConsumerWidget {
               skipLoadingOnRefresh: true,
               loading: () => const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               ),
               error: (e, _) => ErrorView(
                 message:

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../class_posts/class_post_models.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
@@ -298,10 +300,7 @@ class _AssignmentGoogleSectionState
           key: const ValueKey('google_post'),
           onPressed: _busy || !ready ? null : _post,
           icon: _busy
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 16)
               : const Icon(Icons.send_outlined),
           label: Text(
             a.googlePost.state == GoogleSendState.failed
@@ -336,7 +335,10 @@ class _AssignmentGoogleSectionState
                     color: theme.colorScheme.tertiary,
                   )
                 else if (link != null)
-                  StatusChip(label: 'โพสต์แล้ว', color: Colors.green.shade700),
+                  StatusChip(
+                    label: 'โพสต์แล้ว',
+                    color: Theme.of(context).colorScheme.success,
+                  ),
               ],
             ),
             const SizedBox(height: 8),

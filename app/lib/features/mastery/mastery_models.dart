@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../assignments/question.dart';
 
 double? _double(Object? v) => switch (v) {
@@ -63,10 +64,10 @@ enum MasteryLevel {
 
   /// Same colors as the understanding levels of the review screens.
   Color color(BuildContext context) => switch (this) {
-    good => Colors.green.shade700,
-    partial => Colors.orange.shade800,
+    good => Theme.of(context).colorScheme.success,
+    partial => Theme.of(context).colorScheme.warning,
     notYet => Theme.of(context).colorScheme.error,
-    tooLittle => Theme.of(context).colorScheme.outline,
+    tooLittle => Theme.of(context).colorScheme.onSurfaceVariant,
   };
 }
 

@@ -165,7 +165,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
               onChanged: _onChanged,
             ),
             if (hasMyIndicators(ref.watch(myIndicatorsProvider)))
-              SwitchListTile(
+              SwitchListTile.adaptive(
                 key: const ValueKey('skills_picker_show_all'),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -212,7 +212,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _loading && _results.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator.adaptive())
                   : _error != null
                   ? Center(child: Text(_error!))
                   : _results.isEmpty
@@ -222,7 +222,7 @@ class _SkillsPickerDialogState extends ConsumerState<_SkillsPickerDialog> {
                       itemBuilder: (context, i) {
                         final s = _results[i];
                         final checked = _selected.containsKey(s.id);
-                        return CheckboxListTile(
+                        return CheckboxListTile.adaptive(
                           value: checked,
                           dense: true,
                           title: Row(

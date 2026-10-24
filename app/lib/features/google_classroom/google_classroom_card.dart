@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'google_auth.dart';
 import 'google_browser_connect.dart';
 import 'google_models.dart';
@@ -96,7 +98,7 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
         'ต้องเชื่อมใหม่',
         theme.colorScheme.error,
       ),
-      _ => ('เชื่อมแล้ว', Colors.green.shade700),
+      _ => ('เชื่อมแล้ว', theme.colorScheme.success),
     };
 
     return Card(
@@ -174,10 +176,7 @@ class _GoogleClassroomCardState extends ConsumerState<GoogleClassroomCard> {
                     key: const ValueKey('google_connect'),
                     onPressed: _busy ? null : _connect,
                     icon: _busy
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SmallSpinner(size: 16)
                         : const Icon(Icons.link),
                     label: Text(
                       s.connected ? 'เชื่อมใหม่' : 'เชื่อม Google Classroom',

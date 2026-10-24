@@ -53,7 +53,7 @@ class MasteryBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final level = mastery.level;
     final color = level == MasteryLevel.tooLittle
-        ? scheme.outline
+        ? scheme.onSurfaceVariant
         : level.color(context);
     return Semantics(
       label: 'ความเข้าใจ ${percent(mastery.value)}',

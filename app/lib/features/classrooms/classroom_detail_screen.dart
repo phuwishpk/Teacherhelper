@@ -263,7 +263,7 @@ class _HeaderCard extends ConsumerWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Switch(
+                      Switch.adaptive(
                         key: const ValueKey('join_open'),
                         value: classroom.joinOpen,
                         onChanged: (v) => _toggleJoin(context, ref, v),

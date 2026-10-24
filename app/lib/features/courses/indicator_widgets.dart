@@ -343,7 +343,7 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
               SizedBox(
                 height: 180,
                 child: _loading && _parents.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator.adaptive())
                     : _parents.isEmpty
                     ? const Center(child: Text('ไม่พบมาตรฐานหรือตัวชี้วัด'))
                     : RadioGroup<int>(
@@ -357,7 +357,7 @@ class _AddIndicatorDialogState extends ConsumerState<AddIndicatorDialog> {
                         child: ListView(
                           children: [
                             for (final p in _parents)
-                              RadioListTile<int>(
+                              RadioListTile<int>.adaptive(
                                 dense: true,
                                 value: p.id,
                                 title: Text(p.code),

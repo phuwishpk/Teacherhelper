@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -402,23 +403,35 @@ class ReviewItemTile extends StatelessWidget {
           color: error,
         ),
       if (item.isAutoBlank)
-        const StatusChip(label: 'ไม่ได้ตอบ', color: Colors.grey),
+        StatusChip(
+          label: 'ไม่ได้ตอบ',
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       if (item.isCnnMatch)
         StatusChip(label: 'อ่านด้วย CNN', color: theme.colorScheme.secondary),
       if (item.isSuspicious) StatusChip(label: 'น่าสงสัย', color: error),
       if (item.identityMismatch) StatusChip(label: 'ตัวตนไม่ตรง', color: error),
       if (item.hasOpenAppeal)
-        StatusChip(label: 'ขอตรวจใหม่', color: Colors.orange.shade800),
+        StatusChip(label: 'ขอตรวจใหม่', color: theme.colorScheme.warning),
       if (item.isGrading && !item.isManual)
-        StatusChip(label: 'AI กำลังตรวจ', color: theme.colorScheme.outline),
+        StatusChip(
+          label: 'AI กำลังตรวจ',
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       if (item.examAnswer case final exam?) ...[
         for (final d in exam.reviewDoubts)
           StatusChip(label: examDoubtLabel(d), color: error),
         if (exam.resolved)
-          StatusChip(label: 'ครูอ่านรอยฝนแล้ว', color: Colors.green.shade700),
+          StatusChip(
+            label: 'ครูอ่านรอยฝนแล้ว',
+            color: theme.colorScheme.success,
+          ),
       ],
       if (item.isPublished)
-        StatusChip(label: 'เผยแพร่แล้ว', color: theme.colorScheme.outline),
+        StatusChip(
+          label: 'เผยแพร่แล้ว',
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
     ];
     final score = item.currentScore;
     return Card(
@@ -463,7 +476,7 @@ class ReviewItemTile extends StatelessWidget {
               Icon(
                 Icons.check_circle,
                 size: 18,
-                color: Colors.green.shade700,
+                color: theme.colorScheme.success,
                 semanticLabel: 'ตรวจทานแล้ว',
               ),
           ],
@@ -570,7 +583,7 @@ class _SubmissionsTab extends StatelessWidget {
                             if (s.late)
                               StatusChip(
                                 label: 'ส่งช้า',
-                                color: Colors.orange.shade800,
+                                color: theme.colorScheme.warning,
                               ),
                             if (s.regradePending)
                               StatusChip(
@@ -580,7 +593,7 @@ class _SubmissionsTab extends StatelessWidget {
                             if (s.isGrading)
                               StatusChip(
                                 label: 'AI กำลังตรวจ',
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                           ],
                         ),
@@ -596,7 +609,7 @@ class _SubmissionsTab extends StatelessWidget {
                     : s.isPublished
                     ? StatusChip(
                         label: 'เผยแพร่แล้ว',
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       )
                     : FilledButton.tonal(
                         onPressed: busy || !s.canPublish

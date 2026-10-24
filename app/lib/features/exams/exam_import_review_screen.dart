@@ -1,3 +1,4 @@
+import '../../core/widgets/small_spinner.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -326,10 +327,7 @@ class _ExamImportReviewScreenState
       return const Card(
         key: ValueKey('read_review_reading'),
         child: ListTile(
-          leading: SizedBox.square(
-            dimension: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+          leading: SmallSpinner(size: 24),
           title: Text('AI กำลังอ่านไฟล์ข้อสอบ...'),
           subtitle: Text(
             'ใช้เวลาประมาณ 1–3 นาที ออกจากหน้านี้ได้ '
@@ -540,7 +538,7 @@ class _DraftCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
+                Checkbox.adaptive(
                   key: ValueKey('read_review_select_${q.id}'),
                   value: selected,
                   onChanged: busy ? null : (v) => onSelect(v ?? false),
@@ -687,7 +685,7 @@ class _FigureLine extends StatelessWidget {
                   : '$label: ยังไม่มีภาพประกอบ',
               color: status == FigureStatus.cropping
                   ? scheme.secondary
-                  : scheme.outline,
+                  : scheme.onSurfaceVariant,
             ),
           if (onCrop != null)
             TextButton.icon(

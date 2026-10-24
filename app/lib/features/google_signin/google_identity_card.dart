@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/google_auth.dart' show GoogleAuthCanceled;
+import '../../core/widgets/small_spinner.dart';
 import 'google_signin_config.dart';
 import 'google_signin_errors.dart';
 import 'google_signin_models.dart';
@@ -151,13 +152,7 @@ class _GoogleIdentityCardState extends ConsumerState<GoogleIdentityCard> {
           child: FilledButton.icon(
             key: const ValueKey('google_identity_link'),
             onPressed: _busy ? null : () => _link(mode),
-            icon: _busy
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.link),
+            icon: _busy ? const SmallSpinner(size: 18) : const Icon(Icons.link),
             label: const Text('เชื่อมบัญชี Google'),
           ),
         ),
@@ -231,7 +226,7 @@ class _NoticeDialogState extends State<_NoticeDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(googleSignInNotice),
-            CheckboxListTile(
+            CheckboxListTile.adaptive(
               key: const ValueKey('google_notice_accept'),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,

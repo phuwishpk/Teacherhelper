@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
@@ -143,7 +144,10 @@ class _ClassroomGoogleSectionState
                   ),
                 ),
                 if (link != null)
-                  StatusChip(label: 'ผูกแล้ว', color: Colors.green.shade700),
+                  StatusChip(
+                    label: 'ผูกแล้ว',
+                    color: theme.colorScheme.success,
+                  ),
               ],
             ),
             const SizedBox(height: 8),

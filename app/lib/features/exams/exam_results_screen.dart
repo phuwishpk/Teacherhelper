@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/assignment_google_section.dart'
     show openInClassroom;
+import '../../core/widgets/small_spinner.dart';
 import '../google_classroom/google_providers.dart';
 import '../review/review_providers.dart';
 import '../review/review_repository.dart';
@@ -294,7 +296,7 @@ class _SummaryCard extends StatelessWidget {
                 count(
                   'พร้อมประกาศ',
                   s.readyToPublish,
-                  Colors.green.shade700,
+                  theme.colorScheme.success,
                   'count_ready',
                 ),
                 count(
@@ -359,9 +361,9 @@ class _StudentTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final chips = [
       if (s.isPublished)
-        StatusChip(label: 'ประกาศแล้ว', color: scheme.outline)
+        StatusChip(label: 'ประกาศแล้ว', color: scheme.onSurfaceVariant)
       else if (s.isReady)
-        StatusChip(label: 'พร้อมประกาศ', color: Colors.green.shade700)
+        StatusChip(label: 'พร้อมประกาศ', color: scheme.success)
       else if (!s.isMissing)
         StatusChip(label: 'รอตรวจทาน', color: scheme.error),
       if (s.needsVersion)
@@ -369,7 +371,7 @@ class _StudentTile extends StatelessWidget {
       if (!s.isMissing && s.missingPages.isNotEmpty)
         StatusChip(
           label: 'ยังขาดหน้า ${s.missingPages.join(', ')}',
-          color: Colors.orange.shade800,
+          color: scheme.warning,
         ),
     ];
     return Card(
@@ -479,10 +481,7 @@ class _GoogleScoresCardState extends ConsumerState<_GoogleScoresCard> {
                   key: const ValueKey('exam_google_send'),
                   onPressed: canSend ? _send : null,
                   icon: _sending
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SmallSpinner(size: 16)
                       : const Icon(Icons.send_outlined),
                   label: Text(
                     scores.posted ? 'ส่งคะแนนอีกครั้ง' : 'ส่งคะแนนไป Classroom',

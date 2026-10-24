@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'class_post_models.dart';
 import 'class_posts_repository.dart';
 import 'drive_picker.dart';
@@ -120,10 +121,7 @@ class _AttachmentsEditorState extends ConsumerState<AttachmentsEditor> {
                 key: const ValueKey('post_attach_file'),
                 onPressed: busy || _uploading ? null : _pickFiles,
                 icon: _uploading
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 18)
                     : const Icon(Icons.attach_file),
                 label: Text(_uploading ? 'กำลังอัปโหลด…' : 'แนบไฟล์'),
               ),

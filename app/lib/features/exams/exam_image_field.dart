@@ -107,7 +107,7 @@ class ExamImageView extends ConsumerWidget {
       child: child,
     );
     return image.when(
-      loading: () => box(const CircularProgressIndicator()),
+      loading: () => box(const CircularProgressIndicator.adaptive()),
       error: (e, _) => box(
         TextButton.icon(
           onPressed: () => ref.invalidate(examImageProvider(imageKey)),

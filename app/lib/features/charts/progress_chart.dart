@@ -266,7 +266,7 @@ class _ProgressPickerState extends State<_ProgressPicker> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 for (final o in widget.options)
-                  CheckboxListTile(
+                  CheckboxListTile.adaptive(
                     key: ValueKey('progress_option_${o.skill.id}'),
                     dense: true,
                     value: _picked.contains(o.skill.id),

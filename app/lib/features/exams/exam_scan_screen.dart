@@ -561,7 +561,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
     if (load == null) {
       return Scaffold(
         appBar: AppBar(title: title),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       );
     }
     final kit = load.kit;
@@ -651,7 +651,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-            SwitchListTile(
+            SwitchListTile.adaptive(
               key: const ValueKey('exam_scan_continuous'),
               title: const Text('สแกนต่อเนื่อง'),
               subtitle: const Text(
@@ -713,7 +713,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
       );
     }
     if (camera == null || !_cameraReady) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
     return Center(
       child: AspectRatio(
@@ -727,7 +727,7 @@ class _ExamScanScreenState extends ConsumerState<ExamScanScreen>
               if (_busy)
                 const ColoredBox(
                   color: Color(0x55000000),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: CircularProgressIndicator.adaptive()),
                 ),
             ],
           ),

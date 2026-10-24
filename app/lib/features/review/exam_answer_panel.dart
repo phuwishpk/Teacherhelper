@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/scan_page_image.dart';
 import 'exam_answer.dart';
@@ -127,7 +128,7 @@ class _ExamAnswerPanelState extends ConsumerState<ExamAnswerPanel> {
           Text(
             'ครูอ่านรอยฝนแล้ว: $text',
             key: const ValueKey('exam_resolved_text'),
-            style: TextStyle(color: Colors.green.shade800),
+            style: TextStyle(color: theme.colorScheme.success),
           ),
         ],
         const Divider(height: 24),

@@ -1,3 +1,4 @@
+import '../../core/widgets/small_spinner.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/content_column.dart';
 import 'answer_key_models.dart';
@@ -350,7 +352,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
                 style: TextStyle(color: theme.colorScheme.error),
               )
             else
-              SwitchListTile(
+              SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('เลือกเฉพาะช่วงหน้า'),
                 subtitle: const Text('อ่านน้อยหน้าลง ค่าใช้จ่ายก็น้อยลง'),
@@ -430,10 +432,7 @@ class _DocumentReadScreenState extends ConsumerState<DocumentReadScreen> {
             key: const ValueKey('send_key_request'),
             onPressed: canSend ? _send : null,
             icon: _sending
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 16)
                 : const Icon(Icons.auto_awesome),
             label: Text(widget.title),
           ),
@@ -472,10 +471,7 @@ class _EstimateCard extends StatelessWidget {
     } else if (loading || estimate == null) {
       body = const Row(
         children: [
-          SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+          SmallSpinner(size: 16),
           SizedBox(width: 12),
           Text('กำลังคำนวณค่าใช้จ่าย...'),
         ],
@@ -483,7 +479,7 @@ class _EstimateCard extends StatelessWidget {
     } else if (estimate!.cached) {
       body = Row(
         children: [
-          Icon(Icons.check_circle_outline, color: Colors.green.shade700),
+          Icon(Icons.check_circle_outline, color: theme.colorScheme.success),
           const SizedBox(width: 12),
           Expanded(child: Text(cachedMessage)),
         ],

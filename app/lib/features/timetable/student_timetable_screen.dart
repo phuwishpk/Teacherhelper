@@ -42,6 +42,7 @@ class _StudentTimetableScreenState
                   children: [
                     IconButton(
                       key: const ValueKey('week_prev'),
+                      tooltip: 'สัปดาห์ก่อน',
                       icon: const Icon(Icons.chevron_left),
                       onPressed: () => setState(
                         () => _week = isoDate(
@@ -59,6 +60,7 @@ class _StudentTimetableScreenState
                     ),
                     IconButton(
                       key: const ValueKey('week_next'),
+                      tooltip: 'สัปดาห์ถัดไป',
                       icon: const Icon(Icons.chevron_right),
                       onPressed: () => setState(
                         () => _week = isoDate(

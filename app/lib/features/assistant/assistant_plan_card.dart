@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/breakpoints.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../assignments/assignment.dart';
 import '../assignments/assignments_repository.dart';
 import '../classrooms/classroom.dart';
@@ -343,10 +344,7 @@ class _Open extends ConsumerWidget {
             if (ui.applying)
               const Padding(
                 padding: EdgeInsets.only(right: 12),
-                child: SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: SmallSpinner(size: 20),
               ),
             FilledButton.icon(
               key: ValueKey('assistant_plan_apply_$id'),
@@ -406,7 +404,10 @@ class _QuestionTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Checkbox(value: selected, onChanged: (_) => onToggle?.call()),
+          Checkbox.adaptive(
+            value: selected,
+            onChanged: (_) => onToggle?.call(),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -581,7 +582,7 @@ class _TargetDialogState extends ConsumerState<_TargetDialog> {
             if (data == null) {
               return const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               );
             }
             final (assignments, classrooms) = data;
@@ -749,10 +750,7 @@ class _Footer extends ConsumerWidget {
             if (ui.applying)
               const Padding(
                 padding: EdgeInsets.only(right: 12),
-                child: SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: SmallSpinner(size: 20),
               ),
             FilledButton.icon(
               key: ValueKey('assistant_plan_apply_$id'),
@@ -962,7 +960,7 @@ class _OpenIndicators extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
+                Checkbox.adaptive(
                   value: ui.selected.contains(i),
                   onChanged: item.blocked || busy
                       ? null
@@ -1290,7 +1288,7 @@ class _OpenPractice extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
+                Checkbox.adaptive(
                   value: ui.selected.contains(i),
                   onChanged: item.error != null || busy
                       ? null

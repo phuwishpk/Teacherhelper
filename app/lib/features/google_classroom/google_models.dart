@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/school_students.dart';
 import 'google_config.dart';
@@ -561,7 +562,7 @@ enum SubmissionImportState {
 
   Color color(ColorScheme scheme) => switch (this) {
     newSubmission || waitingKey => scheme.primary,
-    imported || graded => Colors.green.shade700,
+    imported || graded => scheme.success,
     needsRetake || gradeFailed || unsupported => scheme.error,
     returnedForRetake || rejectedLate => scheme.tertiary,
   };
@@ -824,7 +825,7 @@ enum FeedbackPostState {
 
   Color color(ColorScheme scheme) => switch (this) {
     queued => scheme.primary,
-    posted => Colors.green.shade700,
+    posted => scheme.success,
     failed => scheme.error,
   };
 }

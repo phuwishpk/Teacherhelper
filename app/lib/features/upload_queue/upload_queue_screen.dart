@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/db/app_database.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../exams/exam_scan_models.dart';
 import '../scan/scan_processor.dart';
 import 'queued_scan.dart';
@@ -25,9 +27,9 @@ String scanStateLabel(ScanState state) => switch (state) {
 Color scanStateColor(BuildContext context, ScanState state) {
   final scheme = Theme.of(context).colorScheme;
   return switch (state) {
-    ScanState.done => Colors.green.shade700,
+    ScanState.done => scheme.success,
     ScanState.failed => scheme.error,
-    ScanState.conflict => Colors.orange.shade800,
+    ScanState.conflict => scheme.warning,
     ScanState.uploading => scheme.primary,
     _ => scheme.secondary,
   };
@@ -88,11 +90,7 @@ class UploadQueueScreen extends ConsumerWidget {
                 );
               },
         icon: busy
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const SmallSpinner(size: 18)
             : const Icon(Icons.cloud_upload_outlined),
         label: const Text('อัปโหลดตอนนี้'),
       ),
