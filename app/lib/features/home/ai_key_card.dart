@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
 import '../settings/ai_key.dart';
 
@@ -43,7 +44,7 @@ class AiKeyCard extends ConsumerWidget {
                         ? 'ใส่แล้ว (${s.masked})'
                         : 'ยังไม่ได้ใส่',
                     color: s.configured
-                        ? Colors.green.shade700
+                        ? theme.colorScheme.success
                         : theme.colorScheme.error,
                   ),
               ],

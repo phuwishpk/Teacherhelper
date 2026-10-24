@@ -112,7 +112,7 @@ class _AutoShareCardState extends ConsumerState<_AutoShareCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SwitchListTile(
+          SwitchListTile.adaptive(
             key: const ValueKey('auto_share_switch'),
             value: widget.data.autoShare,
             onChanged: _busy ? null : _set,

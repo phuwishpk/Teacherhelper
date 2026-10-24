@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -450,7 +451,10 @@ class _SummaryCard extends StatelessWidget {
                     color: scheme.tertiary,
                   ),
                 if (a.showKeyToStudents)
-                  StatusChip(label: 'นักเรียนดูเฉลยได้', color: scheme.outline),
+                  StatusChip(
+                    label: 'นักเรียนดูเฉลยได้',
+                    color: scheme.onSurfaceVariant,
+                  ),
               ],
             ),
           ],
@@ -542,7 +546,7 @@ class _KeyCard extends StatelessWidget {
     if (detail.keyApproved) {
       return _Banner(
         icon: Icons.verified_outlined,
-        color: Colors.green.shade700,
+        color: theme.colorScheme.success,
         text: 'อนุมัติเฉลยแล้ว แก้เฉลยได้ แต่เฉลยที่ไม่ครบจะยกเลิกการอนุมัติ',
       );
     }
@@ -699,14 +703,14 @@ class _QuestionTile extends StatelessWidget {
     final key = q.key;
     final chips = [
       if (q.blank)
-        StatusChip(label: 'ยังไม่ได้กรอก', color: scheme.outline)
+        StatusChip(label: 'ยังไม่ได้กรอก', color: scheme.onSurfaceVariant)
       else if (!q.approved)
         StatusChip(
           label: q.fromDocument ? 'ร่างจากไฟล์ ยังไม่อนุมัติ' : 'ยังไม่อนุมัติ',
           color: scheme.error,
         ),
       if (q.anyFigurePending)
-        StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.outline),
+        StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.onSurfaceVariant),
       if (q.lockOptions)
         StatusChip(label: 'ห้ามสลับตัวเลือก', color: scheme.secondary),
       if (q.lockOptionsSuggested)

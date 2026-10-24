@@ -60,6 +60,7 @@ class _HelpScreenState extends State<HelpScreen> {
         suffixIcon: _query.text.isEmpty
             ? null
             : IconButton(
+                tooltip: 'ล้าง',
                 icon: const Icon(Icons.clear),
                 onPressed: () => setState(_query.clear),
               ),

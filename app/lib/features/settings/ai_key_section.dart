@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/error_codes.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'ai_key.dart';
 
 /// Gemini key form of the settings page (DESIGN §10.1, §9.1).
@@ -141,7 +143,7 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
                   StatusChip(
                     label: s.configured ? 'ใส่แล้ว' : 'ยังไม่ได้ใส่',
                     color: s.configured
-                        ? Colors.green.shade700
+                        ? theme.colorScheme.success
                         : theme.colorScheme.error,
                   ),
               ],
@@ -247,10 +249,7 @@ class _AiKeySectionState extends ConsumerState<AiKeySection> {
                 FilledButton.icon(
                   onPressed: _busy ? null : _save,
                   icon: _busy
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SmallSpinner(size: 16)
                       : const Icon(Icons.verified_outlined),
                   label: const Text('ทดสอบและบันทึก'),
                 ),

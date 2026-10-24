@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'exam_import_models.dart';
 import 'exam_models.dart';
 import 'exam_providers.dart';
@@ -273,7 +274,7 @@ class _ExamFigureCropScreenState extends ConsumerState<ExamFigureCropScreen> {
                               color: theme.colorScheme.surfaceContainerHighest,
                               child: image.when(
                                 loading: () => const Center(
-                                  child: CircularProgressIndicator(),
+                                  child: CircularProgressIndicator.adaptive(),
                                 ),
                                 error: (e, _) => Center(
                                   child: TextButton.icon(
@@ -339,10 +340,7 @@ class _ExamFigureCropScreenState extends ConsumerState<ExamFigureCropScreen> {
                   ? null
                   : _save,
               icon: _saving
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const SmallSpinner(size: 16)
                   : const Icon(Icons.crop),
               label: const Text('ตัดภาพใหม่ตามกรอบ'),
             ),

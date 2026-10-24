@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../courses/courses_providers.dart';
 import 'exam_import_models.dart';
 import 'exam_import_repository.dart';
@@ -179,7 +180,7 @@ class _ExamCopyQuestionsScreenState
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               )
             else if (_cursor != null)
               TextButton(
@@ -295,7 +296,7 @@ class _ExamCopyQuestionsScreenState
           key: ValueKey('copy_group_${section.id}'),
           child: Column(
             children: [
-              CheckboxListTile(
+              CheckboxListTile.adaptive(
                 key: ValueKey('copy_section_${section.id}'),
                 tristate: true,
                 value: picked == 0
@@ -332,7 +333,7 @@ class _ExamCopyQuestionsScreenState
     final scheme = Theme.of(context).colorScheme;
     final prompt = q.promptText.trim();
     final key = q.key;
-    return CheckboxListTile(
+    return CheckboxListTile.adaptive(
       key: ValueKey('copy_q_${q.id}'),
       dense: true,
       value: _selected.contains(q.id),
@@ -400,10 +401,7 @@ class _ExamCopyQuestionsScreenState
                 ? null
                 : () => _copy(d),
             icon: _copying
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 16)
                 : const Icon(Icons.copy_all),
             label: Text('คัดลอก ${_selected.length} ข้อ'),
           ),

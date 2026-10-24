@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
 import 'review_models.dart';
 
@@ -81,7 +82,10 @@ class ExtractionView extends StatelessWidget {
     } else {
       final flags = <Widget>[
         if (e['blank'] == true)
-          const StatusChip(label: 'ว่าง (ไม่ได้ตอบ)', color: Colors.grey),
+          StatusChip(
+            label: 'ว่าง (ไม่ได้ตอบ)',
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         if (_legibilityLabel(e['legibility']) case final l when l.isNotEmpty)
           StatusChip(
             label: l,
@@ -126,7 +130,7 @@ class ExtractionView extends StatelessWidget {
                     valid ? Icons.check_circle : Icons.cancel,
                     size: 20,
                     color: valid
-                        ? Colors.green.shade700
+                        ? theme.colorScheme.success
                         : theme.colorScheme.error,
                     semanticLabel: valid ? 'ขั้นตอนถูก' : 'ขั้นตอนผิด',
                   ),

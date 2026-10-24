@@ -197,7 +197,7 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
                       ),
                   ],
                 ),
-                SwitchListTile(
+                SwitchListTile.adaptive(
                   key: const ValueKey('section_negative'),
                   contentPadding: EdgeInsets.zero,
                   title: const Text('มีช่องเครื่องหมายลบ'),
@@ -206,7 +206,7 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
                       ? (v) => setState(() => _negative = v)
                       : null,
                 ),
-                SwitchListTile(
+                SwitchListTile.adaptive(
                   key: const ValueKey('section_decimal'),
                   contentPadding: EdgeInsets.zero,
                   title: const Text('มีจุดทศนิยม'),

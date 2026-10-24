@@ -20,7 +20,7 @@ class AsyncView<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return value.when(
       skipLoadingOnRefresh: true,
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator.adaptive()),
       error: (e, _) => ErrorView(message: apiErrorMessage(e), onRetry: onRetry),
       data: data,
     );

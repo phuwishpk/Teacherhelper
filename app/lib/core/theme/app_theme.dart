@@ -1,9 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'touch_screen_stub.dart'
+    if (dart.library.js_interop) 'touch_screen_web.dart';
 
 /// The look of the app (DESIGN §27): quiet neutral surfaces, one blue
 /// accent, flat cards with a hairline border, and one Thai typeface.
 /// Screens take colours, text styles and shapes from here through
 /// `Theme.of(context)`; they do not set their own.
+///
+/// Material 3 everywhere, with Apple's conventions on iOS (DESIGN §27.7):
+/// [platform] decides which one the `.adaptive` controls follow.
 abstract final class AppTheme {
   /// IBM Plex Sans Thai Looped, bundled in assets/fonts (pubspec.yaml).
   static const fontFamily = 'IBM Plex Sans Thai Looped';
@@ -16,9 +23,32 @@ abstract final class AppTheme {
   static const radius = 14.0;
   static const radiusLarge = 20.0;
 
+  /// The platform whose controls the app follows: iOS on an iPhone or an
+  /// iPad running iOS, Android everywhere else. A browser on a Mac (and an
+  /// iPad in desktop mode, which reports macOS) gets the same web app as
+  /// Windows, instead of Flutter's iOS look for macOS.
+  static TargetPlatform get platform =>
+      kIsWeb && defaultTargetPlatform != TargetPlatform.iOS
+      ? TargetPlatform.android
+      : defaultTargetPlatform;
+
   static ThemeData light() => _build(_lightScheme);
 
   static ThemeData dark() => _build(_darkScheme);
+
+  /// Share or send a file: Apple's square with an arrow on iOS, Material's
+  /// share icon elsewhere.
+  static IconData shareIcon(BuildContext context) =>
+      Theme.of(context).platform == TargetPlatform.iOS
+      ? Icons.ios_share
+      : Icons.share_outlined;
+
+  // Status roles Material 3 does not have; read them as `scheme.success`
+  // and `scheme.warning` (StatusColors below).
+  static const _successLight = Color(0xFF177245);
+  static const _successDark = Color(0xFF7BD88F);
+  static const _warningLight = Color(0xFF8F5500);
+  static const _warningDark = Color(0xFFF5B566);
 
   static const _lightScheme = ColorScheme(
     brightness: Brightness.light,
@@ -46,7 +76,7 @@ abstract final class AppTheme {
     surfaceContainer: Color(0xFFF1F3F6),
     surfaceContainerHigh: Color(0xFFEBEEF2),
     surfaceContainerHighest: Color(0xFFE4E8ED),
-    outline: Color(0xFF98A2B0),
+    outline: Color(0xFF7F8896),
     outlineVariant: Color(0xFFE2E6EB),
     shadow: Color(0xFF0F172A),
     scrim: Color(0xFF0F172A),
@@ -123,6 +153,7 @@ abstract final class AppTheme {
   }
 
   static ThemeData _build(ColorScheme scheme) {
+    final platform = AppTheme.platform;
     final text = _textTheme(scheme);
     final muted = scheme.onSurfaceVariant;
     final hairline = BorderSide(color: scheme.outlineVariant);
@@ -145,6 +176,7 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      platform: platform,
       colorScheme: scheme,
       fontFamily: fontFamily,
       textTheme: text,
@@ -153,6 +185,12 @@ abstract final class AppTheme {
       dividerColor: scheme.outlineVariant,
       // The same comfortable control sizes on a phone and in a desktop browser.
       visualDensity: VisualDensity.standard,
+      // 48 px touch targets (Material) cover Apple's 44 pt on every touch
+      // screen, a browser on an iPad or a touch-screen laptop included. A
+      // mouse-only browser keeps Flutter's compact desktop sizes.
+      materialTapTargetSize: hasTouchScreen
+          ? MaterialTapTargetSize.padded
+          : MaterialTapTargetSize.shrinkWrap,
       splashFactory: InkSparkle.splashFactory,
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
@@ -160,7 +198,8 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: false,
+        // iOS navigation bars centre the title; Material puts it at the start.
+        centerTitle: platform == TargetPlatform.iOS,
         titleSpacing: 16,
         titleTextStyle: text.titleLarge,
         shape: Border(bottom: hairline),
@@ -290,7 +329,7 @@ abstract final class AppTheme {
                 : muted,
           ),
         ),
-        hintStyle: text.bodyMedium?.copyWith(color: scheme.outline),
+        hintStyle: text.bodyMedium?.copyWith(color: muted),
         helperStyle: text.bodySmall?.copyWith(color: muted),
         errorStyle: text.bodySmall?.copyWith(color: scheme.error),
         helperMaxLines: 3,
@@ -464,4 +503,17 @@ abstract final class AppTheme {
       ),
     );
   }
+}
+
+/// The status roles of DESIGN §27.5 that Material 3 has no slot for: done
+/// or correct (`success`) and late or needs a look (`warning`). Both read
+/// at 4.5 : 1 on every surface and on a `StatusChip` in both modes.
+extension StatusColors on ColorScheme {
+  Color get success => brightness == Brightness.dark
+      ? AppTheme._successDark
+      : AppTheme._successLight;
+
+  Color get warning => brightness == Brightness.dark
+      ? AppTheme._warningDark
+      : AppTheme._warningLight;
 }

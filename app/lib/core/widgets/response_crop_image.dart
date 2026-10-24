@@ -37,7 +37,7 @@ class ResponseCropImage extends ConsumerWidget {
     );
 
     return crop.when(
-      loading: () => box(const CircularProgressIndicator()),
+      loading: () => box(const CircularProgressIndicator.adaptive()),
       error: (e, _) {
         final message = switch (apiStatusCode(e)) {
           410 => 'ภาพนี้ถูกลบตามนโยบายการเก็บข้อมูลแล้ว',

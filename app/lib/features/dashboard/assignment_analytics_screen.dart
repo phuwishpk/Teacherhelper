@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
@@ -325,14 +326,14 @@ class _ItemTable extends StatelessWidget {
                             Icon(
                               Icons.warning_amber_rounded,
                               size: 14,
-                              color: Colors.orange.shade800,
+                              color: theme.colorScheme.warning,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 i.notes.join(' · '),
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.orange.shade800,
+                                  color: theme.colorScheme.warning,
                                 ),
                               ),
                             ),

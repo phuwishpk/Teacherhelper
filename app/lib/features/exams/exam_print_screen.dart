@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classroom.dart';
@@ -599,7 +600,7 @@ class _PrintRow extends ConsumerWidget {
               TextButton.icon(
                 key: ValueKey('exam_pdf_share_$id'),
                 onPressed: () => _share(context, ref, file!),
-                icon: const Icon(Icons.share_outlined),
+                icon: Icon(AppTheme.shareIcon(context)),
                 label: const Text('แชร์ / ส่งไปพิมพ์'),
               ),
               IconButton(
@@ -661,7 +662,7 @@ class _StudentPickerState extends State<_StudentPicker> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CheckboxListTile(
+            CheckboxListTile.adaptive(
               key: const ValueKey('exam_pick_all'),
               value: all,
               title: Text('ทั้งห้อง (${widget.roster.length} คน)'),
@@ -678,7 +679,7 @@ class _StudentPickerState extends State<_StudentPicker> {
                 shrinkWrap: true,
                 children: [
                   for (final s in widget.roster)
-                    CheckboxListTile(
+                    CheckboxListTile.adaptive(
                       key: ValueKey('exam_pick_student_${s.studentId}'),
                       dense: true,
                       value: _picked.contains(s.studentId),

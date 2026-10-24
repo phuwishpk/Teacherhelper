@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import 'gradebook_models.dart';
@@ -28,7 +29,7 @@ class GradebookSettingsScreen extends ConsumerWidget {
       data: (s) => _SettingsForm(courseId: courseId, initial: s),
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('ตั้งค่าสมุดคะแนน')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('ตั้งค่าสมุดคะแนน')),
@@ -216,7 +217,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     final theme = Theme.of(context);
     final cents = _cents;
     final ok = cents == 10000;
-    final totalColor = ok ? Colors.green.shade700 : theme.colorScheme.error;
+    final totalColor = ok ? theme.colorScheme.success : theme.colorScheme.error;
     final cutoffProblem = cutoffsProblem(_cutoffValues);
     final rowsProblem = _rowsProblem;
 

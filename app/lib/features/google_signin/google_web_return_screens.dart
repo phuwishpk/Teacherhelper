@@ -125,7 +125,7 @@ class _GoogleLoginReturnScreenState
       body: FormColumn(
         children: [
           if (_busy) ...[
-            const Center(child: CircularProgressIndicator()),
+            const Center(child: CircularProgressIndicator.adaptive()),
             const SizedBox(height: 16),
             const Text('กำลังเข้าสู่ระบบ…', textAlign: TextAlign.center),
           ] else ...[
@@ -234,7 +234,7 @@ class _GoogleLinkResultScreenState
       body: FormColumn(
         children: _busy
             ? const [
-                Center(child: CircularProgressIndicator()),
+                Center(child: CircularProgressIndicator.adaptive()),
                 SizedBox(height: 16),
                 Text('กำลังเชื่อมบัญชี Google…', textAlign: TextAlign.center),
               ]

@@ -1,9 +1,11 @@
+import '../../core/widgets/small_spinner.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../review/review_labels.dart' show formatScore;
@@ -307,17 +309,13 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
                   StatusChip(
                     label: q.rubricStatus.label,
                     color: q.rubricStatus == RubricStatus.approved
-                        ? Colors.green.shade700
+                        ? theme.colorScheme.success
                         : null,
                   ),
                   FilledButton.tonalIcon(
                     onPressed: _drafting ? null : _requestDraft,
                     icon: _drafting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SmallSpinner(size: 16)
                         : const Icon(Icons.auto_awesome),
                     label: Text(
                       _drafting
@@ -513,7 +511,7 @@ class _CriterionCard extends StatelessWidget {
             ),
             Row(
               children: [
-                Checkbox(
+                Checkbox.adaptive(
                   value: row.isCore,
                   onChanged: (v) => onCoreChanged(v ?? false),
                 ),

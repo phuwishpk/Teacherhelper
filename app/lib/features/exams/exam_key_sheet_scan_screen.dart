@@ -179,7 +179,7 @@ class _ExamKeySheetScanScreenState
               child: _cameraError != null
                   ? Center(child: Text(_cameraError!))
                   : camera == null || !_ready
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator.adaptive())
                   : Center(
                       child: AspectRatio(
                         aspectRatio: camera.previewAspectRatio,

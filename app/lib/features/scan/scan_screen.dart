@@ -470,7 +470,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     }
     final camera = _camera;
     if (camera == null || !_cameraReady) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
     return ColoredBox(
       color: Colors.black,
@@ -605,7 +605,7 @@ class _BusyOverlay extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(),
+              const CircularProgressIndicator.adaptive(),
               const SizedBox(height: 16),
               Text(label),
             ],

@@ -54,7 +54,8 @@ class _StudentSubjectScreenState extends ConsumerState<StudentSubjectScreen> {
     );
     return overview.when(
       skipLoadingOnRefresh: true,
-      loading: () => plain(const Center(child: CircularProgressIndicator())),
+      loading: () =>
+          plain(const Center(child: CircularProgressIndicator.adaptive())),
       error: (e, _) => plain(
         ErrorView(
           message: apiErrorMessage(e),

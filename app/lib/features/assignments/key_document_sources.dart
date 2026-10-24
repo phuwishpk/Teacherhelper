@@ -186,7 +186,7 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
                     ),
                   )
                 : !_ready || camera == null
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator.adaptive())
                 : Center(
                     child: AspectRatio(
                       aspectRatio: camera.previewAspectRatio,

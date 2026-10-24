@@ -59,7 +59,7 @@ class ScanPageImage extends ConsumerWidget {
     );
 
     return file.when(
-      loading: () => frame(const CircularProgressIndicator()),
+      loading: () => frame(const CircularProgressIndicator.adaptive()),
       error: (e, _) {
         final code = apiStatusCode(e);
         return problem(
@@ -146,7 +146,7 @@ class _DecodedState extends ConsumerState<_Decoded> {
         }
         final image = snap.data;
         if (image == null) {
-          return widget.frame(const CircularProgressIndicator());
+          return widget.frame(const CircularProgressIndicator.adaptive());
         }
         final page = AspectRatio(
           aspectRatio: image.width / image.height,

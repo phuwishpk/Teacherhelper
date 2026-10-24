@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -280,7 +281,7 @@ class _ExamItemCard extends StatelessWidget {
                 Text(
                   '${formatScore(i.score)}/${formatScore(i.maxPoints)} คะแนน',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: i.fullMarks ? Colors.green.shade700 : null,
+                    color: i.fullMarks ? theme.colorScheme.success : null,
                   ),
                 ),
               ],
@@ -339,7 +340,7 @@ class _AnswerCard extends ConsumerWidget {
                 Text(
                   '${formatScore(a.score)}/${formatScore(a.maxPoints)} คะแนน',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: a.fullMarks ? Colors.green.shade700 : null,
+                    color: a.fullMarks ? theme.colorScheme.success : null,
                   ),
                 ),
               ],

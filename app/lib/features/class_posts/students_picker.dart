@@ -42,7 +42,7 @@ class _StudentsDialogState extends State<_StudentsDialog> {
                 shrinkWrap: true,
                 children: [
                   for (final s in widget.roster)
-                    CheckboxListTile(
+                    CheckboxListTile.adaptive(
                       key: ValueKey('pick_student_${s.studentId}'),
                       value: _chosen.contains(s.studentId),
                       title: Text('${s.studentNumber}. ${s.name}'),

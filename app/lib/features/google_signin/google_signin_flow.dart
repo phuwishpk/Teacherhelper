@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/router/app_router.dart';
 import '../google_classroom/google_auth.dart' show GoogleAuthCanceled;
+import '../../core/widgets/small_spinner.dart';
 import 'google_signin_config.dart';
 import 'google_signin_errors.dart';
 import 'google_signin_gateway.dart';
@@ -288,11 +289,7 @@ class _GoogleSignInSectionState extends ConsumerState<GoogleSignInSection> {
           key: const ValueKey('google_signin_button'),
           onPressed: _busy ? null : () => _signIn(mode),
           icon: _busy
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 18)
               : const Icon(Icons.account_circle_outlined),
           label: const Text('เข้าสู่ระบบด้วย Google'),
         ),
@@ -390,11 +387,7 @@ class _GoogleSignUpSectionState extends ConsumerState<GoogleSignUpSection> {
           key: const ValueKey('google_signup_button'),
           onPressed: _busy ? null : () => _signUp(mode),
           icon: _busy
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 18)
               : const Icon(Icons.account_circle_outlined),
           label: const Text('สมัครด้วย Google'),
         ),

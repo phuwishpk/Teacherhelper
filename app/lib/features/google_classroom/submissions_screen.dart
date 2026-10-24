@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/assignments_providers.dart';
@@ -76,7 +77,7 @@ class GoogleSubmissionsScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
+              CircularProgressIndicator.adaptive(),
               SizedBox(height: 16),
               Text('กำลังดึงงานที่ส่งจาก Google Classroom…'),
             ],
@@ -109,7 +110,7 @@ RowProgress rowProgress(
   SubmissionSummary? submission,
   ColorScheme scheme,
 ) {
-  final muted = scheme.outline;
+  final muted = scheme.onSurfaceVariant;
   switch (row.state) {
     case SubmissionImportState.newSubmission:
       if (row.student == null) {
@@ -182,7 +183,7 @@ RowProgress rowProgress(
         'grading' => (label: 'AI กำลังตรวจ', color: muted, detail: null),
         'published' => (
           label: 'เผยแพร่ผลแล้ว',
-          color: Colors.green.shade700,
+          color: scheme.success,
           detail: submission.totalScore == null
               ? null
               : 'คะแนนรวม ${formatScore(submission.totalScore!)}'
@@ -629,7 +630,7 @@ class _SubmissionCardState extends ConsumerState<_SubmissionCard> {
                   color: progress.color,
                 ),
                 if (row.late)
-                  StatusChip(label: 'ส่งช้า', color: Colors.orange.shade800),
+                  StatusChip(label: 'ส่งช้า', color: theme.colorScheme.warning),
               ],
             ),
             if (progress.detail case final detail?)

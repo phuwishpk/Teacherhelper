@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+
 /// Review bands of fuzzy system 2 (DESIGN §11.8 `priority_band`).
 enum PriorityBand {
   check('check', 'ต้องตรวจ'),
@@ -38,8 +40,8 @@ enum Understanding {
   }
 
   Color color(BuildContext context) => switch (this) {
-    Understanding.good => Colors.green.shade700,
-    Understanding.partial => Colors.orange.shade800,
+    Understanding.good => Theme.of(context).colorScheme.success,
+    Understanding.partial => Theme.of(context).colorScheme.warning,
     Understanding.notYet => Theme.of(context).colorScheme.error,
   };
 }

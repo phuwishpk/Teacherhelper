@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
+import '../../core/widgets/message_dialog.dart';
 import '../assignments/assignments_providers.dart';
 import 'my_indicators.dart';
 import 'skill_trash.dart';
@@ -15,26 +16,21 @@ Future<bool> confirmMoveToTrash(
   required int id,
   required String code,
 }) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('ลบ $code'),
-      content: const Text(
+  final ok = await showMessageDialog<bool>(
+    context,
+    title: 'ลบ $code',
+    message:
         'ตัวชี้วัดนี้ (และทักษะย่อยที่คุณเพิ่มไว้ใต้มัน) จะไปอยู่ในถังขยะ '
         'เลือกใช้ใหม่ไม่ได้จนกว่าจะกู้คืน ข้อ รายวิชา แผน และคะแนนที่ใช้อยู่แล้วยังเก็บไว้ตามเดิม',
+    actions: const [
+      DialogAction('ยกเลิก', value: false),
+      DialogAction(
+        'ย้ายไปถังขยะ',
+        value: true,
+        key: ValueKey('skill_trash_confirm'),
+        primary: true,
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('ยกเลิก'),
-        ),
-        FilledButton(
-          key: const ValueKey('skill_trash_confirm'),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('ย้ายไปถังขยะ'),
-        ),
-      ],
-    ),
+    ],
   );
   if (ok != true || !context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
@@ -106,27 +102,20 @@ class _SkillTrashScreenState extends ConsumerState<SkillTrashScreen> {
   }
 
   Future<void> _deleteForGood(TrashedSkill t) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('ลบ ${t.skill.code} ถาวร'),
-        content: const Text('ลบแล้วกู้คืนไม่ได้'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ยกเลิก'),
-          ),
-          FilledButton(
-            key: const ValueKey('skill_trash_purge_confirm'),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ลบถาวร'),
-          ),
-        ],
-      ),
+    final ok = await showMessageDialog<bool>(
+      context,
+      title: 'ลบ ${t.skill.code} ถาวร',
+      message: 'ลบแล้วกู้คืนไม่ได้',
+      actions: const [
+        DialogAction('ยกเลิก', value: false),
+        DialogAction(
+          'ลบถาวร',
+          value: true,
+          key: ValueKey('skill_trash_purge_confirm'),
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
     if (ok != true) return;
     await _run(

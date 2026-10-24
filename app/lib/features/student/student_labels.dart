@@ -173,7 +173,7 @@ class ClassroomChip extends StatelessWidget {
     if (text == null) return const SizedBox.shrink();
     return StatusChip(
       label: tag.closed ? 'ห้องเก่า · $text' : text,
-      color: tag.closed ? scheme.outline : scheme.tertiary,
+      color: tag.closed ? scheme.onSurfaceVariant : scheme.tertiary,
     );
   }
 }
@@ -197,7 +197,7 @@ class SubjectSectionHeader extends StatelessWidget {
           Text(
             tag.title,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: tag.closed ? theme.colorScheme.outline : null,
+              color: tag.closed ? theme.colorScheme.onSurfaceVariant : null,
             ),
           ),
           ClassroomChip(tag: tag),

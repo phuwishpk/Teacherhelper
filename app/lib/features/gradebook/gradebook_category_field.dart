@@ -107,7 +107,7 @@ class ExcludedFromGradeSwitch extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => SwitchListTile(
+  Widget build(BuildContext context) => SwitchListTile.adaptive(
     key: const ValueKey('excluded_from_grade'),
     contentPadding: EdgeInsets.zero,
     title: const Text('ไม่นับเกรด'),

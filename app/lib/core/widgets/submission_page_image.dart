@@ -66,7 +66,7 @@ class SubmissionPageImage extends ConsumerWidget {
     );
 
     return file.when(
-      loading: () => box(const CircularProgressIndicator()),
+      loading: () => box(const CircularProgressIndicator.adaptive()),
       error: (e, _) {
         final code = apiStatusCode(e);
         final message = switch (code) {
@@ -176,7 +176,7 @@ class _DecodedPageState extends ConsumerState<_DecodedPage> {
         }
         final image = snap.data;
         if (image == null) {
-          return widget.frame(const CircularProgressIndicator());
+          return widget.frame(const CircularProgressIndicator.adaptive());
         }
         final page = _PageCanvas(image: image, answerBox: widget.answerBox);
         return Semantics(

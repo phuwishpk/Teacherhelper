@@ -68,7 +68,7 @@ class _ImpersonateScreenState extends ConsumerState<ImpersonateScreen> {
       body: FormColumn(
         children: [
           if (_busy) ...[
-            const Center(child: CircularProgressIndicator()),
+            const Center(child: CircularProgressIndicator.adaptive()),
             const SizedBox(height: 16),
             const Text(
               'กำลังเข้าใช้ในฐานะผู้ใช้…',

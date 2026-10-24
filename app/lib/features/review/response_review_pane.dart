@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/ai_guidance_field.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../../core/widgets/submission_page_image.dart';
 import '../settings/ai_key_errors.dart';
 import 'exam_answer_panel.dart';
@@ -277,7 +279,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
             else if (d.band != null)
               StatusChip(label: d.band!.label),
             if (d.late)
-              StatusChip(label: 'ส่งช้า', color: Colors.orange.shade800),
+              StatusChip(label: 'ส่งช้า', color: theme.colorScheme.warning),
             if (d.isWholePage)
               StatusChip(
                 label: 'ตรวจจากรูปทั้งหน้า',
@@ -289,13 +291,19 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 color: theme.colorScheme.secondary,
               ),
             if (d.isAutoBlank || d.extraction?['blank'] == true)
-              const StatusChip(label: 'ไม่ได้ตอบ', color: Colors.grey),
+              StatusChip(
+                label: 'ไม่ได้ตอบ',
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             if (d.isReviewed)
-              StatusChip(label: 'ตรวจทานแล้ว', color: Colors.green.shade700),
+              StatusChip(
+                label: 'ตรวจทานแล้ว',
+                color: theme.colorScheme.success,
+              ),
             if (d.isPublished)
               StatusChip(
                 label: 'เผยแพร่แล้ว',
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
           ],
         ),
@@ -592,10 +600,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                   FilledButton.icon(
                     onPressed: _busy ? null : () => _save(advance: true),
                     icon: _busy
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SmallSpinner(size: 16)
                         : const Icon(Icons.check),
                     label: const Text('บันทึกและข้อถัดไป'),
                   ),

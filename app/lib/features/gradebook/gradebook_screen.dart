@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
@@ -490,7 +491,7 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
                 _Note(
                   key: const ValueKey('gradebook_in_progress'),
                   icon: Icons.hourglass_bottom,
-                  color: Colors.orange.shade800,
+                  color: theme.colorScheme.warning,
                   text:
                       'คะแนนระหว่างภาค: ยังไม่มีรายการที่นับในหมวด '
                       '${g.missingCategories.join(', ')} '
@@ -505,7 +506,7 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
                       : Icons.campaign_outlined,
                   color: publication.stale
                       ? theme.colorScheme.error
-                      : Colors.green.shade700,
+                      : theme.colorScheme.success,
                   text: [
                     'ประกาศเกรดแล้ว ${formatThaiDateTime(publication.publishedAt)}',
                     if (publication.stale)
@@ -517,7 +518,7 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
                 _Note(
                   key: const ValueKey('gradebook_uncategorised'),
                   icon: Icons.label_off_outlined,
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                   text:
                       'มี $uncategorised รายการที่ยังไม่ระบุหมวด (ไม่นับ) '
                       'เลือกหมวดได้ที่ฟอร์มของงานหรือข้อสอบ',
@@ -546,7 +547,7 @@ class _GradebookScreenState extends ConsumerState<GradebookScreen> {
                   OutlinedButton.icon(
                     key: const ValueKey('gradebook_export'),
                     onPressed: _busy ? null : () => _export(g),
-                    icon: const Icon(Icons.ios_share),
+                    icon: Icon(AppTheme.shareIcon(context)),
                     label: const Text('ส่งออก CSV'),
                   ),
                   if (publication != null)

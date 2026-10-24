@@ -66,7 +66,7 @@ class ClassroomFeedbackScreen extends ConsumerWidget {
           onRetry: refresh,
         ),
         _ when !rows.hasValue => const Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator.adaptive(),
         ),
         _ => FeedbackList(
           assignmentId: assignmentId,

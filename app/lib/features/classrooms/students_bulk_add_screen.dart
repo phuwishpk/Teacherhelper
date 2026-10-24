@@ -427,7 +427,7 @@ class _StudentsBulkAddScreenState extends ConsumerState<StudentsBulkAddScreen> {
               ),
             ],
           ),
-          CheckboxListTile(
+          CheckboxListTile.adaptive(
             key: ValueKey('pick_reissue_${p.student.id}'),
             contentPadding: EdgeInsets.zero,
             dense: true,

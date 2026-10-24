@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_repository.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
 import 'pdf_actions.dart';
 
@@ -155,7 +156,7 @@ Future<void> showPdfFileActions(
           ),
           ListTile(
             key: const ValueKey('pdf_share'),
-            leading: const Icon(Icons.share_outlined),
+            leading: Icon(AppTheme.shareIcon(context)),
             title: const Text('แชร์ / ส่งไปพิมพ์'),
             onTap: () {
               Navigator.of(sheetContext).pop();

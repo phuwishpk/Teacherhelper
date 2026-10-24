@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -510,7 +511,7 @@ class _AnswerKeyCard extends StatelessWidget {
                   ? Icons.verified_outlined
                   : Icons.fact_check_outlined,
               color: approvedAt != null
-                  ? Colors.green.shade700
+                  ? theme.colorScheme.success
                   : theme.colorScheme.primary,
             ),
             title: const Text('เฉลย'),
@@ -575,7 +576,7 @@ class _QuestionTile extends StatelessWidget {
             else
               StatusChip(
                 label: 'ยังไม่ผูกตัวชี้วัด',
-                color: Colors.orange.shade800,
+                color: theme.colorScheme.warning,
               ),
             if (q.type.needsRubric)
               InkWell(
@@ -583,7 +584,7 @@ class _QuestionTile extends StatelessWidget {
                 child: StatusChip(
                   label: 'rubric: ${q.rubricStatus.label}',
                   color: q.rubricStatus == RubricStatus.approved
-                      ? Colors.green.shade700
+                      ? theme.colorScheme.success
                       : theme.colorScheme.error,
                 ),
               ),

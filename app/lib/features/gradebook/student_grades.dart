@@ -157,7 +157,7 @@ class StudentGradeBody extends ConsumerWidget {
     final theme = Theme.of(context);
     return detail.when(
       skipLoadingOnRefresh: true,
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator.adaptive()),
       error: (e, _) => apiStatusCode(e) == 404
           ? const EmptyView(
               icon: Icons.hourglass_empty,
@@ -254,7 +254,7 @@ class _CategoryCard extends StatelessWidget {
                 style: i.dropped
                     ? TextStyle(
                         decoration: TextDecoration.lineThrough,
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       )
                     : theme.textTheme.titleSmall,
               ),

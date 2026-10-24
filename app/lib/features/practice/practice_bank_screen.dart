@@ -212,7 +212,7 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
                 loading: () => [
                   const SliverFillRemaining(
                     hasScrollBody: false,
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: CircularProgressIndicator.adaptive()),
                   ),
                 ],
                 error: (e, _) => [

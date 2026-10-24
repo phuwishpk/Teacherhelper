@@ -1,4 +1,5 @@
 import 'dart:io' show Directory, File;
+import '../../core/widgets/small_spinner.dart';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -142,12 +143,7 @@ class _PostAttachmentTileState extends ConsumerState<PostAttachmentTile> {
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         dense: true,
-        leading: _busy
-            ? const SizedBox.square(
-                dimension: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(icon),
+        leading: _busy ? const SmallSpinner(size: 24) : Icon(icon),
         title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           file == null ? (a.url ?? '') : file.sizeLabel,

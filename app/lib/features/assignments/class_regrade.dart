@@ -399,7 +399,7 @@ class _ClassRegradeDialogState extends State<ClassRegradeDialog> {
               key: const ValueKey('regrade_cost'),
             ),
             if (_hasOverridden)
-              CheckboxListTile(
+              CheckboxListTile.adaptive(
                 key: const ValueKey('regrade_include_overridden'),
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,

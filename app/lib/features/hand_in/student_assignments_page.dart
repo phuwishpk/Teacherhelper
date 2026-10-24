@@ -155,7 +155,7 @@ List<Widget> studentAssignmentChips(
     ),
   if (a.late) StatusChip(label: 'ส่งช้า', color: scheme.error),
   if (!a.isSubmitted && !a.canSubmit && (a.classroom?.closed ?? false))
-    StatusChip(label: 'ห้องเก่า ส่งไม่ได้แล้ว', color: scheme.outline)
+    StatusChip(label: 'ห้องเก่า ส่งไม่ได้แล้ว', color: scheme.onSurfaceVariant)
   else if (!a.isSubmitted && !a.canSubmit)
     StatusChip(label: 'ปิดรับแล้ว', color: scheme.error)
   else if (!a.isSubmitted && a.isOverdue(now))

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -52,7 +53,7 @@ class GradeConflictsScreen extends ConsumerWidget {
           onRetry: refresh,
         ),
         _ when !rows.hasValue => const Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator.adaptive(),
         ),
         _ => RefreshIndicator(
           onRefresh: refresh,
@@ -212,7 +213,7 @@ class _ConflictCardState extends ConsumerState<_ConflictCard> {
                   label: c.status.label,
                   color: c.isOpen
                       ? theme.colorScheme.error
-                      : Colors.green.shade700,
+                      : theme.colorScheme.success,
                 ),
                 const SizedBox(width: 8),
               ],

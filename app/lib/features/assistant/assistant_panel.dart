@@ -6,6 +6,8 @@ import '../../core/api/api_client.dart';
 import '../../core/api/error_codes.dart';
 import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
+import '../../core/widgets/message_dialog.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'assistant.dart';
 import 'assistant_plan_card.dart';
 import 'assistant_student_data.dart';
@@ -95,7 +97,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
         ),
       );
     } else {
-      body = const Center(child: CircularProgressIndicator());
+      body = const Center(child: CircularProgressIndicator.adaptive());
     }
 
     return Column(
@@ -179,7 +181,7 @@ class _Chat extends ConsumerWidget {
 
     final Widget list;
     if (chat.loading) {
-      list = const Center(child: CircularProgressIndicator());
+      list = const Center(child: CircularProgressIndicator.adaptive());
     } else if (messages.isEmpty) {
       list = ListView(
         padding: const EdgeInsets.all(16),
@@ -544,23 +546,20 @@ class _ConversationList extends ConsumerWidget {
     WidgetRef ref,
     AssistantConversation c,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ลบบทสนทนานี้?'),
-        content: Text('«${c.title}» จะถูกลบถาวร'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ยกเลิก'),
-          ),
-          FilledButton(
-            key: const ValueKey('assistant_delete_confirm'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ลบ'),
-          ),
-        ],
-      ),
+    final ok = await showMessageDialog<bool>(
+      context,
+      title: 'ลบบทสนทนานี้?',
+      message: '«${c.title}» จะถูกลบถาวร',
+      actions: const [
+        DialogAction('ยกเลิก', value: false),
+        DialogAction(
+          'ลบ',
+          value: true,
+          key: ValueKey('assistant_delete_confirm'),
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
     if (ok != true) return;
     try {
@@ -635,7 +634,7 @@ class _ConversationList extends ConsumerWidget {
           child: const Text('ลองใหม่'),
         ),
       ),
-      _ => const Center(child: CircularProgressIndicator()),
+      _ => const Center(child: CircularProgressIndicator.adaptive()),
     };
   }
 }
@@ -747,10 +746,7 @@ class _AttachedFiles extends ConsumerWidget {
                 ),
               if (state.uploading)
                 const Chip(
-                  avatar: SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  avatar: SmallSpinner(size: 16),
                   label: Text('กำลังอัปโหลด…'),
                 ),
             ],

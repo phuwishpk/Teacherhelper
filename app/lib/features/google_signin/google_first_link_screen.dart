@@ -9,6 +9,7 @@ import '../../core/widgets/content_column.dart';
 import '../../core/widgets/password_field.dart';
 import '../auth/student_login_form.dart' show studentLoginErrorMessage;
 import '../auth/student_qr_scan_screen.dart' show cardErrorMessage;
+import '../../core/widgets/small_spinner.dart';
 import 'google_signin_config.dart';
 import 'google_signin_errors.dart';
 import 'google_signin_providers.dart';
@@ -166,7 +167,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
                   googleSignInNotice,
                   key: ValueKey('google_first_link_notice'),
                 ),
-                CheckboxListTile(
+                CheckboxListTile.adaptive(
                   key: const ValueKey('google_notice_accept'),
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
@@ -223,11 +224,7 @@ class _GoogleFirstLinkScreenState extends ConsumerState<GoogleFirstLinkScreen> {
           key: const ValueKey('google_first_link_submit'),
           onPressed: ready ? _submit : null,
           child: _busy
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 20)
               : const Text('ยืนยันและเชื่อมบัญชี Google'),
         ),
         if (!_accepted) ...[

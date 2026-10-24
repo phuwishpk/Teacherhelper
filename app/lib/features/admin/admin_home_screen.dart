@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../google_classroom/google_browser_connect.dart';
 import '../google_signin/google_identity_card.dart';
 import 'admin_repository.dart';
@@ -65,11 +66,7 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
           FilledButton.icon(
             onPressed: _busy ? null : _openPanel,
             icon: _busy
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 20)
                 : const Icon(Icons.open_in_new),
             label: const Text('เปิดหน้าผู้ดูแลระบบ'),
           ),

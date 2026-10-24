@@ -128,7 +128,7 @@ class _CellEditDialogState extends State<CellEditDialog> {
                     : 'ตรวจด้วยแอป: $stateText',
               ),
             if (!fromAttendance)
-              SwitchListTile(
+              SwitchListTile.adaptive(
                 key: const ValueKey('cell_excused'),
                 contentPadding: EdgeInsets.zero,
                 title: const Text('ยกเว้น'),
@@ -294,7 +294,7 @@ class _PasteLine extends StatelessWidget {
     Color? color;
     if (value.blank) {
       after = 'ไม่เปลี่ยน';
-      color = theme.colorScheme.outline;
+      color = theme.colorScheme.onSurfaceVariant;
     } else if (value.error != null) {
       after = '"${value.raw}" ${value.error}';
       color = theme.colorScheme.error;
@@ -438,7 +438,7 @@ class _GradebookItemDialogState extends State<GradebookItemDialog> {
                 onChanged: (v) => setState(() => _categoryId = v),
                 validator: (v) => v == null ? 'เลือกหมวดคะแนน' : null,
               ),
-              SwitchListTile(
+              SwitchListTile.adaptive(
                 key: const ValueKey('item_attendance'),
                 contentPadding: EdgeInsets.zero,
                 title: const Text('เป็นคะแนนการเข้าเรียน'),
@@ -447,7 +447,7 @@ class _GradebookItemDialogState extends State<GradebookItemDialog> {
                 onChanged: (v) => setState(() => _attendance = v),
               ),
               if (!editing && widget.classrooms.length > 1)
-                SwitchListTile(
+                SwitchListTile.adaptive(
                   key: const ValueKey('item_all_classrooms'),
                   contentPadding: EdgeInsets.zero,
                   title: const Text('เพิ่มให้ทุกห้องของรายวิชา'),

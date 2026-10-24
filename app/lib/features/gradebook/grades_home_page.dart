@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../courses/course_models.dart';
 import 'gradebook_models.dart';
 import 'gradebook_providers.dart';
@@ -338,11 +340,8 @@ class _RoomRow extends StatelessWidget {
                   ? 'ส่งออก CSV'
                   : 'ตั้งหมวดคะแนนก่อนส่งออก CSV',
               icon: exporting
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.ios_share),
+                  ? const SmallSpinner(size: 20)
+                  : Icon(AppTheme.shareIcon(context)),
               onPressed: course.configured && !busy ? onExport : null,
             ),
           ],
@@ -367,7 +366,7 @@ Widget roomStatusChip(BuildContext context, GradebookOverviewRoom room) {
       room.publishedAt == null
           ? 'ประกาศแล้ว'
           : 'ประกาศแล้ว ${formatThaiDate(room.publishedAt!)}',
-      Colors.green.shade700,
+      Theme.of(context).colorScheme.success,
     ),
     GradebookRoomStatus.publishedStale => (
       'ประกาศแล้ว แต่คะแนนเปลี่ยน',

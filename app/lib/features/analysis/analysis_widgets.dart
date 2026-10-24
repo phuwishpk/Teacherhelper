@@ -17,7 +17,7 @@ import 'analysis_models.dart';
     return (
       label: 'ยังไม่มีคะแนน',
       icon: Icons.hourglass_empty,
-      color: scheme.outline,
+      color: scheme.onSurfaceVariant,
     );
   }
   if (a.awaitingApproval) {
@@ -51,7 +51,7 @@ import 'analysis_models.dart';
   return (
     label: a.hasText ? a.status.label : 'ยังไม่มีข้อความ',
     icon: Icons.notes_outlined,
-    color: scheme.outline,
+    color: scheme.onSurfaceVariant,
   );
 }
 

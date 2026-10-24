@@ -273,7 +273,7 @@ class _GroupCard extends StatelessWidget {
             )
           else
             for (final s in rows)
-              CheckboxListTile(
+              CheckboxListTile.adaptive(
                 dense: true,
                 value: chosenIds.contains(s.id),
                 onChanged: enabled ? (v) => onToggle(s, v ?? false) : null,

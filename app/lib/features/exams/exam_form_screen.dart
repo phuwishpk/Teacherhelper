@@ -31,7 +31,7 @@ class ExamEditScreen extends ConsumerWidget {
       data: (d) => ExamFormScreen(existing: d.exam),
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('ตั้งค่าข้อสอบ')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('ตั้งค่าข้อสอบ')),
@@ -449,7 +449,7 @@ class _ExamFormScreenState extends ConsumerState<ExamFormScreen> {
                 ),
               ],
             ],
-            SwitchListTile(
+            SwitchListTile.adaptive(
               key: const ValueKey('exam_show_key'),
               contentPadding: EdgeInsets.zero,
               title: const Text('ให้นักเรียนดูเฉลย'),

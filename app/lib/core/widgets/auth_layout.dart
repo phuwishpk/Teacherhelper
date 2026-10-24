@@ -26,11 +26,18 @@ class BrandMark extends StatelessWidget {
         ),
         if (showName) ...[
           SizedBox(width: size * 0.32),
-          Text(
-            'Krucheck',
-            style: size >= 40
-                ? theme.textTheme.headlineSmall
-                : theme.textTheme.titleMedium,
+          // The name is part of the logo: with very large system text it
+          // shrinks to the space there is instead of overflowing.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Krucheck',
+                style: size >= 40
+                    ? theme.textTheme.headlineSmall
+                    : theme.textTheme.titleMedium,
+              ),
+            ),
           ),
         ],
       ],

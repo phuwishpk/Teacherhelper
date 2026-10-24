@@ -31,7 +31,7 @@ class ExamAnswerKeyScreen extends ConsumerWidget {
       skipLoadingOnRefresh: true,
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('ตารางเฉลย')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: const Text('ตารางเฉลย')),

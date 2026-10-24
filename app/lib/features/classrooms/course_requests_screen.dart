@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -217,9 +218,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
 
   Color _statusColor(ColorScheme scheme) => switch (r.status) {
     CourseRequestStatus.pending => scheme.tertiary,
-    CourseRequestStatus.approved => Colors.green.shade700,
+    CourseRequestStatus.approved => scheme.success,
     CourseRequestStatus.declined => scheme.error,
-    CourseRequestStatus.cancelled => scheme.outline,
+    CourseRequestStatus.cancelled => scheme.onSurfaceVariant,
   };
 
   @override
@@ -295,7 +296,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
               Text(
                 mismatch,
                 key: ValueKey('request_mismatch_${r.id}'),
-                style: TextStyle(color: Colors.orange.shade800),
+                style: TextStyle(color: theme.colorScheme.warning),
               ),
             ],
             if (r.isPending) ...[

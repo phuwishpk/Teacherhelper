@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/answer_key.dart';
 import 'practice_models.dart';
@@ -225,7 +226,7 @@ class _PracticeItemEditorState extends ConsumerState<PracticeItemEditor> {
                               ? Icons.check_circle
                               : Icons.radio_button_unchecked,
                           color: _correct == PracticeOption.letterFor(i)
-                              ? Colors.green.shade700
+                              ? theme.colorScheme.success
                               : null,
                         ),
                       ),

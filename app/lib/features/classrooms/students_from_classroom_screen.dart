@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import 'classroom.dart';
 import 'classrooms_providers.dart';
 import 'one_time_pins_view.dart';
@@ -201,7 +202,7 @@ class _StudentsFromClassroomScreenState
             ),
             _ => const Padding(
               padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
           },
         ],
@@ -257,7 +258,7 @@ class _StudentsFromClassroomScreenState
       onRetry: () => ref.invalidate(rosterProvider(source.id)),
       data: (students) {
         if (target.isLoading && !target.hasValue) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator.adaptive());
         }
         return _studentForm(source, students);
       },
@@ -317,7 +318,7 @@ class _StudentsFromClassroomScreenState
             child: Column(
               children: [
                 for (final s in students)
-                  CheckboxListTile(
+                  CheckboxListTile.adaptive(
                     key: ValueKey('copy_student_${s.studentId}'),
                     dense: true,
                     controlAffinity: ListTileControlAffinity.leading,
@@ -373,7 +374,7 @@ class _StudentsFromClassroomScreenState
           },
           child: const Column(
             children: [
-              RadioListTile<bool>(
+              RadioListTile<bool>.adaptive(
                 key: ValueKey('copy_pin_keep'),
                 contentPadding: EdgeInsets.zero,
                 value: false,
@@ -382,7 +383,7 @@ class _StudentsFromClassroomScreenState
                   'นักเรียนเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านเดิมได้ทันที',
                 ),
               ),
-              RadioListTile<bool>(
+              RadioListTile<bool>.adaptive(
                 key: ValueKey('copy_pin_new'),
                 contentPadding: EdgeInsets.zero,
                 value: true,
@@ -406,10 +407,7 @@ class _StudentsFromClassroomScreenState
           key: const ValueKey('copy_submit'),
           onPressed: _busy || selected.isEmpty ? null : () => _submit(selected),
           icon: _busy
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SmallSpinner(size: 18)
               : const Icon(Icons.group_add_outlined),
           label: Text('นำนักเรียน ${selected.length} คนเข้าห้อง'),
         ),

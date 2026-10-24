@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/async_view.dart';
 import '../dashboard/analytics_models.dart';
 import '../review/review_labels.dart';
@@ -118,7 +119,7 @@ class _QuestionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final q = question;
-    final warn = Colors.orange.shade800;
+    final warn = theme.colorScheme.warning;
     final stats = [
       questionTypeLabel(q.type),
       'p ${stat2(q.p)}',
@@ -211,9 +212,9 @@ class _OptionRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final o = option;
-    final warn = Colors.orange.shade800;
+    final warn = scheme.warning;
     final fill = o.correct
-        ? Colors.green.shade600
+        ? scheme.success
         : (o.flags.isEmpty ? scheme.outline : warn);
     final share = ((o.pct ?? 0) / 100).clamp(0.0, 1.0);
     return Padding(
@@ -234,7 +235,7 @@ class _OptionRow extends StatelessWidget {
                       Icon(
                         Icons.check_circle,
                         size: 16,
-                        color: Colors.green.shade700,
+                        color: scheme.success,
                         semanticLabel: 'เฉลย',
                       ),
                     ],

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../classrooms/classrooms_providers.dart';
 import 'classroom_google_section.dart' show gradeReturnNote;
 import 'google_models.dart';
@@ -99,10 +100,7 @@ class _GoogleCoursePickerScreenState
       title: Text(course.name),
       subtitle: details.isEmpty ? null : Text(details.join(' · ')),
       trailing: _linking == course.courseId
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const SmallSpinner(size: 20)
           : linked == null
           ? const Icon(Icons.chevron_right)
           : null,
@@ -172,7 +170,7 @@ class _GoogleCoursePickerScreenState
               ),
               _ => const Padding(
                 padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               ),
             },
           ],

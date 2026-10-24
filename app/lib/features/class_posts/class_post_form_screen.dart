@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../classrooms/classroom.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../courses/courses_providers.dart';
@@ -336,10 +337,7 @@ class _PostFormState extends ConsumerState<_PostForm> {
                   key: const ValueKey('post_attach_file'),
                   onPressed: _busy || _uploading ? null : _pickFiles,
                   icon: _uploading
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SmallSpinner(size: 18)
                       : const Icon(Icons.attach_file),
                   label: Text(_uploading ? 'กำลังอัปโหลด…' : 'แนบไฟล์'),
                 ),
@@ -456,7 +454,7 @@ class _PostFormState extends ConsumerState<_PostForm> {
 
           if (classroom.googleLink case final link?) ...[
             section('Google Classroom'),
-            CheckboxListTile(
+            CheckboxListTile.adaptive(
               key: const ValueKey('post_send_google'),
               value: _sendToGoogle,
               contentPadding: EdgeInsets.zero,

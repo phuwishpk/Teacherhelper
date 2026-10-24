@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/question.dart';
@@ -400,7 +401,7 @@ class _LessonPlanFormScreenState extends State<LessonPlanFormScreen> {
                 _taughtOn == null
                     ? Icons.radio_button_unchecked
                     : Icons.check_circle,
-                color: _taughtOn == null ? null : Colors.green.shade700,
+                color: _taughtOn == null ? null : theme.colorScheme.success,
               ),
               title: Text(
                 _taughtOn == null

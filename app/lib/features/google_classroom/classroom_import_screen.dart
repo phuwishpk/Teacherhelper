@@ -8,6 +8,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/small_spinner.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../classrooms/one_time_pins_view.dart';
 import '../courses/course_models.dart';
@@ -61,7 +62,7 @@ class ClassroomImportScreen extends ConsumerWidget {
       ),
       _ => Scaffold(
         appBar: AppBar(title: const Text(_title)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator.adaptive()),
       ),
     };
   }
@@ -417,7 +418,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
         },
         child: Column(
           children: [
-            RadioListTile<_ImportChoice>(
+            RadioListTile<_ImportChoice>.adaptive(
               key: const ValueKey('import_choice_link'),
               value: _ImportChoice.linkExisting,
               title: Text('ผูกคอร์สนี้กับห้อง ${room.name} ที่มีอยู่'),
@@ -427,7 +428,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
               ),
             ),
             const Divider(height: 1),
-            const RadioListTile<_ImportChoice>(
+            const RadioListTile<_ImportChoice>.adaptive(
               key: ValueKey('import_choice_create'),
               value: _ImportChoice.createNew,
               title: Text('สร้างห้องใหม่'),
@@ -522,10 +523,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
         key: const ValueKey('import_link_existing'),
         onPressed: _busy ? null : () => _link(room),
         icon: _busy
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const SmallSpinner(size: 18)
             : Icon(atOnce ? Icons.link : Icons.send_outlined),
         label: Text(
           atOnce ? 'ผูกกับห้อง ${room.name}' : 'ส่งคำขอผูกกับห้อง ${room.name}',
@@ -694,10 +692,7 @@ class _ImportFormState extends ConsumerState<_ImportForm> {
         key: const ValueKey('import_create'),
         onPressed: _busy || errors.isNotEmpty ? null : _submit,
         icon: _busy
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const SmallSpinner(size: 18)
             : const Icon(Icons.add_home_work_outlined),
         label: const Text('สร้างห้อง'),
       ),
@@ -837,7 +832,7 @@ class _MatchTile extends StatelessWidget {
         children: [
           SizedBox.square(
             dimension: 32,
-            child: Checkbox(
+            child: Checkbox.adaptive(
               key: ValueKey('import_existing_$googleUserId'),
               value: value,
               onChanged: enabled ? (v) => onChanged(v ?? false) : null,

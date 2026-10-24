@@ -34,7 +34,7 @@ Future<void> showJoinQrDialog(
           if (qr == null) {
             return const SizedBox(
               height: 120,
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             );
           }
           return SingleChildScrollView(

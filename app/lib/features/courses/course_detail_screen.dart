@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
@@ -478,7 +479,7 @@ class _UnitCard extends StatelessWidget {
                   p.taughtOn == null
                       ? Icons.radio_button_unchecked
                       : Icons.check_circle,
-                  color: p.taughtOn == null ? null : Colors.green.shade700,
+                  color: p.taughtOn == null ? null : theme.colorScheme.success,
                 ),
                 onPressed: () => onToggleTaught(p),
               ),

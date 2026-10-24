@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/password_field.dart';
+import '../../core/widgets/small_spinner.dart';
 
 /// Thai message for a failed username + password login.
 ///
@@ -136,11 +137,7 @@ class _StudentLoginFormState extends ConsumerState<StudentLoginForm> {
               FilledButton(
                 onPressed: _busy ? null : _submit,
                 child: _busy
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 20)
                     : const Text('เข้าสู่ระบบ'),
               ),
             ],

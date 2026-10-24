@@ -8,6 +8,7 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../google_classroom/google_auth.dart' show GoogleAuthCanceled;
+import '../../core/widgets/small_spinner.dart';
 import '../google_signin/google_signin_config.dart';
 import '../google_signin/google_signin_errors.dart';
 import '../google_signin/google_signin_gateway.dart';
@@ -35,7 +36,7 @@ class JoinClassroomScreen extends ConsumerWidget {
     if (code == null) {
       body = const _CodeEntry();
     } else if (session is SessionRestoring) {
-      body = const Center(child: CircularProgressIndicator());
+      body = const Center(child: CircularProgressIndicator.adaptive());
     } else if (session is SignedIn && session.user.isStudent) {
       body = _StudentJoin(code: code, studentName: session.user.name);
     } else if (session is SignedIn) {
@@ -255,7 +256,7 @@ class _GuestJoinState extends ConsumerState<_GuestJoin> {
                 'ยังไม่มีบัญชี? สร้างบัญชีนักเรียนด้วย Google แล้วเข้าห้องนี้ได้เลย',
                 style: theme.textTheme.titleSmall,
               ),
-              CheckboxListTile(
+              CheckboxListTile.adaptive(
                 key: const ValueKey('join_accept_notice'),
                 value: _accepted,
                 onChanged: _busy
@@ -272,11 +273,7 @@ class _GuestJoinState extends ConsumerState<_GuestJoin> {
                 key: const ValueKey('join_google'),
                 onPressed: _busy || !_accepted ? null : () => _google(mode),
                 icon: _busy
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 18)
                     : const Icon(Icons.account_circle_outlined),
                 label: const Text('เข้าด้วย Google'),
               ),
@@ -476,11 +473,7 @@ class _StudentJoinState extends ConsumerState<_StudentJoin> {
               key: const ValueKey('join_submit'),
               onPressed: _busy ? null : () => _join(info),
               icon: _busy
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const SmallSpinner(size: 18)
                   : const Icon(Icons.group_add_outlined),
               label: const Text('เข้าห้อง'),
             ),
