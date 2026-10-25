@@ -6,6 +6,7 @@
 ## เอกสาร
 - [docs/DESIGN.md](docs/DESIGN.md) เอกสารออกแบบระบบ (สถาปัตยกรรม, schema, API, fuzzy, prompt)
 - [docs/UX-UI.md](docs/UX-UI.md) หลักการออกแบบ UX/UI (สรุปจาก DESIGN §27 และหัวข้อที่เกี่ยวข้อง)
+- [backend/resources/qa/manual-test/](backend/resources/qa/manual-test/README.md) checklist ทดสอบด้วยมือบนเว็บ ตั้งแต่สมัครจนตัดเกรด พร้อมไฟล์ทดสอบ (การบ้านคณิตศาสตร์ ม.4) เปิดติ๊กและดาวน์โหลดไฟล์ได้ใน Test Lab ที่ `/qa/checklist`
 - [docs/KICKOFF.md](docs/KICKOFF.md) แผนขึ้นโปรเจกต์และกติกาของ repo
 - [docs/DEPLOY-CHECKLIST.md](docs/DEPLOY-CHECKLIST.md) ขั้นตอนขึ้นเว็บครั้งแรกแบบทำตามทีละข้อ และ [docs/HOSTING.md](docs/HOSTING.md) รายละเอียดการ deploy บน Plesk
 - [docs/SELFHOST.md](docs/SELFHOST.md) คู่มือ deploy เครื่อง self-hosted (ชุดทดสอบด้วย Docker แยกจาก Plesk)

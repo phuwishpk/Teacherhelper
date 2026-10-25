@@ -42,6 +42,7 @@ final class GoogleSignIn
         private readonly GoogleSignInTickets $tickets,
         private readonly StudentAuthenticator $students,
         private readonly CredentialIssuer $issuer,
+        private readonly StudentRosterLink $rosterLink,
     ) {}
 
     /**
@@ -391,10 +392,8 @@ final class GoogleSignIn
 
     /**
      * §24.9.3 step 4: a student is linked from the Classroom roster only when
-     * a roster row has both the token's `sub` (Classroom userId) and its
-     * verified e-mail, every row with either belongs to that one student,
-     * and the student is active, unmerged and without another Google
-     * account. Anything else gets a link ticket for the PIN/QR confirmation.
+     * StudentRosterLink says `ok`. Anything else gets a link ticket for the
+     * PIN/QR confirmation.
      *
      * @return array{token: NewAccessToken, user: User}
      */
@@ -425,23 +424,8 @@ final class GoogleSignIn
 
     private function rosterStudent(VerifiedGoogleIdentity $google): ?User
     {
-        $bySub = DB::table('classroom_students')->where('google_user_id', $google->sub)->get(['student_id', 'google_email']);
-        if ($bySub->isEmpty()) {
-            return null;
-        }
-        $byEmail = DB::table('classroom_students')->whereRaw('LOWER(google_email) = ?', [$google->email])->pluck('student_id');
+        $check = $this->rosterLink->check($google->sub, $google->email);
 
-        $ids = $bySub->pluck('student_id')->merge($byEmail)->map(fn ($id) => (int) $id)->unique()->values();
-        $both = $bySub->contains(fn ($row) => mb_strtolower(trim((string) $row->google_email)) === $google->email);
-        if ($ids->count() !== 1 || ! $both) {
-            return null;
-        }
-
-        $student = User::query()->with('school')->find($ids->first());
-        if ($student === null || ! $student->isStudent() || ! $student->isActive() || $student->isMerged()) {
-            return null;
-        }
-
-        return UserGoogleIdentity::query()->where('user_id', $student->id)->exists() ? null : $student;
+        return $check['result'] === StudentRosterLink::OK ? $check['student'] : null;
     }
 }
