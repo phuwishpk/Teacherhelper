@@ -244,7 +244,10 @@ class _WebScanScreenState extends ConsumerState<WebScanScreen> {
   Widget build(BuildContext context) {
     // Read by every photo: kept loaded while the screen is open.
     ref.watch(assignmentsProvider);
-    final wide = context.windowSize != WindowSize.compact;
+    // Held either way: the preview follows the device, and in landscape
+    // the shutter and the list move beside it (DESIGN §25.6).
+    final orientation = MediaQuery.orientationOf(context);
+    final landscape = orientation == Orientation.landscape;
     final groups = groupWebScanShots(_shots);
     final ready = groups.where((g) => g.problem == null).length;
     final camera = _camera;
@@ -254,7 +257,7 @@ class _WebScanScreenState extends ConsumerState<WebScanScreen> {
         ? const Center(child: CircularProgressIndicator.adaptive())
         : Center(
             child: AspectRatio(
-              aspectRatio: camera.previewAspectRatio,
+              aspectRatio: previewAspectFor(camera, orientation),
               child: camera.buildPreview(),
             ),
           );
@@ -289,21 +292,25 @@ class _WebScanScreenState extends ConsumerState<WebScanScreen> {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('สแกนใบงานด้วยกล้อง')),
-        body: wide
+        body: landscape
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    flex: 3,
+                  Expanded(child: preview),
+                  const VerticalDivider(width: 1),
+                  SizedBox(
+                    width: (MediaQuery.sizeOf(context).width * 0.38).clamp(
+                      300,
+                      420,
+                    ),
                     child: Column(
                       children: [
-                        Expanded(child: preview),
                         controls,
+                        const Divider(height: 1),
+                        Expanded(child: batch),
                       ],
                     ),
                   ),
-                  const VerticalDivider(width: 1),
-                  SizedBox(width: 400, child: batch),
                 ],
               )
             : Column(
@@ -484,6 +491,7 @@ class _Batch extends StatelessWidget {
       );
     }
     return ListView(
+      key: const ValueKey('web_scan_batch'),
       padding: EdgeInsets.all(context.pageGutter),
       children: [
         for (final g in groups)
