@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Qa\Pages\ManualTestChecklist;
 use App\Filament\Qa\Pages\MyResults;
 use App\Filament\Qa\Pages\QaOverview;
 use App\Filament\Qa\Pages\SusSurvey;
@@ -9,6 +10,7 @@ use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\TestCaseDetail;
 use App\Filament\Qa\Pages\Testers;
 use App\Filament\Qa\Pages\TestPlan;
+use App\Http\Controllers\Qa\ManualChecklistFileController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -21,6 +23,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -42,6 +45,7 @@ class QaPanelProvider extends PanelProvider
             ->pages([
                 QaOverview::class,
                 TestPlan::class,
+                ManualTestChecklist::class,
                 TestCaseDetail::class,
                 MyResults::class,
                 SusSurvey::class,
@@ -59,6 +63,9 @@ class QaPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->authenticatedRoutes(function (): void {
+                Route::get('checklist/files/{file}', ManualChecklistFileController::class)->name('checklist.file');
+            })
             ->authMiddleware([
                 Authenticate::class,
             ]);
