@@ -30,7 +30,7 @@
 
     <x-filament::section>
         <x-slot name="heading">ไฟล์ทดสอบ (กดเพื่อดาวน์โหลด)</x-slot>
-        <x-slot name="description">ข้อมูลสมมติทั้งหมด การบ้านคณิตศาสตร์พื้นฐาน ม.4 ใช้ในข้อ 37, 40, 43, 50 และ 51</x-slot>
+        <x-slot name="description">ข้อมูลสมมติทั้งหมด การบ้านคณิตศาสตร์พื้นฐาน ม.4 ใช้ในข้อ 37, 40, 43, 50, 51 และส่วน Google Classroom (ข้อ 98–108, 119)</x-slot>
         <div class="qa-files">
             @foreach ($files as $f)
                 <a class="qa-file" href="{{ $f['url'] }}" download>
