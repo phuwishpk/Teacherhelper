@@ -88,6 +88,9 @@ final class GoogleErrors
         );
     }
 
+    /** shortText() of an expired grant; also the grade push's text for an account already marked so. */
+    public const INVALID_GRANT_TEXT = 'ต้องเชื่อมบัญชี Google ใหม่ แล้วกดส่งคะแนนอีกครั้ง';
+
     /**
      * A short Thai sentence for google_accounts / import rows (last_error is
      * shown to the teacher in the submissions list).
@@ -96,7 +99,7 @@ final class GoogleErrors
     {
         return match ($e->kind) {
             GoogleApiException::NOT_CONFIGURED => 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google Classroom',
-            GoogleApiException::INVALID_GRANT => 'ต้องเชื่อมบัญชี Google ใหม่ แล้วกดส่งคะแนนอีกครั้ง',
+            GoogleApiException::INVALID_GRANT => self::INVALID_GRANT_TEXT,
             GoogleApiException::SCOPE_MISSING => 'บัญชี Google ไม่ได้ให้สิทธิ์ครบ ต้องเชื่อมใหม่',
             GoogleApiException::PROJECT_PERMISSION_DENIED => 'งานนี้ไม่ได้สร้างจากแอป จึงส่งคะแนนกลับไม่ได้',
             GoogleApiException::PERMISSION_DENIED => 'Google ไม่อนุญาต (บัญชีอาจไม่ได้เป็นครูของคอร์ส)',

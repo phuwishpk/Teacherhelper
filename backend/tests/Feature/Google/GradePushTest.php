@@ -3,6 +3,7 @@
 namespace Tests\Feature\Google;
 
 use App\Domain\Google\ClassroomGradePusher;
+use App\Domain\Google\GoogleErrors;
 use App\Domain\Notifications\Notifier;
 use App\Events\AppealResolved;
 use App\Events\SubmissionPublished;
@@ -220,6 +221,20 @@ class GradePushTest extends TestCase
         $this->assertSame(ClassroomSubmissionImport::STATE_GRADE_FAILED, $import->state);
         $this->assertSame('งานนี้ไม่ได้สร้างจากแอป จึงส่งคะแนนกลับไม่ได้', $import->last_error);
         $this->asUser($this->teacher)->getJson("/api/v1/assignments/{$this->assignment->id}/google-submissions");
+    }
+
+    public function test_an_account_already_marked_expired_gets_the_same_text(): void
+    {
+        // The feedback post of the same publish may refresh the token first (listener order is not fixed).
+        $this->account->forceFill(['last_error' => GoogleAccount::ERROR_INVALID_GRANT])->save();
+        $submission = $this->reviewedSubmission(0);
+        $import = $this->importFor(0, 'sub-1');
+        $this->fakeGoogle([]);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/submissions/{$submission->id}/publish")->assertOk();
+
+        $this->assertSame(ClassroomSubmissionImport::STATE_GRADE_FAILED, $import->refresh()->state);
+        $this->assertSame(GoogleErrors::INVALID_GRANT_TEXT, $import->last_error);
     }
 
     public function test_an_expired_grant_marks_the_account_and_the_row(): void
