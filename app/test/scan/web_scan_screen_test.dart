@@ -109,13 +109,32 @@ Future<void> _pump(
   );
 }
 
+/// Scrolls the photo list from its top until [finder] is built (the list
+/// is short on a phone held in landscape).
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  final list = find.byKey(const ValueKey('web_scan_batch'));
+  await tester.drag(list, const Offset(0, 2000));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    finder,
+    100,
+    scrollable: find.descendant(of: list, matching: find.byType(Scrollable)),
+  );
+}
+
 Future<void> _shoot(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('web_scan_shutter')));
   await tester.pumpAndSettle();
 }
 
 void main() {
-  for (final size in const [Size(390, 844), Size(820, 1180), Size(1440, 900)]) {
+  for (final size in const [
+    Size(390, 844),
+    Size(844, 390),
+    Size(820, 1180),
+    Size(1180, 820),
+    Size(1440, 900),
+  ]) {
     testWidgets('photos are grouped by the QR and sent per student '
         '(${size.width.toInt()} px)', (tester) async {
       final handIn = FakeHandIn();
@@ -137,8 +156,8 @@ void main() {
 
       expect(find.text('ด.ช. กล้า'), findsOneWidget);
       expect(find.textContaining('หน้า 1, 2'), findsOneWidget);
-      expect(find.text('ใช้ QR ไม่ได้ 1 รูป'), findsOneWidget);
       expect(find.text('ส่งตรวจ 2 คน'), findsOneWidget);
+      await _scrollTo(tester, find.text('ใช้ QR ไม่ได้ 1 รูป'));
 
       await tester.tap(find.byKey(const ValueKey('web_scan_send')));
       await tester.pumpAndSettle();
@@ -147,12 +166,35 @@ void main() {
       // Page order, whatever order they were taken in.
       expect(handIn.uploaded.first.$3.map((f) => f.bytes!.single), [2, 1]);
       // The photo without a usable QR waits for "ส่งแบบเลือกนักเรียนเอง".
-      expect(find.text('ใช้ QR ไม่ได้ 1 รูป'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('ส่งแล้ว 2 คน'), 100);
+      await _scrollTo(tester, find.text('ใช้ QR ไม่ได้ 1 รูป'));
+      await _scrollTo(tester, find.text('ส่งแล้ว 2 คน'));
       expect(find.text('ส่งแล้ว 2 คน'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('the preview turns with the device', (tester) async {
+    double previewRatio() => tester
+        .widget<AspectRatio>(
+          find.ancestor(
+            of: find.byType(ColoredBox),
+            matching: find.byType(AspectRatio),
+          ),
+        )
+        .aspectRatio;
+
+    await _pump(tester, handIn: FakeHandIn(), qr: _Qr(const []));
+    expect(previewRatio(), closeTo(3 / 4, 1e-9));
+
+    tester.view.physicalSize = const Size(844, 390);
+    await tester.pumpAndSettle();
+    expect(previewRatio(), closeTo(4 / 3, 1e-9));
+    // Landscape: the shutter sits beside the preview, not under it.
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('web_scan_shutter'))).dx,
+      greaterThan(844 / 2),
+    );
+  });
 
   testWidgets('a photo without a QR goes to อัปโหลดรูปเพื่อตรวจ', (
     tester,

@@ -197,7 +197,12 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
                 ? const Center(child: CircularProgressIndicator.adaptive())
                 : Center(
                     child: AspectRatio(
-                      aspectRatio: camera.previewAspectRatio,
+                      aspectRatio: kIsWeb
+                          ? previewAspectFor(
+                              camera,
+                              MediaQuery.orientationOf(context),
+                            )
+                          : camera.previewAspectRatio,
                       child: camera.buildPreview(),
                     ),
                   ),

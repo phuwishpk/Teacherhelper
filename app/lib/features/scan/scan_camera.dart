@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -82,7 +83,10 @@ class PluginScanCamera implements ScanCamera {
   Widget buildPreview() {
     final c = _controller;
     if (c == null || !c.value.isInitialized) return const SizedBox.shrink();
-    return CameraPreview(c);
+    // In a browser the video fills the box the screen gives it (object-fit
+    // cover); CameraPreview would add an aspect ratio of its own that does
+    // not follow the device's rotation (DESIGN §25.6).
+    return kIsWeb ? c.buildPreview() : CameraPreview(c);
   }
 
   @override
@@ -124,6 +128,17 @@ class PluginScanCamera implements ScanCamera {
     }
     return ScanCameraException('เปิดกล้องไม่ได้ (${e.description ?? e.code})');
   }
+}
+
+/// [camera]'s preview ratio for a screen held in [orientation]. A browser
+/// rotates the stream with the device but may report its size either way
+/// round, so the web screens take the long side and the screen's
+/// orientation (DESIGN §25.6).
+double previewAspectFor(ScanCamera camera, Orientation orientation) {
+  var ratio = camera.previewAspectRatio;
+  if (!ratio.isFinite || ratio <= 0) ratio = 3 / 4;
+  final long = ratio >= 1 ? ratio : 1 / ratio;
+  return orientation == Orientation.portrait ? 1 / long : long;
 }
 
 /// A fresh camera per scan screen; tests override it with a fake.
