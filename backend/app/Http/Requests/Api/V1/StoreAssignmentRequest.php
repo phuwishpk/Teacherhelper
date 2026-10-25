@@ -1,0 +1,101 @@
+<?php
+
+namespace App\Http\Requests\Api\V1;
+
+use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Classrooms\CoTeachers;
+use App\Domain\Exams\ExamVersions;
+use App\Models\Assignment;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+/**
+ * POST /api/v1/assignments — {classroom_id, course_id, lesson_plan_id?,
+ * title, strictness?, due_at?, mode?: worksheet|freeform, accept_late?,
+ * score_only?, kind?: homework|exam, grading_method?: app|manual,
+ * version_count?, duration_minutes?, show_key_to_students?,
+ * manual_full_marks?, gradebook_category_id?, excluded_from_grade?} (DESIGN
+ * §8.3, §19.5, §20.1, §22.15, §23.3). The exam fields
+ * are refused on homework; an exam needs due_at (the exam date) and a
+ * manual exam manual_full_marks. The classroom must be one the
+ * teacher teaches (homeroom or subject, §24.8); the course must be one of
+ * the teacher's own courses bound to it and the lesson plan be
+ * one of the course (checked in the controller). The subject comes from
+ * the course (a subject_id sent by an older app is ignored).
+ */
+class StoreAssignmentRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true; // AssignmentPolicy::create runs in the controller
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        $teacher = $this->user();
+
+        return [
+            'classroom_id' => [
+                'required',
+                'integer',
+                // A classroom the teacher is the homeroom, a subject or a co-teacher of (DESIGN §24.8, §29.13.4).
+                Rule::exists('classrooms', 'id')
+                    ->where(fn ($q) => $teacher === null ? $q->whereRaw('1 = 0') : $q
+                        ->where('teacher_id', $teacher->id)
+                        ->orWhereIn('id', ClassroomAccess::subjectClassroomIds($teacher))
+                        ->orWhereIn('id', CoTeachers::coTeacherClassroomIds($teacher))),
+            ],
+            'course_id' => ['required', 'integer', 'min:1'],
+            'lesson_plan_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'title' => ['required', 'string', 'max:255'],
+            'strictness' => ['sometimes', 'nullable', Rule::in(Assignment::STRICTNESS)],
+            // The exam date decides when a missing score counts as 0 (DESIGN §22.2, §23.4).
+            'due_at' => ['required_if:kind,exam', 'nullable', 'date'],
+            'mode' => ['sometimes', 'nullable', Rule::in(Assignment::MODES)],
+            'accept_late' => ['sometimes', 'nullable', 'boolean'],
+            'score_only' => ['sometimes', 'nullable', 'boolean'],
+            // Exams (DESIGN §22.1, §22.15): kind is set at creation only.
+            'kind' => ['sometimes', 'nullable', Rule::in(Assignment::KINDS)],
+            'grading_method' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', Rule::in(Assignment::GRADING_METHODS)],
+            'version_count' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.ExamVersions::maxVersions()],
+            'duration_minutes' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'integer', 'min:1', 'max:'.AssignmentMessages::MAX_DURATION_MINUTES],
+            'show_key_to_students' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', 'boolean'],
+            // Answer sheets with a student-ID grid (DESIGN §22.19).
+            'sheet_identity' => ['sometimes', 'nullable', 'prohibited_unless:kind,exam', Rule::in(Assignment::SHEET_IDENTITIES)],
+            'student_code_digits' => ['nullable', 'prohibited_unless:sheet_identity,code', 'required_if:sheet_identity,code', 'integer', 'min:'.Assignment::MIN_CODE_DIGITS, 'max:'.Assignment::MAX_CODE_DIGITS],
+            'manual_full_marks' => ['nullable', 'prohibited_unless:kind,exam', 'required_if:grading_method,manual', 'numeric', 'gt:0', 'max:'.AssignmentMessages::MAX_MANUAL_FULL_MARKS, 'decimal:0,2'],
+            // Gradebook (DESIGN §23.3): checked against the course in AssignmentCategories.
+            'gradebook_category_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'excluded_from_grade' => ['sometimes', 'nullable', 'boolean'],
+            // Post-like parts (DESIGN §30.12): a topic (unit of the course or free text), the text and the files.
+            'unit_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'topic' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'instructions' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'send_to_google' => ['sometimes', 'nullable', 'boolean'],
+            'attachments' => ['sometimes', 'array', 'max:'.(int) config('eduvision.class_posts.max_attachments')],
+            'attachments.*.file_id' => ['sometimes', 'integer'],
+            'attachments.*.url' => ['sometimes', 'string', 'max:2000'],
+            'attachments.*.title' => ['sometimes', 'nullable', 'string', 'max:200'],
+            // Homework for chosen students (DESIGN §30.13).
+            'audience' => ['sometimes', 'nullable', Rule::in([Assignment::AUDIENCE_ALL, Assignment::AUDIENCE_STUDENTS])],
+            'student_ids' => ['sometimes', 'array', 'max:500'],
+            'student_ids.*' => ['integer', 'distinct'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return AssignmentMessages::MESSAGES + [
+            'classroom_id.required' => 'กรุณาเลือกห้องเรียน',
+            'classroom_id.exists' => 'ไม่พบห้องเรียนนี้ในห้องที่คุณสอน',
+            'course_id.required' => 'กรุณาเลือกรายวิชา',
+            'course_id.integer' => 'รหัสรายวิชาไม่ถูกต้อง',
+        ];
+    }
+}
