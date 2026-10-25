@@ -81,6 +81,7 @@ import '../../features/review/review_detail_screen.dart';
 import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
+import '../../features/scan/web_scan_screen.dart';
 import '../../features/help/help_content.dart';
 import '../../features/notices/notices_screen.dart';
 import '../../features/help/help_screen.dart';
@@ -1170,7 +1171,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.scan,
-        builder: (context, state) => const ScanScreen(),
+        // A browser has no native pipeline: the camera scan of DESIGN §25.6.
+        builder: (context, state) =>
+            kIsWeb ? const WebScanScreen() : const ScanScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherUpload,

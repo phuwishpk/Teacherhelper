@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -86,6 +87,9 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
   String? _error;
   final _photos = <String>[];
 
+  /// The photos' bytes in a browser, where a path is only a `blob:` URL.
+  final _bytes = <String, Uint8List>{};
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +121,9 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
     setState(() => _busy = true);
     try {
       final path = await camera.takePicture();
+      if (kIsWeb) {
+        _bytes[path] = await ref.read(cameraPhotoBytesProvider)(path);
+      }
       if (mounted) setState(() => _photos.add(path));
     } on ScanCameraException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -138,7 +145,8 @@ class _KeyPhotoScreenState extends ConsumerState<KeyPhotoScreen> {
       for (var i = 0; i < _photos.length; i++)
         PickedDocument(
           name: '${widget.namePrefix}-${i + 1}.jpg',
-          path: _photos[i],
+          path: kIsWeb ? null : _photos[i],
+          bytes: _bytes[_photos[i]],
         ),
     ]);
   }

@@ -88,6 +88,8 @@ Future<void> _pumpHandIn(
         picker ?? FakeDocumentPicker(),
       ),
       keyPhotoCameraFactoryProvider.overrideWithValue(_Camera.new),
+      // A browser reads the photo back from its blob: URL (DESIGN §25.6).
+      cameraPhotoBytesProvider.overrideWithValue((_) async => Uint8List(1)),
     ],
   );
 }

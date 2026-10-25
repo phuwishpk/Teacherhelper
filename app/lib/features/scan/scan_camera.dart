@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -136,3 +138,20 @@ final keyPhotoCameraFactoryProvider = Provider<ScanCamera Function()>(
   (ref) =>
       () => PluginScanCamera(preset: ResolutionPreset.veryHigh),
 );
+
+/// The camera of the web scan (DESIGN §25.6): 1080p, as for a key photo.
+/// A browser hands the page to the whole-page path, which needs no more,
+/// and the QR is read in Dart from this same photo.
+final webScanCameraFactoryProvider = Provider<ScanCamera Function()>(
+  (ref) =>
+      () => PluginScanCamera(preset: ResolutionPreset.veryHigh),
+);
+
+/// The bytes of a photo [ScanCamera.takePicture] returned. In a browser
+/// the path is a `blob:` URL (no file system), read back through
+/// `XFile`; tests override it.
+final cameraPhotoBytesProvider =
+    Provider<Future<Uint8List> Function(String path)>(
+      (ref) =>
+          (path) => XFile(path).readAsBytes(),
+    );

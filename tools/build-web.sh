@@ -29,7 +29,8 @@ esac
 
 # The page talks to its own server ('self') in production. A local build
 # names the API origin, because the test page is served from another port.
-CONNECT_SRC="'self' https://fonts.gstatic.com"
+# blob:: a camera photo comes back as a blob: URL and is read with XHR (DESIGN §25.6).
+CONNECT_SRC="'self' blob: https://fonts.gstatic.com"
 case "$API_BASE_URL" in http://*) CONNECT_SRC="$CONNECT_SRC $API_BASE_URL" ;; esac
 
 # Firebase on the web (DESIGN §38.8) only when the build carries its config:
@@ -74,14 +75,15 @@ flutter build web --release \
 # middleware never sees them: the same protections go into an .htaccess.
 # - script-src 'wasm-unsafe-eval': CanvasKit is WebAssembly;
 # - fonts.gstatic.com: Flutter fetches Roboto and Noto Sans Thai from there;
-# - no-cache on the entry files, so a new upload shows up on the next reload.
+# - no-cache on the entry files, so a new upload shows up on the next reload;
+# - camera=(self): the camera scan and hand-in photos (DESIGN §25.6).
 cat > "$SITE/.htaccess" <<EOF
 # Written by tools/build-web.sh; do not edit on the server.
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "no-referrer"
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
     Header always set Content-Security-Policy "default-src 'self'; script-src $SCRIPT_SRC; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src $CONNECT_SRC; frame-src $FRAME_SRC; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
     <FilesMatch "^(index\.html|flutter_bootstrap\.js|flutter_service_worker\.js|main\.dart\.js|version\.json|manifest\.json)$">
