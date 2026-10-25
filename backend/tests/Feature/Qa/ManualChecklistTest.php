@@ -44,6 +44,14 @@ class ManualChecklistTest extends TestCase
         $this->assertSame(count(array_unique($m[1])), count(ManualChecklist::files()));
     }
 
+    public function test_the_steps_are_numbered_one_after_another(): void
+    {
+        preg_match_all('/^- \[ \] \*\*(\d+)\.\*\*/m', (string) file_get_contents(ManualChecklist::readme()), $m);
+
+        $this->assertSame(range(1, count($m[1])), array_map('intval', $m[1]));
+        $this->assertGreaterThanOrEqual(128, count($m[1]));
+    }
+
     public function test_the_page_shows_tickable_steps_and_download_links(): void
     {
         $this->get('/qa/checklist')->assertRedirect('/qa/login');

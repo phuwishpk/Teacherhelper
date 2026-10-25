@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Domain\Auth\Google\StudentRosterLink;
+use App\Domain\Google\GoogleEventLabels;
 use App\Domain\Google\SchoolStudentMatcher;
 use App\Models\School;
 use App\Models\User;
@@ -220,7 +221,7 @@ class GoogleStudentLinkFlow extends Page
             'name' => $user?->name,
             'role' => $user?->role,
             'active' => $user !== null && $user->isActive() && ! $user->isMerged(),
-            'linked_via' => $identity->linked_via,
+            'linked_via' => GoogleEventLabels::VIA[$identity->linked_via] ?? $identity->linked_via,
             'email' => $identity->email,
         ];
     }
