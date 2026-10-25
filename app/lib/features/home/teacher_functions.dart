@@ -88,7 +88,9 @@ List<MenuGroup> teacherMenu(
         'สแกนใบงาน',
         Icons.document_scanner_outlined,
         AppRoutes.scan,
-        where: 'ใช้กล้องของแอป Android',
+        where: kIsWeb
+            ? 'ใช้กล้องของมือถือหรือแท็บเล็ต อ่าน QR แล้วส่งตรวจทั้งหน้า'
+            : 'ใช้กล้องของแอป Android',
         keywords: ['scan', 'กล้อง', 'ถ่ายรูป', 'ใบงาน'],
       ),
       page(

@@ -10,6 +10,7 @@ import 'package:eduvision/features/hand_in/hand_in_models.dart';
 import 'package:eduvision/features/hand_in/hand_in_repository.dart';
 import 'package:eduvision/features/hand_in/teacher_upload_screen.dart';
 import 'package:eduvision/features/review/review_repository.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -192,8 +193,12 @@ void main() {
 
     final send = find.byKey(const ValueKey('upload_send'));
     expect(tester.widget<ButtonStyleButton>(send).onPressed, isNull);
-    // file_picker only on this page: no camera button.
-    expect(find.byKey(const ValueKey('hand_in_camera')), findsNothing);
+    // The apps scan with "สแกนใบงาน"; a browser also gets the camera here
+    // (DESIGN §25.6).
+    expect(
+      find.byKey(const ValueKey('hand_in_camera')),
+      kIsWeb ? findsOneWidget : findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('hand_in_pick')));
     await tester.pumpAndSettle();
     await tester.tap(send);

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,8 +22,8 @@ class HandInFilesPanel extends ConsumerWidget {
   final List<PickedDocument> files;
   final ValueChanged<List<PickedDocument>> onChanged;
 
-  /// "ถ่ายรูป" (the in-app camera). The Chrome preview has no camera, so
-  /// the button is hidden on the web.
+  /// "ถ่ายรูป" (the in-app camera; in a browser the device camera, DESIGN
+  /// §25.6, with "เลือกรูปจากเครื่องแทน" when it cannot open).
   final bool allowCamera;
   final bool enabled;
   final String pickerTitle;
@@ -77,7 +76,7 @@ class HandInFilesPanel extends ConsumerWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            if (allowCamera && !kIsWeb)
+            if (allowCamera)
               FilledButton.tonalIcon(
                 key: const ValueKey('hand_in_camera'),
                 onPressed: enabled && !full ? () => _shoot(context) : null,
