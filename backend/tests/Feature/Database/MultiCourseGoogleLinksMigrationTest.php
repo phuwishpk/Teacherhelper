@@ -38,8 +38,8 @@ class MultiCourseGoogleLinksMigrationTest extends TestCase
         $this->makeCourse($subject, [$one], ['code' => 'ว15101']);
 
         // Step 8: the teacher_google_auto_approve (#71), exam code sheets (#74), subject owner (§29.4), attendance (§29.5),
-        // student usernames (§29.10), teacher school name (§29.11), class posts (§30), their Google copies (§30.11) and assignment posts (§30.12) recipients (§30.13) the timetable (§29.12) the admin level (§29.13.1) join_open (§29.13.3), co-teachers (§29.13.4), audit logs (§29.14), account deletion (§31), google_events (§32), teacher_indicators (§34), the skill trash (§34.1), AI error codes (§36), the assistant (§37) and the Test Lab (§39, two migrations) run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 27])->assertSuccessful();
+        // student usernames (§29.10), teacher school name (§29.11), class posts (§30), their Google copies (§30.11) and assignment posts (§30.12) recipients (§30.13) the timetable (§29.12) the admin level (§29.13.1) join_open (§29.13.3), co-teachers (§29.13.4), audit logs (§29.14), account deletion (§31), google_events (§32), teacher_indicators (§34), the skill trash (§34.1), AI error codes (§36), the assistant (§37) and the Test Lab (§39, three migrations) run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 28])->assertSuccessful();
         $this->assertFalse(Schema::hasColumn('classroom_google_links', 'app_course_id'));
         foreach ([[$one, 'c-one'], [$two, 'c-two'], [$none, 'c-none']] as [$room, $course]) {
             DB::table('classroom_google_links')->insert(['classroom_id' => $room->id, 'course_id' => $course, 'course_name' => $course, 'owner_user_id' => $teacher->id, 'linked_at' => now(), 'roster_synced_at' => '2026-09-30 01:00:00']);
@@ -68,8 +68,8 @@ class MultiCourseGoogleLinksMigrationTest extends TestCase
         }
 
         // Step 8: the teacher_google_auto_approve (#71), exam code sheets (#74), subject owner (§29.4), attendance (§29.5),
-        // student usernames (§29.10), teacher school name (§29.11), class posts (§30), their Google copies (§30.11) and assignment posts (§30.12) recipients (§30.13) the timetable (§29.12) the admin level (§29.13.1) join_open (§29.13.3), co-teachers (§29.13.4), audit logs (§29.14), account deletion (§31), google_events (§32), teacher_indicators (§34), the skill trash (§34.1), AI error codes (§36), the assistant (§37) and the Test Lab (§39, two migrations) run after this one.
-        $this->artisan('migrate:rollback', ['--step' => 27])->assertSuccessful();
+        // student usernames (§29.10), teacher school name (§29.11), class posts (§30), their Google copies (§30.11) and assignment posts (§30.12) recipients (§30.13) the timetable (§29.12) the admin level (§29.13.1) join_open (§29.13.3), co-teachers (§29.13.4), audit logs (§29.14), account deletion (§31), google_events (§32), teacher_indicators (§34), the skill trash (§34.1), AI error codes (§36), the assistant (§37) and the Test Lab (§39, three migrations) run after this one.
+        $this->artisan('migrate:rollback', ['--step' => 28])->assertSuccessful();
         $this->assertSame(
             [[$one->id, 'c-one'], [$two->id, 'c-two'], [$none->id, 'c-none']],
             DB::table('classroom_google_links')->orderBy('classroom_id')->get()->map(fn ($r) => [(int) $r->classroom_id, $r->course_id])->all(),
