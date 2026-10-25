@@ -107,7 +107,11 @@ final class ClassroomGradePusher
         }
         $account = GoogleAccount::query()->find($posted->posted_by);
         if ($account === null || $account->needsReconnect()) {
-            return $this->fail($import, $assignment->id, $studentId, 'บัญชี Google ของครูที่โพสต์งานนี้ไม่ได้เชื่อมอยู่ เชื่อมใหม่แล้วกดส่งคะแนนอีกครั้ง');
+            // Another listener of the same publish (the feedback post) may have
+            // hit the expired grant first: same cause, same text either way.
+            return $this->fail($import, $assignment->id, $studentId, $account?->last_error === GoogleAccount::ERROR_INVALID_GRANT
+                ? GoogleErrors::INVALID_GRANT_TEXT
+                : 'บัญชี Google ของครูที่โพสต์งานนี้ไม่ได้เชื่อมอยู่ เชื่อมใหม่แล้วกดส่งคะแนนอีกครั้ง');
         }
 
         $api = GoogleApi::forAccount($account, $this->tokens);
