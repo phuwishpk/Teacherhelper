@@ -2072,6 +2072,683 @@ class CachedExamKitsCompanion extends UpdateCompanion<CachedExamKit> {
   }
 }
 
+class $TeacherNotesTable extends TeacherNotes
+    with TableInfo<$TeacherNotesTable, TeacherNoteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TeacherNotesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<int> userId = GeneratedColumn<int>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _classroomIdMeta = const VerificationMeta(
+    'classroomId',
+  );
+  @override
+  late final GeneratedColumn<int> classroomId = GeneratedColumn<int>(
+    'classroom_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _classroomNameMeta = const VerificationMeta(
+    'classroomName',
+  );
+  @override
+  late final GeneratedColumn<String> classroomName = GeneratedColumn<String>(
+    'classroom_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _photoMeta = const VerificationMeta('photo');
+  @override
+  late final GeneratedColumn<Uint8List> photo = GeneratedColumn<Uint8List>(
+    'photo',
+    aliasedName,
+    true,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _thumbMeta = const VerificationMeta('thumb');
+  @override
+  late final GeneratedColumn<Uint8List> thumb = GeneratedColumn<Uint8List>(
+    'thumb',
+    aliasedName,
+    true,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
+    'syncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+    'synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<bool> deleted = GeneratedColumn<bool>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    classroomId,
+    classroomName,
+    body,
+    photo,
+    thumb,
+    createdAt,
+    updatedAt,
+    syncedAt,
+    deleted,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'teacher_notes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TeacherNoteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('classroom_id')) {
+      context.handle(
+        _classroomIdMeta,
+        classroomId.isAcceptableOrUnknown(
+          data['classroom_id']!,
+          _classroomIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('classroom_name')) {
+      context.handle(
+        _classroomNameMeta,
+        classroomName.isAcceptableOrUnknown(
+          data['classroom_name']!,
+          _classroomNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('photo')) {
+      context.handle(
+        _photoMeta,
+        photo.isAcceptableOrUnknown(data['photo']!, _photoMeta),
+      );
+    }
+    if (data.containsKey('thumb')) {
+      context.handle(
+        _thumbMeta,
+        thumb.isAcceptableOrUnknown(data['thumb']!, _thumbMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(
+        _syncedAtMeta,
+        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TeacherNoteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TeacherNoteRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}user_id'],
+      )!,
+      classroomId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}classroom_id'],
+      ),
+      classroomName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}classroom_name'],
+      ),
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      photo: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}photo'],
+      ),
+      thumb: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}thumb'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      syncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}synced_at'],
+      ),
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}deleted'],
+      )!,
+    );
+  }
+
+  @override
+  $TeacherNotesTable createAlias(String alias) {
+    return $TeacherNotesTable(attachedDatabase, alias);
+  }
+}
+
+class TeacherNoteRow extends DataClass implements Insertable<TeacherNoteRow> {
+  final String id;
+
+  /// The Krucheck account that wrote it: a shared phone shows each teacher
+  /// only their own.
+  final int userId;
+  final int? classroomId;
+  final String? classroomName;
+  final String body;
+
+  /// The photo as taken (JPEG), only on this device.
+  final Uint8List? photo;
+
+  /// What goes to Firestore (PNG, at most [kNoteThumbMaxSide] px).
+  final Uint8List? thumb;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// When Firestore last took this version; null = not yet.
+  final DateTime? syncedAt;
+
+  /// Deleted here, still to be deleted in Firestore.
+  final bool deleted;
+  const TeacherNoteRow({
+    required this.id,
+    required this.userId,
+    this.classroomId,
+    this.classroomName,
+    required this.body,
+    this.photo,
+    this.thumb,
+    required this.createdAt,
+    required this.updatedAt,
+    this.syncedAt,
+    required this.deleted,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<int>(userId);
+    if (!nullToAbsent || classroomId != null) {
+      map['classroom_id'] = Variable<int>(classroomId);
+    }
+    if (!nullToAbsent || classroomName != null) {
+      map['classroom_name'] = Variable<String>(classroomName);
+    }
+    map['body'] = Variable<String>(body);
+    if (!nullToAbsent || photo != null) {
+      map['photo'] = Variable<Uint8List>(photo);
+    }
+    if (!nullToAbsent || thumb != null) {
+      map['thumb'] = Variable<Uint8List>(thumb);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || syncedAt != null) {
+      map['synced_at'] = Variable<DateTime>(syncedAt);
+    }
+    map['deleted'] = Variable<bool>(deleted);
+    return map;
+  }
+
+  TeacherNotesCompanion toCompanion(bool nullToAbsent) {
+    return TeacherNotesCompanion(
+      id: Value(id),
+      userId: Value(userId),
+      classroomId: classroomId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(classroomId),
+      classroomName: classroomName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(classroomName),
+      body: Value(body),
+      photo: photo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(photo),
+      thumb: thumb == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumb),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      syncedAt: syncedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedAt),
+      deleted: Value(deleted),
+    );
+  }
+
+  factory TeacherNoteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TeacherNoteRow(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<int>(json['userId']),
+      classroomId: serializer.fromJson<int?>(json['classroomId']),
+      classroomName: serializer.fromJson<String?>(json['classroomName']),
+      body: serializer.fromJson<String>(json['body']),
+      photo: serializer.fromJson<Uint8List?>(json['photo']),
+      thumb: serializer.fromJson<Uint8List?>(json['thumb']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
+      deleted: serializer.fromJson<bool>(json['deleted']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<int>(userId),
+      'classroomId': serializer.toJson<int?>(classroomId),
+      'classroomName': serializer.toJson<String?>(classroomName),
+      'body': serializer.toJson<String>(body),
+      'photo': serializer.toJson<Uint8List?>(photo),
+      'thumb': serializer.toJson<Uint8List?>(thumb),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'syncedAt': serializer.toJson<DateTime?>(syncedAt),
+      'deleted': serializer.toJson<bool>(deleted),
+    };
+  }
+
+  TeacherNoteRow copyWith({
+    String? id,
+    int? userId,
+    Value<int?> classroomId = const Value.absent(),
+    Value<String?> classroomName = const Value.absent(),
+    String? body,
+    Value<Uint8List?> photo = const Value.absent(),
+    Value<Uint8List?> thumb = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> syncedAt = const Value.absent(),
+    bool? deleted,
+  }) => TeacherNoteRow(
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    classroomId: classroomId.present ? classroomId.value : this.classroomId,
+    classroomName: classroomName.present
+        ? classroomName.value
+        : this.classroomName,
+    body: body ?? this.body,
+    photo: photo.present ? photo.value : this.photo,
+    thumb: thumb.present ? thumb.value : this.thumb,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
+    deleted: deleted ?? this.deleted,
+  );
+  TeacherNoteRow copyWithCompanion(TeacherNotesCompanion data) {
+    return TeacherNoteRow(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      classroomId: data.classroomId.present
+          ? data.classroomId.value
+          : this.classroomId,
+      classroomName: data.classroomName.present
+          ? data.classroomName.value
+          : this.classroomName,
+      body: data.body.present ? data.body.value : this.body,
+      photo: data.photo.present ? data.photo.value : this.photo,
+      thumb: data.thumb.present ? data.thumb.value : this.thumb,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TeacherNoteRow(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('classroomId: $classroomId, ')
+          ..write('classroomName: $classroomName, ')
+          ..write('body: $body, ')
+          ..write('photo: $photo, ')
+          ..write('thumb: $thumb, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('deleted: $deleted')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    classroomId,
+    classroomName,
+    body,
+    $driftBlobEquality.hash(photo),
+    $driftBlobEquality.hash(thumb),
+    createdAt,
+    updatedAt,
+    syncedAt,
+    deleted,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TeacherNoteRow &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.classroomId == this.classroomId &&
+          other.classroomName == this.classroomName &&
+          other.body == this.body &&
+          $driftBlobEquality.equals(other.photo, this.photo) &&
+          $driftBlobEquality.equals(other.thumb, this.thumb) &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.syncedAt == this.syncedAt &&
+          other.deleted == this.deleted);
+}
+
+class TeacherNotesCompanion extends UpdateCompanion<TeacherNoteRow> {
+  final Value<String> id;
+  final Value<int> userId;
+  final Value<int?> classroomId;
+  final Value<String?> classroomName;
+  final Value<String> body;
+  final Value<Uint8List?> photo;
+  final Value<Uint8List?> thumb;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> syncedAt;
+  final Value<bool> deleted;
+  final Value<int> rowid;
+  const TeacherNotesCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.classroomId = const Value.absent(),
+    this.classroomName = const Value.absent(),
+    this.body = const Value.absent(),
+    this.photo = const Value.absent(),
+    this.thumb = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TeacherNotesCompanion.insert({
+    required String id,
+    required int userId,
+    this.classroomId = const Value.absent(),
+    this.classroomName = const Value.absent(),
+    required String body,
+    this.photo = const Value.absent(),
+    this.thumb = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.syncedAt = const Value.absent(),
+    this.deleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       userId = Value(userId),
+       body = Value(body),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<TeacherNoteRow> custom({
+    Expression<String>? id,
+    Expression<int>? userId,
+    Expression<int>? classroomId,
+    Expression<String>? classroomName,
+    Expression<String>? body,
+    Expression<Uint8List>? photo,
+    Expression<Uint8List>? thumb,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? syncedAt,
+    Expression<bool>? deleted,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (classroomId != null) 'classroom_id': classroomId,
+      if (classroomName != null) 'classroom_name': classroomName,
+      if (body != null) 'body': body,
+      if (photo != null) 'photo': photo,
+      if (thumb != null) 'thumb': thumb,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (syncedAt != null) 'synced_at': syncedAt,
+      if (deleted != null) 'deleted': deleted,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TeacherNotesCompanion copyWith({
+    Value<String>? id,
+    Value<int>? userId,
+    Value<int?>? classroomId,
+    Value<String?>? classroomName,
+    Value<String>? body,
+    Value<Uint8List?>? photo,
+    Value<Uint8List?>? thumb,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? syncedAt,
+    Value<bool>? deleted,
+    Value<int>? rowid,
+  }) {
+    return TeacherNotesCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      classroomId: classroomId ?? this.classroomId,
+      classroomName: classroomName ?? this.classroomName,
+      body: body ?? this.body,
+      photo: photo ?? this.photo,
+      thumb: thumb ?? this.thumb,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      syncedAt: syncedAt ?? this.syncedAt,
+      deleted: deleted ?? this.deleted,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<int>(userId.value);
+    }
+    if (classroomId.present) {
+      map['classroom_id'] = Variable<int>(classroomId.value);
+    }
+    if (classroomName.present) {
+      map['classroom_name'] = Variable<String>(classroomName.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (photo.present) {
+      map['photo'] = Variable<Uint8List>(photo.value);
+    }
+    if (thumb.present) {
+      map['thumb'] = Variable<Uint8List>(thumb.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    if (deleted.present) {
+      map['deleted'] = Variable<bool>(deleted.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TeacherNotesCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('classroomId: $classroomId, ')
+          ..write('classroomName: $classroomName, ')
+          ..write('body: $body, ')
+          ..write('photo: $photo, ')
+          ..write('thumb: $thumb, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('deleted: $deleted, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2080,6 +2757,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ScanQueueTable scanQueue = $ScanQueueTable(this);
   late final $ModelCacheTable modelCache = $ModelCacheTable(this);
   late final $CachedExamKitsTable cachedExamKits = $CachedExamKitsTable(this);
+  late final $TeacherNotesTable teacherNotes = $TeacherNotesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2090,6 +2768,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     scanQueue,
     modelCache,
     cachedExamKits,
+    teacherNotes,
   ];
 }
 
@@ -3228,6 +3907,333 @@ typedef $$CachedExamKitsTableProcessedTableManager =
       CachedExamKit,
       PrefetchHooks Function()
     >;
+typedef $$TeacherNotesTableCreateCompanionBuilder =
+    TeacherNotesCompanion Function({
+      required String id,
+      required int userId,
+      Value<int?> classroomId,
+      Value<String?> classroomName,
+      required String body,
+      Value<Uint8List?> photo,
+      Value<Uint8List?> thumb,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> syncedAt,
+      Value<bool> deleted,
+      Value<int> rowid,
+    });
+typedef $$TeacherNotesTableUpdateCompanionBuilder =
+    TeacherNotesCompanion Function({
+      Value<String> id,
+      Value<int> userId,
+      Value<int?> classroomId,
+      Value<String?> classroomName,
+      Value<String> body,
+      Value<Uint8List?> photo,
+      Value<Uint8List?> thumb,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> syncedAt,
+      Value<bool> deleted,
+      Value<int> rowid,
+    });
+
+class $$TeacherNotesTableFilterComposer
+    extends Composer<_$AppDatabase, $TeacherNotesTable> {
+  $$TeacherNotesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get classroomId => $composableBuilder(
+    column: $table.classroomId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get classroomName => $composableBuilder(
+    column: $table.classroomName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get photo => $composableBuilder(
+    column: $table.photo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get thumb => $composableBuilder(
+    column: $table.thumb,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TeacherNotesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TeacherNotesTable> {
+  $$TeacherNotesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get classroomId => $composableBuilder(
+    column: $table.classroomId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get classroomName => $composableBuilder(
+    column: $table.classroomName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get photo => $composableBuilder(
+    column: $table.photo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get thumb => $composableBuilder(
+    column: $table.thumb,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TeacherNotesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TeacherNotesTable> {
+  $$TeacherNotesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<int> get classroomId => $composableBuilder(
+    column: $table.classroomId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get classroomName => $composableBuilder(
+    column: $table.classroomName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get photo =>
+      $composableBuilder(column: $table.photo, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get thumb =>
+      $composableBuilder(column: $table.thumb, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
+}
+
+class $$TeacherNotesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TeacherNotesTable,
+          TeacherNoteRow,
+          $$TeacherNotesTableFilterComposer,
+          $$TeacherNotesTableOrderingComposer,
+          $$TeacherNotesTableAnnotationComposer,
+          $$TeacherNotesTableCreateCompanionBuilder,
+          $$TeacherNotesTableUpdateCompanionBuilder,
+          (
+            TeacherNoteRow,
+            BaseReferences<_$AppDatabase, $TeacherNotesTable, TeacherNoteRow>,
+          ),
+          TeacherNoteRow,
+          PrefetchHooks Function()
+        > {
+  $$TeacherNotesTableTableManager(_$AppDatabase db, $TeacherNotesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TeacherNotesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TeacherNotesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TeacherNotesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> userId = const Value.absent(),
+                Value<int?> classroomId = const Value.absent(),
+                Value<String?> classroomName = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<Uint8List?> photo = const Value.absent(),
+                Value<Uint8List?> thumb = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> syncedAt = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TeacherNotesCompanion(
+                id: id,
+                userId: userId,
+                classroomId: classroomId,
+                classroomName: classroomName,
+                body: body,
+                photo: photo,
+                thumb: thumb,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                syncedAt: syncedAt,
+                deleted: deleted,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int userId,
+                Value<int?> classroomId = const Value.absent(),
+                Value<String?> classroomName = const Value.absent(),
+                required String body,
+                Value<Uint8List?> photo = const Value.absent(),
+                Value<Uint8List?> thumb = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> syncedAt = const Value.absent(),
+                Value<bool> deleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TeacherNotesCompanion.insert(
+                id: id,
+                userId: userId,
+                classroomId: classroomId,
+                classroomName: classroomName,
+                body: body,
+                photo: photo,
+                thumb: thumb,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                syncedAt: syncedAt,
+                deleted: deleted,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$TeacherNotesTable, TeacherNoteRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $TeacherNotesTable,
+                    TeacherNoteRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TeacherNotesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TeacherNotesTable,
+      TeacherNoteRow,
+      $$TeacherNotesTableFilterComposer,
+      $$TeacherNotesTableOrderingComposer,
+      $$TeacherNotesTableAnnotationComposer,
+      $$TeacherNotesTableCreateCompanionBuilder,
+      $$TeacherNotesTableUpdateCompanionBuilder,
+      (
+        TeacherNoteRow,
+        BaseReferences<_$AppDatabase, $TeacherNotesTable, TeacherNoteRow>,
+      ),
+      TeacherNoteRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3242,4 +4248,6 @@ class $AppDatabaseManager {
       $$ModelCacheTableTableManager(_db, _db.modelCache);
   $$CachedExamKitsTableTableManager get cachedExamKits =>
       $$CachedExamKitsTableTableManager(_db, _db.cachedExamKits);
+  $$TeacherNotesTableTableManager get teacherNotes =>
+      $$TeacherNotesTableTableManager(_db, _db.teacherNotes);
 }

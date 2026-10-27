@@ -2,6 +2,9 @@ import 'package:drift/drift.dart';
 
 part 'app_database.g.dart';
 
+/// Longest side of a note's thumbnail (DESIGN §40).
+const kNoteThumbMaxSide = 360;
+
 /// Upload state of a queued scan (DESIGN §6.4 scan_queue.state).
 /// Stored with the snake_case names from the design so a DB dump reads the
 /// same as the document.
@@ -140,15 +143,55 @@ class ModelCache extends Table {
   Set<Column<Object>> get primaryKey => {name};
 }
 
+/// "บันทึกครู" (DESIGN §40): a teacher's photo and short note, kept here
+/// first (offline, full photo) and copied to Firestore `users/{uid}/notes`
+/// (thumbnail and text) for the teacher's other devices.
+@DataClassName('TeacherNoteRow')
+class TeacherNotes extends Table {
+  TextColumn get id => text()();
+
+  /// The Krucheck account that wrote it: a shared phone shows each teacher
+  /// only their own.
+  IntColumn get userId => integer()();
+  IntColumn get classroomId => integer().nullable()();
+  TextColumn get classroomName => text().nullable()();
+  TextColumn get body => text()();
+
+  /// The photo as taken (JPEG), only on this device.
+  BlobColumn get photo => blob().nullable()();
+
+  /// What goes to Firestore (PNG, at most [kNoteThumbMaxSide] px).
+  BlobColumn get thumb => blob().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  /// When Firestore last took this version; null = not yet.
+  DateTimeColumn get syncedAt => dateTime().nullable()();
+
+  /// Deleted here, still to be deleted in Firestore.
+  BoolColumn get deleted => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
-  tables: [CachedLayouts, CachedRosters, ScanQueue, ModelCache, CachedExamKits],
+  tables: [
+    CachedLayouts,
+    CachedRosters,
+    ScanQueue,
+    ModelCache,
+    CachedExamKits,
+    TeacherNotes,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
   /// 2: `scan_queue.kind` and `cached_exam_kits` (exam answer sheets).
+  /// 3: `teacher_notes` (DESIGN §40).
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,6 +200,7 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(scanQueue, scanQueue.kind);
         await m.createTable(cachedExamKits);
       }
+      if (from < 3) await m.createTable(teacherNotes);
     },
   );
 

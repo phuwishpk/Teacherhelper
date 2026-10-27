@@ -5399,7 +5399,7 @@ CREATE TABLE classroom_teachers (
 ### 38.1 หลักการ
 
 - **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
-- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
+- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** (ยกเว้นข้อเดียวตั้งแต่ 27 ต.ค. 2569: แอปเขียน `users/{uid}/notes` ของ "บันทึกครู" เอง §40) queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
 - **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
 - **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
 - **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
@@ -5550,3 +5550,36 @@ service cloud.firestore {
 - **ที่เก็บ**: `backend/resources/qa/manual-test/README.md` (128 ข้อ: 1–80 ตั้งแต่ครูสมัครจนประกาศเกรด, 81–128 เส้นทาง Google Classroom ที่ครูมีชั้นเรียนใน Classroom และนักเรียนเข้าชั้นเรียนของครู ตั้งแต่เชื่อมบัญชี ผูกห้อง นักเรียนที่มีแค่ใน Classroom เข้าสู่ระบบด้วย Google แล้วเชื่อมเอง โพสต์ ส่งงานใน Classroom ส่งคะแนนกลับ คะแนนไม่ตรงกัน จนถึงนำเข้าและส่งออกคะแนนผ่าน Google Sheets เพิ่ม 25 ต.ค. 2569) และ `files/*.pdf` อยู่ใน backend เพราะเครื่อง self-hosted คัดลอกแค่ `backend/` (§26) ไฟล์ทดสอบเป็นการบ้านสมมติ "คณิตศาสตร์พื้นฐาน ม.4" 4 ข้อ 6 คะแนน (สมการกำลังสอง ฟังก์ชัน ลำดับเลขคณิต เลขยกกำลัง): ใบโจทย์ เฉลยพร้อมเกณฑ์ คำตอบ นร.1 ถูกทุกข้อ และคำตอบ นร.2 ที่ผิดแบบต่าง ๆ (ผิดเครื่องหมาย ใช้สูตรถูกแต่คูณผิด ท่องกฎไม่อธิบาย) ไม่มีข้อมูลหรือลายมือนักเรียนจริง (§16.2)
 - **หน้า** `ManualTestChecklist` (`ManualChecklist` แปลง Markdown แบบ GFM, `html_input` escape): การ์ดดาวน์โหลดไฟล์ทดสอบด้านบน ลิงก์ `files/…` ในเนื้อหาชี้ไปที่ `GET /qa/checklist/files/{file}` (เฉพาะบัญชี Test Lab, ชื่อไฟล์ต้องตรง `[a-z0-9-].pdf` ในโฟลเดอร์ files เท่านั้น) ช่อง `- [ ]` ติ๊กได้ แถบความคืบหน้าติดด้านบน เครื่องหมายเก็บใน localStorage ของเบราว์เซอร์ (key เปลี่ยนเมื่อ README เปลี่ยน) ไม่ใช่ผลทดสอบ ผลจริงยังบันทึกที่ "ผลของฉัน" (PR-01, PR-03, PR-05)
 - `ManualChecklistTest` ตรวจว่าทุกไฟล์ที่เช็คลิสต์ลิงก์มีอยู่จริง
+
+## 40. บันทึกครู: เก็บในเครื่อง (drift) และ Firestore
+
+ตัดสินใจ 27 ต.ค. 2569 (ผู้ใช้ขอ: เกณฑ์โครงงานข้อ "Local Database + Firestore ที่บันทึกและอ่านข้อมูลได้จริง" อยากมีข้อมูลที่เก็บสองที่ชัด ๆ เช่นรูปภาพ ผู้ใช้เลือก "บันทึกครู" แทนการเก็บรูปงานนักเรียน เพราะ §38.1 ห้ามรูปและลายมือของนักเรียนใน Firestore)
+
+### 40.1 คืออะไร
+
+ครูถ่ายรูป (กระดาน สื่อการสอน) หรือเลือกรูป พิมพ์ข้อความสั้น และเลือกห้องเรียนได้ (ไม่บังคับ) เมนู "บันทึกครู" (`/notes`, `TeacherNotesScreen`) แสดงบันทึกใหม่สุดก่อนเป็นการ์ดรูปพร้อมข้อความ ห้อง วันเวลา และป้ายว่าอยู่ที่ไหน ครูเท่านั้น ไม่มีข้อมูลนักเรียน (ฟอร์มบอกให้ไม่ถ่ายหน้า ชื่อ หรือผลงานนักเรียน)
+
+### 40.2 เก็บสองที่
+
+| ที่ | เก็บอะไร | ใครเขียน |
+|---|---|---|
+| drift ในเครื่อง ตาราง `teacher_notes` (schema 3) | `id` (uuid), `user_id`, `classroom_id`, `classroom_name`, `body`, `photo` (รูปตามที่ถ่าย), `thumb` (PNG ด้านยาว ≤ 360 px), `created_at`, `updated_at`, `synced_at`, `deleted` | แอป บันทึกทันทีแม้ออฟไลน์ |
+| Firestore `users/{uid}/notes/{id}` | `body`, `classroom_id`, `classroom_name`, `thumb` (bytes ≤ 300 KB), `device` (`android`/`ios`/`web`), `created_at`, `updated_at` | แอปเขียนเอง ด้วย Firebase session ของ §38.6 |
+
+- **MariaDB ไม่เก็บบันทึก** (ต่างจาก §38.1 ที่ Firestore เป็นแค่สำเนา): บันทึกเป็นของครูเพื่อความสะดวก ถ้า Firestore ถูกล้าง บันทึกยังอยู่ในเครื่องที่เขียน รูปเต็มอยู่เฉพาะในเครื่องที่ถ่าย เครื่องอื่นเห็นรูปย่อ
+- **เว็บ** ไม่มี drift: อ่านและเขียน Firestore อย่างเดียว ถ้ายังไม่เชื่อมข้อมูลสด หน้าแสดงคำอธิบายแทน
+- รูปย่อทำในเครื่องด้วย `dart:ui` (PNG ด้านยาว 360 px ถ้าเกิน 300 KB ลดเป็น 240 และ 160) ไม่มี package ใหม่
+
+### 40.3 ซิงก์
+
+`TeacherNotesStore`: บันทึกเขียน drift ก่อน แล้ว `syncPending()` ส่งทุกแถวที่ `synced_at` ว่างหรือเก่ากว่า `updated_at` ไป Firestore (`set` ทั้ง document) ลบ = ตั้ง `deleted` แล้วลบใน Firestore ก่อนลบแถว (tombstone รอจนลบได้) ซิงก์เมื่อบันทึก เมื่อลบ เมื่อเปิดหน้า เมื่อเชื่อมข้อมูลสดได้ระหว่างเปิดหน้า และปุ่ม "ซิงก์ตอนนี้" หยุดเงียบเมื่อติดต่อ Firestore ไม่ได้ รายการที่แสดงรวมแถวในเครื่องกับ document ใน Firestore ตาม `id` (แถวในเครื่องชนะ เพราะมีรูปเต็ม) ป้าย: "อยู่ในเครื่องนี้เท่านั้น" (ยังไม่มี Firestore) "รอซิงก์" "ซิงก์แล้ว" และ "จาก…" สำหรับบันทึกที่มาจากเครื่องอื่น เครื่องเดียวกันหลายบัญชีเห็นเฉพาะของตัวเอง (`user_id`)
+
+### 40.4 กฎและการลบ
+
+- `firebase/firestore.rules`: เพิ่ม `match /users/{uid}/notes/{noteId}` ให้เจ้าของลบได้ และสร้าง/แก้ได้เมื่อ field มีเฉพาะชุดข้างบน `body` ≤ 2,000 ตัวอักษร `thumb` ≤ 300 KB `device` อยู่ในสามค่า และเวลาเป็น timestamp ที่อื่นใต้ `users/{uid}` ยังเขียนไม่ได้ **ต้องวางกฎใหม่ใน Firebase console แล้ว Publish** (firebase/README.md)
+- ลบบัญชี: `PurgeLiveUserJob` ลบทุก subcollection ใต้ `users/{uid}` อยู่แล้ว จึงลบบันทึกด้วย ข้อมูลในเครื่องหายเมื่อลบแอปหรือข้อมูลแอป
+- โควตา Spark: หนึ่งบันทึกคือหนึ่งการเขียน รูปย่อทำให้ document ใหญ่สุดราว 300 KB (ขีดของ Firestore 1 MiB)
+
+### 40.5 test
+
+`test/notes/teacher_notes_store_test.dart` (drift ในหน่วยความจำกับ `fake_cloud_firestore`: ออฟไลน์แล้วซิงก์ทีหลัง, บันทึกจากเครื่องอื่น, ลบสองที่และ tombstone, แยกบัญชี, เว็บใช้ Firestore อย่างเดียว, ข้อความยาวเกิน, ขนาดรูปย่อ) และ `teacher_notes_screen_test.dart` ที่ 390/820/1440 px
