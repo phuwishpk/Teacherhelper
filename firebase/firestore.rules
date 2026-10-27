@@ -1,12 +1,33 @@
-// Krucheck Firestore rules (DESIGN §38.5). Paste into Firebase console >
+// Krucheck Firestore rules (DESIGN §38.5, §40.4). Paste into Firebase console >
 // Firestore Database > Rules. The backend writes with the service account
-// (rules do not apply to it); signed-in users only read their own subtree.
+// (rules do not apply to it); signed-in users only read their own subtree,
+// and write only their own "บันทึกครู" (users/{uid}/notes), within limits.
 rules_version = '2';
 service cloud.firestore {
+  // Text up to 2,000 characters, a thumbnail up to 300 KB, nothing else.
+  function validNote(note) {
+    return note.keys().hasOnly(['body', 'classroom_id', 'classroom_name',
+                                'thumb', 'device', 'created_at', 'updated_at'])
+      && note.body is string && note.body.size() <= 2000
+      && (note.classroom_id == null || note.classroom_id is int)
+      && (note.classroom_name == null
+          || (note.classroom_name is string && note.classroom_name.size() <= 255))
+      && (note.thumb == null || (note.thumb is bytes && note.thumb.size() <= 307200))
+      && note.device in ['android', 'ios', 'web']
+      && note.created_at is timestamp
+      && note.updated_at is timestamp;
+  }
+
   match /databases/{database}/documents {
     match /users/{uid}/{document=**} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+    match /users/{uid}/notes/{noteId} {
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && validNote(request.resource.data);
     }
     match /{document=**} {
       allow read, write: if false;
