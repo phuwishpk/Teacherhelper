@@ -55,6 +55,7 @@ class Testers extends Page
     {
         return [
             QaCatalog::MANUAL => count(QaCatalog::ofKind(QaCatalog::MANUAL)),
+            QaCatalog::QUICK => count(QaCatalog::ofKind(QaCatalog::QUICK)),
             QaCatalog::PROCESS => count(QaCatalog::ofKind(QaCatalog::PROCESS)),
             QaCatalog::FUNCTION => count(QaCatalog::ofKind(QaCatalog::FUNCTION)),
         ];

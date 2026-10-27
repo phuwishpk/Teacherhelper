@@ -6,7 +6,7 @@
     @php
         $counts = $this->counts();
         $kindLabel = QaCatalog::KIND_LABELS;
-        $kindTone = [QaCatalog::AUTO => 'info', QaCatalog::MANUAL => 'gray', QaCatalog::PROCESS => 'warning', QaCatalog::FUNCTION => 'success'];
+        $kindTone = [QaCatalog::AUTO => 'info', QaCatalog::MANUAL => 'gray', QaCatalog::QUICK => 'danger', QaCatalog::PROCESS => 'warning', QaCatalog::FUNCTION => 'success'];
         $size = $this->functionSize();
     @endphp
 
