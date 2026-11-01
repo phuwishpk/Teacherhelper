@@ -845,6 +845,7 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
       for (final f in state.files)
         if (f.id != id) f,
     ],
+    uploading: state.uploading,
   );
 
   void clear() => state = const AssistantAttachments();

@@ -234,5 +234,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.sent.single.$2, [31]);
   });
+
+  // F3
+  testWidgets('taking a file off leaves the other upload running', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+    await tester.tap(attach);
+    await tester.pumpAndSettle();
+    uploads.gate = Completer();
+    await tester.tap(attach);
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('assistant_file_31')),
+        matching: find.byIcon(Icons.close),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('กำลังอัปโหลด…'), findsOneWidget);
+    expect(tester.widget<IconButton>(attach).onPressed, isNull);
+
+    uploads.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('กำลังอัปโหลด…'), findsNothing);
+  });
 }
 
