@@ -208,7 +208,7 @@ final class QaCatalog
                 'backend', ['backend/tests/Feature/Gradebook/GradebookGridTest.php', 'backend/tests/Feature/Gradebook/GradebookPublishTest.php', 'backend/tests/Feature/Gradebook/GradebookCsvTest.php']),
             $c('IT-A10', 'แจ้งเตือนและข้อมูลสด', 'push ผ่าน FCM และกล่องแจ้งเตือนกับสถานะการตรวจใน Firestore (HTTP จำลอง)',
                 'จำลอง FCM HTTP v1 และ Firestore REST ตรวจข้อความที่ส่ง เอกสารที่เขียนใต้ users/{uid} และ custom token ของ Firebase',
-                'backend', ['backend/tests/Feature/Notifications/FcmNotifierTest.php', 'backend/tests/Feature/Firestore/FirestoreInboxTest.php', 'backend/tests/Feature/Firestore/LiveGradingTest.php', 'backend/tests/Feature/Firestore/FirebaseTokenTest.php']),
+                'backend', ['backend/tests/Feature/Notifications/FcmNotifierTest.php', 'backend/tests/Feature/Firestore/FirestoreInboxTest.php', 'backend/tests/Feature/Firestore/LiveGradingTest.php', 'backend/tests/Feature/Firestore/LiveRecordsTest.php', 'backend/tests/Feature/Firestore/FirebaseTokenTest.php']),
             $c('IT-A11', 'ผู้ช่วย Krucheck', 'แชท สร้างข้อ rubric ตัวชี้วัด ข้อมูลนักเรียนแบบรหัส และไฟล์ (Gemini จำลอง)',
                 'ตรวจการ์ดที่ผู้ช่วยเสนอและการกดยืนยัน การแทนชื่อนักเรียนด้วยรหัสก่อนส่งให้ Gemini และการอ่านไฟล์แนบ',
                 'backend', ['backend/tests/Feature/Assistant/AssistantChatTest.php', 'backend/tests/Feature/Assistant/AssistantCardsTest.php', 'backend/tests/Feature/Assistant/AssistantStudentDataTest.php', 'backend/tests/Feature/Assistant/AssistantFilesTest.php']),

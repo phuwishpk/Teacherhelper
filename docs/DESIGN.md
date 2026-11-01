@@ -5401,7 +5401,7 @@ CREATE TABLE classroom_teachers (
 - **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
 - **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** (ยกเว้นข้อเดียวตั้งแต่ 27 ต.ค. 2569: แอปเขียน `users/{uid}/notes` ของ "บันทึกครู" เอง §40) queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
 - **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
-- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
+- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นในเอกสารที่แอปอ่านได้ (ใต้ `users/{uid}`) รูปและลายมือห้ามขึ้น Firestore ทุกกรณี ข้อยกเว้นเดียวคือสำเนาข้อมูลนักเรียนฝั่ง server ใต้ `classrooms/{id}` ซึ่งปิดเป็นค่าเริ่มต้นและแอปอ่านไม่ได้ (§38.10 แก้ 1 พ.ย. 2569) ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
 - **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
 
 ### 38.2 โครงสร้างเอกสาร
@@ -5415,6 +5415,9 @@ CREATE TABLE classroom_teachers (
 | `users/{studentUid}/submissions/{id}` | `assignment_id`, `assignment_title`, `status` (ค่าเดียวกับ `submissions.status`), `updated_at`, `expires_at` **ไม่มีคะแนน** | `MirrorSubmissionStatusJob` (unique ต่องานที่ส่ง) (§38.9) | 3 |
 | `classrooms/{id}/feed/{postId}` และ `classrooms/{id}/members/{uid}` | หัวข้อ ชนิด ชื่อผู้เขียน เวลา มีไฟล์หรือไม่ | listener ของ `ClassPostPublished` (§30) และการเข้า/ออกห้อง | 4 |
 | `classrooms/{id}/attendance/{date}_{period}` | สถานะต่อ `uid` | `AttendanceBook` (§29.9) | 4 |
+| `classrooms/{id}/students/{studentId}` | `classroom_id`, `student_id`, `name`, `student_number`, `student_code`, `updated_at`, `expires_at` | `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
+| `classrooms/{id}/submissions/{submissionId}` | `classroom_id`, `assignment_id`, `assignment_title`, `student_id`, `status`, `total_score`, `published`, `answers[]` (`question_id`, `position`, `type`, `answer`, `score`, `max_points`), `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
+| `classrooms/{id}/gradebook/{entryId}` | `classroom_id`, `student_id`, `assignment_id`, `gradebook_item_id`, `score`, `excused`, `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
 
 uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`) ไม่เก็บคอลัมน์ใหม่ใน MariaDB
 
@@ -5427,6 +5430,7 @@ uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`
 | 2ข | งานที่เหลือของขั้น 1–2: ลบข้อมูลสดเมื่อลบบัญชี การ์ด "ข้อมูลสด" ในหน้าตั้งค่า Firebase บนเว็บ production (CSP และ Actions variables) (§38.8) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเพิ่ม Web app ใน Firebase และ Actions variables แล้วลองในเบราว์เซอร์จริง |
 | 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน (§38.9) | เสร็จในโค้ด 22 ต.ค. 2569 |
 | 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด (ต้องมี `members` และ rule ระดับห้อง) | ยังไม่ทำ |
+| 5 | สำเนาข้อมูลนักเรียน: รายชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบ ฝั่ง server (§38.10) | เสร็จในโค้ด 1 พ.ย. 2569 ⚠️ ปิดอยู่จนกว่าจะตั้ง `FIRESTORE_MIRROR_RECORDS=true` แล้ว Run Now `eduvision:mirror-records` |
 
 ### 38.4 backend (ขั้น 1)
 
@@ -5488,6 +5492,22 @@ service cloud.firestore {
 - **แอป นักเรียน**: เอกสารใน Firestore เป็นแค่สัญญาณ `StudentShell` ฟัง `liveSubmissionTicksProvider` (นับการเปลี่ยนหลัง snapshot แรก) แล้ว invalidate `studentAssignmentsProvider`, `studentResultsProvider`, `studentOverviewProvider` หน้า "ส่งงาน" และ "ผลการบ้าน" จึงดึง API ใหม่เองเมื่อครูตรวจหรือเผยแพร่ ข้อมูลที่แสดงยังมาจาก MariaDB
 - `core/live/live_scope.dart`: `liveUserScope` (Firestore + uid เมื่อ uid ตรงกับผู้ใช้ที่ล็อกอิน) และ `liveChangeTicks` ใช้ร่วมกับกล่องแจ้งเตือน (§38.7)
 - rules ไม่เปลี่ยน (ยังอยู่ใต้ `users/{uid}`) TTL ถ้าตั้ง ให้เพิ่ม collection group `assignments` และ `submissions` (HOSTING §6.5 ข้อ 4)
+
+### 38.10 ขั้น 5: สำเนาข้อมูลนักเรียน
+
+ตัดสินใจ 1 พ.ย. 2569 (ผู้พัฒนาขอให้เก็บชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบใน Firestore ด้วย) แก้กติกา PDPA ของ §38.1 โดยมีเงื่อนไขข้างล่าง MariaDB ยังเป็นแหล่งความจริง แอปยังอ่านข้อมูลชุดนี้จาก API เหมือนเดิม
+
+- **อยู่นอก `users/{uid}` โดยตั้งใจ** `firebase/firestore.rules` ไม่เปิดให้ client อ่านนอก `users/{uid}` เลย สำเนาใต้ `classrooms/{id}` จึงเข้าถึงได้เฉพาะ server (service account) และผู้ดูแลโครงการ Firebase นักเรียนจึงอ่านคะแนนที่ยังไม่เผยแพร่หรือข้อมูลของเพื่อนไม่ได้ ไม่ต้องแก้ rules และไม่ต้องมี `members` ถ้าวันหน้าจะให้แอปอ่าน ต้องออกแบบ rule รายห้องและซ่อนคะแนนที่ยังไม่เผยแพร่ก่อน test `test_no_client_rule_opens_the_student_records` คุมข้อนี้
+- **สวิตช์แยก** `FIRESTORE_MIRROR_RECORDS` (`false` เป็นค่าเริ่มต้น) ใช้คู่กับ `FIRESTORE_ENABLED` เพราะ `main` deploy เอง ข้อมูลนักเรียนจริงจึงไม่เริ่มส่งเพียงเพราะ merge ปิดสวิตช์แล้วงานที่ค้างในคิวไม่เขียนอะไร แต่สำเนาที่อยู่ใน Firestore แล้วไม่ถูกลบเอง ต้องลบใน console
+- **ก่อนใช้กับนักเรียนจริง** ต้องมีความยินยอมของผู้ปกครองที่ครอบคลุมการเก็บชื่อ คะแนน และคำตอบที่ Firebase และตั้ง TTL ของ collection group `students`, `submissions`, `gradebook` ถ้าตั้ง TTL แล้วสำเนาที่ไม่เปลี่ยน 90 วันจะหายไป รัน `eduvision:mirror-records` เพื่อสร้างใหม่ได้ หน้า `/privacy` เปลี่ยนข้อความตามสวิตช์นี้เอง
+- **ไม่เก็บ** อีเมล รูป ลายมือ path ของไฟล์ `extraction` ดิบ `fuzzy_trace` คำอธิบายคะแนน แชท เกรดที่ตัดแล้วของสมุดคะแนน (`gradebook_published_grades`) และชื่อในเอกสารคะแนน (ใช้ `student_id` เทียบกับ `students`) `answer` ยาวสุด 1,000 ตัวอักษร เพื่อให้ไม่เกิน 1 MiB ต่อเอกสาร
+- **คำตอบเป็นข้อความ**: ข้อปรนัยจาก `selected_options` หรือจาก `mcq_fill` ด้วยเกณฑ์ `McqGrader::FILLED_FROM`, `short` จาก `answer_text`, `show_work` จาก `steps` กับ `final_answer_text`, `open` จาก `transcription`, ข้อสอบกระดาษจาก `exam_answer` (ค่าที่ครูแก้ใน `resolved` ก่อน) `score` คือ `Response::effectiveScore()` `total_score` คือ `COALESCE(total_override, total_score)`
+- **การเปลี่ยนรายแถว**: `Submission` (ใหม่, ลบ, `status`, `total_score`, `total_override`), `Response` (ใหม่, `extraction`, `exam_answer`, `mcq_fill`, `ai_score`, `final_score`), `GradebookEntry` (บันทึก, ลบ) ส่ง `MirrorRecordJob` (unique ต่อแถวจนกว่าจะเริ่มรัน) ซึ่งอ่านแถวตอนรัน แล้วเขียนหรือลบเอกสาร เขียนผ่าน `LiveStore` จึงไม่ทำให้งานหลักล้ม `tries = 1`
+- **ทั้งห้อง**: `ClassroomStudent` (attach, detach, `updateExistingPivot`) และการแก้ `name` หรือ `student_code` ส่ง `MirrorClassroomRecordsJob` แบบ `rosterOnly` การรวมบัญชี ลบหรือกู้บัญชี แก้ชื่องาน และลบห้อง ซึ่งเขียนด้วย query builder หรือกระทบหลายแถว ส่งแบบเต็มห้อง job เขียนทุกเอกสาร แล้วอ่านรายชื่อเอกสารใน Firestore เพื่อลบตัวที่ไม่มีใน MariaDB ห้องที่ลบแล้วถูกลบทั้งชุดด้วย `deleteSubcollections` job นี้เรียก `FirestoreClient` ตรงเพื่อให้ล้มแล้วลองใหม่ (`tries = 3`) เพราะการลบต้องไม่หาย commit ละ 50 เอกสารเพื่อไม่ให้เกิน 10 MiB
+- **การ update แบบ query builder ที่ไม่ต้องตาม**: `ClassroomStudent::query()->update` ที่เหลือแตะแค่คอลัมน์ Google และ PIN ซึ่งไม่ได้คัดลอก `AssignmentController::destroy` ไม่ต้องตามเพราะ `submissions.assignment_id` เป็น `RESTRICT` ลบได้เฉพาะงานที่ไม่มีคนส่ง
+- `eduvision:mirror-records` (Plesk Run Now) ส่งทุกห้องที่ยังไม่ถูกลบเข้าคิว ใช้ครั้งแรกหลังเปิดสวิตช์ เพราะข้อมูลเก่าไม่ถูกคัดลอกเอง และใช้ซ่อมเมื่อ `MirrorRecordJob` เขียนไม่สำเร็จ
+- โควตา Spark: แต่ละแถวที่เปลี่ยนเขียนหนึ่งครั้ง sync เต็มห้องเขียนเท่าจำนวนเอกสารของห้องและอ่านเท่ากัน ห้อง 40 คน 20 งานประมาณ 840 เขียน ถ้า backfill หลายห้องวันเดียวให้ดู Firestore > Usage (20,000 เขียนต่อวัน)
+- test: `tests/Feature/Firestore/LiveRecordsTest.php`
 
 
 ## 39. Krucheck Test Lab (`/qa`)

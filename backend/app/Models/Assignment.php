@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\AnswerKeys\KeyCompleteness;
 use App\Domain\Exams\ExamKeyCheck;
+use App\Domain\Firestore\LiveRecords;
 use Database\Factories\AssignmentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -202,6 +203,20 @@ class Assignment extends Model
             'gradebook_category_id' => 'integer',
             'excluded_from_grade' => 'boolean',
         ];
+    }
+
+    /**
+     * Each hand-in's copy carries the title (DESIGN §38.10). No `deleted`
+     * hook: submissions RESTRICT the delete, so an assignment goes alone
+     * only with no hand-ins, or with its classroom, whose hook covers it.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (Assignment $assignment) {
+            if ($assignment->wasChanged('title')) {
+                LiveRecords::queueClassroom((int) $assignment->classroom_id);
+            }
+        });
     }
 
     /** @return BelongsTo<School, $this> */

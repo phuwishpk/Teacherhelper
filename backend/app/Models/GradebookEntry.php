@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Firestore\LiveRecords;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -40,5 +41,12 @@ class GradebookEntry extends Model
             'excused' => 'boolean',
             'updated_by' => 'integer',
         ];
+    }
+
+    /** Typed scores go to the student record copy (DESIGN §38.10). */
+    protected static function booted(): void
+    {
+        static::saved(fn (GradebookEntry $entry) => LiveRecords::queueEntry($entry));
+        static::deleted(fn (GradebookEntry $entry) => LiveRecords::queueEntry($entry));
     }
 }
