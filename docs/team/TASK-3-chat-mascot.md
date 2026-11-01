@@ -9,6 +9,8 @@
 | C | `fix/app-assistant-chat` | 15 | แก้บั๊กแชทบอท 12 จุด, แก้ความรู้ที่ตอบผิด, ให้ผู้ช่วยรู้จักชื่อน้องเช็ค |
 | D (ถ้ามีเวลา) | `feat/app-onboarding-about` | 15 | ทำตาม `TASK-1-onboarding-about.md` โดยแก้ 4 จุดท้ายไฟล์นี้ |
 
+**branch:** ทุกส่วนแตกจาก `main` ล่าสุด และเปิด PR เข้า `main` รายละเอียดอยู่ใน `00-START-HERE.md`
+
 **ลำดับ:** ทำ A → B → C และให้แต่ละส่วนเป็น PR ของตัวเอง งานที่ต้องจบคือ A, B และ C (37 commit) ส่วน D ทำต่อเมื่อยังมีเวลา ถ้าไม่ทันก็ข้ามได้
 
 **แบบตัวการ์ตูน:** `mascot/nong-check-idle.svg`, `-wave`, `-thinking`, `-happy`, `-sorry` ในโฟลเดอร์คู่มือนี้
@@ -191,7 +193,7 @@ flutter test test/assistant/
 
 **commit:** `refactor(app): split the remaining plan cards by kind`
 
-**จบส่วน A:** push แล้วเปิด PR รอ CI เขียว และรอ merge ก่อนเริ่มส่วน B
+**จบส่วน A:** push แล้วเปิด PR เข้า `main` รอ CI เขียว และรอ merge ก่อนเริ่มส่วน B
 
 ---
 
@@ -455,7 +457,7 @@ CI ไม่ได้รัน Firebase emulator จึงตรวจกฎจ�
 
 **commit:** `docs: describe the mascot and the split assistant files`
 
-**จบส่วน B:** push แล้วเปิด PR รอ CI เขียว ลองบน Chrome ที่ 390, 820, 1440 px และแนบรูปหน้าจอใน PR
+**จบส่วน B:** push แล้วเปิด PR เข้า `main` รอ CI เขียว ลองบน Chrome ที่ 390, 820, 1440 px และแนบรูปหน้าจอใน PR
 
 ---
 
@@ -725,7 +727,7 @@ flutter test test/help/ test/assistant/assistant_chat_fixes_test.dart
 
 **commit:** `docs: record the chat fixes and prompt v7`
 
-**จบส่วน C:** push แล้วเปิด PR รอ CI เขียว ลองบน Chrome ที่ 390, 820, 1440 px และแนบรูปหน้าจอใน PR
+**จบส่วน C:** push แล้วเปิด PR เข้า `main` รอ CI เขียว ลองบน Chrome ที่ 390, 820, 1440 px และแนบรูปหน้าจอใน PR
 
 ---
 

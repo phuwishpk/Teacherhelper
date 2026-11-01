@@ -32,7 +32,7 @@ chmod +x .git/hooks/pre-commit
 
 ```bash
 git checkout main && git pull
-git checkout -b feat/<ชื่องาน>
+git checkout -b <ชื่อ branch ตามตารางใน 00-START-HERE.md>
 ```
 
 ---
@@ -167,9 +167,9 @@ php artisan migrate:fresh --seed && php artisan db:seed --class=DemoSeeder
 ```bash
 git add <ไฟล์ที่แก้>
 git commit -m "feat(app): add about screen route"
-git push -u origin feat/<ชื่องาน>
+git push -u origin <ชื่อ branch ของงาน>
 ```
-จากนั้นเปิด Pull Request บน GitHub แล้วรอ CI ผ่านครบ คนที่ merge คือ phuwishpk
+จากนั้นเปิด Pull Request บน GitHub โดยตั้ง base เป็น `main` แล้วรอ CI ผ่านครบ คนที่ merge คือ phuwishpk
 
 **รูปแบบข้อความ commit:** `ชนิด(ส่วน): ทำอะไร` เขียนเป็นภาษาอังกฤษ
 - ชนิด: `feat`, `fix`, `test`, `docs`, `refactor`

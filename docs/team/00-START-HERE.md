@@ -28,6 +28,16 @@
 | งานที่ 2 C9–C14 | Suwimon249 | #94 | `feat/live-class-feed` |
 | งานที่ 2 C15–C18 | Suwimon249 | #95 | `feat/live-class-feed` |
 
+### แตก branch จากไหน และเปิด PR เข้าไหน
+
+- **แตก branch จาก `main` ล่าสุดเสมอ:** `git checkout main && git pull` แล้ว `git checkout -b <ชื่อ branch ตามตารางด้านบน>`
+- **เปิด PR เข้า `main` ทุกครั้ง:** หน้าเปิด PR ต้องขึ้น `base: main` ห้ามเปิด PR เข้า branch ของคนอื่นหรือ branch ของส่วนก่อนหน้า
+- **ห้าม push ตรงเข้า `main`:** คนที่ merge คือ phuwishpk
+- **korn-daengthong:** แต่ละส่วนมี branch และ PR ของตัวเอง รอส่วนก่อนหน้า merge แล้วแตก branch ใหม่จาก `main` ห้ามแตกต่อจาก branch ของส่วนก่อนหน้า
+- **Suwimon249:** ใช้ branch เดียวและ PR เดียวตลอดงาน ถ้า `main` มีงานใหม่ให้รัน `git fetch origin && git merge origin/main` ใน branch ของตัวเอง
+
+### การอ้างเลข issue
+
 - แต่ละ commit มี issue ย่อยของตัวเอง: korn-daengthong #249–#285 และ Suwimon249 #286–#303 เลขของแต่ละข้ออยู่ในตารางความคืบหน้าของไฟล์ task
 - ใส่บรรทัด `Closes #เลขของ commit นั้น` ท้ายข้อความ commit issue ย่อยจะปิดเองเมื่อ PR merge และ board จะย้ายไป Done เอง
 - commit ที่ไม่มี issue ย่อย เช่น commit แก้ CI และงานส่วน D ให้ใส่ `Refs #เลข` ตามตารางด้านบนแทน

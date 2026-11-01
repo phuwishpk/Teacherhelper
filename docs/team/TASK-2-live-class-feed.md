@@ -1,7 +1,8 @@
 # งานที่ 2: ฟีดห้องเรียนและเช็คชื่อแบบสด
 
 - **คนทำ:** Suwimon249 หน้าติดตามงานคือ #248
-- **branch:** `feat/live-class-feed`
+- **branch:** `feat/live-class-feed` แตกจาก `main` ล่าสุด
+- **PR:** เปิดเข้า `main` PR เดียวตลอดงาน
 - **ขนาด:** 18 commit (backend 8, แอป 9, docs 1)
 - **ภาษา:** PHP (Laravel) และ Dart (Flutter)
 - **เครื่อง:** แนะนำ RAM 8 GB ขึ้นไป หรือใช้ GitHub Codespaces (ดู `00-START-HERE.md`)

@@ -1,6 +1,7 @@
 # งานที่ 1: หน้าแนะนำการใช้งานครั้งแรก + หน้า "เกี่ยวกับ Krucheck"
 
-- **branch:** `feat/app-onboarding-about`
+- **branch:** `feat/app-onboarding-about` แตกจาก `main` ล่าสุด
+- **PR:** เปิดเข้า `main`
 - **ขนาด:** 16 commit
 - **ภาษา:** Dart (Flutter) และแก้ Firestore rules หนึ่งไฟล์
 - **เครื่อง RAM 4 GB:** ทำได้แบบรันบน Chrome และชี้ไปที่ server ทดสอบ (ดู `00-START-HERE.md`)
