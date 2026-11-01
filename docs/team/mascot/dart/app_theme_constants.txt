@@ -1,0 +1,11 @@
+  // น้องเช็ค keeps the logo's colours in both modes; only its cover and feet
+  // follow the theme (MascotColors below).
+  static const _mascotCap = Color(0xFFF5A623);
+  static const _mascotCapShade = Color(0xFFC97F10);
+  static const _mascotCheck = Color(0xFF2EA84F);
+  static const _mascotPaper = Color(0xFFFFFFFF);
+  static const _mascotInk = Color(0xFF1B2433);
+  static const _mascotCheek = Color(0xFFFF9FB0);
+  static const _mascotSweat = Color(0xFF6EC1FF);
+  static const _mascotShadeLight = Color(0xFF173A8C);
+  static const _mascotShadeDark = Color(0xFF4A6FC4);

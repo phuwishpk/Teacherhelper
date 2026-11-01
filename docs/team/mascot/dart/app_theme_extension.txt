@@ -1,0 +1,17 @@
+
+/// The colours of น้องเช็ค (DESIGN §43), read as `scheme.mascotCap`.
+extension MascotColors on ColorScheme {
+  Color get mascotCover => primary;
+
+  Color get mascotShade => brightness == Brightness.dark
+      ? AppTheme._mascotShadeDark
+      : AppTheme._mascotShadeLight;
+
+  Color get mascotPaper => AppTheme._mascotPaper;
+  Color get mascotInk => AppTheme._mascotInk;
+  Color get mascotCap => AppTheme._mascotCap;
+  Color get mascotCapShade => AppTheme._mascotCapShade;
+  Color get mascotCheck => AppTheme._mascotCheck;
+  Color get mascotCheek => AppTheme._mascotCheek;
+  Color get mascotSweat => AppTheme._mascotSweat;
+}
