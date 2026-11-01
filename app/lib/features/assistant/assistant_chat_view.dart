@@ -188,6 +188,11 @@ class AssistantChatView extends ConsumerWidget {
                         ? 'ผู้ช่วยกำลังคิด…'
                         : ref.watch(assistantAttachmentsProvider).uploading
                         ? 'รออัปโหลดไฟล์ให้เสร็จก่อน'
+                        : ref
+                              .watch(assistantAttachmentsProvider)
+                              .files
+                              .isNotEmpty
+                        ? 'บอกผู้ช่วยว่าจะให้ทำอะไรกับไฟล์นี้'
                         : 'พิมพ์คำถาม',
                     counterText: '',
                   ),

@@ -280,5 +280,14 @@ void main() {
     expect(find.byType(InputChip), findsNWidgets(5));
     expect(find.text('แนบได้ไม่เกิน 5 ไฟล์ต่อคำถาม'), findsOneWidget);
   });
+
+  // F5
+  testWidgets('a file with no question says what to type', (tester) async {
+    await pumpPanel(tester);
+    await tester.tap(attach);
+    await tester.pumpAndSettle();
+    expect(find.text('บอกผู้ช่วยว่าจะให้ทำอะไรกับไฟล์นี้'), findsOneWidget);
+    expect(repo.sent, isEmpty);
+  });
 }
 
