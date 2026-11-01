@@ -46,7 +46,7 @@ phuwishpk อนุมัติให้ใส่น้องเช็คแล�
 - [x] M12 Firestore rules (#266)
 - [x] M13 สวิตช์เปิดปิดในหน้าตั้งค่า (#267)
 - [x] M14 integration test (#268)
-- [ ] M15 security test (#269)
+- [x] M15 security test (#269)
 - [ ] M16 เอกสาร DESIGN (#270)
 
 **ส่วน C: แก้แชทบอท**
