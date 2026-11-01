@@ -45,9 +45,9 @@ class AppSettingsStore {
       }
     }
 
-    final doc = _doc;
-    if (doc != null) {
-      try {
+    try {
+      final doc = _doc;
+      if (doc != null) {
         final snap = await doc.get();
         if (snap.exists) {
           final data = snap.data();
@@ -63,9 +63,9 @@ class AppSettingsStore {
             return remote;
           }
         }
-      } catch (e) {
-        debugPrint('Failed to read mascotEnabled from Firestore: $e');
       }
+    } catch (e) {
+      debugPrint('Failed to read mascotEnabled from Firestore: $e');
     }
 
     return local ?? true;
@@ -82,13 +82,13 @@ class AppSettingsStore {
       }
     }
 
-    final doc = _doc;
-    if (doc != null) {
-      try {
+    try {
+      final doc = _doc;
+      if (doc != null) {
         await doc.set({'mascot_enabled': on}, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Failed to write mascotEnabled to Firestore: $e');
       }
+    } catch (e) {
+      debugPrint('Failed to write mascotEnabled to Firestore: $e');
     }
   }
 }
