@@ -8,11 +8,9 @@ use App\Domain\Qa\QaCatalog;
 use App\Domain\Qa\TestIndex;
 use App\Filament\Qa\Pages\MyResults;
 use App\Filament\Qa\Pages\QaOverview;
-use App\Filament\Qa\Pages\SusSurvey;
 use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\Testers;
 use App\Models\QaResult;
-use App\Models\QaSusResponse;
 use App\Models\QaTester;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,7 +22,7 @@ use Tests\TestCase;
 
 /**
  * Krucheck Test Lab at /qa (DESIGN §39): its own accounts, every page,
- * results a tester writes only for themselves, SUS, the test index and the
+ * results a tester writes only for themselves, the test index and the
  * CI status read from GitHub.
  */
 class QaLabTest extends TestCase
@@ -96,15 +94,6 @@ class QaLabTest extends TestCase
             $this->assertNotEmpty($case['steps']);
             $this->assertNotEmpty($case['why']);
         }
-    }
-
-    public function test_sus_scoring_follows_brooke(): void
-    {
-        $this->assertSame(100.0, QaCatalog::susScore([5, 1, 5, 1, 5, 1, 5, 1, 5, 1]));
-        $this->assertSame(0.0, QaCatalog::susScore([1, 5, 1, 5, 1, 5, 1, 5, 1, 5]));
-        $this->assertSame(50.0, QaCatalog::susScore(array_fill(0, 10, 3)));
-        $this->assertNull(QaCatalog::susScore([5, 1, 5]));
-        $this->assertNull(QaCatalog::susScore([5, 1, 5, 1, 5, 1, 5, 1, 5, 6]));
     }
 
     public function test_the_test_index_reads_php_dart_and_workflows(): void
@@ -183,14 +172,12 @@ class QaLabTest extends TestCase
         QaResult::create(['qa_tester_id' => $this->lead->id, 'case_code' => 'IT-M01', 'status' => 'pass']);
         QaResult::create(['qa_tester_id' => $this->tester->id, 'case_code' => 'PR-01', 'status' => 'assisted', 'time_sec' => 95, 'error_count' => 2]);
         QaResult::create(['qa_tester_id' => $this->tester->id, 'case_code' => 'UC-T11', 'status' => 'success', 'checks' => ['3ก' => 'pass', '4ก' => 'fail']]);
-        QaSusResponse::create(['qa_tester_id' => $this->tester->id, 'role' => 'teacher', 'answers' => [5, 1, 5, 1, 5, 1, 5, 1, 5, 1], 'score' => 100]);
         $this->asQa($this->tester);
 
         $this->get('/qa')->assertOk()
             ->assertSee('ภาพรวมการทดสอบ')
             ->assertSee('abcdef1')
             ->assertSee('ผู้ทดสอบหนึ่ง')
-            ->assertSee('100')               // SUS mean
             ->assertSee('0 / 1 / 0 จาก 1')    // PR-01: one assisted
             ->assertSee('ห้องเรียน นักเรียน และการสอนร่วม');
         $this->get('/qa/plan')->assertOk()->assertSee('IT-A01')->assertSee('PR-12')->assertSee('UC-X08')->assertSee('Usability สองระดับ');
@@ -212,7 +199,7 @@ class QaLabTest extends TestCase
         $this->get('/qa/run?section='.urlencode('ห้องเรียน นักเรียน และการสอนร่วม'))->assertOk()->assertSee('UC-T11')->assertSee('UC-T21')->assertDontSee('IT-M13');
         $this->get('/qa/team')->assertOk()->assertSee('ความคืบหน้าของแต่ละคน');
         $this->get('/qa/testers')->assertOk()->assertSee('one@qa.test')->assertSee('เพิ่มผู้ทดสอบ');
-        $this->get('/qa/sus')->assertOk()->assertSee('ฉันคิดว่าแอปนี้ใช้งานง่าย');
+        $this->get('/qa/sus')->assertOk()->assertSee('สรุปตามมาตรฐาน SUS')->assertSee('ยังไม่มีผู้ประเมิน');
     }
 
     public function test_a_tester_saves_only_their_own_results(): void
@@ -247,25 +234,6 @@ class QaLabTest extends TestCase
 
         // The page loads them back.
         Livewire::test(MyResults::class)->assertSet('form.UC_T11.time_sec', 240)->assertSet('form.IT_M02.status', 'fail')->assertSet('form.UC_T11.checks.0', 'pass');
-    }
-
-    public function test_the_sus_survey_needs_every_answer_and_stores_the_score(): void
-    {
-        $this->asQa($this->tester);
-        Livewire::test(SusSurvey::class)
-            ->set('answers', [4, 2, 4, 2, 4, 2, 4, 2, 4, null])
-            ->call('save')
-            ->assertHasErrors()
-            ->set('answers.9', '2')
-            ->set('role', 'student')
-            ->set('comment', 'ใช้ง่าย')
-            ->call('save')
-            ->assertHasNoErrors();
-
-        $row = QaSusResponse::query()->sole();
-        $this->assertSame(75.0, $row->score);
-        $this->assertSame('student', $row->role);
-        $this->assertSame([4, 2, 4, 2, 4, 2, 4, 2, 4, 2], $row->answers);
     }
 
     public function test_only_the_lead_refreshes_the_ci_status(): void

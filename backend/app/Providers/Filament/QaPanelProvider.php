@@ -5,7 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Qa\Pages\ManualTestChecklist;
 use App\Filament\Qa\Pages\MyResults;
 use App\Filament\Qa\Pages\QaOverview;
-use App\Filament\Qa\Pages\SusSurvey;
+use App\Filament\Qa\Pages\SusResults;
 use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\TestCaseDetail;
 use App\Filament\Qa\Pages\Testers;
@@ -50,7 +50,7 @@ class QaPanelProvider extends PanelProvider
                 TestCaseDetail::class,
                 MyResults::class,
                 UsabilityReport::class,
-                SusSurvey::class,
+                SusResults::class,
                 TeamBoard::class,
                 Testers::class,
             ])
