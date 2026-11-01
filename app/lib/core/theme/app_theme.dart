@@ -50,6 +50,18 @@ abstract final class AppTheme {
   static const _warningLight = Color(0xFF8F5500);
   static const _warningDark = Color(0xFFF5B566);
 
+  // น้องเช็ค keeps the logo's colours in both modes; only its cover and feet
+  // follow the theme (MascotColors below).
+  static const _mascotCap = Color(0xFFF5A623);
+  static const _mascotCapShade = Color(0xFFC97F10);
+  static const _mascotCheck = Color(0xFF2EA84F);
+  static const _mascotPaper = Color(0xFFFFFFFF);
+  static const _mascotInk = Color(0xFF1B2433);
+  static const _mascotCheek = Color(0xFFFF9FB0);
+  static const _mascotSweat = Color(0xFF6EC1FF);
+  static const _mascotShadeLight = Color(0xFF173A8C);
+  static const _mascotShadeDark = Color(0xFF4A6FC4);
+
   static const _lightScheme = ColorScheme(
     brightness: Brightness.light,
     primary: Color(0xFF2563EB),
@@ -516,4 +528,21 @@ extension StatusColors on ColorScheme {
   Color get warning => brightness == Brightness.dark
       ? AppTheme._warningDark
       : AppTheme._warningLight;
+}
+
+/// The colours of น้องเช็ค (DESIGN §43), read as `scheme.mascotCap`.
+extension MascotColors on ColorScheme {
+  Color get mascotCover => primary;
+
+  Color get mascotShade => brightness == Brightness.dark
+      ? AppTheme._mascotShadeDark
+      : AppTheme._mascotShadeLight;
+
+  Color get mascotPaper => AppTheme._mascotPaper;
+  Color get mascotInk => AppTheme._mascotInk;
+  Color get mascotCap => AppTheme._mascotCap;
+  Color get mascotCapShade => AppTheme._mascotCapShade;
+  Color get mascotCheck => AppTheme._mascotCheck;
+  Color get mascotCheek => AppTheme._mascotCheek;
+  Color get mascotSweat => AppTheme._mascotSweat;
 }
