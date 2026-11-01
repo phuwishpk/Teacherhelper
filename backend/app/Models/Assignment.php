@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\AnswerKeys\KeyCompleteness;
 use App\Domain\Exams\ExamKeyCheck;
+use App\Domain\Firestore\LiveClassroom;
 use App\Domain\Firestore\LiveRecords;
 use Database\Factories\AssignmentFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -215,6 +216,17 @@ class Assignment extends Model
         static::updated(function (Assignment $assignment) {
             if ($assignment->wasChanged('title')) {
                 LiveRecords::queueClassroom((int) $assignment->classroom_id);
+            }
+        });
+
+        // Homework that opens or closes changes the student's class feed
+        // (DESIGN §38.11); a no-op while Firestore is off.
+        static::saved(function (Assignment $assignment) {
+            $opened = $assignment->wasRecentlyCreated && $assignment->isReady();
+            if (($opened || $assignment->wasChanged('status'))
+                && $assignment->kind === self::KIND_HOMEWORK
+                && $assignment->classroom_id !== null) {
+                LiveClassroom::feedChanged((int) $assignment->classroom_id);
             }
         });
     }

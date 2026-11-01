@@ -10,6 +10,7 @@ import '../courses/course_fakes.dart';
 import '../gradebook/gradebook_fakes.dart';
 import '../helpers/fake_http_adapter.dart';
 import '../helpers/pump_screen.dart';
+import 'attendance_fakes.dart';
 
 Map<String, dynamic> _counts({
   int present = 0,
@@ -94,99 +95,6 @@ Map<String, dynamic> _overviewJson({
   ],
 };
 
-class FakeAttendance implements AttendanceRepository {
-  FakeAttendance({Map<String, dynamic>? overview})
-    : overviewBody = overview ?? _overviewJson();
-
-  Map<String, dynamic> overviewBody;
-  final calls = <String>[];
-  AttendanceDraft? lastDraft;
-  AttendanceScores? savedScores;
-  Object? failWith;
-
-  @override
-  Future<AttendanceOverview> overview(int courseId, int classroomId) async {
-    calls.add('overview:$courseId:$classroomId');
-    return AttendanceOverview.fromJson(overviewBody);
-  }
-
-  @override
-  Future<AttendanceSession> session(int sessionId) async =>
-      AttendanceSession.fromJson(_sessionJson(id: sessionId, records: true));
-
-  @override
-  Future<AttendanceSession> create(
-    int courseId,
-    int classroomId,
-    AttendanceDraft draft,
-  ) async {
-    if (failWith case final e?) throw e;
-    calls.add('create:$courseId:$classroomId');
-    lastDraft = draft;
-    return AttendanceSession.fromJson(_sessionJson(records: true));
-  }
-
-  @override
-  Future<AttendanceSession> update(int sessionId, AttendanceDraft draft) async {
-    calls.add('update:$sessionId');
-    lastDraft = draft;
-    return AttendanceSession.fromJson(_sessionJson(records: true));
-  }
-
-  @override
-  Future<void> delete(int sessionId) async => calls.add('delete:$sessionId');
-
-  @override
-  Future<AttendanceScores> saveScores(
-    int courseId,
-    AttendanceScores scores,
-  ) async {
-    calls.add('scores:$courseId');
-    savedScores = scores;
-    overviewBody = {...overviewBody, 'scores': scores.toJson()};
-    return scores;
-  }
-
-  @override
-  Future<void> addAutoItem(
-    int courseId,
-    int classroomId, {
-    required int categoryId,
-    required double maxPoints,
-  }) async {
-    calls.add('auto:$courseId:$classroomId:$categoryId:$maxPoints');
-    overviewBody = {
-      ...overviewBody,
-      'auto_item': {
-        'id': 9,
-        'category_id': categoryId,
-        'max_points': maxPoints,
-      },
-    };
-  }
-
-  @override
-  Future<List<MyAttendanceCourse>> mine() async => [
-    MyAttendanceCourse.fromJson({
-      'course': {'id': 4, 'code': 'ค15101', 'name': 'คณิตศาสตร์ 5'},
-      'classroom': {'id': 7, 'name': 'ป.5/1', 'academic_year': 2569},
-      'counts': _counts(late: 1, sick: 1),
-      'counted': 1,
-      'rate': 0.5,
-      'sessions': [
-        {
-          'id': 32,
-          'held_on': '2026-10-06',
-          'period_no': null,
-          'status': 'sick_leave',
-          'note': 'ไข้หวัด',
-        },
-        {'id': 31, 'held_on': '2026-10-05', 'period_no': 1, 'status': 'late'},
-      ],
-    }),
-  ];
-}
-
 void main() {
   Future<FakeAttendance> pump(
     WidgetTester tester,
@@ -195,7 +103,7 @@ void main() {
     FakeGradebookRepository? gradebook,
   }) async {
     tall(tester);
-    final r = repo ?? FakeAttendance();
+    final r = repo ?? FakeAttendance(overview: _overviewJson());
     await pumpScreen(
       tester,
       screen,
