@@ -59,10 +59,12 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
   }
 
   void _send([String? text]) {
-    if (ref.read(assistantAttachmentsProvider).uploading) return;
     final question = (text ?? _input.text).trim();
     if (question.isEmpty) return;
-    _input.clear();
+    // A file still uploading would miss the question.
+    if (ref.read(assistantAttachmentsProvider).uploading) return;
+    // A suggestion leaves what the teacher typed alone.
+    if (text == null) _input.clear();
     ref.read(assistantChatProvider.notifier).send(question);
   }
 

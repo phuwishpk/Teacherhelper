@@ -471,5 +471,20 @@ void main() {
       expect(find.text('ตอบเก่า'), findsOneWidget);
     });
   });
+
+  // F10
+  testWidgets('a suggestion leaves what the teacher typed', (tester) async {
+    repo.replies.add(
+      _reply(7, [_message(1, 'user', 'ถาม'), _message(2, 'assistant', 'ตอบ')]),
+    );
+    await pumpPanel(tester);
+    await tester.enterText(input, 'ข้อความที่พิมพ์ค้างไว้');
+    await tester.tap(find.byKey(const ValueKey('assistant_suggestion_0')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(input).controller?.text,
+      'ข้อความที่พิมพ์ค้างไว้',
+    );
+  });
 }
 
