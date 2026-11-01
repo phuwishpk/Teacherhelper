@@ -2,6 +2,7 @@
 
 namespace App\Domain\Firestore;
 
+use App\Jobs\SignalClassFeedJob;
 use App\Models\ClassroomTeacher;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -65,5 +66,14 @@ final class LiveClassroom
     public static function attendanceFields(int $courseId, int $classroomId, ?CarbonImmutable $now = null): array
     {
         return ['course_id' => $courseId] + self::feedFields($classroomId, $now);
+    }
+
+    /** A post or a homework of the classroom changed; a no-op while Firestore is off. */
+    public static function feedChanged(int $classroomId): void
+    {
+        if (! FirestoreConfig::enabled()) {
+            return;
+        }
+        SignalClassFeedJob::dispatch($classroomId)->afterCommit();
     }
 }
