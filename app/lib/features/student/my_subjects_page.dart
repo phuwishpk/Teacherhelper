@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../attendance/today_attendance_card.dart';
 import '../class_posts/student_class_feed.dart';
 import '../gradebook/student_grades.dart' show GradeBadge;
 import 'student_labels.dart';
@@ -36,7 +37,12 @@ class MySubjectsPage extends ConsumerWidget {
                 if (o.classrooms.isNotEmpty)
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: LatestPostsCard(),
+                    child: Column(
+                      children: [
+                        LatestPostsCard(),
+                        TodayAttendanceCard(),
+                      ],
+                    ),
                   ),
                 if (o.classrooms.isEmpty)
                   EmptyView(
@@ -75,7 +81,9 @@ class MySubjectsPage extends ConsumerWidget {
           child: ContentColumn(
             child: ListView(
               children: [
-                const LatestPostsCard(),
+                const Column(
+                  children: [LatestPostsCard(), TodayAttendanceCard()],
+                ),
                 // Wraps on a narrow phone: the links go under the count.
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,

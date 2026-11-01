@@ -6,7 +6,9 @@ import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/live_badge.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../student/live_refresh.dart';
 import 'class_post_models.dart';
 import 'class_posts_repository.dart';
 import 'post_card.dart';
@@ -77,6 +79,12 @@ class ClassPostsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Another teacher of the classroom posted (DESIGN §38.11).
+    ref.listen(liveClassFeedTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(classroomPostsProvider(classroomId));
+    });
+
     final classroom = ref.watch(classroomProvider(classroomId));
     final posts = ref.watch(classroomPostsProvider(classroomId));
     final open = classroom.value != null && !classroom.value!.isClosed;
@@ -113,10 +121,20 @@ class ClassPostsScreen extends ConsumerWidget {
             child: ContentColumn(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               child: ListView.separated(
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemCount: list.length + 1,
+                separatorBuilder: (_, i) =>
+                    i == 0 ? const SizedBox.shrink() : const SizedBox(height: 12),
                 itemBuilder: (context, i) {
-                  final p = list[i];
+                  if (i == 0) {
+                    return const Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: LiveBadge(),
+                      ),
+                    );
+                  }
+                  final p = list[i - 1];
                   return PostCard(
                     key: ValueKey('post_${p.id}'),
                     post: p,
