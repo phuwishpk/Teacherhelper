@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/live_badge.dart';
 import '../classrooms/classrooms_providers.dart';
 import '../student/live_refresh.dart';
 import 'class_post_models.dart';
@@ -120,10 +121,20 @@ class ClassPostsScreen extends ConsumerWidget {
             child: ContentColumn(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               child: ListView.separated(
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemCount: list.length + 1,
+                separatorBuilder: (_, i) =>
+                    i == 0 ? const SizedBox.shrink() : const SizedBox(height: 12),
                 itemBuilder: (context, i) {
-                  final p = list[i];
+                  if (i == 0) {
+                    return const Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: LiveBadge(),
+                      ),
+                    );
+                  }
+                  final p = list[i - 1];
                   return PostCard(
                     key: ValueKey('post_${p.id}'),
                     post: p,

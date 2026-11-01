@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/live_badge.dart';
 import 'attendance_models.dart';
 import 'attendance_repository.dart';
 
@@ -16,7 +17,15 @@ class MyAttendanceScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final courses = ref.watch(myAttendanceProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('การเข้าเรียนของฉัน')),
+      appBar: AppBar(
+        title: const Text('การเข้าเรียนของฉัน'),
+        actions: const [
+          Padding(
+            padding: EdgeInsetsDirectional.only(end: 16),
+            child: Center(child: LiveBadge()),
+          ),
+        ],
+      ),
       body: AsyncView(
         value: courses,
         onRetry: () => ref.invalidate(myAttendanceProvider),

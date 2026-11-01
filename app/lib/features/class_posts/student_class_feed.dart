@@ -6,6 +6,7 @@ import '../../core/router/app_router.dart';
 import '../../core/util/thai_date.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
+import '../../core/widgets/live_badge.dart';
 import 'class_post_models.dart';
 import 'class_posts_repository.dart';
 import 'post_card.dart';
@@ -56,22 +57,28 @@ class _StudentClassFeedBodyState extends ConsumerState<StudentClassFeedBody> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             child: ListView(
               children: [
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: SegmentedButton<bool>(
-                    key: const ValueKey('feed_view'),
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('สตรีม')),
-                      ButtonSegment(
-                        value: true,
-                        label: Text('งานของชั้นเรียน'),
-                      ),
-                    ],
-                    selected: {_classwork},
-                    onSelectionChanged: (s) =>
-                        setState(() => _classwork = s.single),
-                  ),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    SegmentedButton<bool>(
+                      key: const ValueKey('feed_view'),
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('สตรีม')),
+                        ButtonSegment(
+                          value: true,
+                          label: Text('งานของชั้นเรียน'),
+                        ),
+                      ],
+                      selected: {_classwork},
+                      onSelectionChanged: (s) =>
+                          setState(() => _classwork = s.single),
+                    ),
+                    const LiveBadge(),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 if (shown.isEmpty)
