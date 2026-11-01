@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
-import '../../core/util/thai_date.dart';
-import '../../core/widgets/message_dialog.dart';
-import '../../core/widgets/small_spinner.dart';
 import 'assistant.dart';
+import 'assistant_attached_files.dart';
 import 'assistant_bubble.dart';
+import 'assistant_conversation_list.dart';
+import 'assistant_notices.dart';
 import 'assistant_plan_card.dart';
 import 'assistant_student_data.dart';
 
@@ -71,9 +71,9 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     final Widget body;
     if (status.value case final s?) {
       body = !s.available
-          ? _NoKey(onOpenSettings: () => widget.onNavigate(AppRoutes.settings))
+          ? AssistantNoKey(onOpenSettings: () => widget.onNavigate(AppRoutes.settings))
           : _showList
-          ? _ConversationList(
+          ? AssistantConversationList(
               onOpen: (id) {
                 setState(() => _showList = false);
                 ref.read(assistantChatProvider.notifier).open(id);
@@ -88,7 +88,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
               onNavigate: widget.onNavigate,
             );
     } else if (status.hasError) {
-      body = _Centered(
+      body = AssistantCentered(
         icon: Icons.cloud_off_outlined,
         text: apiErrorMessage(status.error!),
         action: OutlinedButton(
@@ -261,7 +261,7 @@ class _Chat extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: StudentDataChip(status: status, enabled: !busy),
         ),
-        _AttachedFiles(enabled: !busy),
+        AssistantAttachedFiles(enabled: !busy),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: Text(
@@ -314,7 +314,7 @@ class _Chat extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
           child: Text(
             'วันนี้ถามแล้ว ${status.usedToday}/${status.dailyLimit} ข้อความ'
-            '${tokens > 0 ? ' · บทสนทนานี้ใช้ ${_thousands(tokens)} โทเค็น' : ''}',
+            '${tokens > 0 ? ' · บทสนทนานี้ใช้ ${thousands(tokens)} โทเค็น' : ''}',
             key: const ValueKey('assistant_usage'),
             style: muted,
           ),
@@ -325,158 +325,6 @@ class _Chat extends ConsumerWidget {
 }
 
 
-class _ConversationList extends ConsumerWidget {
-  const _ConversationList({required this.onOpen});
-
-  final ValueChanged<int> onOpen;
-
-  Future<void> _delete(
-    BuildContext context,
-    WidgetRef ref,
-    AssistantConversation c,
-  ) async {
-    final ok = await showMessageDialog<bool>(
-      context,
-      title: 'ลบบทสนทนานี้?',
-      message: '«${c.title}» จะถูกลบถาวร',
-      actions: const [
-        DialogAction('ยกเลิก', value: false),
-        DialogAction(
-          'ลบ',
-          value: true,
-          key: ValueKey('assistant_delete_confirm'),
-          primary: true,
-          destructive: true,
-        ),
-      ],
-    );
-    if (ok != true) return;
-    try {
-      await ref.read(assistantChatProvider.notifier).delete(c.id);
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final conversations = ref.watch(assistantConversationsProvider);
-    final note = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Text(
-        'บทสนทนาที่ไม่ได้ใช้ 90 วันจะถูกลบเอง ผู้ดูแลระบบเปิดอ่านได้เพื่อช่วยแก้ปัญหา',
-        style: muted,
-      ),
-    );
-
-    return switch (conversations) {
-      AsyncValue(value: final list?) when list.isEmpty => Column(
-        children: [
-          const Expanded(
-            child: _Centered(
-              icon: Icons.forum_outlined,
-              text: 'ยังไม่มีบทสนทนา',
-            ),
-          ),
-          note,
-        ],
-      ),
-      AsyncValue(value: final list?) => ListView(
-        children: [
-          for (final c in list)
-            ListTile(
-              key: ValueKey('assistant_conversation_${c.id}'),
-              title: Text(
-                c.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                [
-                  if (c.updatedAt case final at?) formatThaiDateTime(at),
-                  if (c.tokens > 0) '${_thousands(c.tokens)} โทเค็น',
-                ].join(' · '),
-              ),
-              onTap: () => onOpen(c.id),
-              trailing: IconButton(
-                key: ValueKey('assistant_delete_${c.id}'),
-                tooltip: 'ลบบทสนทนา',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _delete(context, ref, c),
-              ),
-            ),
-          note,
-        ],
-      ),
-      AsyncValue(:final error?) => _Centered(
-        icon: Icons.cloud_off_outlined,
-        text: apiErrorMessage(error),
-        action: OutlinedButton(
-          onPressed: () => ref.invalidate(assistantConversationsProvider),
-          child: const Text('ลองใหม่'),
-        ),
-      ),
-      _ => const Center(child: CircularProgressIndicator.adaptive()),
-    };
-  }
-}
-
-class _NoKey extends StatelessWidget {
-  const _NoKey({required this.onOpenSettings});
-
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) => _Centered(
-    icon: Icons.key_outlined,
-    text:
-        'ผู้ช่วยใช้ Gemini API key ของครูเอง ยังไม่ได้ใส่ key '
-        'ใส่ที่หน้าตั้งค่าก่อน แล้วกลับมาถามได้เลย',
-    action: FilledButton(
-      key: const ValueKey('assistant_settings'),
-      onPressed: onOpenSettings,
-      child: const Text('ไปที่ตั้งค่า'),
-    ),
-  );
-}
-
-class _Centered extends StatelessWidget {
-  const _Centered({required this.icon, required this.text, this.action});
-
-  final IconData icon;
-  final String text;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text(text, textAlign: TextAlign.center),
-            if (action case final a?) ...[const SizedBox(height: 16), a],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 41230 -> "41,230".
-String _thousands(int n) =>
-    n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
 
 /// The assistant as its own page, on a phone or a tablet.
 class AssistantScreen extends StatelessWidget {
@@ -497,64 +345,3 @@ class AssistantScreen extends StatelessWidget {
   }
 }
 
-/// The files picked for the next question (DESIGN §37.10), with the
-/// warning that only the teacher's own documents belong here.
-class _AttachedFiles extends ConsumerWidget {
-  const _AttachedFiles({required this.enabled});
-
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final state = ref.watch(assistantAttachmentsProvider);
-    if (state.files.isEmpty && !state.uploading && state.error == null) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final f in state.files)
-                InputChip(
-                  key: ValueKey('assistant_file_${f.id}'),
-                  avatar: const Icon(Icons.description_outlined),
-                  label: Text('${f.originalName} (${f.pageCount} หน้า)'),
-                  deleteIcon: const Icon(Icons.close),
-                  deleteButtonTooltipMessage: 'เอาไฟล์ออก',
-                  onDeleted: enabled
-                      ? () => ref
-                            .read(assistantAttachmentsProvider.notifier)
-                            .remove(f.id)
-                      : null,
-                ),
-              if (state.uploading)
-                const Chip(
-                  avatar: SmallSpinner(size: 16),
-                  label: Text('กำลังอัปโหลด…'),
-                ),
-            ],
-          ),
-          if (state.error case final error?)
-            Text(
-              error,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            ),
-          Text(
-            'แนบเฉพาะเอกสารของครู อย่าแนบไฟล์ที่มีชื่อหรือคำตอบของนักเรียน',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
