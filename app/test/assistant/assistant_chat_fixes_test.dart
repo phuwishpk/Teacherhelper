@@ -146,6 +146,9 @@ void main() {
   late _Uploads uploads;
   late List<String> routes;
 
+  final input = find.byKey(const ValueKey('assistant_input'));
+  final send = find.byKey(const ValueKey('assistant_send'));
+  final attach = find.byKey(const ValueKey('assistant_attach'));
   final retry = find.byKey(const ValueKey('assistant_retry'));
 
   setUp(() {
@@ -198,6 +201,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.opens, 2);
     expect(find.text('ตอบเก่า'), findsOneWidget);
+  });
+
+  // F2
+  testWidgets('a question waits for the file that is still uploading', (
+    tester,
+  ) async {
+    uploads.gate = Completer();
+    repo.replies.add(
+      _reply(7, [
+        _message(1, 'user', 'อ่านไฟล์นี้'),
+        _message(2, 'assistant', 'อ่านแล้ว'),
+      ]),
+    );
+    await pumpPanel(tester);
+
+    await tester.tap(attach);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('กำลังอัปโหลด…'), findsOneWidget);
+    expect(tester.widget<IconButton>(send).onPressed, isNull);
+
+    await tester.enterText(input, 'อ่านไฟล์นี้');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
+    expect(repo.sent, isEmpty);
+    expect(find.text('อ่านไฟล์นี้'), findsOneWidget);
+
+    uploads.gate!.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(repo.sent.single.$2, [31]);
   });
 }
 

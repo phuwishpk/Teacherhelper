@@ -184,7 +184,11 @@ class AssistantChatView extends ConsumerWidget {
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => onSend(),
                   decoration: InputDecoration(
-                    hintText: busy ? 'ผู้ช่วยกำลังคิด…' : 'พิมพ์คำถาม',
+                    hintText: busy
+                        ? 'ผู้ช่วยกำลังคิด…'
+                        : ref.watch(assistantAttachmentsProvider).uploading
+                        ? 'รออัปโหลดไฟล์ให้เสร็จก่อน'
+                        : 'พิมพ์คำถาม',
                     counterText: '',
                   ),
                 ),
@@ -193,7 +197,10 @@ class AssistantChatView extends ConsumerWidget {
                 key: const ValueKey('assistant_send'),
                 tooltip: 'ส่ง',
                 icon: const Icon(Icons.send),
-                onPressed: busy ? null : onSend,
+                onPressed:
+                    busy || ref.watch(assistantAttachmentsProvider).uploading
+                    ? null
+                    : onSend,
               ),
             ],
           ),
