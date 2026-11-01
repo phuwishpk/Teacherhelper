@@ -39,6 +39,7 @@ class AssistantChatView extends ConsumerWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final busy = chat.sending || chat.loading;
+    final attachments = ref.watch(assistantAttachmentsProvider);
     final messages = chat.messages;
     final tokens = chat.conversation?.tokens ?? 0;
     final mascotOn = ref.watch(mascotEnabledProvider);
@@ -143,10 +144,10 @@ class AssistantChatView extends ConsumerWidget {
       );
     }
 
-    return Column(
+    final footer = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(child: list),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
           child: StudentDataChip(status: status, enabled: !busy),
@@ -168,8 +169,7 @@ class AssistantChatView extends ConsumerWidget {
                 key: const ValueKey('assistant_attach'),
                 tooltip: 'แนบเอกสารของครู (PDF หรือรูป)',
                 icon: const Icon(Icons.attach_file),
-                onPressed:
-                    busy || ref.watch(assistantAttachmentsProvider).uploading
+                onPressed: busy || attachments.uploading
                     ? null
                     : () => ref
                           .read(assistantAttachmentsProvider.notifier)
@@ -189,12 +189,9 @@ class AssistantChatView extends ConsumerWidget {
                   decoration: InputDecoration(
                     hintText: busy
                         ? 'ผู้ช่วยกำลังคิด…'
-                        : ref.watch(assistantAttachmentsProvider).uploading
+                        : attachments.uploading
                         ? 'รออัปโหลดไฟล์ให้เสร็จก่อน'
-                        : ref
-                              .watch(assistantAttachmentsProvider)
-                              .files
-                              .isNotEmpty
+                        : attachments.files.isNotEmpty
                         ? 'บอกผู้ช่วยว่าจะให้ทำอะไรกับไฟล์นี้'
                         : 'พิมพ์คำถาม',
                     counterText: '',
@@ -205,10 +202,7 @@ class AssistantChatView extends ConsumerWidget {
                 key: const ValueKey('assistant_send'),
                 tooltip: 'ส่ง',
                 icon: const Icon(Icons.send),
-                onPressed:
-                    busy || ref.watch(assistantAttachmentsProvider).uploading
-                    ? null
-                    : onSend,
+                onPressed: busy || attachments.uploading ? null : onSend,
               ),
             ],
           ),
@@ -223,6 +217,23 @@ class AssistantChatView extends ConsumerWidget {
           ),
         ),
       ],
+    );
+
+    // On a short window (a phone on its side with the keyboard open) the
+    // footer scrolls with the input in view, and the list keeps a quarter.
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: list),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: constraints.maxHeight * 0.75,
+            ),
+            child: SingleChildScrollView(reverse: true, child: footer),
+          ),
+        ],
+      ),
     );
   }
 }

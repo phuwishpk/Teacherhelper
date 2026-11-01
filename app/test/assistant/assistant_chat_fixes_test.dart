@@ -524,5 +524,24 @@ void main() {
     );
     await tester.pumpAndSettle();
   });
+
+  // F12
+  for (final size in const [
+    Size(390, 844),
+    Size(390, 340),
+    Size(844, 300),
+    Size(844, 200),
+  ]) {
+    testWidgets('fits ${size.width.toInt()} x ${size.height.toInt()}', (
+      tester,
+    ) async {
+      await pumpPanel(tester, size: size);
+      expect(tester.takeException(), isNull);
+      await tester.tap(attach, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(input.hitTestable(), findsOneWidget);
+    });
+  }
 }
 
