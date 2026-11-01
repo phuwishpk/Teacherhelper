@@ -5499,7 +5499,7 @@ service cloud.firestore {
   - ฟีดห้องเรียน (`SignalClassFeedJob`): dispatch `afterCommit` ทำงานแบบ `ShouldBeUniqueUntilProcessing` แยกตาม `classroomId` ส่งสัญญาณให้ครูทุกคนและนักเรียนของห้อง ส่งเมื่อ:
     1. `ClassPostPublished`: มีการเผยแพร่โพสต์ใหม่
     2. แก้ไขโพสต์หรือลบโพสต์ใน `ClassPostController`
-    3. `Assignment::booted` ฟัง `saved` เมื่อการบ้านเปิดรับส่งหรือปิดรับส่ง (`published_at`, `due_at`, `status`)
+    3. `Assignment::booted` ฟัง `saved` เมื่อการบ้านถูกสร้างในสถานะพร้อมใช้ หรือ `status` เปลี่ยน
   - การเช็คชื่อสด (`SignalAttendanceJob`): dispatch `afterCommit` ทำงานแบบ `ShouldBeUniqueUntilProcessing` แยกตาม `courseId:classroomId` ส่งสัญญาณให้นักเรียนทุกคนของห้อง (ไม่ส่งให้ครู) เมื่อมีการสร้าง แก้ไข ลบคาบ หรือเช็คชื่อใน `AttendanceController`
   - หาก Firestore ปิดหรือล่ม job จะกลืน exception เงียบ ๆ และไม่กระทบกระบวนการหลัก
 - **แอป**:
@@ -5510,7 +5510,7 @@ service cloud.firestore {
     - การ์ด "การเข้าเรียนวันนี้" (`TodayAttendanceCard`): บนหน้าแรกของนักเรียน แสดงสถานะคาบเรียนของวันนี้ (เช่น มาสาย, มาตรงเวลา) และไม่กินพื้นที่หากไม่มีคาบเรียนวันนี้หรือโหลดไม่สำเร็จ
 - **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) โดยปกติอยู่ที่ 1–5 วินาที
 - **test ที่มี**:
-  - backend: `LiveClassroomTest` (ผู้รับและ fields), `SignalClassFeedJobTest`, `SignalAttendanceJobTest`, `LiveClassroomPrivacyTest` (ยืนยันว่าไม่มีเนื้อหาโพสต์/สถานะเช็คชื่อใน Firestore และผู้ใช้คนอื่นไม่ได้รับสัญญาณ)
+  - backend: `LiveClassroomTest` (ผู้รับและ fields), `LiveClassFeedTest`, `LiveAttendanceTest`, `LiveClassroomPrivacyTest` (ยืนยันว่าไม่มีเนื้อหาโพสต์/สถานะเช็คชื่อใน Firestore และผู้ใช้คนอื่นไม่ได้รับสัญญาณ)
   - app: `live_class_widgets_test.dart` (widget test ของ LiveBadge, ปุ่มรายการใหม่, TodayAttendanceCard และการแสดงผล 3 ขนาดหน้าจอ 390, 820, 1440 px), `live_class_flow_test.dart` (integration flow ของ StudentShell ตามสัญญาณโพสต์และการเข้าเรียน), `live_class_signal_test.dart` (security test ตรวจว่า uid อื่นไม่ trigger refetch, uid ไม่ตรงไม่ฟัง, แอปไม่เขียน Firestore เอง, และ firestore.rules ยังคงมี uid guard ไม่มี match /classrooms)
 
 
