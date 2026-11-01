@@ -156,7 +156,6 @@ void _liveRefreshTests() {
         ),
         myAnalysesProvider.overrideWith((ref) async => const []),
         myCoursesProvider.overrideWith((ref) async => const []),
-        attendanceRepositoryProvider.overrideWithValue(_FakeAttendance()),
         liveSessionProvider.overrideWithValue(_Live(db)),
       ],
     );
@@ -177,7 +176,7 @@ void _liveRefreshTests() {
       tester,
       const StudentShell(),
       overrides: [
-        ...studentViewOverrides(),
+        ...studentViewOverrides(attendance: attendance),
         currentUserProvider.overrideWithValue(
           const User(id: 11, name: 'ด.ญ. เอ', role: 'student'),
         ),
@@ -187,7 +186,6 @@ void _liveRefreshTests() {
         ),
         myAnalysesProvider.overrideWith((ref) async => const []),
         myCoursesProvider.overrideWith((ref) async => const []),
-        attendanceRepositoryProvider.overrideWithValue(attendance),
         liveSessionProvider.overrideWithValue(_Live(db)),
       ],
     );
