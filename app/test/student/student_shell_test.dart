@@ -5,6 +5,8 @@ import 'package:eduvision/core/live/live_session.dart';
 import 'package:eduvision/core/live/live_token_api.dart';
 import 'package:eduvision/core/router/app_router.dart';
 import 'package:eduvision/features/analysis/analysis_repository.dart';
+import 'package:eduvision/features/attendance/attendance_models.dart';
+import 'package:eduvision/features/attendance/attendance_repository.dart';
 import 'package:eduvision/features/mastery/course_mastery.dart';
 import 'package:eduvision/features/mastery/mastery_models.dart';
 import 'package:eduvision/features/mastery/mastery_repository.dart';
@@ -12,10 +14,12 @@ import 'package:eduvision/features/practice/practice_repository.dart';
 import 'package:eduvision/features/student/student_shell.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../class_posts/class_post_fakes.dart';
 import '../hand_in/hand_in_fakes.dart';
 import '../helpers/pump_screen.dart';
 import 'student_fixtures.dart';
@@ -92,6 +96,16 @@ class _Live implements LiveSession {
   Future<void> signOut() async {}
 }
 
+class _FakeAttendance extends Fake implements AttendanceRepository {
+  int mineCalls = 0;
+
+  @override
+  Future<List<MyAttendanceCourse>> mine() async {
+    mineCalls++;
+    return const [];
+  }
+}
+
 void _liveRefreshTests() {
   testWidgets('a hand-in that changes status refetches the lists', (
     tester,
@@ -123,6 +137,78 @@ void _liveRefreshTests() {
     await tester.pumpAndSettle();
 
     expect(handIn.listCalls, greaterThan(before));
+  });
+
+  testWidgets('class_feed signal refetches the student feed', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final classPosts = FakeClassPosts();
+    await pumpScreen(
+      tester,
+      const StudentShell(),
+      overrides: [
+        ...studentViewOverrides(classPosts: classPosts),
+        currentUserProvider.overrideWithValue(
+          const User(id: 11, name: 'ด.ญ. เอ', role: 'student'),
+        ),
+        practiceRecommendationsProvider.overrideWith((ref) async => const []),
+        myMasteryProvider.overrideWith(
+          (ref) async => const MasteryList(rows: []),
+        ),
+        myAnalysesProvider.overrideWith((ref) async => const []),
+        myCoursesProvider.overrideWith((ref) async => const []),
+        attendanceRepositoryProvider.overrideWithValue(_FakeAttendance()),
+        liveSessionProvider.overrideWithValue(_Live(db)),
+      ],
+    );
+    await tester.pumpAndSettle();
+    final before = classPosts.feedKeys.length;
+
+    // Write class_feed signal for this user
+    await db.doc('users/u11/class_feed/7').set({'classroom_id': 7});
+    await tester.pumpAndSettle();
+
+    expect(classPosts.feedKeys.length, greaterThan(before));
+  });
+
+  testWidgets('attendance signal refetches the attendance data', (tester) async {
+    final db = FakeFirebaseFirestore();
+    final attendance = _FakeAttendance();
+    await pumpScreen(
+      tester,
+      const StudentShell(),
+      overrides: [
+        ...studentViewOverrides(),
+        currentUserProvider.overrideWithValue(
+          const User(id: 11, name: 'ด.ญ. เอ', role: 'student'),
+        ),
+        practiceRecommendationsProvider.overrideWith((ref) async => const []),
+        myMasteryProvider.overrideWith(
+          (ref) async => const MasteryList(rows: []),
+        ),
+        myAnalysesProvider.overrideWith((ref) async => const []),
+        myCoursesProvider.overrideWith((ref) async => const []),
+        attendanceRepositoryProvider.overrideWithValue(attendance),
+        liveSessionProvider.overrideWithValue(_Live(db)),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(StudentShell)),
+    );
+    final subscription = container.listen(myAttendanceProvider, (_, __) {});
+    addTearDown(subscription.close);
+    await tester.pumpAndSettle();
+    final before = attendance.mineCalls;
+
+    // Write attendance signal for this user
+    await db.doc('users/u11/attendance/3_7').set({
+      'course_id': 3,
+      'classroom_id': 7,
+    });
+    await tester.pumpAndSettle();
+
+    expect(attendance.mineCalls, greaterThan(before));
   });
 }
 

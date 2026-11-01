@@ -7,6 +7,8 @@ import '../../core/live/live_session.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/adaptive_shell.dart';
 import '../auth/sign_out_action.dart';
+import '../attendance/attendance_repository.dart';
+import '../class_posts/class_posts_repository.dart';
 import '../hand_in/hand_in_repository.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
@@ -74,9 +76,23 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     // A hand-in changed status (DESIGN §38.9): refetch what shows it.
     ref.listen(liveSubmissionTicksProvider, (_, next) {
       if (!next.hasValue) return;
+      ref.invalidate(classFeedProvider);
       ref.invalidate(studentAssignmentsProvider);
       ref.invalidate(studentResultsProvider);
       ref.invalidate(studentOverviewProvider);
+    });
+
+    // A post or homework changed (DESIGN §38.11): the feed refetches itself.
+    ref.listen(liveClassFeedTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(classFeedProvider);
+      ref.invalidate(studentAssignmentsProvider);
+      ref.invalidate(studentOverviewProvider);
+    });
+    // The teacher took attendance (DESIGN §38.11).
+    ref.listen(liveAttendanceTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(myAttendanceProvider);
     });
 
     return AdaptiveShell(
