@@ -1,0 +1,431 @@
+diff --git a/app/lib/core/api/error_codes.dart b/app/lib/core/api/error_codes.dart
+index 96feab8e..54f50575 100644
+--- a/app/lib/core/api/error_codes.dart
++++ b/app/lib/core/api/error_codes.dart
+@@ -16,6 +16,12 @@ class ErrorCode {
+   /// The server took too long to answer.
+   static const timeout = 'NET-TIMEOUT';
+ 
++  /// The day's questions to the assistant are used up (DESIGN §37.1).
++  static const chatLimit = 'CHAT-LIMIT';
++
++  /// Google no longer accepts the teacher's Gemini key (DESIGN §36).
++  static const keyInvalid = 'AI-KEY-INVALID';
++
+   final String code;
+   final int? callId;
+ 
+diff --git a/app/lib/features/assistant/assistant.dart b/app/lib/features/assistant/assistant.dart
+index 457a7f23..6a405066 100644
+--- a/app/lib/features/assistant/assistant.dart
++++ b/app/lib/features/assistant/assistant.dart
+@@ -397,6 +397,8 @@ class AssistantChatState {
+     this.sending = false,
+     this.loading = false,
+     this.labels = const {},
++    this.failedOpenId,
++    this.justApplied = false,
+   });
+ 
+   final AssistantConversation? conversation;
+@@ -404,11 +406,21 @@ class AssistantChatState {
+   final bool sending;
+   final bool loading;
+ 
++  /// A conversation that could not be opened: "ลองใหม่" opens it again.
++  final int? failedOpenId;
++
++  /// A card was created just now, by its button or a typed confirmation.
++  final bool justApplied;
++
+   /// The conversation's students by label (DESIGN §37.8).
+   final Map<String, StudentLabel> labels;
+ 
+-  /// The last message failed and nothing is running: "ลองใหม่" can go.
+-  bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
++  /// The last message failed and nothing is running: "ลองใหม่" can go,
++  /// except when asking again cannot work today.
++  bool get canRetry =>
++      !sending &&
++      (messages.lastOrNull?.isError ?? false) &&
++      messages.last.errorCode != ErrorCode.chatLimit;
+ }
+ 
+ /// Kept while the teacher is signed in, so closing the desktop panel or
+@@ -441,7 +453,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+       );
+     } catch (e) {
+       if (!ref.mounted) return;
+-      state = AssistantChatState(messages: [_localFailure(e)]);
++      state = AssistantChatState(
++        messages: [_localFailure(e)],
++        failedOpenId: id,
++      );
+     }
+   }
+ 
+@@ -497,6 +512,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+   /// failure the server never saw sends the question again.
+   Future<void> retry() async {
+     if (!state.canRetry) return;
++    if (state.failedOpenId case final id?) return open(id);
+     final messages = state.messages;
+     final failure = messages.last;
+     final conversation = state.conversation;
+@@ -508,7 +524,11 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+         sending: true,
+         labels: state.labels,
+       );
+-      await _ask(before, () => _repo.retry(conversation.id));
++      await _ask(
++        before,
++        () => _repo.retry(conversation.id),
++        storedFailureId: failure.id,
++      );
+       return;
+     }
+     final question = messages.length >= 2
+@@ -527,10 +547,13 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+ 
+   /// Runs [call]; the question and its answer or failure follow [before].
+   /// True when the server got the question (answered or stored a failure).
++  /// [storedFailureId]: a retry of that stored failure; if the connection
++  /// drops, "ลองใหม่" must retry it again, not send the question twice.
+   Future<bool> _ask(
+     List<AssistantMessage> before,
+-    Future<AssistantReply> Function() call,
+-  ) async {
++    Future<AssistantReply> Function() call, {
++    int? storedFailureId,
++  }) async {
+     try {
+       final reply = await call();
+       if (!ref.mounted) return true;
+@@ -549,6 +572,17 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+       return true;
+     } catch (e) {
+       if (!ref.mounted) return false;
++      // The retry reached the server but its answer did not reach the app.
++      if (apiErrorBody(e)?['code'] == 'nothing_to_retry') {
++        final id = state.conversation?.id;
++        state = AssistantChatState(
++          conversation: state.conversation,
++          messages: state.messages,
++          labels: state.labels,
++        );
++        if (id != null) await open(id);
++        return true;
++      }
+       final stored = AssistantReply.tryParse(apiErrorBody(e));
+       state = stored != null
+           ? AssistantChatState(
+@@ -560,7 +594,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+             )
+           : AssistantChatState(
+               conversation: state.conversation,
+-              messages: [...state.messages, _localFailure(e)],
++              messages: [
++                ...state.messages,
++                _localFailure(e, id: storedFailureId),
++              ],
+               labels: state.labels,
+             );
+       return stored != null;
+@@ -582,6 +619,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+       sending: state.sending,
+       loading: state.loading,
+       labels: state.labels,
++      justApplied: message.planStatus == AssistantMessage.planApplied,
+     );
+   }
+ 
+@@ -602,9 +640,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
+     ];
+   }
+ 
+-  static AssistantMessage _localFailure(Object error) {
++  static AssistantMessage _localFailure(Object error, {int? id}) {
+     final code = errorCodeOf(error);
+     return AssistantMessage(
++      id: id,
+       role: AssistantMessage.error,
+       content: switch (code?.code) {
+         ErrorCode.offline =>
+@@ -799,6 +838,8 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
+   /// The same limit as the server's (AssistantChat::MAX_ATTACHMENTS).
+   static const maxFiles = 5;
+ 
++  static const _tooMany = 'แนบได้ไม่เกิน $maxFiles ไฟล์ต่อคำถาม';
++
+   @override
+   AssistantAttachments build() {
+     ref.watch(currentUserProvider.select((u) => u?.id));
+@@ -806,18 +847,26 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
+   }
+ 
+   Future<void> pick() async {
+-    if (state.uploading || state.files.length >= maxFiles) return;
++    if (state.uploading) return;
++    if (state.files.length >= maxFiles) {
++      state = AssistantAttachments(files: state.files, error: _tooMany);
++      return;
++    }
+     final picked = await ref
+         .read(documentFilePickerProvider)
+         .pick(dialogTitle: 'แนบเอกสารของครู');
+     if (picked.isEmpty || !ref.mounted) return;
++    final room = maxFiles - state.files.length;
+     state = AssistantAttachments(files: state.files, uploading: true);
+     try {
+       final uploaded = await ref
+           .read(answerKeyRepositoryProvider)
+-          .upload(picked.take(maxFiles - state.files.length).toList());
++          .upload(picked.take(room).toList());
+       if (!ref.mounted) return;
+-      state = AssistantAttachments(files: [...state.files, ...uploaded]);
++      state = AssistantAttachments(
++        files: [...state.files, ...uploaded],
++        error: picked.length > room ? _tooMany : null,
++      );
+     } catch (e) {
+       if (!ref.mounted) return;
+       state = AssistantAttachments(
+@@ -832,6 +881,7 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
+       for (final f in state.files)
+         if (f.id != id) f,
+     ],
++    uploading: state.uploading,
+   );
+ 
+   void clear() => state = const AssistantAttachments();
+diff --git a/app/lib/features/assistant/assistant_panel.dart b/app/lib/features/assistant/assistant_panel.dart
+index 007d9e20..d6f904b4 100644
+--- a/app/lib/features/assistant/assistant_panel.dart
++++ b/app/lib/features/assistant/assistant_panel.dart
+@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
+ import '../../core/api/api_client.dart';
+ import '../../core/api/error_codes.dart';
+ import '../../core/router/app_router.dart';
++import '../../core/theme/breakpoints.dart';
+ import '../../core/util/thai_date.dart';
+ import '../../core/widgets/message_dialog.dart';
+ import '../../core/widgets/small_spinner.dart';
+@@ -37,6 +38,7 @@ class AssistantPanel extends ConsumerStatefulWidget {
+ 
+ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
+   final _input = TextEditingController();
++  final _inputFocus = FocusNode();
+   bool _showList = false;
+ 
+   static const _suggestions = [
+@@ -51,13 +53,17 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
+   @override
+   void dispose() {
+     _input.dispose();
++    _inputFocus.dispose();
+     super.dispose();
+   }
+ 
+   void _send([String? text]) {
+     final question = (text ?? _input.text).trim();
+     if (question.isEmpty) return;
+-    _input.clear();
++    // A file still uploading would miss the question.
++    if (ref.read(assistantAttachmentsProvider).uploading) return;
++    // A suggestion leaves what the teacher typed alone.
++    if (text == null) _input.clear();
+     ref.read(assistantChatProvider.notifier).send(question);
+   }
+ 
+@@ -68,6 +74,16 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
+     final status = ref.watch(assistantStatusProvider);
+     final busy = chat.sending || chat.loading;
+ 
++    // The input is locked while the AI answers, which takes its focus. On a
++    // desktop the teacher types on; a phone's keyboard would hide the answer.
++    ref.listen(assistantChatProvider.select((c) => c.sending), (was, sending) {
++      if (was != true || sending) return;
++      if (context.windowSize != WindowSize.expanded) return;
++      WidgetsBinding.instance.addPostFrameCallback((_) {
++        if (mounted) _inputFocus.requestFocus();
++      });
++    });
++
+     final Widget body;
+     if (status.value case final s?) {
+       body = !s.available
+@@ -83,6 +99,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
+               chat: chat,
+               status: s,
+               input: _input,
++              inputFocus: _inputFocus,
+               suggestions: _suggestions,
+               onSend: _send,
+               onNavigate: widget.onNavigate,
+@@ -157,6 +174,7 @@ class _Chat extends ConsumerWidget {
+     required this.chat,
+     required this.status,
+     required this.input,
++    required this.inputFocus,
+     required this.suggestions,
+     required this.onSend,
+     required this.onNavigate,
+@@ -165,6 +183,7 @@ class _Chat extends ConsumerWidget {
+   final AssistantChatState chat;
+   final AssistantStatus status;
+   final TextEditingController input;
++  final FocusNode inputFocus;
+   final List<String> suggestions;
+   final void Function([String? text]) onSend;
+   final ValueChanged<String> onNavigate;
+@@ -176,6 +195,7 @@ class _Chat extends ConsumerWidget {
+       color: theme.colorScheme.onSurfaceVariant,
+     );
+     final busy = chat.sending || chat.loading;
++    final attachments = ref.watch(assistantAttachmentsProvider);
+     final messages = chat.messages;
+     final tokens = chat.conversation?.tokens ?? 0;
+ 
+@@ -251,10 +271,10 @@ class _Chat extends ConsumerWidget {
+       );
+     }
+ 
+-    return Column(
++    final footer = Column(
+       crossAxisAlignment: CrossAxisAlignment.stretch,
++      mainAxisSize: MainAxisSize.min,
+       children: [
+-        Expanded(child: list),
+         Padding(
+           padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+           child: StudentDataChip(status: status, enabled: !busy),
+@@ -276,8 +296,7 @@ class _Chat extends ConsumerWidget {
+                 key: const ValueKey('assistant_attach'),
+                 tooltip: 'แนบเอกสารของครู (PDF หรือรูป)',
+                 icon: const Icon(Icons.attach_file),
+-                onPressed:
+-                    busy || ref.watch(assistantAttachmentsProvider).uploading
++                onPressed: busy || attachments.uploading
+                     ? null
+                     : () => ref
+                           .read(assistantAttachmentsProvider.notifier)
+@@ -287,6 +306,7 @@ class _Chat extends ConsumerWidget {
+                 child: TextField(
+                   key: const ValueKey('assistant_input'),
+                   controller: input,
++                  focusNode: inputFocus,
+                   enabled: !busy,
+                   minLines: 1,
+                   maxLines: 5,
+@@ -294,7 +314,13 @@ class _Chat extends ConsumerWidget {
+                   textInputAction: TextInputAction.send,
+                   onSubmitted: (_) => onSend(),
+                   decoration: InputDecoration(
+-                    hintText: busy ? 'ผู้ช่วยกำลังคิด…' : 'พิมพ์คำถาม',
++                    hintText: busy
++                        ? 'ผู้ช่วยกำลังคิด…'
++                        : attachments.uploading
++                        ? 'รออัปโหลดไฟล์ให้เสร็จก่อน'
++                        : attachments.files.isNotEmpty
++                        ? 'บอกผู้ช่วยว่าจะให้ทำอะไรกับไฟล์นี้'
++                        : 'พิมพ์คำถาม',
+                     counterText: '',
+                   ),
+                 ),
+@@ -303,7 +329,7 @@ class _Chat extends ConsumerWidget {
+                 key: const ValueKey('assistant_send'),
+                 tooltip: 'ส่ง',
+                 icon: const Icon(Icons.send),
+-                onPressed: busy ? null : onSend,
++                onPressed: busy || attachments.uploading ? null : onSend,
+               ),
+             ],
+           ),
+@@ -319,6 +345,23 @@ class _Chat extends ConsumerWidget {
+         ),
+       ],
+     );
++
++    // On a short window (a phone on its side with the keyboard open) the
++    // footer scrolls with the input in view, and the list keeps a quarter.
++    return LayoutBuilder(
++      builder: (context, constraints) => Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          Expanded(child: list),
++          ConstrainedBox(
++            constraints: BoxConstraints(
++              maxHeight: constraints.maxHeight * 0.75,
++            ),
++            child: SingleChildScrollView(reverse: true, child: footer),
++          ),
++        ],
++      ),
++    );
+   }
+ }
+ 
+@@ -436,6 +479,17 @@ class _Bubble extends StatelessWidget {
+                       ),
+                     ),
+                 if (code != null) ErrorCodeLine(code),
++                if (message.errorCode == ErrorCode.keyInvalid &&
++                    onNavigate != null)
++                  Align(
++                    alignment: Alignment.centerRight,
++                    child: TextButton.icon(
++                      key: const ValueKey('assistant_error_settings'),
++                      onPressed: () => onNavigate!(AppRoutes.settings),
++                      icon: const Icon(Icons.key_outlined),
++                      label: const Text('ไปที่ตั้งค่า'),
++                    ),
++                  ),
+                 if (onRetry != null)
+                   Align(
+                     alignment: Alignment.centerRight,
+@@ -470,7 +524,18 @@ class _ThinkingBubbleState extends State<_ThinkingBubble>
+   late final _pulse = AnimationController(
+     vsync: this,
+     duration: const Duration(milliseconds: 1200),
+-  )..repeat();
++  );
++
++  @override
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    // The dots rest when the device asks for less motion.
++    if (MediaQuery.disableAnimationsOf(context)) {
++      _pulse.stop();
++    } else if (!_pulse.isAnimating) {
++      _pulse.repeat();
++    }
++  }
+ 
+   @override
+   void dispose() {
+@@ -690,18 +755,22 @@ String _thousands(int n) =>
+     n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+ 
+ /// The assistant as its own page, on a phone or a tablet.
+-class AssistantScreen extends StatelessWidget {
++class AssistantScreen extends ConsumerWidget {
+   const AssistantScreen({super.key});
+ 
+   @override
+-  Widget build(BuildContext context) {
++  Widget build(BuildContext context, WidgetRef ref) {
+     void close() =>
+         context.canPop() ? context.pop() : context.go(AppRoutes.home);
+     return Scaffold(
+       body: SafeArea(
+         child: AssistantPanel(
+           onClose: close,
+-          onNavigate: (route) => context.push(route),
++          onNavigate: (route) async {
++            await context.push(route);
++            // A key added in settings counts as soon as the teacher is back.
++            if (context.mounted) ref.invalidate(assistantStatusProvider);
++          },
+         ),
+       ),
+     );
