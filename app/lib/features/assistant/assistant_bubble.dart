@@ -202,7 +202,18 @@ class _AssistantThinkingBubbleState
   late final _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1200),
-  )..repeat();
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The dots rest when the device asks for less motion.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat();
+    }
+  }
 
   @override
   void dispose() {

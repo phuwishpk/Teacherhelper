@@ -486,5 +486,43 @@ void main() {
       'ข้อความที่พิมพ์ค้างไว้',
     );
   });
+
+  // F11
+  testWidgets('the thinking dots rest when the device asks for less motion', (
+    tester,
+  ) async {
+    final answer = Completer<AssistantReply>();
+    repo.replies.add(answer);
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [assistantRepositoryProvider.overrideWithValue(repo)],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: AssistantPanel(onClose: () {}, onNavigate: routes.add),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(input, 'ถาม');
+    await tester.tap(send);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('assistant_thinking')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.hasRunningAnimations, isFalse);
+
+    answer.complete(
+      _reply(7, [_message(1, 'user', 'ถาม'), _message(2, 'assistant', 'ตอบ')]),
+    );
+    await tester.pumpAndSettle();
+  });
 }
 
