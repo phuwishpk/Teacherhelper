@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/live/app_settings.dart';
 import '../../core/widgets/mascot.dart';
 import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
@@ -38,6 +39,7 @@ class AssistantChatView extends ConsumerWidget {
     final busy = chat.sending || chat.loading;
     final messages = chat.messages;
     final tokens = chat.conversation?.tokens ?? 0;
+    final mascotOn = ref.watch(mascotEnabledProvider);
 
     final Widget list;
     if (chat.loading) {
@@ -46,23 +48,25 @@ class AssistantChatView extends ConsumerWidget {
       list = ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Mascot(
-                mood: MascotMood.wave,
-                size: 96,
-                semanticLabel: Mascot.name,
+          if (mascotOn) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Mascot(
+                  mood: MascotMood.wave,
+                  size: 96,
+                  semanticLabel: Mascot.name,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'สวัสดี น้องเช็คเอง',
-            style: theme.textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
+            const SizedBox(height: 8),
+            Text(
+              'สวัสดี น้องเช็คเอง',
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+          ],
           Text(
             'ถามเรื่องการใช้ Krucheck การให้คะแนน หรือการตัดเกรดได้เลย',
             style: theme.textTheme.titleSmall,

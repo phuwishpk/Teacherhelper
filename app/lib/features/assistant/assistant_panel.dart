@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/live/app_settings.dart';
 import '../../core/router/app_router.dart';
 import '../../core/widgets/mascot.dart';
 import '../../core/widgets/mascot_mood.dart';
@@ -67,6 +68,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     final chat = ref.watch(assistantChatProvider);
     final status = ref.watch(assistantStatusProvider);
     final busy = chat.sending || chat.loading;
+    final mascotOn = ref.watch(mascotEnabledProvider);
 
     final Widget body;
     if (status.value case final s?) {
@@ -89,7 +91,9 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
             );
     } else if (status.hasError) {
       body = AssistantCentered(
-        illustration: const Mascot(mood: MascotMood.sorry, size: 96),
+        illustration:
+            mascotOn ? const Mascot(mood: MascotMood.sorry, size: 96) : null,
+        icon: mascotOn ? null : Icons.cloud_off_outlined,
         text: apiErrorMessage(status.error!),
         action: OutlinedButton(
           onPressed: () => ref.invalidate(assistantStatusProvider),
@@ -107,7 +111,10 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
           padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
           child: Row(
             children: [
-              Mascot(mood: moodForChat(chat), size: 40),
+              if (mascotOn)
+                Mascot(mood: moodForChat(chat), size: 40)
+              else
+                Icon(Icons.smart_toy_outlined, color: theme.colorScheme.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
