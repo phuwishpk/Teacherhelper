@@ -45,7 +45,7 @@ phuwishpk อนุมัติให้ใส่น้องเช็คแล�
 - [x] M11 test ของที่เก็บการตั้งค่า (#265)
 - [x] M12 Firestore rules (#266)
 - [x] M13 สวิตช์เปิดปิดในหน้าตั้งค่า (#267)
-- [ ] M14 integration test (#268)
+- [x] M14 integration test (#268)
 - [ ] M15 security test (#269)
 - [ ] M16 เอกสาร DESIGN (#270)
 
