@@ -398,6 +398,7 @@ class AssistantChatState {
     this.loading = false,
     this.labels = const {},
     this.justApplied = false,
+    this.failedOpenId,
   });
 
   final AssistantConversation? conversation;
@@ -410,6 +411,9 @@ class AssistantChatState {
 
   /// A card was created just now, by its button or a typed confirmation.
   final bool justApplied;
+
+  /// The conversation that failed to open (F1).
+  final int? failedOpenId;
 
   /// The last message failed and nothing is running: "ลองใหม่" can go.
   bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
@@ -445,7 +449,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       );
     } catch (e) {
       if (!ref.mounted) return;
-      state = AssistantChatState(messages: [_localFailure(e)]);
+      state = AssistantChatState(
+        messages: [_localFailure(e)],
+        failedOpenId: id,
+      );
     }
   }
 
@@ -500,6 +507,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
   /// "ลองใหม่" on the last failure: the server asks its question again; a
   /// failure the server never saw sends the question again.
   Future<void> retry() async {
+    if (state.failedOpenId case final id?) return open(id);
     if (!state.canRetry) return;
     final messages = state.messages;
     final failure = messages.last;

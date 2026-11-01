@@ -1,0 +1,203 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:eduvision/core/theme/app_theme.dart';
+import 'package:eduvision/features/assignments/answer_key_models.dart';
+import 'package:eduvision/features/assignments/answer_key_repository.dart';
+import 'package:eduvision/features/assignments/key_document_sources.dart';
+import 'package:eduvision/features/assistant/assistant.dart';
+import 'package:eduvision/features/assistant/assistant_panel.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Faults found in the assistant chat on 2026-11-01 (DESIGN §37.5).
+class _FakeAssistant implements AssistantRepository {
+  AssistantStatus statusValue = const AssistantStatus(available: true);
+  List<AssistantConversation> list = const [];
+  bool openFails = false;
+  int opens = 0;
+  final sent = <(String, List<int>)>[];
+  final retried = <int>[];
+  final replies = <Object>[];
+
+  Future<AssistantReply> _next() async {
+    final r = replies.removeAt(0);
+    final value = r is Completer<AssistantReply> ? await r.future : r;
+    if (value is AssistantReply) return value;
+    throw value;
+  }
+
+  @override
+  Future<AssistantStatus> status() async => statusValue;
+
+  @override
+  Future<List<AssistantConversation>> conversations() async => list;
+
+  @override
+  Future<AssistantReply> conversation(int id) async {
+    opens++;
+    if (openFails) {
+      openFails = false;
+      throw _offline();
+    }
+    return _reply(id, [
+      _message(1, 'user', 'ถามเก่า'),
+      _message(2, 'assistant', 'ตอบเก่า'),
+    ]);
+  }
+
+  @override
+  Future<AssistantStatus> acknowledgeStudentData() async =>
+      const AssistantStatus(available: true, studentDataAcknowledged: true);
+
+  @override
+  Future<void> delete(int id) async {}
+
+  @override
+  Future<AssistantReply> send(
+    String text, {
+    int? conversationId,
+    DataScope? scope,
+    List<int> documentIds = const [],
+  }) {
+    sent.add((text, documentIds));
+    return _next();
+  }
+
+  @override
+  Future<AssistantReply> retry(int conversationId) {
+    retried.add(conversationId);
+    return _next();
+  }
+
+  @override
+  Future<AssistantMessage> apply(
+    int messageId,
+    List<int> selected, {
+    Map<String, dynamic>? target,
+  }) async => throw UnimplementedError();
+}
+
+class _Picker implements DocumentFilePicker {
+  int count = 1;
+
+  @override
+  Future<List<PickedDocument>> pick({
+    bool imagesOnly = false,
+    String? dialogTitle,
+  }) async => [
+    for (var i = 0; i < count; i++)
+      PickedDocument(
+        name: 'เฉลย$i.pdf',
+        bytes: Uint8List.fromList([37, 80, 68, 70]),
+      ),
+  ];
+}
+
+class _Uploads extends Fake implements AnswerKeyRepository {
+  Completer<void>? gate;
+  var _next = 31;
+
+  @override
+  Future<List<SourceDocument>> upload(List<PickedDocument> files) async {
+    if (gate case final g?) await g.future;
+    return [
+      for (final f in files)
+        SourceDocument(
+          id: _next++,
+          originalName: f.name,
+          mimeType: 'application/pdf',
+          pageCount: 2,
+        ),
+    ];
+  }
+}
+
+DioException _offline() => DioException(
+  requestOptions: RequestOptions(path: '/assistant'),
+  type: DioExceptionType.connectionError,
+);
+
+Map<String, dynamic> _message(
+  int id,
+  String role,
+  String content, {
+  String? code,
+}) => {'id': id, 'role': role, 'content': content, 'error_code': code};
+
+Map<String, dynamic> _conversation(int id) => {
+  'id': id,
+  'title': 'เรื่องเก่า',
+  'input_tokens': 10,
+  'output_tokens': 5,
+};
+
+AssistantReply _reply(int id, List<Map<String, dynamic>> messages) =>
+    AssistantReply.tryParse({
+      'conversation': _conversation(id),
+      'messages': messages,
+    })!;
+
+void main() {
+  late _FakeAssistant repo;
+  late _Picker picker;
+  late _Uploads uploads;
+  late List<String> routes;
+
+  final retry = find.byKey(const ValueKey('assistant_retry'));
+
+  setUp(() {
+    repo = _FakeAssistant();
+    picker = _Picker();
+    uploads = _Uploads();
+    routes = [];
+  });
+
+  Future<void> pumpPanel(
+    WidgetTester tester, {
+    Size size = const Size(420, 900),
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          assistantRepositoryProvider.overrideWithValue(repo),
+          documentFilePickerProvider.overrideWithValue(picker),
+          answerKeyRepositoryProvider.overrideWithValue(uploads),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: AssistantPanel(onClose: () {}, onNavigate: routes.add),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  // F1
+  testWidgets('"ลองใหม่" opens again a conversation that failed to open', (
+    tester,
+  ) async {
+    repo.list = [AssistantConversation.fromJson(_conversation(7))];
+    repo.openFails = true;
+    await pumpPanel(tester);
+
+    await tester.tap(find.byKey(const ValueKey('assistant_list')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('assistant_conversation_7')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('assistant_error')), findsOneWidget);
+
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(repo.opens, 2);
+    expect(find.text('ตอบเก่า'), findsOneWidget);
+  });
+}
+
