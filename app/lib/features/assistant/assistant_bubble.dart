@@ -201,47 +201,55 @@ class _AssistantThinkingBubbleState extends State<AssistantThinkingBubble>
     final scheme = theme.colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: widget.maxWidth),
-        child: Card(
-          key: const ValueKey('assistant_thinking'),
-          color: scheme.surfaceContainerHigh,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedBuilder(
-                  animation: _pulse,
-                  builder: (context, _) => Row(
-                    children: [
-                      for (var i = 0; i < 3; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Opacity(
-                            opacity: _dot(i),
-                            child: Icon(
-                              Icons.circle,
-                              size: 8,
-                              color: scheme.primary,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Mascot(mood: MascotMood.thinking, size: 28),
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: widget.maxWidth - 36),
+            child: Card(
+              key: const ValueKey('assistant_thinking'),
+              color: scheme.surfaceContainerHigh,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulse,
+                      builder: (context, _) => Row(
+                        children: [
+                          for (var i = 0; i < 3; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Opacity(
+                                opacity: _dot(i),
+                                child: Icon(
+                                  Icons.circle,
+                                  size: 8,
+                                  color: scheme.primary,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'ผู้ช่วยกำลังคิด…',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'ผู้ช่วยกำลังคิด…',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
