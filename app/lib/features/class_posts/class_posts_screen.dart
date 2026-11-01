@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../classrooms/classrooms_providers.dart';
+import '../student/live_refresh.dart';
 import 'class_post_models.dart';
 import 'class_posts_repository.dart';
 import 'post_card.dart';
@@ -77,6 +78,12 @@ class ClassPostsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Another teacher of the classroom posted (DESIGN §38.11).
+    ref.listen(liveClassFeedTicksProvider, (_, next) {
+      if (!next.hasValue) return;
+      ref.invalidate(classroomPostsProvider(classroomId));
+    });
+
     final classroom = ref.watch(classroomProvider(classroomId));
     final posts = ref.watch(classroomPostsProvider(classroomId));
     final open = classroom.value != null && !classroom.value!.isClosed;

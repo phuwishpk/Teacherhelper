@@ -196,7 +196,7 @@ void _liveRefreshTests() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(StudentShell)),
     );
-    final subscription = container.listen(myAttendanceProvider, (_, __) {});
+    final subscription = container.listen(myAttendanceProvider, (_, _) {});
     addTearDown(subscription.close);
     await tester.pumpAndSettle();
     final before = attendance.mineCalls;
