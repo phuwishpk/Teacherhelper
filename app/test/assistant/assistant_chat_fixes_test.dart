@@ -417,5 +417,59 @@ void main() {
     expect(routes, ['/settings']);
     expect(retry, findsOneWidget);
   });
+
+  // F9
+  group('a retry that loses the connection', () {
+    Future<void> failOnce(WidgetTester tester) async {
+      repo.replies.add(
+        _apiError(503, {
+          'message': 'ล้ม',
+          'code': 'ai_unavailable',
+          'ai_error_code': 'AI-SERVER',
+          'conversation': _conversation(7),
+          'messages': [
+            _message(1, 'user', 'ถาม'),
+            _message(2, 'error', 'ล้ม', code: 'AI-SERVER'),
+          ],
+        }),
+      );
+      await pumpPanel(tester);
+      await ask(tester, 'ถาม');
+      repo.replies.add(_offline());
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('asks the server to retry, never sends the question twice', (
+      tester,
+    ) async {
+      await failOnce(tester);
+      repo.replies.add(
+        _reply(7, [
+          _message(1, 'user', 'ถาม'),
+          _message(3, 'assistant', 'ตอบ'),
+        ]),
+      );
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      expect(repo.sent, hasLength(1));
+      expect(repo.retried, [7, 7]);
+      expect(find.text('ตอบ'), findsOneWidget);
+    });
+
+    testWidgets('reloads when the server had already answered', (tester) async {
+      await failOnce(tester);
+      repo.replies.add(
+        _apiError(409, {
+          'message': 'ไม่มีข้อความที่ต้องลองใหม่',
+          'code': 'nothing_to_retry',
+        }),
+      );
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      expect(repo.opens, 1);
+      expect(find.text('ตอบเก่า'), findsOneWidget);
+    });
+  });
 }
 

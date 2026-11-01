@@ -524,7 +524,11 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         sending: true,
         labels: state.labels,
       );
-      await _ask(before, () => _repo.retry(conversation.id));
+      await _ask(
+        before,
+        () => _repo.retry(conversation.id),
+        storedFailureId: failure.id,
+      );
       return;
     }
     final question = messages.length >= 2
@@ -543,10 +547,13 @@ class AssistantChatController extends Notifier<AssistantChatState> {
 
   /// Runs [call]; the question and its answer or failure follow [before].
   /// True when the server got the question (answered or stored a failure).
+  /// [storedFailureId]: a retry of that stored failure; if the connection
+  /// drops, "ลองใหม่" must retry it again, not send the question twice.
   Future<bool> _ask(
     List<AssistantMessage> before,
-    Future<AssistantReply> Function() call,
-  ) async {
+    Future<AssistantReply> Function() call, {
+    int? storedFailureId,
+  }) async {
     try {
       final reply = await call();
       if (!ref.mounted) return true;
@@ -565,6 +572,17 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       return true;
     } catch (e) {
       if (!ref.mounted) return false;
+      // The retry reached the server but its answer did not reach the app.
+      if (apiErrorBody(e)?['code'] == 'nothing_to_retry') {
+        final id = state.conversation?.id;
+        state = AssistantChatState(
+          conversation: state.conversation,
+          messages: state.messages,
+          labels: state.labels,
+        );
+        if (id != null) await open(id);
+        return true;
+      }
       final stored = AssistantReply.tryParse(apiErrorBody(e));
       state = stored != null
           ? AssistantChatState(
@@ -576,7 +594,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
             )
           : AssistantChatState(
               conversation: state.conversation,
-              messages: [...state.messages, _localFailure(e)],
+              messages: [
+                ...state.messages,
+                _localFailure(e, id: storedFailureId),
+              ],
               labels: state.labels,
             );
       return stored != null;
@@ -619,9 +640,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
     ];
   }
 
-  static AssistantMessage _localFailure(Object error) {
+  static AssistantMessage _localFailure(Object error, {int? id}) {
     final code = errorCodeOf(error);
     return AssistantMessage(
+      id: id,
       role: AssistantMessage.error,
       content: switch (code?.code) {
         ErrorCode.offline =>
