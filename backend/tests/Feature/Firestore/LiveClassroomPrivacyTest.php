@@ -9,6 +9,7 @@ use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\Support\RecordingLiveStore;
 use Tests\TestCase;
 
@@ -103,6 +104,11 @@ class LiveClassroomPrivacyTest extends TestCase
 
     public function test_targeted_post_signals_all_students_but_api_filters_visibility(): void
     {
+        Http::fake([
+            self::TOKEN_URI => Http::response(['access_token' => 'at', 'expires_in' => 3600]),
+            '*' => Http::response([], 200),
+        ]);
+
         // Post targeted to student A (students[0]) only
         $res = $this->asUser($this->teacher)->postJson('/api/v1/class-posts', [
             'classroom_ids' => [$this->classroom->id],

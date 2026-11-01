@@ -7,6 +7,7 @@ use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\Support\RecordingLiveStore;
 use Tests\TestCase;
@@ -33,6 +34,7 @@ class LiveAttendanceTest extends TestCase
         $this->teacher = $this->makeTeacher();
         $this->classroom = $this->makeClassroom($this->teacher);
         $this->course = $this->makeCourse($this->teacher, [$this->classroom]);
+
         for ($i = 1; $i <= 3; $i++) {
             $this->students[] = $this->enrollStudent($this->classroom, $i)['student'];
         }
@@ -61,12 +63,16 @@ class LiveAttendanceTest extends TestCase
         Queue::assertPushed(SignalAttendanceJob::class, 1);
         Queue::assertPushed(SignalAttendanceJob::class, fn ($job) => $job->courseId === $this->course->id && $job->classroomId === $this->classroom->id);
 
+        Cache::flush();
+
         // 2. Update session
         $this->asUser($this->teacher)->putJson("/api/v1/attendance-sessions/{$sessionId}", [
             'note' => 'เปลี่ยนโน้ต',
         ])->assertOk();
 
         Queue::assertPushed(SignalAttendanceJob::class, 2);
+
+        Cache::flush();
 
         // 3. Delete session
         $this->asUser($this->teacher)->deleteJson("/api/v1/attendance-sessions/{$sessionId}")->assertNoContent();

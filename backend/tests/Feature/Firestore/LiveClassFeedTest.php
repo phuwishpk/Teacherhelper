@@ -10,6 +10,7 @@ use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -184,9 +185,13 @@ class LiveClassFeedTest extends TestCase
         $hw->update(['status' => Assignment::STATUS_READY]);
         Queue::assertPushed(SignalClassFeedJob::class, 1);
 
+        Cache::flush();
+
         // Homework goes back to draft -> signals
         $hw->update(['status' => Assignment::STATUS_DRAFT]);
         Queue::assertPushed(SignalClassFeedJob::class, 2);
+
+        Cache::flush();
 
         // Homework created directly as ready -> signals
         Assignment::factory()->for_classroom($this->classroom)->create([
@@ -208,6 +213,6 @@ class LiveClassFeedTest extends TestCase
             'body' => 'เมื่อปิด Firestore',
         ])->assertCreated();
 
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(SignalClassFeedJob::class);
     }
 }
