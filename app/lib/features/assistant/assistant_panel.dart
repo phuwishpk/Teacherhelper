@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/mascot.dart';
+import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
 import 'assistant_chat_view.dart';
 import 'assistant_conversation_list.dart';
+import 'assistant_mood.dart';
 import 'assistant_notices.dart';
 
 /// "ผู้ช่วย Krucheck" (DESIGN §37): the chat, or the list of the teacher's
@@ -86,7 +89,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
             );
     } else if (status.hasError) {
       body = AssistantCentered(
-        icon: Icons.cloud_off_outlined,
+        illustration: const Mascot(mood: MascotMood.sorry, size: 96),
         text: apiErrorMessage(status.error!),
         action: OutlinedButton(
           onPressed: () => ref.invalidate(assistantStatusProvider),
@@ -104,7 +107,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
           padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
           child: Row(
             children: [
-              Icon(Icons.smart_toy_outlined, color: theme.colorScheme.primary),
+              Mascot(mood: moodForChat(chat), size: 40),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
