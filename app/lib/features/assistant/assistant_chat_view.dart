@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
 import 'assistant_attached_files.dart';
 import 'assistant_bubble.dart';
+import 'assistant_mood.dart';
 import 'assistant_notices.dart';
 import 'assistant_plan_card.dart';
 import 'assistant_student_data.dart';
@@ -96,6 +98,12 @@ class AssistantChatView extends ConsumerWidget {
               );
             }
             final last = item.i == messages.length - 1;
+            final mood = switch (item.message.isUser) {
+              true => null,
+              false when last => moodForChat(chat),
+              false when item.message.isError => MascotMood.sorry,
+              false => MascotMood.idle,
+            };
             return AssistantBubble(
               message: item.message,
               maxWidth: maxWidth,
@@ -104,6 +112,7 @@ class AssistantChatView extends ConsumerWidget {
               onRetry: last && chat.canRetry
                   ? () => ref.read(assistantChatProvider.notifier).retry()
                   : null,
+              mood: mood,
             );
           },
         ),
