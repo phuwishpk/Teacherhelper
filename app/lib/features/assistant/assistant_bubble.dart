@@ -127,6 +127,17 @@ class AssistantBubble extends ConsumerWidget {
                   ),
                 ),
             if (code != null) ErrorCodeLine(code),
+            if (message.errorCode == ErrorCode.keyInvalid &&
+                onNavigate != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const ValueKey('assistant_error_settings'),
+                  onPressed: () => onNavigate!(AppRoutes.settings),
+                  icon: const Icon(Icons.key_outlined),
+                  label: const Text('ไปที่ตั้งค่า'),
+                ),
+              ),
             if (onRetry != null)
               Align(
                 alignment: Alignment.centerRight,

@@ -415,8 +415,12 @@ class AssistantChatState {
   /// The conversation that failed to open (F1).
   final int? failedOpenId;
 
-  /// The last message failed and nothing is running: "ลองใหม่" can go.
-  bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
+  /// The last message failed and nothing is running: "ลองใหม่" can go,
+  /// except when asking again cannot work today.
+  bool get canRetry =>
+      !sending &&
+      (messages.lastOrNull?.isError ?? false) &&
+      messages.last.errorCode != ErrorCode.chatLimit;
 }
 
 /// Kept while the teacher is signed in, so closing the desktop panel or

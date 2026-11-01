@@ -122,6 +122,15 @@ DioException _offline() => DioException(
   type: DioExceptionType.connectionError,
 );
 
+DioException _apiError(int status, Map<String, dynamic> body) {
+  final options = RequestOptions(path: '/assistant');
+  return DioException(
+    requestOptions: options,
+    type: DioExceptionType.badResponse,
+    response: Response(requestOptions: options, statusCode: status, data: body),
+  );
+}
+
 Map<String, dynamic> _message(
   int id,
   String role,
@@ -182,6 +191,12 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> ask(WidgetTester tester, String text) async {
+    await tester.enterText(input, text);
+    await tester.tap(send);
     await tester.pumpAndSettle();
   }
 
@@ -366,6 +381,41 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(input, findsOneWidget);
+  });
+
+  // F8
+  testWidgets('the day\'s limit offers no "ลองใหม่"', (tester) async {
+    repo.replies.add(
+      _apiError(429, {
+        'message': 'วันนี้ถามผู้ช่วยครบ 100 ข้อความแล้ว',
+        'code': 'assistant_limit',
+        'ai_error_code': 'CHAT-LIMIT',
+      }),
+    );
+    await pumpPanel(tester);
+    await ask(tester, 'ถาม');
+    expect(find.text('รหัส CHAT-LIMIT'), findsOneWidget);
+    expect(retry, findsNothing);
+  });
+
+  testWidgets('a key Google refuses goes to settings', (tester) async {
+    repo.replies.add(
+      _apiError(422, {
+        'message': 'key ใช้ไม่ได้',
+        'code': 'ai_key_invalid',
+        'ai_error_code': 'AI-KEY-INVALID',
+        'conversation': _conversation(7),
+        'messages': [
+          _message(1, 'user', 'ถาม'),
+          _message(2, 'error', 'key ใช้ไม่ได้', code: 'AI-KEY-INVALID'),
+        ],
+      }),
+    );
+    await pumpPanel(tester);
+    await ask(tester, 'ถาม');
+    await tester.tap(find.byKey(const ValueKey('assistant_error_settings')));
+    expect(routes, ['/settings']);
+    expect(retry, findsOneWidget);
   });
 }
 
