@@ -72,7 +72,7 @@ users/{studentUid}/attendance/{courseId}_{classroomId}
 **Backend**
 - [x] C1 LiveClassroom: ผู้รับและ field ของสัญญาณ (#286)
 - [x] C2 SignalClassFeedJob (#287)
-- [ ] C3 test ของ LiveClassroom และ job (#288)
+- [x] C3 test ของ LiveClassroom และ job (#288)
 - [ ] C4 ส่งสัญญาณเมื่อโพสต์เผยแพร่ แก้ หรือลบ (#289)
 - [ ] C5 ส่งสัญญาณเมื่อการบ้านพร้อมส่ง (#290)
 - [ ] C6 test ของจุดส่งสัญญาณ (#291)
