@@ -5406,15 +5406,15 @@ CREATE TABLE classroom_teachers (
 
 ### 38.2 โครงสร้างเอกสาร
 
-ทุกเอกสารของขั้น 1–3 อยู่ใต้ `users/{uid}` เพื่อให้ rule มีบรรทัดเดียว (อ่านได้เมื่อ uid ตรงกับผู้ล็อกอิน เขียนไม่ได้) ขั้น 4 ขึ้นไปจึงมี `classrooms/{id}` ที่ต้องมี `members`
+ทุกเอกสารของขั้น 1–4 อยู่ใต้ `users/{uid}` เพื่อให้ rule มีบรรทัดเดียว (อ่านได้เมื่อ uid ตรงกับผู้ล็อกอิน เขียนไม่ได้) สัญญาณของขั้น 4 จึงอยู่ใต้ `users/{uid}` เช่นกันโดยไม่ต้องมีเอกสารระดับ `classrooms/{id}` หรือสำเนาสมาชิกห้อง
 
 | path | เนื้อหา | ผู้เขียน | ขั้น |
 |---|---|---|---|
 | `users/{uid}/notices/{ulid}` | `kind` (type ของ `PushMessage`), `title`, `body`, `data` (map เดียวกับ `data` ของ push: ปลายทางในแอป), `read` (bool), `created_at`, `expires_at` | `FirestoreInbox` คู่กับทุก `PushMessage` ที่ `PushNotifier` สร้าง (11 เหตุการณ์) id เดียวกันทุกผู้รับของเหตุการณ์เดียว แอปนับยังไม่อ่านเองจาก listener จึงไม่มี document ตัวนับ | 2 |
 | `users/{teacherUid}/assignments/{id}` | `title`, `total`, จำนวนต่อสถานะ (`awaiting_scan`, `grading`, `needs_review`, `reviewed`, `published`), `awaiting_ai_key`, `updated_at`, `expires_at` | `MirrorAssignmentProgressJob` (unique ต่องานจนกว่าจะเริ่มรัน) ให้ครูทุกคนของห้องใน commit เดียว (§38.9) | 3 |
 | `users/{studentUid}/submissions/{id}` | `assignment_id`, `assignment_title`, `status` (ค่าเดียวกับ `submissions.status`), `updated_at`, `expires_at` **ไม่มีคะแนน** | `MirrorSubmissionStatusJob` (unique ต่องานที่ส่ง) (§38.9) | 3 |
-| `classrooms/{id}/feed/{postId}` และ `classrooms/{id}/members/{uid}` | หัวข้อ ชนิด ชื่อผู้เขียน เวลา มีไฟล์หรือไม่ | listener ของ `ClassPostPublished` (§30) และการเข้า/ออกห้อง | 4 |
-| `classrooms/{id}/attendance/{date}_{period}` | สถานะต่อ `uid` | `AttendanceBook` (§29.9) | 4 |
+| `users/{uid}/class_feed/{classroomId}` | `classroom_id`, `updated_at`, `expires_at` (ไม่มีเนื้อหาหรือหัวข้อโพสต์) | `SignalClassFeedJob` ให้ทุกคนในห้อง (§38.11) | 4 |
+| `users/{studentUid}/attendance/{courseId}_{classroomId}` | `course_id`, `classroom_id`, `updated_at`, `expires_at` (ไม่มีสถานะเช็คชื่อ) | `SignalAttendanceJob` ให้นักเรียนทุกคนของห้อง (§38.11) | 4 |
 
 uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`) ไม่เก็บคอลัมน์ใหม่ใน MariaDB
 
@@ -5426,7 +5426,7 @@ uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`
 | 2 | กล่องแจ้งเตือน: `FirestoreInbox`, หน้าแจ้งเตือนและป้ายยังไม่อ่านในแอป (Android และเว็บ), `POST /me/notices/read` (§38.7) | เสร็จในโค้ด 21 ต.ค. 2569 (TTL ยังไม่ตั้ง ไม่บังคับ §38.1) |
 | 2ข | งานที่เหลือของขั้น 1–2: ลบข้อมูลสดเมื่อลบบัญชี การ์ด "ข้อมูลสด" ในหน้าตั้งค่า Firebase บนเว็บ production (CSP และ Actions variables) (§38.8) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเพิ่ม Web app ใน Firebase และ Actions variables แล้วลองในเบราว์เซอร์จริง |
 | 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน (§38.9) | เสร็จในโค้ด 22 ต.ค. 2569 |
-| 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด (ต้องมี `members` และ rule ระดับห้อง) | ยังไม่ทำ |
+| 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด | เสร็จในโค้ด 1 พ.ย. 2569 (§38.11) |
 
 ### 38.4 backend (ขั้น 1)
 
@@ -5488,6 +5488,30 @@ service cloud.firestore {
 - **แอป นักเรียน**: เอกสารใน Firestore เป็นแค่สัญญาณ `StudentShell` ฟัง `liveSubmissionTicksProvider` (นับการเปลี่ยนหลัง snapshot แรก) แล้ว invalidate `studentAssignmentsProvider`, `studentResultsProvider`, `studentOverviewProvider` หน้า "ส่งงาน" และ "ผลการบ้าน" จึงดึง API ใหม่เองเมื่อครูตรวจหรือเผยแพร่ ข้อมูลที่แสดงยังมาจาก MariaDB
 - `core/live/live_scope.dart`: `liveUserScope` (Firestore + uid เมื่อ uid ตรงกับผู้ใช้ที่ล็อกอิน) และ `liveChangeTicks` ใช้ร่วมกับกล่องแจ้งเตือน (§38.7)
 - rules ไม่เปลี่ยน (ยังอยู่ใต้ `users/{uid}`) TTL ถ้าตั้ง ให้เพิ่ม collection group `assignments` และ `submissions` (HOSTING §6.5 ข้อ 4)
+
+### 38.11 ขั้น 4: ฟีดห้องเรียนและเช็คชื่อสด
+
+- **เอกสารทั้งสองชนิดและเหตุผลที่ไม่มีเนื้อหา**: เอกสารอยู่ใน Firestore ใต้ `users/{uid}` ของแต่ละคน:
+  1. `users/{uid}/class_feed/{classroomId}` มีฟิลด์ `classroom_id`, `updated_at`, `expires_at` (+90 วัน)
+  2. `users/{studentUid}/attendance/{courseId}_{classroomId}` มีฟิลด์ `course_id`, `classroom_id`, `updated_at`, `expires_at` (+90 วัน)
+  **เหตุผลที่เอกสารมีเพียง id และเวลา (ไม่มีเนื้อหา หัวข้อ หรือสถานะเช็คชื่อ)**: สัญญาณเป็นเพียง trigger ให้แอปดึงข้อมูลใหม่ผ่าน REST API ที่มี authorization กรองสิทธิ์และกรองรายบุคคลครบถ้วนอยู่แล้ว โพสต์บางโพสต์กำหนดผู้รับเฉพาะกลุ่ม security rules ของ Firestore ไม่สามารถกรองฟิลด์ในเอกสารเดียวกันได้ และเพื่อนร่วมชั้นต้องไม่เห็นสถานะการเช็คชื่อของกันและกัน นอกจากนี้ยังไม่ต้องสร้างสำเนาสมาชิกห้อง (`members`) ใต้ Firestore ที่ต้องคอยซิงก์ตามการรวมบัญชีหรือการลบบัญชี (§31) อีกทั้ง `firebase/firestore.rules` ยังคงมีกฎเพียงบรรทัดเดียวสำหรับ `users/{uid}` โดยไม่ต้องเปิดสิทธิ์หรือสร้างเอกสารระดับห้องเรียน
+- **จุดส่งสัญญาณ (backend)**:
+  - ฟีดห้องเรียน (`SignalClassFeedJob`): dispatch `afterCommit` ทำงานแบบ `ShouldBeUniqueUntilProcessing` แยกตาม `classroomId` ส่งสัญญาณให้ครูทุกคนและนักเรียนของห้อง ส่งเมื่อ:
+    1. `ClassPostPublished`: มีการเผยแพร่โพสต์ใหม่
+    2. แก้ไขโพสต์หรือลบโพสต์ใน `ClassPostController`
+    3. `Assignment::booted` ฟัง `saved` เมื่อการบ้านถูกสร้างในสถานะพร้อมใช้ หรือ `status` เปลี่ยน
+  - การเช็คชื่อสด (`SignalAttendanceJob`): dispatch `afterCommit` ทำงานแบบ `ShouldBeUniqueUntilProcessing` แยกตาม `courseId:classroomId` ส่งสัญญาณให้นักเรียนทุกคนของห้อง (ไม่ส่งให้ครู) เมื่อมีการสร้าง แก้ไข ลบคาบ หรือเช็คชื่อใน `AttendanceController`
+  - หาก Firestore ปิดหรือล่ม job จะกลืน exception เงียบ ๆ และไม่กระทบกระบวนการหลัก
+- **แอป**:
+  - **การฟังและ invalidate**: `StudentShell` ฟัง `liveClassFeedTicksProvider` แล้ว invalidate `classFeedProvider`, `studentAssignmentsProvider`, `studentOverviewProvider` เพื่อให้หน้า "วิชาของฉัน" และฟีดดึงข้อมูลใหม่เอง และฟัง `liveAttendanceTicksProvider` เพื่อ invalidate `myAttendanceProvider` ให้การ์ดเช็คชื่ออัปเดตสถานะทันที ส่วนฝั่งครู หน้ารายละเอียดห้องเรียนฟัง `liveClassFeedTicksProvider` แล้ว refetch รายการโพสต์เมื่อมีครูร่วมสอนท่านอื่นโพสต์
+  - **UI/UX**:
+    - `LiveBadge`: ป้าย "อัปเดตสด" แสดงบนการ์ดโพสต์ล่าสุด หน้ารายการโพสต์ และการ์ดการเข้าเรียนวันนี้เฉพาะเมื่อชั้นข้อมูลสดเปิดใช้งานอยู่
+    - ปุ่มรายการใหม่ (`feed_new_items`): หากผู้ใช้กำลังเลื่อนดูฟีดโพสต์อยู่ด้านล่าง เมื่อมีโพสต์ใหม่จะแสดงปุ่มลอย "มีรายการใหม่ N รายการ" แทนที่จะกระตุกเลื่อนฟีดทันที กดแล้วจะ scroll กลับขึ้นบนสุดและซ่อนปุ่ม แต่หากอยู่บนสุดอยู่แล้วจะแสดงรายการใหม่ทันทีโดยไม่ขึ้นปุ่ม
+    - การ์ด "การเข้าเรียนวันนี้" (`TodayAttendanceCard`): บนหน้าแรกของนักเรียน แสดงสถานะคาบเรียนของวันนี้ (เช่น มาสาย, มาตรงเวลา) และไม่กินพื้นที่หากไม่มีคาบเรียนวันนี้หรือโหลดไม่สำเร็จ
+- **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) โดยปกติอยู่ที่ 1–5 วินาที
+- **test ที่มี**:
+  - backend: `LiveClassroomTest` (ผู้รับและ fields), `LiveClassFeedTest`, `LiveAttendanceTest`, `LiveClassroomPrivacyTest` (ยืนยันว่าไม่มีเนื้อหาโพสต์/สถานะเช็คชื่อใน Firestore และผู้ใช้คนอื่นไม่ได้รับสัญญาณ)
+  - app: `live_class_widgets_test.dart` (widget test ของ LiveBadge, ปุ่มรายการใหม่, TodayAttendanceCard และการแสดงผล 3 ขนาดหน้าจอ 390, 820, 1440 px), `live_class_flow_test.dart` (integration flow ของ StudentShell ตามสัญญาณโพสต์และการเข้าเรียน), `live_class_signal_test.dart` (security test ตรวจว่า uid อื่นไม่ trigger refetch, uid ไม่ตรงไม่ฟัง, แอปไม่เขียน Firestore เอง, และ firestore.rules ยังคงมี uid guard ไม่มี match /classrooms)
 
 
 ## 39. Krucheck Test Lab (`/qa`)

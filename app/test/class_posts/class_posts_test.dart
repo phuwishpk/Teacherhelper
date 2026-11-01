@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 
+import 'package:eduvision/core/auth/session.dart';
+import 'package:eduvision/core/auth/user.dart';
+import 'package:eduvision/core/live/live_session.dart';
 import 'package:eduvision/features/class_posts/class_post_form_screen.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:eduvision/features/class_posts/drive_picker.dart';
 import 'package:eduvision/features/class_posts/attachments_editor.dart';
 import 'package:eduvision/features/class_posts/class_post_models.dart';
@@ -12,7 +14,9 @@ import 'package:eduvision/features/class_posts/student_class_feed.dart';
 import 'package:eduvision/features/classrooms/classroom.dart';
 import 'package:eduvision/features/classrooms/classrooms_repository.dart';
 import 'package:eduvision/features/courses/courses_repository.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +24,7 @@ import 'package:go_router/go_router.dart';
 import '../classrooms/classroom_fakes.dart';
 import '../courses/course_fakes.dart';
 import '../helpers/pump_screen.dart';
+import '../live/live_test_support.dart';
 import 'class_post_fakes.dart';
 
 class _FakeFiles implements PostFiles {
@@ -216,6 +221,42 @@ void main() {
       );
       expect(find.text('เขียนโพสต์'), findsNothing);
       expect(find.byKey(const ValueKey('post_menu_1')), findsNothing);
+    });
+
+    testWidgets('another teacher posting refetches the classroom posts', (
+      tester,
+    ) async {
+      _size(tester);
+      final db = FakeFirebaseFirestore();
+      final posts = FakeClassPosts(
+        posts: [announcementFixture(id: 1, body: 'โพสต์แรก')],
+      );
+      await pumpScreen(
+        tester,
+        const ClassPostsScreen(classroomId: 7),
+        overrides: [
+          ..._teacher(posts),
+          currentUserProvider.overrideWithValue(
+            const User(id: 12, name: 'ครูสมศรี', role: 'teacher'),
+          ),
+          liveSessionProvider.overrideWithValue(
+            FakeLiveSession(db: db, uid: 'u12'),
+          ),
+        ],
+        extraRoutes: _routes,
+      );
+      expect(find.text('โพสต์แรก'), findsOneWidget);
+      expect(find.text('โพสต์ของครูอีกคน'), findsNothing);
+
+      posts.posts = [
+        ...posts.posts,
+        announcementFixture(id: 2, body: 'โพสต์ของครูอีกคน', isMine: false),
+      ];
+
+      await db.doc('users/u12/class_feed/7').set({'classroom_id': 7});
+      await tester.pumpAndSettle();
+
+      expect(find.text('โพสต์ของครูอีกคน'), findsOneWidget);
     });
 
     testWidgets('the Classroom copy: open it, or send a failed one again', (

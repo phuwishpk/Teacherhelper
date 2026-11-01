@@ -14,3 +14,14 @@ final liveSubmissionTicksProvider = StreamProvider.autoDispose<int>(
 final liveAssignmentTicksProvider = StreamProvider.autoDispose<int>(
   (ref) => liveChangeTicks(ref, 'assignments'),
 );
+
+/// A classroom's posts or homework changed (DESIGN §38.11).
+final liveClassFeedTicksProvider = StreamProvider.autoDispose<int>(
+  (ref) => liveChangeTicks(ref, 'class_feed'),
+);
+
+/// The student's attendance changed in a course (DESIGN §38.11).
+final liveAttendanceTicksProvider = StreamProvider.autoDispose<int>(
+  (ref) => liveChangeTicks(ref, 'attendance'),
+);
+
