@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/mascot.dart';
 import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
 import 'assistant_attached_files.dart';
@@ -45,13 +46,30 @@ class AssistantChatView extends ConsumerWidget {
       list = ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Mascot(
+                mood: MascotMood.wave,
+                size: 96,
+                semanticLabel: Mascot.name,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'สวัสดี น้องเช็คเอง',
+            style: theme.textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
           Text(
             'ถามเรื่องการใช้ Krucheck การให้คะแนน หรือการตัดเกรดได้เลย',
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: 4),
           Text(
-            'ผู้ช่วยตอบจากคู่มือของระบบ ตอนนี้ยังเปิดดูหรือแก้ข้อมูลในบัญชีให้ไม่ได้',
+            'ผู้ช่วยตอบจากคู่มือของระบบ และสร้างงานให้ได้เมื่อครูกดยืนยันในการ์ด',
             style: muted,
           ),
           const SizedBox(height: 16),
