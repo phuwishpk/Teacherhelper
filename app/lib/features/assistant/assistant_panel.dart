@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/live/app_settings.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/breakpoints.dart';
 import '../../core/widgets/mascot.dart';
 import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
@@ -38,6 +39,7 @@ class AssistantPanel extends ConsumerStatefulWidget {
 
 class _AssistantPanelState extends ConsumerState<AssistantPanel> {
   final _input = TextEditingController();
+  final _inputFocus = FocusNode();
   bool _showList = false;
 
   static const _suggestions = [
@@ -52,6 +54,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
   @override
   void dispose() {
     _input.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
@@ -71,6 +74,16 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     final busy = chat.sending || chat.loading;
     final mascotOn = ref.watch(mascotEnabledProvider);
 
+    // The input is locked while the AI answers, which takes its focus. On a
+    // desktop the teacher types on; a phone's keyboard would hide the answer.
+    ref.listen(assistantChatProvider.select((c) => c.sending), (was, sending) {
+      if (was != true || sending) return;
+      if (context.windowSize != WindowSize.expanded) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _inputFocus.requestFocus();
+      });
+    });
+
     final Widget body;
     if (status.value case final s?) {
       body = !s.available
@@ -86,6 +99,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
               chat: chat,
               status: s,
               input: _input,
+              inputFocus: _inputFocus,
               suggestions: _suggestions,
               onSend: _send,
               onNavigate: widget.onNavigate,

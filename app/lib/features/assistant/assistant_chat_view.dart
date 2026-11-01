@@ -18,6 +18,7 @@ class AssistantChatView extends ConsumerWidget {
     required this.chat,
     required this.status,
     required this.input,
+    this.inputFocus,
     required this.suggestions,
     required this.onSend,
     required this.onNavigate,
@@ -26,6 +27,7 @@ class AssistantChatView extends ConsumerWidget {
   final AssistantChatState chat;
   final AssistantStatus status;
   final TextEditingController input;
+  final FocusNode? inputFocus;
   final List<String> suggestions;
   final void Function([String? text]) onSend;
   final ValueChanged<String> onNavigate;
@@ -177,6 +179,7 @@ class AssistantChatView extends ConsumerWidget {
                 child: TextField(
                   key: const ValueKey('assistant_input'),
                   controller: input,
+                  focusNode: inputFocus,
                   enabled: !busy,
                   minLines: 1,
                   maxLines: 5,

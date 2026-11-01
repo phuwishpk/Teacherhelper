@@ -183,6 +183,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  bool focused(WidgetTester tester) => tester
+      .widget<EditableText>(
+        find.descendant(of: input, matching: find.byType(EditableText)),
+      )
+      .focusNode
+      .hasFocus;
+
   // F1
   testWidgets('"ลองใหม่" opens again a conversation that failed to open', (
     tester,
@@ -288,6 +295,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('บอกผู้ช่วยว่าจะให้ทำอะไรกับไฟล์นี้'), findsOneWidget);
     expect(repo.sent, isEmpty);
+  });
+
+  // F6
+  testWidgets('desktop: the input keeps its focus after an answer', (
+    tester,
+  ) async {
+    repo.replies.add(
+      _reply(7, [_message(1, 'user', 'ถาม'), _message(2, 'assistant', 'ตอบ')]),
+    );
+    await pumpPanel(tester, size: const Size(1440, 900));
+    await tester.tap(input);
+    await tester.enterText(input, 'ถาม');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(find.text('ตอบ'), findsOneWidget);
+    expect(focused(tester), isTrue);
+  });
+
+  testWidgets('phone: the keyboard stays down so the answer can be read', (
+    tester,
+  ) async {
+    repo.replies.add(
+      _reply(7, [_message(1, 'user', 'ถาม'), _message(2, 'assistant', 'ตอบ')]),
+    );
+    await pumpPanel(tester, size: const Size(390, 844));
+    await tester.tap(input);
+    await tester.enterText(input, 'ถาม');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(focused(tester), isFalse);
   });
 }
 
