@@ -10,6 +10,7 @@ use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\TestCaseDetail;
 use App\Filament\Qa\Pages\Testers;
 use App\Filament\Qa\Pages\TestPlan;
+use App\Filament\Qa\Pages\UsabilityReport;
 use App\Http\Controllers\Qa\ManualChecklistFileController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -48,6 +49,7 @@ class QaPanelProvider extends PanelProvider
                 ManualTestChecklist::class,
                 TestCaseDetail::class,
                 MyResults::class,
+                UsabilityReport::class,
                 SusSurvey::class,
                 TeamBoard::class,
                 Testers::class,
