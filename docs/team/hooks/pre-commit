@@ -1,0 +1,6 @@
+#!/bin/sh
+# Block Google API keys in staged changes: classic "AIza..." keys and the newer
+# "AQ." keys. GitHub push protection does not catch either for this repo.
+if git diff --cached -U0 | grep -E '^\+.*(AIza[0-9A-Za-z_-]{35}|AQ\.[0-9A-Za-z_-]{40,})' >/dev/null; then
+  echo 'blocked: Google API key (AIza... or AQ....) in staged changes'; exit 1
+fi
