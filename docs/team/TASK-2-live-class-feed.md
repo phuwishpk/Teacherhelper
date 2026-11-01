@@ -74,7 +74,7 @@ users/{studentUid}/attendance/{courseId}_{classroomId}
 - [x] C2 SignalClassFeedJob (#287)
 - [x] C3 test ของ LiveClassroom และ job (#288)
 - [x] C4 ส่งสัญญาณเมื่อโพสต์เผยแพร่ แก้ หรือลบ (#289)
-- [ ] C5 ส่งสัญญาณเมื่อการบ้านพร้อมส่ง (#290)
+- [x] C5 ส่งสัญญาณเมื่อการบ้านพร้อมส่ง (#290)
 - [ ] C6 test ของจุดส่งสัญญาณ (#291)
 - [ ] C7 SignalAttendanceJob และการเช็คชื่อ (#292)
 - [ ] C8 test การเช็คชื่อและ security test (backend) (#293)
