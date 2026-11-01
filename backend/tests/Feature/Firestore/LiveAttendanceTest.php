@@ -6,6 +6,7 @@ use App\Jobs\SignalAttendanceJob;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\User;
+use Illuminate\Bus\UniqueLock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -46,6 +47,15 @@ class LiveAttendanceTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * A fake queue never runs the job, so its unique lock stays taken and the
+     * next change would not queue. Cache::flush() leaves array store locks alone.
+     */
+    private function releaseSignalLock(): void
+    {
+        Cache::lock(UniqueLock::getKey(new SignalAttendanceJob($this->course->id, $this->classroom->id)))->forceRelease();
+    }
+
     public function test_creating_updating_and_deleting_attendance_session_signals_each_time(): void
     {
         Queue::fake();
@@ -63,7 +73,7 @@ class LiveAttendanceTest extends TestCase
         Queue::assertPushed(SignalAttendanceJob::class, 1);
         Queue::assertPushed(SignalAttendanceJob::class, fn ($job) => $job->courseId === $this->course->id && $job->classroomId === $this->classroom->id);
 
-        Cache::flush();
+        $this->releaseSignalLock();
 
         // 2. Update session
         $this->asUser($this->teacher)->putJson("/api/v1/attendance-sessions/{$sessionId}", [
@@ -72,7 +82,7 @@ class LiveAttendanceTest extends TestCase
 
         Queue::assertPushed(SignalAttendanceJob::class, 2);
 
-        Cache::flush();
+        $this->releaseSignalLock();
 
         // 3. Delete session
         $this->asUser($this->teacher)->deleteJson("/api/v1/attendance-sessions/{$sessionId}")->assertNoContent();

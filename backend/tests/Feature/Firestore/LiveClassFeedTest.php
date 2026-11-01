@@ -9,6 +9,7 @@ use App\Models\ClassPost;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\User;
+use Illuminate\Bus\UniqueLock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -39,6 +40,15 @@ class LiveClassFeedTest extends TestCase
     {
         $this->removeServiceAccountFile();
         parent::tearDown();
+    }
+
+    /**
+     * A fake queue never runs the job, so its unique lock stays taken and the
+     * next change would not queue. Cache::flush() leaves array store locks alone.
+     */
+    private function releaseSignalLock(): void
+    {
+        Cache::lock(UniqueLock::getKey(new SignalClassFeedJob($this->classroom->id)))->forceRelease();
     }
 
     public function test_publishing_a_post_immediately_queues_a_class_feed_signal(): void
@@ -185,13 +195,13 @@ class LiveClassFeedTest extends TestCase
         $hw->update(['status' => Assignment::STATUS_READY]);
         Queue::assertPushed(SignalClassFeedJob::class, 1);
 
-        Cache::flush();
+        $this->releaseSignalLock();
 
         // Homework goes back to draft -> signals
         $hw->update(['status' => Assignment::STATUS_DRAFT]);
         Queue::assertPushed(SignalClassFeedJob::class, 2);
 
-        Cache::flush();
+        $this->releaseSignalLock();
 
         // Homework created directly as ready -> signals
         Assignment::factory()->for_classroom($this->classroom)->create([
