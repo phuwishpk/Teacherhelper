@@ -86,12 +86,12 @@ users/{studentUid}/attendance/{courseId}_{classroomId}
 - [x] C12 ป้าย "อัปเดตสด" (#297)
 - [x] C13 ปุ่ม "มีรายการใหม่" (#298)
 - [x] C14 การ์ด "การเข้าเรียนวันนี้" (#299)
-- [ ] C15 widget test และ 3 ขนาดจอ (#300)
-- [ ] C16 integration test (#301)
-- [ ] C17 security test (แอป) (#302)
+- [x] C15 widget test และ 3 ขนาดจอ (#300)
+- [x] C16 integration test (#301)
+- [x] C17 security test (แอป) (#302)
 
 **เอกสาร**
-- [ ] C18 DESIGN (#303)
+- [x] C18 DESIGN (#303)
 
 ---
 
