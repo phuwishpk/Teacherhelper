@@ -26,18 +26,70 @@ class StudentClassFeedBody extends ConsumerStatefulWidget {
 }
 
 class _StudentClassFeedBodyState extends ConsumerState<StudentClassFeedBody> {
+  final _scroll = ScrollController();
+  Set<String>? _seen;
+  int _fresh = 0;
   bool _classwork = false;
 
   FeedKey get _key =>
       (courseId: widget.courseId, classroomId: widget.classroomId);
 
+  static String _itemKey(FeedItem item) =>
+      '${item.type.name}_${item.post?.id ?? item.assignmentId ?? item.submissionId}';
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scroll.hasClients && _scroll.offset <= 0 && _fresh > 0) {
+      setState(() => _fresh = 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToTop() {
+    if (!_scroll.hasClients) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scroll.jumpTo(0);
+    } else {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    setState(() => _fresh = 0);
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen(classFeedProvider(_key), (_, next) {
+      final items = next.value;
+      if (items == null) return;
+      final keys = {for (final i in items) _itemKey(i)};
+      final seen = _seen;
+      _seen = keys;
+      if (seen == null) return;
+      final added = keys.difference(seen).length;
+      final reading = _scroll.hasClients && _scroll.offset > 0;
+      if (added > 0 && reading) setState(() => _fresh += added);
+    });
+
     final feed = ref.watch(classFeedProvider(_key));
     return AsyncView(
       value: feed,
       onRetry: () => ref.invalidate(classFeedProvider(_key)),
       data: (items) {
+        _seen ??= {for (final i in items) _itemKey(i)};
         if (items.isEmpty) {
           return const EmptyView(
             icon: Icons.campaign_outlined,
@@ -51,11 +103,12 @@ class _StudentClassFeedBodyState extends ConsumerState<StudentClassFeedBody> {
                   if (i.isClasswork) i,
               ]
             : items;
-        return RefreshIndicator(
+        final listWidget = RefreshIndicator(
           onRefresh: () => ref.refresh(classFeedProvider(_key).future),
           child: ContentColumn(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             child: ListView(
+              controller: _scroll,
               children: [
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,
@@ -100,6 +153,24 @@ class _StudentClassFeedBodyState extends ConsumerState<StudentClassFeedBody> {
               ],
             ),
           ),
+        );
+
+        if (_fresh == 0) return listWidget;
+
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            listWidget,
+            Positioned(
+              top: 8,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('feed_new_items'),
+                onPressed: _scrollToTop,
+                icon: const Icon(Icons.arrow_upward),
+                label: Text('มีรายการใหม่ $_fresh รายการ'),
+              ),
+            ),
+          ],
         );
       },
     );
