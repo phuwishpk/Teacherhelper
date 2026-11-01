@@ -5539,7 +5539,7 @@ service cloud.firestore {
     - `LiveBadge`: ป้าย "อัปเดตสด" แสดงบนการ์ดโพสต์ล่าสุด หน้ารายการโพสต์ และการ์ดการเข้าเรียนวันนี้เฉพาะเมื่อชั้นข้อมูลสดเปิดใช้งานอยู่
     - ปุ่มรายการใหม่ (`feed_new_items`): หากผู้ใช้กำลังเลื่อนดูฟีดโพสต์อยู่ด้านล่าง เมื่อมีโพสต์ใหม่จะแสดงปุ่มลอย "มีรายการใหม่ N รายการ" แทนที่จะกระตุกเลื่อนฟีดทันที กดแล้วจะ scroll กลับขึ้นบนสุดและซ่อนปุ่ม แต่หากอยู่บนสุดอยู่แล้วจะแสดงรายการใหม่ทันทีโดยไม่ขึ้นปุ่ม
     - การ์ด "การเข้าเรียนวันนี้" (`TodayAttendanceCard`): บนหน้าแรกของนักเรียน แสดงสถานะคาบเรียนของวันนี้ (เช่น มาสาย, มาตรงเวลา) และไม่กินพื้นที่หากไม่มีคาบเรียนวันนี้หรือโหลดไม่สำเร็จ
-- **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) โดยปกติอยู่ที่ 1–5 วินาที
+- **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) บน production worker รันทุกนาทีจึงช้าได้ราว 1 นาที
 - **test ที่มี**:
   - backend: `LiveClassroomTest` (ผู้รับและ fields), `LiveClassFeedTest`, `LiveAttendanceTest`, `LiveClassroomPrivacyTest` (ยืนยันว่าไม่มีเนื้อหาโพสต์/สถานะเช็คชื่อใน Firestore และผู้ใช้คนอื่นไม่ได้รับสัญญาณ)
   - app: `live_class_widgets_test.dart` (widget test ของ LiveBadge, ปุ่มรายการใหม่, TodayAttendanceCard และการแสดงผล 3 ขนาดหน้าจอ 390, 820, 1440 px), `live_class_flow_test.dart` (integration flow ของ StudentShell ตามสัญญาณโพสต์และการเข้าเรียน), `live_class_signal_test.dart` (security test ตรวจว่า uid อื่นไม่ trigger refetch, uid ไม่ตรงไม่ฟัง, แอปไม่เขียน Firestore เอง, และ firestore.rules ยังคงมี uid guard ไม่มี match /classrooms)
