@@ -261,5 +261,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('กำลังอัปโหลด…'), findsNothing);
   });
+
+  // F4
+  testWidgets('more files than the limit: the teacher is told why', (
+    tester,
+  ) async {
+    picker.count = 7;
+    await pumpPanel(tester);
+    await tester.tap(attach);
+    await tester.pumpAndSettle();
+    expect(find.byType(InputChip), findsNWidgets(5));
+    expect(find.text('แนบได้ไม่เกิน 5 ไฟล์ต่อคำถาม'), findsOneWidget);
+
+    picker.count = 1;
+    await tester.tap(find.byKey(const ValueKey('assistant_file_31')).first);
+    await tester.tap(attach);
+    await tester.pumpAndSettle();
+    expect(find.byType(InputChip), findsNWidgets(5));
+    expect(find.text('แนบได้ไม่เกิน 5 ไฟล์ต่อคำถาม'), findsOneWidget);
+  });
 }
 

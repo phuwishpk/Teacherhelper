@@ -811,6 +811,7 @@ class AssistantAttachments {
 class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
   /// The same limit as the server's (AssistantChat::MAX_ATTACHMENTS).
   static const maxFiles = 5;
+  static const _tooMany = 'แนบได้ไม่เกิน $maxFiles ไฟล์ต่อคำถาม';
 
   @override
   AssistantAttachments build() {
@@ -819,18 +820,26 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
   }
 
   Future<void> pick() async {
-    if (state.uploading || state.files.length >= maxFiles) return;
+    if (state.uploading) return;
+    if (state.files.length >= maxFiles) {
+      state = AssistantAttachments(files: state.files, error: _tooMany);
+      return;
+    }
     final picked = await ref
         .read(documentFilePickerProvider)
         .pick(dialogTitle: 'แนบเอกสารของครู');
     if (picked.isEmpty || !ref.mounted) return;
+    final room = maxFiles - state.files.length;
     state = AssistantAttachments(files: state.files, uploading: true);
     try {
       final uploaded = await ref
           .read(answerKeyRepositoryProvider)
-          .upload(picked.take(maxFiles - state.files.length).toList());
+          .upload(picked.take(room).toList());
       if (!ref.mounted) return;
-      state = AssistantAttachments(files: [...state.files, ...uploaded]);
+      state = AssistantAttachments(
+        files: [...state.files, ...uploaded],
+        error: picked.length > room ? _tooMany : null,
+      );
     } catch (e) {
       if (!ref.mounted) return;
       state = AssistantAttachments(
