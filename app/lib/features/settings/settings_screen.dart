@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/live/app_settings.dart';
 import '../../core/live/live_status_card.dart';
 import '../../core/push/push_messaging.dart';
 import '../../core/router/app_router.dart';
@@ -52,6 +53,17 @@ class SettingsScreen extends ConsumerWidget {
                   const GoogleClassroomCard(),
                   const SizedBox(height: 8),
                   const ThemeModeSection(),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: SwitchListTile(
+                      key: const ValueKey('settings_mascot'),
+                      title: const Text('แสดงน้องเช็คในแชท'),
+                      subtitle: const Text('ปิดแล้วแชทจะใช้ไอคอนธรรมดา'),
+                      value: ref.watch(mascotEnabledProvider),
+                      onChanged: (on) =>
+                          ref.read(mascotEnabledProvider.notifier).setEnabled(on),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Card(
                     child: ListTile(

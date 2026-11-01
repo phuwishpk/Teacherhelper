@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/error_codes.dart';
+import '../../core/live/app_settings.dart';
 import '../../core/router/app_router.dart';
+import '../../core/widgets/mascot.dart';
+import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
 import 'assistant_student_data.dart';
 
-class AssistantBubble extends StatelessWidget {
+class AssistantBubble extends ConsumerWidget {
   const AssistantBubble({
     super.key,
     required this.message,
@@ -13,6 +17,7 @@ class AssistantBubble extends StatelessWidget {
     this.labels = const {},
     this.onNavigate,
     this.onRetry,
+    this.mood,
   });
 
   final AssistantMessage message;
@@ -23,8 +28,12 @@ class AssistantBubble extends StatelessWidget {
   final ValueChanged<String>? onNavigate;
   final VoidCallback? onRetry;
 
+  /// Mascot mood when shown beside an assistant answer or error (M6).
+  final MascotMood? mood;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mascotOn = ref.watch(mascotEnabledProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final (color, onColor) = message.isUser
@@ -34,123 +43,150 @@ class AssistantBubble extends StatelessWidget {
         : (scheme.surfaceContainerHigh, scheme.onSurface);
     final code = message.code;
 
-    return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Card(
-          key: message.isError ? const ValueKey('assistant_error') : null,
-          color: color,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (message.isError)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline, size: 18, color: onColor),
-                        const SizedBox(width: 6),
-                        Text(
-                          'ผู้ช่วยตอบไม่สำเร็จ',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: onColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                SelectableText(
-                  message.isUser
-                      ? message.content
-                      : withNames(message.content, labels),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
-                ),
-                for (final f in message.attachments)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.description_outlined,
-                          size: 16,
+    final card = Card(
+      key: message.isError ? const ValueKey('assistant_error') : null,
+      color: color,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.isError)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, size: 18, color: onColor),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'ผู้ช่วยตอบไม่สำเร็จ',
+                        style: theme.textTheme.titleSmall?.copyWith(
                           color: onColor,
                         ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            '${f.name} (${f.pageCount} หน้า)',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: onColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (!message.isUser && onNavigate != null)
-                  if (mentioned(message.content, labels) case final students
-                      when students.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          for (final s in students)
-                            if (s.classroomId != null)
-                              ActionChip(
-                                key: ValueKey('assistant_student_${s.label}'),
-                                avatar: const Icon(Icons.person_outline),
-                                label: Text(s.name ?? s.label),
-                                onPressed: () => onNavigate!(
-                                  AppRoutes.studentMastery(
-                                    s.classroomId!,
-                                    s.studentId,
-                                  ),
-                                ),
-                              ),
-                        ],
                       ),
                     ),
-                if (code != null) ErrorCodeLine(code),
-                if (onRetry != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      key: const ValueKey('assistant_retry'),
-                      onPressed: onRetry,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('ลองใหม่'),
+                  ],
+                ),
+              ),
+            SelectableText(
+              message.isUser
+                  ? message.content
+                  : withNames(message.content, labels),
+              style: theme.textTheme.bodyMedium?.copyWith(color: onColor),
+            ),
+            for (final f in message.attachments)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.description_outlined,
+                      size: 16,
+                      color: onColor,
                     ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        '${f.name} (${f.pageCount} หน้า)',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: onColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (!message.isUser && onNavigate != null)
+              if (mentioned(message.content, labels) case final students
+                  when students.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final s in students)
+                        if (s.classroomId != null)
+                          ActionChip(
+                            key: ValueKey('assistant_student_${s.label}'),
+                            avatar: const Icon(Icons.person_outline),
+                            label: Text(s.name ?? s.label),
+                            onPressed: () => onNavigate!(
+                              AppRoutes.studentMastery(
+                                s.classroomId!,
+                                s.studentId,
+                              ),
+                            ),
+                          ),
+                    ],
                   ),
-              ],
+                ),
+            if (code != null) ErrorCodeLine(code),
+            if (onRetry != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const ValueKey('assistant_retry'),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('ลองใหม่'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (message.isUser || !mascotOn) {
+      return Align(
+        alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: card,
+        ),
+      );
+    }
+
+    final mascotMood =
+        mood ?? (message.isError ? MascotMood.sorry : MascotMood.idle);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Mascot(mood: mascotMood, size: 28),
+          const SizedBox(width: 8),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth - 36),
+              child: card,
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
 /// "ผู้ช่วยกำลังคิด…" with three dots that pulse in turn.
-class AssistantThinkingBubble extends StatefulWidget {
+class AssistantThinkingBubble extends ConsumerStatefulWidget {
   const AssistantThinkingBubble({super.key, required this.maxWidth});
 
   final double maxWidth;
 
   @override
-  State<AssistantThinkingBubble> createState() =>
+  ConsumerState<AssistantThinkingBubble> createState() =>
       _AssistantThinkingBubbleState();
 }
 
-class _AssistantThinkingBubbleState extends State<AssistantThinkingBubble>
+class _AssistantThinkingBubbleState
+    extends ConsumerState<AssistantThinkingBubble>
     with SingleTickerProviderStateMixin {
   late final _pulse = AnimationController(
     vsync: this,
@@ -165,51 +201,71 @@ class _AssistantThinkingBubbleState extends State<AssistantThinkingBubble>
 
   @override
   Widget build(BuildContext context) {
+    final mascotOn = ref.watch(mascotEnabledProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: widget.maxWidth),
-        child: Card(
-          key: const ValueKey('assistant_thinking'),
-          color: scheme.surfaceContainerHigh,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedBuilder(
-                  animation: _pulse,
-                  builder: (context, _) => Row(
-                    children: [
-                      for (var i = 0; i < 3; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Opacity(
-                            opacity: _dot(i),
-                            child: Icon(
-                              Icons.circle,
-                              size: 8,
-                              color: scheme.primary,
-                            ),
+    final bubble = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: mascotOn ? widget.maxWidth - 36 : widget.maxWidth,
+      ),
+      child: Card(
+        key: const ValueKey('assistant_thinking'),
+        color: scheme.surfaceContainerHigh,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _pulse,
+                builder: (context, _) => Row(
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Opacity(
+                          opacity: _dot(i),
+                          child: Icon(
+                            Icons.circle,
+                            size: 8,
+                            color: scheme.primary,
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'ผู้ช่วยกำลังคิด…',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'ผู้ช่วยกำลังคิด…',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+
+    if (!mascotOn) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: bubble,
+      );
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Mascot(mood: MascotMood.thinking, size: 28),
+          const SizedBox(width: 8),
+          bubble,
+        ],
       ),
     );
   }
