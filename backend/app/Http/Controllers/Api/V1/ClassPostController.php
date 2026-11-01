@@ -7,6 +7,7 @@ use App\Domain\ClassPosts\ClassPostGoogle;
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
+use App\Domain\Firestore\LiveClassroom;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\ClassPost;
@@ -229,6 +230,9 @@ class ClassPostController extends Controller
                     $this->google->unsend($post);
                 }
             }
+            if ($alreadyPublished) {
+                LiveClassroom::feedChanged($post->classroom_id);
+            }
             ClassPosts::deleteUnused($removed);
         });
 
@@ -245,6 +249,9 @@ class ClassPostController extends Controller
             $fileIds = $post->attachments()->whereNotNull('class_post_file_id')->pluck('class_post_file_id')->map(fn ($id) => (int) $id)->all();
             $this->google->unsend($post);
             $post->delete(); // attachments and recipients cascade
+            if ($post->isPublished()) {
+                LiveClassroom::feedChanged($post->classroom_id);
+            }
             ClassPosts::deleteUnused($fileIds);
         });
 
