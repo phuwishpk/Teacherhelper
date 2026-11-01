@@ -14,6 +14,7 @@ import '../courses/course_models.dart';
 import '../courses/courses_repository.dart';
 import 'assistant.dart';
 import 'assistant_plan.dart';
+import 'plan_cards/plan_card_common.dart';
 
 /// The plan card under an assistant answer (DESIGN §37.6): the proposed
 /// questions with ticks, where they go («เปลี่ยน»), and «สร้างเลย»; after
@@ -40,7 +41,7 @@ class AssistantPlanCard extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: switch ((message.planStatus, plan.kind, plan.result)) {
-          (AssistantMessage.planReplaced, _, _) => _Replaced(plan: plan),
+          (AssistantMessage.planReplaced, _, _) => PlanCardReplaced(plan: plan),
           (AssistantMessage.planApplied, AssistantPlan.rubricCard, final r?) =>
             _RubricApplied(result: r, onNavigate: onNavigate),
           (
@@ -54,7 +55,7 @@ class AssistantPlanCard extends ConsumerWidget {
             AssistantPlan.gradebookCard,
             final r?,
           ) =>
-            _SimpleApplied(
+            PlanCardSimpleApplied(
               text: 'บันทึกการตั้งค่าสมุดคะแนนของ «${r.title}» แล้ว',
               note: 'ถ้าประกาศเกรดไว้แล้ว ต้องประกาศอีกครั้งให้เป็นค่าใหม่',
               button: 'เปิดตั้งค่าหมวดคะแนน',
@@ -66,7 +67,7 @@ class AssistantPlanCard extends ConsumerWidget {
             AssistantPlan.practiceCard,
             final r?,
           ) =>
-            _SimpleApplied(
+            PlanCardSimpleApplied(
               text: 'บันทึกแบบฝึก ${r.created} ข้อเป็นร่างแล้ว',
               note: [
                 'ไปตรวจและกดอนุมัติใน «คลังแบบฝึก» นักเรียนจึงจะเห็น',
@@ -96,38 +97,6 @@ class AssistantPlanCard extends ConsumerWidget {
           _ => _Open(message: message),
         },
       ),
-    );
-  }
-}
-
-class _Replaced extends StatelessWidget {
-  const _Replaced({required this.plan});
-
-  final AssistantPlan plan;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(Icons.history, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '${switch (plan.kind) {
-              AssistantPlan.rubricCard => 'การ์ด rubric',
-              AssistantPlan.indicatorsCard => 'การ์ดตัวชี้วัด ${plan.items.length} รายการ',
-              AssistantPlan.gradebookCard => 'การ์ดตั้งค่าสมุดคะแนน',
-              AssistantPlan.practiceCard => 'การ์ดแบบฝึก ${plan.practiceItems.length} ข้อ',
-              AssistantPlan.fileCard => 'การ์ดอ่านไฟล์',
-              _ => 'การ์ด ${plan.questions.length} ข้อ',
-            }}นี้ถูกแทนด้วยการ์ดใหม่',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -707,66 +676,6 @@ class _TargetDialogState extends ConsumerState<_TargetDialog> {
   }
 }
 
-/// The error, the spinner and the button at the bottom of an open card.
-class _Footer extends ConsumerWidget {
-  const _Footer({
-    required this.message,
-    required this.label,
-    required this.icon,
-    required this.enabled,
-  });
-
-  final AssistantMessage message;
-  final String label;
-  final IconData icon;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final plans = ref.watch(assistantPlansProvider.notifier);
-    ref.watch(assistantPlansProvider);
-    final ui = plans.of(message);
-    final busy = ui.applying || ref.watch(assistantChatProvider).sending;
-    final id = message.id!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (ui.error case final error?)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              error,
-              key: ValueKey('assistant_plan_error_$id'),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            ),
-          ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (ui.applying)
-              const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: SmallSpinner(size: 20),
-              ),
-            FilledButton.icon(
-              key: ValueKey('assistant_plan_apply_$id'),
-              onPressed: enabled && !busy ? () => plans.apply(id) : null,
-              icon: Icon(icon),
-              label: Text(label),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-String _points(double p) => p == p.roundToDouble() ? '${p.toInt()}' : '$p';
-
 class _OpenRubric extends StatelessWidget {
   const _OpenRubric({required this.message});
 
@@ -801,7 +710,7 @@ class _OpenRubric extends StatelessWidget {
           Text(
             'ใน «${plan.target.title ?? ''}» · '
             '${q.type == 'open' ? 'อัตนัย' : 'แสดงวิธีทำ'} · '
-            '${_points(q.maxPoints)} คะแนน',
+            '${planPoints(q.maxPoints)} คะแนน',
             style: muted,
           ),
           Text(q.prompt, style: theme.textTheme.bodyMedium),
@@ -833,7 +742,7 @@ class _OpenRubric extends StatelessWidget {
                   ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_points(c.points)} คะแนน',
+                  '${planPoints(c.points)} คะแนน',
                   style: theme.textTheme.labelMedium,
                 ),
               ],
@@ -857,7 +766,7 @@ class _OpenRubric extends StatelessWidget {
               style: muted,
             ),
           ),
-        _Footer(
+        PlanCardFooter(
           message: message,
           label: 'บันทึกเป็นร่าง',
           icon: Icons.save_outlined,
@@ -1014,7 +923,7 @@ class _OpenIndicators extends ConsumerWidget {
               ],
             ),
           ),
-        _Footer(
+        PlanCardFooter(
           message: message,
           label: 'ทำตามที่เลือก (${ui.selected.length})',
           icon: Icons.add_task,
@@ -1090,61 +999,6 @@ class _IndicatorsApplied extends StatelessWidget {
                 label: const Text('เปิดหน้าจับคู่ตัวชี้วัด'),
               ),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-/// After a gradebook or practice card: what was saved and where to look.
-class _SimpleApplied extends StatelessWidget {
-  const _SimpleApplied({
-    required this.text,
-    required this.note,
-    required this.button,
-    required this.route,
-    required this.onNavigate,
-  });
-
-  final String text;
-  final String note;
-  final String button;
-  final String route;
-  final ValueChanged<String> onNavigate;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.check_circle, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                key: const ValueKey('assistant_plan_done'),
-                style: theme.textTheme.titleSmall,
-              ),
-            ),
-          ],
-        ),
-        Text(
-          note,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            key: const ValueKey('assistant_plan_open'),
-            onPressed: () => onNavigate(route),
-            icon: const Icon(Icons.open_in_new),
-            label: Text(button),
-          ),
         ),
       ],
     );
@@ -1230,7 +1084,7 @@ class _OpenGradebook extends StatelessWidget {
               style: muted,
             ),
           ),
-        _Footer(
+        PlanCardFooter(
           message: message,
           label: 'บันทึกการตั้งค่า',
           icon: Icons.save_outlined,
@@ -1337,7 +1191,7 @@ class _OpenPractice extends ConsumerWidget {
             ),
           ),
         Text('บันทึกเป็นร่าง แล้วไปอนุมัติใน «คลังแบบฝึก»', style: muted),
-        _Footer(
+        PlanCardFooter(
           message: message,
           label: 'บันทึกเป็นร่าง (${ui.selected.length})',
           icon: Icons.save_outlined,
@@ -1417,7 +1271,7 @@ class _OpenFile extends StatelessWidget {
           'ระบบอ่านไฟล์อยู่เบื้องหลัง แล้วครูตรวจผลในหน้าปกติก่อนใช้',
           style: muted,
         ),
-        _Footer(
+        PlanCardFooter(
           message: message,
           label: 'ส่งไฟล์ไปอ่าน',
           icon: Icons.send_outlined,
