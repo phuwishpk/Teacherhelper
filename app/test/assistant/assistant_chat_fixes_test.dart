@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:eduvision/core/router/app_router.dart';
 import 'package:eduvision/core/theme/app_theme.dart';
 import 'package:eduvision/features/assignments/answer_key_models.dart';
 import 'package:eduvision/features/assignments/answer_key_repository.dart';
@@ -11,6 +12,7 @@ import 'package:eduvision/features/assistant/assistant_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 /// Faults found in the assistant chat on 2026-11-01 (DESIGN §37.5).
 class _FakeAssistant implements AssistantRepository {
@@ -325,6 +327,45 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
     expect(focused(tester), isFalse);
+  });
+
+  // F7
+  testWidgets('phone: a key added in settings counts on the way back', (
+    tester,
+  ) async {
+    repo.statusValue = const AssistantStatus(available: false);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final router = GoRouter(
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const AssistantScreen()),
+        GoRoute(
+          path: AppRoutes.settings,
+          builder: (_, _) => const Scaffold(body: Text('ตั้งค่า')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [assistantRepositoryProvider.overrideWithValue(repo)],
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('assistant_settings')));
+    await tester.pumpAndSettle();
+    expect(find.text('ตั้งค่า'), findsOneWidget);
+    repo.statusValue = const AssistantStatus(available: true);
+    router.pop();
+    await tester.pumpAndSettle();
+
+    expect(input, findsOneWidget);
   });
 }
 

@@ -179,18 +179,22 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
 
 
 /// The assistant as its own page, on a phone or a tablet.
-class AssistantScreen extends StatelessWidget {
+class AssistantScreen extends ConsumerWidget {
   const AssistantScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     void close() =>
         context.canPop() ? context.pop() : context.go(AppRoutes.home);
     return Scaffold(
       body: SafeArea(
         child: AssistantPanel(
           onClose: close,
-          onNavigate: (route) => context.push(route),
+          onNavigate: (route) async {
+            await context.push(route);
+            // A key added in settings counts as soon as the teacher is back.
+            if (context.mounted) ref.invalidate(assistantStatusProvider);
+          },
         ),
       ),
     );
