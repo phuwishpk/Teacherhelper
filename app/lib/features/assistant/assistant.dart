@@ -397,6 +397,7 @@ class AssistantChatState {
     this.sending = false,
     this.loading = false,
     this.labels = const {},
+    this.justApplied = false,
   });
 
   final AssistantConversation? conversation;
@@ -406,6 +407,9 @@ class AssistantChatState {
 
   /// The conversation's students by label (DESIGN §37.8).
   final Map<String, StudentLabel> labels;
+
+  /// A card was created just now, by its button or a typed confirmation.
+  final bool justApplied;
 
   /// The last message failed and nothing is running: "ลองใหม่" can go.
   bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
@@ -582,6 +586,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       sending: state.sending,
       loading: state.loading,
       labels: state.labels,
+      justApplied: message.planStatus == AssistantMessage.planApplied,
     );
   }
 
