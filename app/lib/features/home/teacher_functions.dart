@@ -119,6 +119,14 @@ List<MenuGroup> teacherMenu(
         keywords: ['appeal', 'อุทธรณ์', 'ขอคะแนน'],
       ),
       page(
+        'notes',
+        'บันทึกครู',
+        Icons.photo_library_outlined,
+        AppRoutes.teacherNotes,
+        where: 'รูปและโน้ตการสอน เก็บในเครื่องและซิงก์ทุกเครื่อง',
+        keywords: ['note', 'บันทึก', 'รูป', 'โน้ต', 'firestore'],
+      ),
+      page(
         'timetable',
         'ตารางสอน',
         Icons.calendar_month_outlined,
