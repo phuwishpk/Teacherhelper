@@ -51,6 +51,11 @@ abstract class TokenStorage {
   Future<bool> readMyIndicatorsPromptClosed(int userId);
   Future<void> writeMyIndicatorsPromptClosed(int userId);
 
+  /// Whether the teacher [userId] wants the mascot shown (DESIGN §43).
+  /// null = not chosen yet (defaults to true).
+  Future<bool?> readMascotEnabled(int userId);
+  Future<void> writeMascotEnabled(int userId, bool on);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
@@ -67,6 +72,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _themeModeKey = 'theme_mode';
   static const _myIndicatorsPromptKey = 'my_indicators_prompt_closed';
   static const _googleSignUpKey = 'google_signup_started_at';
+  static const _mascotEnabledKey = 'mascot_enabled';
   final FlutterSecureStorage _storage;
 
   @override
@@ -114,6 +120,17 @@ class SecureTokenStorage implements TokenStorage {
   @override
   Future<void> writeMyIndicatorsPromptClosed(int userId) =>
       _storage.write(key: '${_myIndicatorsPromptKey}_$userId', value: '1');
+
+  @override
+  Future<bool?> readMascotEnabled(int userId) async {
+    final raw = await _storage.read(key: '${_mascotEnabledKey}_$userId');
+    if (raw == null) return null;
+    return raw == '1';
+  }
+
+  @override
+  Future<void> writeMascotEnabled(int userId, bool on) =>
+      _storage.write(key: '${_mascotEnabledKey}_$userId', value: on ? '1' : '0');
 
   @override
   Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
@@ -166,6 +183,14 @@ class InMemoryTokenStorage implements TokenStorage {
   String? themeMode;
   DateTime? googleSignUpStartedAt;
   final Set<int> myIndicatorsPromptClosed = {};
+  final Map<int, bool> mascotEnabled = {};
+
+  @override
+  Future<bool?> readMascotEnabled(int userId) async => mascotEnabled[userId];
+
+  @override
+  Future<void> writeMascotEnabled(int userId, bool on) async =>
+      mascotEnabled[userId] = on;
 
   @override
   Future<bool> readMyIndicatorsPromptClosed(int userId) async =>

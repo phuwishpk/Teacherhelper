@@ -37,6 +37,7 @@
 23. [สมุดคะแนนและการตัดเกรด (Phase 11)](#23-สมุดคะแนนและการตัดเกรด-phase-11)
 24. [บัญชีนักเรียนระดับโรงเรียน ห้องประจำชั้นร่วม และการเข้าสู่ระบบด้วย Google](#24-บัญชีนักเรียนระดับโรงเรียน-ห้องประจำชั้นร่วม-และการเข้าสู่ระบบด้วย-google)
 25. [เว็บแอป (ใช้จริงบนเบราว์เซอร์)](#25-เว็บแอป-ใช้จริงบนเบราว์เซอร์)
+43. [น้องเช็ค: ตัวการ์ตูนของผู้ช่วย](#43-น้องเช็ค-ตัวการ์ตูนของผู้ช่วย)
 
 ---
 
@@ -5339,8 +5340,8 @@ CREATE TABLE classroom_teachers (
 
 ### 37.5 แอป (`lib/features/assistant/`)
 
-- **ปุ่มหุ่นยนต์ "ผู้ช่วย Krucheck"**: desktop เป็นปุ่มใกล้ล่างสุดของ sidebar เปิดแผงด้านขวากว้าง 420 px (end drawer ของ `AdaptiveShell`) แท็บเล็ตและมือถือเป็นปุ่มลอยเล็กมุมล่างซ้าย เปิดหน้าเต็ม `/assistant` อยู่ในเมนูค้นหา (§35) ด้วย
-- **แชท**: ระหว่างรอคำตอบมีฟองจุดกระพริบ "ผู้ช่วยกำลังคิด…" และล็อกช่องพิมพ์ ล้มแล้วแสดงฟอง error ข้อความภาษาไทย รหัส (`AI-QUOTA · #48213`, `NET-OFFLINE`, `NET-TIMEOUT`, `CHAT-LIMIT`, `AI-KEY-MISSING`) ปุ่มคัดลอกรหัส และ "ลองใหม่" (error ที่เซิร์ฟเวอร์บันทึกไว้ใช้ retry ของ API, error ที่ไม่ถึงเซิร์ฟเวอร์ส่งคำถามเดิมอีกครั้ง) ใต้ช่องพิมพ์เตือนว่าอย่าพิมพ์ข้อมูลส่วนตัวของนักเรียน และแสดง "วันนี้ถามแล้ว N/100 ข้อความ · บทสนทนานี้ใช้ X โทเค็น"
+- **ปุ่มหุ่นยนต์ "ผู้ช่วย Krucheck"**: desktop เป็นปุ่มใกล้ล่างสุดของ sidebar เปิดแผงด้านขวากว้าง 420 px (end drawer ของ `AdaptiveShell`) แท็บเล็ตและมือถือเป็นปุ่มลอยเล็กมุมล่างซ้าย เปิดหน้าเต็ม `/assistant` อยู่ในเมนูค้นหา (§35) ด้วย (ปุ่มเปิดแชทยังเป็นรูปหุ่นยนต์ แต่ในแชทมีตัวการ์ตูน "น้องเช็ค" ดู §43)
+- **แชท**: หัวแผงและคำตอบของผู้ช่วยมีตัวการ์ตูน "น้องเช็ค" แสดงอารมณ์ตามสถานะแชท (ดู §43) ระหว่างรอคำตอบมีตัวการ์ตูนกำลังคิดข้างฟองจุดกระพริบ "ผู้ช่วยกำลังคิด…" และล็อกช่องพิมพ์ ล้มแล้วแสดงฟอง error พร้อมน้องเช็คอารมณ์ขอโทษ ข้อความภาษาไทย รหัส (`AI-QUOTA · #48213`, `NET-OFFLINE`, `NET-TIMEOUT`, `CHAT-LIMIT`, `AI-KEY-MISSING`) ปุ่มคัดลอกรหัส และ "ลองใหม่" (error ที่เซิร์ฟเวอร์บันทึกไว้ใช้ retry ของ API, error ที่ไม่ถึงเซิร์ฟเวอร์ส่งคำถามเดิมอีกครั้ง) ใต้ช่องพิมพ์เตือนว่าอย่าพิมพ์ข้อมูลส่วนตัวของนักเรียน และแสดง "วันนี้ถามแล้ว N/100 ข้อความ · บทสนทนานี้ใช้ X โทเค็น" (ครูปิดตัวการ์ตูนเพื่อกลับไปใช้ไอคอนปกติได้ที่หน้าตั้งค่า)
 - **บทสนทนา**: "บทสนทนาใหม่" รายการบทสนทนาพร้อมเวลาและโทเค็น ลบรายบทสนทนา (ยืนยันก่อน) สถานะแชทอยู่ใน provider ตลอดที่ครูเข้าสู่ระบบ ปิดแผงระหว่างรอคำตอบไม่ทำให้หาย
 
 ### 37.6 ขั้น 2: สร้างข้อผ่านแชท
@@ -5410,7 +5411,8 @@ CREATE TABLE classroom_teachers (
 ### 38.1 หลักการ
 
 - **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
-- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** (ยกเว้นข้อเดียวตั้งแต่ 27 ต.ค. 2569: แอปเขียน `users/{uid}/notes` ของ "บันทึกครู" เอง §40) queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
+- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** (ยกเว้นสองจุด: แอปเขียน `users/{uid}/notes` ของ "บันทึกครู" เอง §40 และ `users/{uid}/settings/app` เอง §43) queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
+- **ข้อยกเว้นการเขียนจากแอป**: เอกสาร `users/{uid}/settings/app` (§43) แอปเขียนเองได้เพื่อเก็บการตั้งค่า เช่น `mascot_enabled` (bool) ไม่มี `expires_at` เพราะเป็นการตั้งค่าถาวรของผู้ใช้ข้ามเครื่อง และไม่มีข้อมูลนักเรียนหรือเนื้อหาแชทใด ๆ
 - **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
 - **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นในเอกสารที่แอปอ่านได้ (ใต้ `users/{uid}`) รูปและลายมือห้ามขึ้น Firestore ทุกกรณี ข้อยกเว้นเดียวคือสำเนาข้อมูลนักเรียนฝั่ง server ใต้ `classrooms/{id}` ซึ่งปิดเป็นค่าเริ่มต้นและแอปอ่านไม่ได้ (§38.10 แก้ 1 พ.ย. 2569) ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
 - **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
@@ -5426,6 +5428,7 @@ CREATE TABLE classroom_teachers (
 | `users/{studentUid}/submissions/{id}` | `assignment_id`, `assignment_title`, `status` (ค่าเดียวกับ `submissions.status`), `updated_at`, `expires_at` **ไม่มีคะแนน** | `MirrorSubmissionStatusJob` (unique ต่องานที่ส่ง) (§38.9) | 3 |
 | `users/{uid}/class_feed/{classroomId}` | `classroom_id`, `updated_at`, `expires_at` (ไม่มีเนื้อหาหรือหัวข้อโพสต์) | `SignalClassFeedJob` ให้ทุกคนในห้อง (§38.11) | 4 |
 | `users/{studentUid}/attendance/{courseId}_{classroomId}` | `course_id`, `classroom_id`, `updated_at`, `expires_at` (ไม่มีสถานะเช็คชื่อ) | `SignalAttendanceJob` ให้นักเรียนทุกคนของห้อง (§38.11) | 4 |
+| `users/{uid}/settings/app` | `mascot_enabled` (bool), `onboarding_done_at` (timestamp), `device` (string) **ไม่มีข้อมูลนักเรียน/แชท** | แอป (ครู) (§43) | 4 |
 | `classrooms/{id}/students/{studentId}` | `classroom_id`, `student_id`, `name`, `student_number`, `student_code`, `updated_at`, `expires_at` | `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
 | `classrooms/{id}/submissions/{submissionId}` | `classroom_id`, `assignment_id`, `assignment_title`, `student_id`, `status`, `total_score`, `published`, `answers[]` (`question_id`, `position`, `type`, `answer`, `score`, `max_points`), `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
 | `classrooms/{id}/gradebook/{entryId}` | `classroom_id`, `student_id`, `assignment_id`, `gradebook_item_id`, `score`, `excused`, `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
@@ -5658,3 +5661,71 @@ service cloud.firestore {
 ### 40.5 test
 
 `test/notes/teacher_notes_store_test.dart` (drift ในหน่วยความจำกับ `fake_cloud_firestore`: ออฟไลน์แล้วซิงก์ทีหลัง, บันทึกจากเครื่องอื่น, ลบสองที่และ tombstone, แยกบัญชี, เว็บใช้ Firestore อย่างเดียว, ข้อความยาวเกิน, ขนาดรูปย่อ) และ `teacher_notes_screen_test.dart` ที่ 390/820/1440 px
+
+---
+
+## 43. น้องเช็ค: ตัวการ์ตูนของผู้ช่วย
+
+เพิ่ม 2 พ.ย. 2569 (งานที่ 3 ส่วน B, issue #90)
+
+### 43.1 ทำไมถึงมีตัวการ์ตูน
+
+1. **ทำให้แชทดูเป็นมิตรและลดความเครียด**: การบ้านและการตัดเกรดเป็นเรื่องเคร่งเครียด การมีตัวการ์ตูน "น้องเช็ค" ช่วยให้ครูรู้สึกเข้าถึงง่ายและผ่อนคลายขึ้น โดยเฉพาะตอนรอ AI คิดคำตอบ
+2. **สื่อสารสถานะของแชทผ่านอารมณ์**: น้องเช็คเปลี่ยนอารมณ์ตามบริบท ทำให้ครูทราบสถานะทันทีโดยไม่ต้องอ่านข้อความยาว เช่น กำลังคิด ขอโทษเมื่อเกิดข้อผิดพลาด หรือดีใจเมื่อสร้างงานสำเร็จ
+
+### 43.2 อารมณ์ทั้งห้า (`MascotMood`)
+
+| อารมณ์ | enum | เมื่อไหร่ |
+|---|---|---|
+| ปกติ | `MascotMood.idle` | คำตอบทั่วไปและการสนทนาปกติ |
+| ทักทาย | `MascotMood.wave` | แชทว่าง (เปิดแชทใหม่) โบกมือทักทาย |
+| กำลังคิด | `MascotMood.thinking` | ระหว่างที่ AI กำลังประมวลผลคำตอบ (มีจุดหมุนเคลื่อนไหว) |
+| ดีใจ | `MascotMood.happy` | การ์ดสร้างงานสำเร็จ (กด «สร้างเลย» หรือพิมพ์ยืนยัน) |
+| ขอโทษ | `MascotMood.sorry` | ข้อความล่าสุดเกิดข้อผิดพลาด (error) หรือโหลดสถานะไม่สำเร็จ |
+
+ลำดับการตัดสินอารมณ์ใน `moodForChat(chat)`:
+1. `chat.sending` → `thinking`
+2. `chat.messages` ว่าง → `wave`
+3. `messages.last.isError` → `sorry`
+4. `chat.justApplied` หรือ `messages.last.planStatus == 'applied'` → `happy`
+5. นอกนั้น → `idle`
+
+### 43.3 วาดด้วยโค้ดเวกเตอร์ (`CustomPainter`)
+
+แทนที่จะใช้ไฟล์รูปภาพ SVG หรือแอนิเมชัน Lottie น้องเช็คถูกวาดด้วย `CustomPainter` (`MascotPainter`):
+- **ขนาดไฟล์เล็ก**: ไม่มี asset รูปภาพเพิ่มเติมในแอป ลดขนาดตัวติดตั้ง
+- **ปรับตามธีมทันที**: ดึงสีจาก `Theme.of(context).colorScheme` (เช่น หน้าปกสมุดเปลี่ยนตาม primary color ของธีมสว่าง/มืด)
+- **Accessibility & Motion**: แอนิเมชันเฉพาะตอนกำลังคิด (`thinking`) และเคารพการตั้งค่าลดการเคลื่อนไหวของผู้ใช้ (`prefers-reduced-motion`)
+
+### 43.4 ที่เก็บการตั้งค่าและการซิงก์
+
+ครูสามารถเปิดหรือปิดน้องเช็คได้ที่หน้าตั้งค่า (`settings_mascot`):
+- **Local Storage**: เก็บใน `TokenStorage` (`FlutterSecureStorage`) ด้วย key `mascot_enabled_{userId}` เพื่อให้แอปเปิดมาแล้วอ่านค่าได้ทันทีแม้ออฟไลน์
+- **Cloud (Firestore)**: ซิงก์ไปที่ `users/{uid}/settings/app` ด้วย field `mascot_enabled` (bool) เพื่อให้เมื่อครูเปลี่ยนเครื่องหรือเข้าใช้งานผ่านเว็บ การตั้งค่ายังคงอยู่
+- **Fallback**: หากไม่เคยตั้งค่า เริ่มต้นเป็น `true` (เปิดใช้งาน) หาก Firestore หรือ storage เกิดข้อผิดพลาด จะจับข้อยกเว้นและใช้ค่าเริ่มต้นโดยไม่ทำให้แชทล่ม
+
+### 43.5 ความเป็นส่วนตัวและความปลอดภัย (PDPA)
+
+- **ข้อความแชทไม่เคยถูกส่งไปเก็บใน Firestore**: Firestore ใช้เฉพาะส่งผ่านข้อมูลสดและการตั้งค่า `mascot_enabled` เท่านั้น ข้อความแชทคุยผ่าน API ของ backend และส่งต่อไปยัง Gemini โดยตรง ไม่ถูก mirror ไปยัง Firestore
+- **Security Rules**: เอกสาร `/users/{uid}/settings/app` มี security rules บังคับ:
+  - ผู้ใช้เขียนได้เฉพาะ subtree ของตัวเอง (`request.auth.uid == uid`)
+  - ฟังก์ชัน `validAppSettings()` บังคับอนุญาตเฉพาะ 3 fields เท่านั้น: `['mascot_enabled', 'onboarding_done_at', 'device']`
+  - ตรวจชนิดข้อมูล `mascot_enabled is bool` ป้องกันการแอบใส่ข้อมูลอื่นลงไป
+
+### 43.6 การแยกไฟล์แชท (Refactor ส่วน A)
+
+เพื่อรองรับฟีเจอร์ตัวการ์ตูนและการขยายตัวของระบบ โค้ดผู้ช่วยถูกแยกออกเป็นโมดูลย่อย:
+- `assistant_bubble.dart`: ฟองข้อความและฟองรอคิด
+- `assistant_notices.dart`: หน้าแจ้งเตือน หน้าไม่มี key และ helpers
+- `assistant_conversation_list.dart`: รายการบทสนทนา
+- `assistant_attached_files.dart`: รายการไฟล์แนบ
+- `assistant_chat_view.dart`: พื้นที่แชทหลัก
+- `plan_cards/`: แยกการ์ดตามชนิด (`question_plan_card.dart`, `rubric_plan_card.dart`, `indicator_plan_card.dart`, `gradebook_plan_card.dart`, `practice_plan_card.dart`, `file_plan_card.dart`)
+
+### 43.7 การทดสอบครบทั้ง 4 ประเภท
+
+1. **Unit Test**: `assistant_mood_test.dart` ตรวจสอบการเลือกอารมณ์ทั้ง 5 อารมณ์, `app_settings_test.dart` ตรวจสอบการอ่าน/เขียน local และ Firestore 6 กรณี
+2. **Widget Test**: `mascot_test.dart` ตรวจสอบการวาดทุกอารมณ์และการเคารพ reduced motion
+3. **Integration Test**: `assistant_mascot_flow_test.dart` ทดสอบ flow ผู้ช่วยตั้งแต่แชทว่าง (wave) -> กำลังคิด (thinking) -> ได้คำตอบ (idle) -> เกิด error (sorry + retry) -> ลองใหม่สำเร็จ (idle) -> ปิดสวิตช์น้องเช็ค
+4. **Security Test**: `assistant_firestore_privacy_test.dart` ยืนยันข้อความแชทไม่หลุดไป Firestore, ตรวจ field whitelist และตรวจ security rules
+

@@ -1,7 +1,8 @@
-// Krucheck Firestore rules (DESIGN §38.5, §40.4). Paste into Firebase console >
+// Krucheck Firestore rules (DESIGN §38.5, §40.4, §43.5). Paste into Firebase console >
 // Firestore Database > Rules. The backend writes with the service account
 // (rules do not apply to it); signed-in users only read their own subtree,
-// and write only their own "บันทึกครู" (users/{uid}/notes), within limits.
+// and write only their own "บันทึกครู" (users/{uid}/notes) and app settings
+// (users/{uid}/settings/app), within limits.
 rules_version = '2';
 service cloud.firestore {
   // Text up to 2,000 characters, a thumbnail up to 300 KB, nothing else.
@@ -19,6 +20,19 @@ service cloud.firestore {
   }
 
   match /databases/{database}/documents {
+    function validAppSettings() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['mascot_enabled', 'onboarding_done_at', 'device'])
+        && (!('mascot_enabled' in d) || d.mascot_enabled is bool)
+        && (!('onboarding_done_at' in d) || d.onboarding_done_at is timestamp)
+        && (!('device' in d) || d.device in ['android', 'ios', 'web']);
+    }
+
+    match /users/{uid}/settings/app {
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid && validAppSettings();
+    }
+
     match /users/{uid}/{document=**} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
