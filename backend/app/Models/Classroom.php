@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Firestore\LiveRecords;
 use Database\Factories\ClassroomFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -62,6 +63,12 @@ class Classroom extends Model
             'closed_at' => 'datetime',
             'deleted_at' => 'datetime',
         ];
+    }
+
+    /** A deleted classroom takes its student record copy with it (DESIGN §38.10). */
+    protected static function booted(): void
+    {
+        static::deleted(fn (Classroom $classroom) => LiveRecords::queueClassroom($classroom->id));
     }
 
     public function isClosed(): bool

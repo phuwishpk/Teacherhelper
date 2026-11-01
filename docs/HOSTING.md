@@ -255,6 +255,7 @@ FIREBASE_TIMEOUT=10
 # ---- Firestore ชั้นข้อมูลสด (§6.5) ----
 FIRESTORE_ENABLED=false               # true = backend เขียนแจ้งเตือนและสถานะการตรวจลง Firestore (ใช้ไฟล์ service account เดิม)
 FIRESTORE_DATABASE=(default)
+FIRESTORE_MIRROR_RECORDS=false        # true = คัดลอกชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบของนักเรียนลง Firestore (DESIGN §38.10) อ่าน §6.5 ก่อนเปิด
 
 # ---- Google Classroom (§6.3) ----
 GOOGLE_OAUTH_CLIENT_ID=               # ว่างทั้งคู่ = endpoint ของ Classroom ตอบ 503 google_not_configured
@@ -327,6 +328,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | ตรวจว่าโมเดลจริงจับ prompt injection ได้ | `eduvision:gemini-check --injection` | ส่งภาพตัวอย่าง 5 ภาพใน `backend/tests/fixtures/injection` (ภาพสังเคราะห์ ไม่มีข้อมูลนักเรียน) = 5 request; ทุกภาพต้องขึ้น `ok` และบรรทัดสุดท้าย `injection: 5/5 as expected` ถ้ามี `MISMATCH` แจ้งผู้พัฒนาเพื่อปรับ prompt |
 | ตรวจ FCM | `eduvision:fcm-check` | §6.2 |
 | ตรวจ Firestore | `eduvision:firestore-check` | §6.5 |
+| คัดลอกข้อมูลนักเรียนลง Firestore ทั้งหมดหรือซ่อมสำเนา | `eduvision:mirror-records` | §6.5 เฉพาะเมื่อเปิด `FIRESTORE_MIRROR_RECORDS` |
 | สร้างดัชนีชื่อ test ของ Test Lab | `eduvision:qa-index` | ไม่ต้องรันบน server: workflow deploy สร้างให้ทุกครั้ง (DESIGN §39.5) |
 | ลงทะเบียนโมเดล | `eduvision:register-model <path เต็มของโฟลเดอร์โมเดล>` | §7 |
 | import ตัวชี้วัดจาก CSV | `eduvision:import-skills <path เต็มของไฟล์ csv>` | §8 (หรือใช้หน้า Filament) |
@@ -575,6 +577,15 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 - เว็บ (DESIGN §38.8): workflow `deploy` build เว็บเองทุกครั้งที่ push main ใส่ค่าจากข้อ 5 ใน GitHub > repo > Settings > Secrets and variables > Actions > แท็บ **Variables** > New repository variable สี่ตัว: `FIREBASE_WEB_API_KEY` (= `apiKey`), `FIREBASE_WEB_APP_ID` (= `appId`), `FIREBASE_PROJECT_ID` (= `projectId` เช่น `eduvision-b17aa`), `FIREBASE_MESSAGING_SENDER_ID` (= `messagingSenderId`) แล้ว Actions > deploy > **Run workflow** หนึ่งครั้ง (build ด้วยมือใช้ตัวแปรสภาพแวดล้อมชื่อเดียวกันกับ `tools/build-web.sh`) ไม่ใส่ = เว็บแอปไม่ต่อ Firestore และทำงานแบบเดิม
 - **จำกัด API key ของเว็บ** (ค่านี้อยู่ใน JS ที่ใครก็โหลดได้ และอยู่ใน branch `deploy` ที่ public): Google Cloud console > APIs & Services > Credentials > key ชื่อ "Browser key (auto created by Firebase)" > Application restrictions = **Websites** ใส่ `https://teacherhelper.phuwish.com/*` (และ `http://localhost:5173/*` ถ้าใช้ทดสอบในเครื่อง) > API restrictions = **Restrict key** เลือก Identity Toolkit API, Token Service API, Cloud Firestore API > Save ถ้า GitHub แจ้ง secret scanning alert ของ key นี้ใน branch `deploy` ให้ปิดเป็น "False positive" หลังจำกัด key แล้ว
 - ตรวจในเบราว์เซอร์: เปิดเว็บแอป ล็อกอิน ไปที่ ตั้งค่า > การ์ด "ข้อมูลสด (Firestore)" ต้องขึ้น "เชื่อมต่อแล้ว" ถ้าไม่ขึ้น เปิด DevTools > Console ดูว่ามีข้อความ `Content Security Policy` หรือไม่ แล้วแจ้งผู้พัฒนา
+
+**สำเนาข้อมูลนักเรียน (ไม่บังคับ ปิดเป็นค่าเริ่มต้น, DESIGN §38.10)** คัดลอกชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบไปไว้ใต้ `classrooms/{id}` ซึ่งแอปอ่านไม่ได้ เปิดดูได้จาก Firebase console และไม่ต้องแก้ rules
+
+1. **ถ้ามีนักเรียนจริงในระบบ** ต้องมีความยินยอมของผู้ปกครองที่ครอบคลุมข้อมูลชุดนี้ก่อน และตั้ง TTL ตามข้อ 4 เพิ่ม collection group `students`, `submissions`, `gradebook`
+2. `.env`: `FIRESTORE_MIRROR_RECORDS=true` → Run Now `eduvision:post-deploy`
+3. Run Now `eduvision:mirror-records` ต้องขึ้น `queued N classroom(s)` worker คัดลอกข้อมูลเก่าภายในไม่กี่นาที ดูผลที่ Firestore Database > Data > `classrooms` ข้อมูลใหม่หลังจากนี้ตามเองผ่านคิว
+4. หน้า `/privacy` เปลี่ยนข้อความตามสวิตช์นี้เอง
+
+ปิดด้วย `FIRESTORE_MIRROR_RECORDS=false` แล้ว Run Now `eduvision:post-deploy` ระบบหยุดเขียน แต่สำเนาเดิมยังอยู่ ต้องลบ collection `classrooms` ใน Firebase console เอง
 
 ลบบัญชีใน Filament = ลบเอกสารใต้ `users/{uid}` และผู้ใช้ใน Firebase Authentication ของบัญชีนั้นทันทีผ่านคิว (DESIGN §38.8; service account ของ FCM ที่สร้างจาก Firebase มีสิทธิ์อยู่แล้ว ถ้าใน log มี `firestore.user_purge_failed` พร้อม `PERMISSION_DENIED` ให้เพิ่ม role **Firebase Authentication Admin** ให้ service account ใน Google Cloud IAM)
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Firestore\LiveRecords;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
 
@@ -32,5 +33,16 @@ class ClassroomStudent extends Pivot
             'left_course_at' => 'datetime',
             'pin_pending_at' => 'datetime',
         ];
+    }
+
+    /**
+     * attach, detach and updateExistingPivot run through this class (the
+     * relation's `using`). The query-builder updates elsewhere touch only
+     * Google columns, which are not copied (DESIGN §38.10).
+     */
+    protected static function booted(): void
+    {
+        static::saved(fn (ClassroomStudent $row) => LiveRecords::queueRoster((int) $row->classroom_id));
+        static::deleted(fn (ClassroomStudent $row) => LiveRecords::queueRoster((int) $row->classroom_id));
     }
 }

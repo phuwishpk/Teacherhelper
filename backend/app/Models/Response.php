@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Firestore\LiveRecords;
 use App\Domain\Grading\ScanGrader;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -149,6 +150,16 @@ class Response extends Model
             'reviewed_at' => 'datetime',
             'exam_answer' => 'array',
         ];
+    }
+
+    /** The answer's text and score live in its hand-in's record copy (DESIGN §38.10). */
+    protected static function booted(): void
+    {
+        static::saved(function (Response $response) {
+            if ($response->wasRecentlyCreated || $response->wasChanged(['extraction', 'exam_answer', 'mcq_fill', 'ai_score', 'final_score'])) {
+                LiveRecords::queueResponse($response);
+            }
+        });
     }
 
     /** @return BelongsTo<Submission, $this> */

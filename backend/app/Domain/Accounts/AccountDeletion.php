@@ -3,6 +3,7 @@
 namespace App\Domain\Accounts;
 
 use App\Domain\Firestore\FirestoreConfig;
+use App\Domain\Firestore\LiveRecords;
 use App\Jobs\PurgeLiveUserJob;
 use App\Models\AuditLog;
 use App\Models\Classroom;
@@ -91,6 +92,8 @@ final class AccountDeletion
         if (FirestoreConfig::enabled()) {
             PurgeLiveUserJob::dispatch($target->id);
         }
+        // So do the copies of the account's records in its classrooms (§38.10).
+        LiveRecords::queueAccount($target);
     }
 
     public function restore(User $admin, User $target): void
@@ -109,5 +112,6 @@ final class AccountDeletion
             AuditLog::record($admin, AuditLog::ACCOUNT_RESTORE, $target);
         });
         Log::info('account.restore', ['admin_id' => $admin->id, 'user_id' => $target->id]);
+        LiveRecords::queueAccount($target);
     }
 }

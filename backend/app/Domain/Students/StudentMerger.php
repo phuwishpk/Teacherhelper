@@ -3,6 +3,7 @@
 namespace App\Domain\Students;
 
 use App\Domain\Analysis\StudentAnalyses;
+use App\Domain\Firestore\LiveRecords;
 use App\Domain\Mastery\MasteryCalculator;
 use App\Exceptions\ApiException;
 use App\Models\StudentMerge;
@@ -243,6 +244,9 @@ final class StudentMerger
         foreach ($files as $path) {
             Storage::disk('local')->delete($path);
         }
+        // Rows moved with the query builder: K's classrooms are copied again
+        // and D's old documents removed (DESIGN §38.10).
+        LiveRecords::queueAccount($keep);
 
         return $record;
     }

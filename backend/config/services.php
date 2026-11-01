@@ -100,6 +100,8 @@ return [
         // POST /auth/firebase-token answers 503; needs `credentials` above.
         'firestore_enabled' => filter_var(env('FIRESTORE_ENABLED', false), FILTER_VALIDATE_BOOL),
         'firestore_database' => env('FIRESTORE_DATABASE', '(default)'),
+        // Student names, numbers, codes, scores and answers (DESIGN §38.10).
+        'firestore_records' => filter_var(env('FIRESTORE_MIRROR_RECORDS', false), FILTER_VALIDATE_BOOL),
     ],
 
     /*
