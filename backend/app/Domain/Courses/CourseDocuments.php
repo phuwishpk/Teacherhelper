@@ -4,6 +4,7 @@ namespace App\Domain\Courses;
 
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
@@ -87,7 +88,7 @@ final class CourseDocuments
             && $extraction->updated_at->gt(now()->subMinutes(self::STALE_MINUTES));
         if (! $running) {
             // New, failed before, or lost: (re)queue it.
-            $extraction->forceFill(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'requested_by' => $teacher->id, 'updated_at' => now()])->save();
+            $extraction->forceFill(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'error_code' => null, 'ai_call_id' => null, 'requested_by' => $teacher->id, 'updated_at' => now()])->save();
             ReadCourseDocumentJob::dispatch($extraction->id, $kind, $selection->ids(), $selection->pageFrom, $selection->pageTo, $teacher->id);
         }
 
@@ -143,7 +144,7 @@ final class CourseDocuments
         }
         $key = $this->keys->forTeacher($teacherId);
         if ($key === null) {
-            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง');
+            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', AiErrorCode::KEY_MISSING);
 
             return;
         }
@@ -157,7 +158,7 @@ final class CourseDocuments
         try {
             $files = $selection->files();
         } catch (ApiException $e) {
-            $this->fail($extraction, $e->getMessage());
+            $this->fail($extraction, $e->getMessage(), null);
 
             return;
         }
@@ -173,7 +174,7 @@ final class CourseDocuments
                 GeminiException::INVALID_OUTPUT => 'AI อ่านเอกสารไม่สำเร็จ ลองถ่ายรูปให้ชัดขึ้น แนบไฟล์ใหม่ หรือกรอกในฟอร์มเอง',
                 GeminiException::KEY_INVALID => 'Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง',
                 default => 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง',
-            });
+            }, $e->code(), $e->aiCallId);
 
             return;
         }
@@ -183,7 +184,7 @@ final class CourseDocuments
             'result' => $result,
             'model' => Str::limit($this->gateway->client()->model(), 64, ''),
             'prompt_version' => $this->prompts->get(CourseDocumentReader::PURPOSE, 'general')->versionLabel(),
-            'error' => null,
+            'error' => null, 'error_code' => null, 'ai_call_id' => null,
         ])->save();
     }
 
@@ -192,7 +193,7 @@ final class CourseDocuments
     {
         $extraction = DocumentExtraction::query()->find($extractionId);
         if ($extraction !== null && $extraction->status === DocumentExtraction::STATUS_QUEUED) {
-            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง');
+            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง', AiErrorCode::TIMEOUT);
         }
     }
 
@@ -227,8 +228,9 @@ final class CourseDocuments
             ->first();
     }
 
-    private function fail(DocumentExtraction $extraction, string $message): void
+    /** $code and $callId: the AI error code and ai_calls row the teacher can quote (DESIGN §36.1). */
+    private function fail(DocumentExtraction $extraction, string $message, ?string $code = AiErrorCode::ERROR, ?int $callId = null): void
     {
-        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250)])->save();
+        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250), 'error_code' => $code, 'ai_call_id' => $callId])->save();
     }
 }

@@ -18,6 +18,7 @@ import 'review_models.dart';
 import 'review_providers.dart';
 import 'review_repository.dart';
 import 'score_stepper.dart';
+import '../../core/api/error_codes.dart';
 
 /// Detail of one response in the review queue (DESIGN §13): crop, what was
 /// read, why the AI gave this score, the explanation and the teacher's
@@ -333,6 +334,9 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                       'ใส่ key แล้วกด "ตรวจข้อที่ค้างใหม่" ที่หน้าคิว หรือให้คะแนนเองได้เลย'
                 : 'ตรวจเอง: ${manualReasonLabel(d.manualReason)}',
           ),
+        // DESIGN §36.1: the AI failure that left it to the teacher.
+        if (_aiCode(d) case final code?)
+          Align(alignment: Alignment.centerLeft, child: ErrorCodeLine(code)),
         if (d.identityMismatch)
           const _Notice(
             icon: Icons.person_search_outlined,
@@ -711,4 +715,11 @@ class _Notice extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The code of the AI failure that left an answer to the teacher.
+ErrorCode? _aiCode(ResponseDetail d) {
+  final trace = d.fuzzyTrace;
+  if (!d.isManual || trace is! Map) return null;
+  return ErrorCode.fromFields(trace['ai_error_code'], trace['ai_call_id']);
 }

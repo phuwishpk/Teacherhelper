@@ -1,3 +1,5 @@
+import '../../core/api/error_codes.dart';
+
 /// Question types of DESIGN §2.2 / §8.3.
 enum QuestionType {
   mcq('mcq', 'ปรนัย'),
@@ -176,6 +178,7 @@ class Question {
     this.rubricCriteria = const [],
     this.modelAnswer,
     this.keyComplete = true,
+    this.rubricDraftError,
   });
 
   final int id;
@@ -196,6 +199,10 @@ class Question {
   /// The teacher's model answer of an open question (§19.5): a reference
   /// for the rubric draft and extraction; the rubric still decides scores.
   final String? modelAnswer;
+
+  /// The last AI rubric draft failed (DESIGN §36.1): what to say and the
+  /// code to quote; cleared when the teacher asks again.
+  final ({String message, ErrorCode code})? rubricDraftError;
 
   /// The question counts as done for approving the key (server's
   /// KeyCompleteness: an answer, or an approved rubric for show_work/open).
@@ -222,6 +229,7 @@ class Question {
     matchMode: json['match_mode'] as String? ?? 'flexible',
     answerKey: (json['answer_key'] as Map?)?.cast<String, dynamic>(),
     rubricStatus: RubricStatus.fromApi(json['rubric_status'] as String?),
+    rubricDraftError: _rubricDraftError(json['rubric_draft_error']),
     skills: ((json['skills'] as List?) ?? const [])
         .cast<Map<String, dynamic>>()
         .map(Skill.fromJson)
@@ -276,4 +284,15 @@ class QuestionDraft {
     'skill_ids': skillIds,
     if (type == QuestionType.open) 'model_answer': modelAnswer,
   };
+}
+
+({String message, ErrorCode code})? _rubricDraftError(Object? json) {
+  if (json is! Map) return null;
+  final code = ErrorCode.fromFields(json['ai_error_code'], json['ai_call_id']);
+  return code == null
+      ? null
+      : (
+          message: json['message'] as String? ?? 'AI ร่าง rubric ไม่สำเร็จ',
+          code: code,
+        );
 }

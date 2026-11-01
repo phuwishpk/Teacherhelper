@@ -172,10 +172,10 @@ final class WholePageGrader
         foreach ($chunks as $i => $chunk) {
             $outcome = $outcomes[$i];
             if ($outcome->status === CallOutcome::KEY_INVALID) {
-                return ['status' => self::PAGE_KEY_INVALID, 'questions' => []];
+                return ['status' => self::PAGE_KEY_INVALID, 'questions' => []] + GradeApplier::code($outcome->errorCode, $outcome->aiCallId);
             }
             if ($outcome->status === CallOutcome::ERROR) {
-                return ['status' => self::PAGE_ERROR, 'questions' => []];
+                return ['status' => self::PAGE_ERROR, 'questions' => []] + GradeApplier::code($outcome->errorCode, $outcome->aiCallId);
             }
             $answers = $outcome->isOk() ? (array) ($outcome->data['answers'] ?? []) : [];
             foreach ($chunk as $no => $item) {
@@ -202,9 +202,9 @@ final class WholePageGrader
                     // A valid reply that still leaves the question out (or lists it only
                     // against its schema is invalid below): not found on this page.
                     $outcome->isOk() && ! isset($outcome->data['invalid'][$no]) => ['found' => false],
-                    $outcome->status === CallOutcome::KEY_INVALID => ['error' => self::PAGE_KEY_INVALID],
-                    $outcome->status === CallOutcome::ERROR => ['error' => self::PAGE_ERROR],
-                    default => ['invalid' => true],
+                    $outcome->status === CallOutcome::KEY_INVALID => ['error' => self::PAGE_KEY_INVALID] + GradeApplier::code($outcome->errorCode, $outcome->aiCallId),
+                    $outcome->status === CallOutcome::ERROR => ['error' => self::PAGE_ERROR] + GradeApplier::code($outcome->errorCode, $outcome->aiCallId),
+                    default => ['invalid' => true] + GradeApplier::code($outcome->errorCode, $outcome->aiCallId),
                 };
             }
         }
@@ -282,6 +282,7 @@ final class WholePageGrader
         $graded = [];
         $extractions = [];
         $manual = [];
+        $manualCodes = [];
         $pageOf = [];
         $traces = [];
         foreach ($responses as $response) {
@@ -293,9 +294,10 @@ final class WholePageGrader
                 continue;
             }
 
-            [$chosen, $conflict, $reason] = self::choose($pages->all(), $question->id);
+            [$chosen, $conflict, $reason, $code] = self::choose($pages->all(), $question->id);
             if ($chosen === null) {
                 $manual[$response->id] = $reason;
+                $manualCodes[$response->id] = $code;
 
                 continue;
             }
@@ -312,7 +314,7 @@ final class WholePageGrader
             ? [[], []]
             : $this->applier->explain($graded, $responses->keyBy('id')->all(), $extractions, $key, RubricDraftRequest::gradeLabel((int) $assignment->classroom?->grade_level), (bool) $assignment->score_only, PageExtractionRequests::FEATURE, $assignment->id);
 
-        $written = DB::transaction(function () use ($submission, $responses, $pageIds, $graded, $extractions, $manual, $pageOf, $traces, $explanations, $explanationErrors) {
+        $written = DB::transaction(function () use ($submission, $responses, $pageIds, $graded, $extractions, $manual, $manualCodes, $pageOf, $traces, $explanations, $explanationErrors) {
             $locked = Submission::query()->lockForUpdate()->find($submission->id);
             $written = 0;
             foreach ($responses as $loaded) {
@@ -326,7 +328,7 @@ final class WholePageGrader
                     $response->submission_page_id = $pageOf[$response->id];
                 }
                 if (isset($manual[$response->id])) {
-                    GradeApplier::markManual($response, $manual[$response->id]);
+                    GradeApplier::markManual($response, $manual[$response->id], null, $manualCodes[$response->id] ?? []);
                 } elseif (isset($graded[$response->id])) {
                     GradeApplier::applyGrade(
                         $response,
@@ -355,18 +357,20 @@ final class WholePageGrader
      * The answer of one question across the pages of the round.
      *
      * @param  list<SubmissionPage>  $pages  in position order
-     * @return array{0: array{0: int, 1: array<string, mixed>}|null, 1: bool, 2: string} [page id, answer] or null, conflict, manual reason
+     * @return array{0: array{0: int, 1: array<string, mixed>}|null, 1: bool, 2: string, 3: array{ai_error_code?: string, ai_call_id?: int}} [page id, answer] or null, conflict, manual reason, the AI code of a failure (§36.1)
      */
     private static function choose(array $pages, int $questionId): array
     {
         $found = [];
         $invalid = false;
         $failed = null;
+        $code = [];
         foreach ($pages as $page) {
             $result = $page->result ?? [];
             $status = (string) ($result['status'] ?? self::PAGE_ERROR);
             if ($status !== self::PAGE_OK) {
                 $failed ??= $status;
+                $code = $code ?: array_intersect_key($result, ['ai_error_code' => 0, 'ai_call_id' => 0]);
 
                 continue;
             }
@@ -378,8 +382,10 @@ final class WholePageGrader
                 $found[] = [$page->id, $entry];
             } elseif (($entry['invalid'] ?? false) === true) {
                 $invalid = true;
+                $code = $code ?: array_intersect_key($entry, ['ai_error_code' => 0, 'ai_call_id' => 0]);
             } elseif (isset($entry['error'])) {
                 $failed ??= (string) $entry['error'];
+                $code = $code ?: array_intersect_key($entry, ['ai_error_code' => 0, 'ai_call_id' => 0]);
             }
         }
 
@@ -393,16 +399,16 @@ final class WholePageGrader
                 default => self::REASON_ANSWER_NOT_FOUND,
             };
 
-            return [null, false, $reason];
+            return [null, false, $reason, $code];
         }
 
         $answered = array_values(array_filter($found, fn (array $f) => ($f[1]['data']['blank'] ?? false) !== true));
         if ($answered === []) {
-            return [$found[0], false, ''];
+            return [$found[0], false, '', []];
         }
         $readings = array_unique(array_map(fn (array $f) => self::reading($f[1]['data']), $answered));
 
-        return [$answered[0], count($readings) > 1, ''];
+        return [$answered[0], count($readings) > 1, '', []];
     }
 
     /**

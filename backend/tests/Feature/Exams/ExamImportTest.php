@@ -516,6 +516,7 @@ class ExamImportTest extends TestCase
         $queued = $this->asUser($this->teacher)->postJson("/api/v1/exams/{$exam->id}/import", ['document_ids' => $ids])->assertStatus(202);
         $this->asUser($this->teacher)->getJson('/api/v1/document-extractions/'.$queued->json('data.extraction.id'))
             ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.ai_error_code', 'AI-OUTPUT')
             ->assertJsonPath('data.result', null);
         $this->assertSame(0, Question::query()->where('assignment_id', $exam->id)->count());
         $this->assertNull(ExamImport::query()->sole()->applied_at);

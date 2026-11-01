@@ -2,6 +2,7 @@
 
 namespace App\Domain\Analysis;
 
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\CallOutcome;
 use App\Domain\Gemini\GeminiBatch;
 use App\Domain\Gemini\GeminiBatchClient;
@@ -252,7 +253,7 @@ final class AnalysisBatches
             if ($outcome->isOk()) {
                 $this->analyses->applyText($row->id, (array) $outcome->data, StudentAnalysis::VIA_BATCH, $hash, $batch->id);
             } else {
-                $this->analyses->markFailed($row->id, $batch->id);
+                $this->analyses->markFailed($row->id, $batch->id, $outcome->errorCode, $outcome->aiCallId);
                 $failed++;
             }
         }
@@ -325,7 +326,7 @@ final class AnalysisBatches
         StudentAnalysis::query()
             ->where('batch_id', $batch->id)
             ->where('status', StudentAnalysis::STATUS_QUEUED)
-            ->update(['status' => StudentAnalysis::STATUS_FAILED, 'queued_input_hash' => null, 'updated_at' => now()]);
+            ->update(['status' => StudentAnalysis::STATUS_FAILED, 'queued_input_hash' => null, 'error_code' => AiErrorCode::ERROR, 'ai_call_id' => null, 'updated_at' => now()]);
     }
 
     /** The metadata key of a row's request: the analysis row id, never a student id (§20.9). */

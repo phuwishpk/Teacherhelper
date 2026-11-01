@@ -3,6 +3,7 @@ import '../classrooms/classroom.dart' show TeacherRef;
 import '../../core/util/thai_date.dart';
 import '../assignments/answer_key_models.dart';
 import '../assignments/question.dart';
+import '../../core/api/error_codes.dart';
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
 
@@ -687,6 +688,7 @@ class CourseExtraction {
     required this.id,
     required this.status,
     this.error,
+    this.errorCode,
     this.cached = false,
     this.estimate,
     this.result,
@@ -699,6 +701,9 @@ class CourseExtraction {
   /// `queued`, `done` or `failed`.
   final String status;
   final String? error;
+
+  /// The AI failure's code and ai_calls id (DESIGN §36.1).
+  final ErrorCode? errorCode;
 
   /// The school read the same files before: free, answered at once.
   final bool cached;
@@ -729,6 +734,10 @@ class CourseExtraction {
       id: (inner['id'] as num).toInt(),
       status: inner['status'] as String? ?? 'queued',
       error: _text(inner['error']),
+      errorCode: ErrorCode.fromFields(
+        inner['ai_error_code'],
+        inner['ai_call_id'],
+      ),
       guidance: normalizeGuidance(_text(inner['guidance'])),
       cached: json['cached'] == true,
       estimate: CostEstimate.maybe(json['estimate']),

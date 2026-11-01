@@ -9,6 +9,7 @@ use App\Domain\Courses\IndicatorSuggestions;
 use App\Domain\Documents\CostEstimate;
 use App\Domain\Documents\DocumentSelection;
 use App\Domain\Exams\ExamKeyCheck;
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiKeyResolver;
@@ -136,7 +137,7 @@ final class AnswerKeyService
         // is one conditional UPDATE, so two requests never both win it.
         $dispatch = $extraction->wasRecentlyCreated
             || DocumentExtraction::query()->whereKey($extraction->id)->where('status', DocumentExtraction::STATUS_FAILED)
-                ->update(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'requested_by' => $teacher->id, 'updated_at' => now()]) === 1
+                ->update(['status' => DocumentExtraction::STATUS_QUEUED, 'error' => null, 'error_code' => null, 'ai_call_id' => null, 'requested_by' => $teacher->id, 'updated_at' => now()]) === 1
             || DocumentExtraction::query()->whereKey($extraction->id)->where('status', DocumentExtraction::STATUS_QUEUED)
                 ->where('updated_at', '<', now()->subMinutes(self::LOST_JOB_MINUTES))
                 ->update(['updated_at' => now()]) === 1;
@@ -208,7 +209,7 @@ final class AnswerKeyService
 
         $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
-            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง');
+            $this->fail($extraction, 'ยังไม่มี Gemini API key ให้ใช้ ใส่ key ที่หน้าตั้งค่าก่อนแล้วลองอีกครั้ง', AiErrorCode::KEY_MISSING);
 
             return;
         }
@@ -222,7 +223,7 @@ final class AnswerKeyService
         try {
             $files = $selection->files();
         } catch (ApiException $e) {
-            $this->fail($extraction, $e->getMessage());
+            $this->fail($extraction, $e->getMessage(), null);
 
             return;
         }
@@ -245,7 +246,7 @@ final class AnswerKeyService
                 GeminiException::INVALID_OUTPUT => 'AI อ่านเฉลยไม่สำเร็จ ลองถ่ายรูปให้ชัดขึ้น แนบไฟล์ใหม่ หรือพิมพ์เฉลยเอง',
                 GeminiException::KEY_INVALID => 'Gemini API key ใช้ไม่ได้ ตรวจ key ที่หน้าตั้งค่าแล้วลองอีกครั้ง',
                 default => 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง',
-            });
+            }, $e->code(), $e->aiCallId);
 
             return;
         }
@@ -255,7 +256,7 @@ final class AnswerKeyService
             'result' => $result->toArray(),
             'model' => Str::limit($this->gateway->client()->model(), 64, ''),
             'prompt_version' => $this->prompts->get($kind, 'general')->versionLabel(),
-            'error' => null,
+            'error' => null, 'error_code' => null, 'ai_call_id' => null,
         ])->save();
 
         $this->applyToWaiting($extraction);
@@ -266,7 +267,7 @@ final class AnswerKeyService
     {
         $extraction = DocumentExtraction::query()->find($extractionId);
         if ($extraction !== null && $extraction->status === DocumentExtraction::STATUS_QUEUED) {
-            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง');
+            $this->fail($extraction, 'ติดต่อ AI ไม่ได้ ลองใหม่อีกครั้งภายหลัง', AiErrorCode::TIMEOUT);
         }
     }
 
@@ -379,8 +380,9 @@ final class AnswerKeyService
         $this->applier->apply($assignment, AnswerKeyResult::fromArray((array) $extraction->result));
     }
 
-    private function fail(DocumentExtraction $extraction, string $message): void
+    /** $code and $callId: the AI error code and ai_calls row the teacher can quote (DESIGN §36.1). */
+    private function fail(DocumentExtraction $extraction, string $message, ?string $code = AiErrorCode::ERROR, ?int $callId = null): void
     {
-        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250)])->save();
+        $extraction->forceFill(['status' => DocumentExtraction::STATUS_FAILED, 'error' => Str::limit($message, 250), 'error_code' => $code, 'ai_call_id' => $callId])->save();
     }
 }

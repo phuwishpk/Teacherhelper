@@ -3,6 +3,7 @@
 namespace App\Domain\Courses;
 
 use App\Domain\Classrooms\ClassroomAccess;
+use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Exceptions\ApiException;
@@ -160,7 +161,7 @@ final class IndicatorSuggestions
         }
         $key = $this->keys->forTeacher(ClassroomAccess::managerId($assignment));
         if ($key === null) {
-            $this->fail($assignmentId, 'ai_key_missing', 'ยังไม่มี Gemini API key ให้ใช้');
+            $this->fail($assignmentId, 'ai_key_missing', 'ยังไม่มี Gemini API key ให้ใช้', AiErrorCode::KEY_MISSING);
 
             return;
         }
@@ -176,7 +177,7 @@ final class IndicatorSuggestions
             $this->fail($assignmentId, $e->status === GeminiException::KEY_INVALID ? 'ai_key_invalid' : 'ai_failed', match ($e->status) {
                 GeminiException::KEY_INVALID => 'Google ไม่รับ Gemini API key นี้ ตรวจ key ที่หน้าตั้งค่า',
                 default => 'AI เสนอตัวชี้วัดไม่สำเร็จ ลองอีกครั้ง หรือเลือกตัวชี้วัดเอง',
-            });
+            }, $e->code(), $e->aiCallId);
 
             return;
         }
@@ -212,16 +213,16 @@ final class IndicatorSuggestions
     public function giveUp(int $assignmentId): void
     {
         if ($this->state($assignmentId)['status'] === self::STATUS_QUEUED) {
-            $this->fail($assignmentId, 'ai_failed', 'AI เสนอตัวชี้วัดไม่สำเร็จ ลองอีกครั้ง หรือเลือกตัวชี้วัดเอง');
+            $this->fail($assignmentId, 'ai_failed', 'AI เสนอตัวชี้วัดไม่สำเร็จ ลองอีกครั้ง หรือเลือกตัวชี้วัดเอง', AiErrorCode::TIMEOUT);
         }
     }
 
     /**
      * {status: null|queued|done|failed, requested_at, finished_at,
-     *  error: {code, message}|null, suggested_question_count, dropped_code_count,
+     *  error: {code, message, ai_error_code, ai_call_id}|null (DESIGN §36.1), suggested_question_count, dropped_code_count,
      *  guidance: the teacher's guidance of that round|null}
      *
-     * @return array{status: string|null, requested_at: string|null, finished_at: string|null, error: array{code: string, message: string}|null, suggested_question_count: int|null, dropped_code_count: int|null, guidance: string|null}
+     * @return array{status: string|null, requested_at: string|null, finished_at: string|null, error: array{code: string, message: string, ai_error_code?: string|null, ai_call_id?: int|null}|null, suggested_question_count: int|null, dropped_code_count: int|null, guidance: string|null}
      */
     public function state(int $assignmentId): array
     {
@@ -316,14 +317,14 @@ final class IndicatorSuggestions
         SuggestIndicatorsJob::dispatch($assignmentId, $guidance, $guidanceBy);
     }
 
-    private function fail(int $assignmentId, string $code, string $message): void
+    private function fail(int $assignmentId, string $code, string $message, ?string $aiCode = null, ?int $callId = null): void
     {
         $state = $this->state($assignmentId);
         $this->remember($assignmentId, [
             'status' => self::STATUS_FAILED,
             'requested_at' => $state['requested_at'],
             'finished_at' => now()->toIso8601String(),
-            'error' => ['code' => $code, 'message' => $message],
+            'error' => ['code' => $code, 'message' => $message, 'ai_error_code' => $aiCode, 'ai_call_id' => $callId],
             'suggested_question_count' => null,
             'dropped_code_count' => null,
             'guidance' => $state['guidance'],

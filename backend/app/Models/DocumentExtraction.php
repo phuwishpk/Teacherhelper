@@ -73,6 +73,7 @@ class DocumentExtraction extends Model
     protected function casts(): array
     {
         return [
+            'ai_call_id' => 'integer',
             'result' => 'array',
         ];
     }
@@ -100,6 +101,9 @@ class DocumentExtraction extends Model
             'purpose' => $this->purpose,
             'status' => $this->status,
             'error' => $this->error,
+            // DESIGN §36.1: what to quote to the admin when the read failed.
+            'ai_error_code' => $this->error_code,
+            'ai_call_id' => $this->ai_call_id,
             'guidance' => $this->guidance,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

@@ -223,6 +223,9 @@ final class ReviewQueue
             'max_points' => (float) $response->question->max_points,
             'grading_state' => $response->grading_state,
             'manual_reason' => $response->manualReason(),
+            // DESIGN §36.1: the code of the AI failure that left it to the teacher.
+            'ai_error_code' => $response->fuzzy_trace['ai_error_code'] ?? null,
+            'ai_call_id' => $response->fuzzy_trace['ai_call_id'] ?? null,
             'priority_band' => $response->priority_band,
             'review_priority' => $response->review_priority,
             'tab' => self::tab($response),

@@ -1,6 +1,7 @@
 import '../../core/api/teacher_guidance.dart';
 import '../assignments/answer_key_models.dart';
 import 'exam_models.dart';
+import '../../core/api/error_codes.dart';
 
 /// `document_extractions.purpose` of an exam read (DESIGN §22.4); a file
 /// with it in `cached_purposes` was read before in this school.
@@ -57,6 +58,7 @@ class ExamRead {
     required this.id,
     required this.status,
     this.error,
+    this.errorCode,
     this.guidance,
     this.notesTh,
     this.skipped = const [],
@@ -67,6 +69,9 @@ class ExamRead {
   /// `queued`, `done` or `failed`.
   final String status;
   final String? error;
+
+  /// The AI failure's code and ai_calls id (DESIGN §36.1).
+  final ErrorCode? errorCode;
 
   /// "คำแนะนำถึง AI" sent with the read (§21.12).
   final String? guidance;
@@ -88,6 +93,10 @@ class ExamRead {
       id: (json['id'] as num).toInt(),
       status: json['status'] as String? ?? 'queued',
       error: json['error'] as String?,
+      errorCode: ErrorCode.fromFields(
+        json['ai_error_code'],
+        json['ai_call_id'],
+      ),
       guidance: normalizeGuidance(json['guidance'] as String?),
       notesTh: notes == null || notes.trim().isEmpty ? null : notes.trim(),
       skipped: result is Map

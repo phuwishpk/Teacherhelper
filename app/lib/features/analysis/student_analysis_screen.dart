@@ -12,6 +12,7 @@ import '../classrooms/classrooms_providers.dart';
 import 'analysis_models.dart';
 import 'analysis_repository.dart';
 import 'analysis_widgets.dart';
+import '../../core/api/error_codes.dart';
 
 /// Server limits of `PATCH /analyses/{id}` (DESIGN §20.5).
 const teacherTextMax = 4000;
@@ -273,6 +274,8 @@ class _TextsCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(_statusLine(a), style: muted),
+            if (a.status == AnalysisStatus.failed && a.aiCode != null)
+              ErrorCodeLine(a.aiCode!),
             if (a.guidance case final guidance?) ...[
               const SizedBox(height: 4),
               GuidanceUsedNote(guidance: guidance),

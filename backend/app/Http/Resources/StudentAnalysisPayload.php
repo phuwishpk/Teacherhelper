@@ -56,6 +56,9 @@ final class StudentAnalysisPayload
             'student_id' => $row->student_id,
             'classroom_id' => $row->classroom_id,
             'status' => $row->status,
+            // DESIGN §36.1: why the last AI attempt failed, to quote to the admin.
+            'ai_error_code' => $row->status === StudentAnalysis::STATUS_FAILED ? $row->error_code : null,
+            'ai_call_id' => $row->status === StudentAnalysis::STATUS_FAILED ? $row->ai_call_id : null,
             'strengths' => self::items((array) $row->strengths, $skills),
             'areas' => self::items((array) $row->areas, $skills),
             'has_text' => $row->student_text !== null || $row->teacher_text !== null,

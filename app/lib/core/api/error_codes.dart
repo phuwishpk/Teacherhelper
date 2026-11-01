@@ -21,6 +21,13 @@ class ErrorCode {
 
   /// "AI-QUOTA · #48213" or "NET-OFFLINE".
   String get label => callId == null ? code : '$code · #$callId';
+
+  /// A failure kept with a background job's result (DESIGN §36.1): its
+  /// `ai_error_code` and `ai_call_id` fields, or null when there is none.
+  static ErrorCode? fromFields(Object? code, Object? callId) =>
+      code is String && code.isNotEmpty
+      ? ErrorCode(code, callId: callId is num ? callId.toInt() : null)
+      : null;
 }
 
 /// The code of [error], or null when there is none worth showing.
