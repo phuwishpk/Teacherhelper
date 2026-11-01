@@ -1,7 +1,8 @@
 {{-- "รายงาน Usability" (DESIGN §39.8): the short set for five testers, printable. --}}
 @use('App\Domain\Qa\QaCatalog')
+@use('App\Domain\Qa\QaSus')
 @use('App\Filament\Qa\Pages\MyResults')
-@use('App\Filament\Qa\Pages\SusSurvey')
+@use('App\Filament\Qa\Pages\SusResults')
 <x-filament-panels::page>
     @include('filament.qa._styles')
     <style>
@@ -14,7 +15,7 @@
         $board = $this->board();
         $tasks = $this->tasks();
         $people = $this->participants($board);
-        $sus = $this->susMean($board, $people);
+        $sus = $board->susStats();
         $statusLabels = QaCatalog::USABILITY_STATUSES;
         $min = QaCatalog::QUICK_MIN_TESTERS;
         $time = fn (?float $s) => $s === null ? '—' : (floor($s / 60) > 0 ? floor($s / 60).' นาที ' : '').round(fmod($s, 60)).' วิ';
@@ -22,7 +23,7 @@
 
     <div class="qa-row qa-noprint">
         <a class="qa-link qa-small" href="{{ MyResults::getUrl(['section' => QaCatalog::QUICK_GROUP]) }}">บันทึกผลชุดย่อ</a>
-        <a class="qa-link qa-small" href="{{ SusSurvey::getUrl() }}">แบบประเมิน SUS</a>
+        <a class="qa-link qa-small" href="{{ SusResults::getUrl() }}">ผล SUS</a>
         <x-filament::button size="sm" color="gray" icon="heroicon-o-printer" x-data x-on:click="window.print()">พิมพ์หรือบันทึกเป็น PDF</x-filament::button>
     </div>
 
@@ -30,13 +31,13 @@
         <x-slot name="heading">วิธีทดสอบ</x-slot>
         <p class="qa-small">
             ผู้ทดสอบภายนอกแต่ละคนทำ {{ count($tasks) }} งานบนระบบสาธิตโดยไม่มีคนบอกวิธี (think-aloud) ผู้ดูแลจับเวลาตั้งแต่ผู้ทดสอบอ่านโจทย์จบ
-            นับครั้งที่ทำผิด และบันทึกว่าสำเร็จเอง สำเร็จเมื่อมีคนช่วย หรือไม่สำเร็จ จากนั้นผู้ทดสอบตอบแบบประเมิน SUS 10 ข้อ (เกณฑ์ผ่าน {{ QaCatalog::SUS_BENCHMARK }})
+            นับครั้งที่ทำผิด และบันทึกว่าสำเร็จเอง สำเร็จเมื่อมีคนช่วย หรือไม่สำเร็จ จากนั้นตอบแบบประเมิน SUS ที่หน้า /sus ด้วยบัญชีผู้ประเมิน (เกณฑ์เทียบ {{ QaSus::BENCHMARK }})
         </p>
         <div class="qa-stats" style="margin-top:12px;">
             <div class="qa-stat"><span class="k">ผู้ทดสอบ</span><span class="v">{{ count($people) }} / {{ $min }}</span>
                 <span class="s">{{ count($people) >= $min ? 'ครบตามเกณฑ์โครงงาน' : 'ยังขาดอีก '.($min - count($people)).' คน' }}</span></div>
-            <div class="qa-stat"><span class="k">SUS เฉลี่ย</span><span class="v">{{ $sus === null ? '—' : number_format($sus, 1) }}</span>
-                <span class="s">{{ $sus === null ? 'ยังไม่มีคำตอบ' : ($sus >= QaCatalog::SUS_BENCHMARK ? 'สูงกว่าเกณฑ์ '.QaCatalog::SUS_BENCHMARK : 'ต่ำกว่าเกณฑ์ '.QaCatalog::SUS_BENCHMARK) }}</span></div>
+            <div class="qa-stat"><span class="k">SUS เฉลี่ย</span><span class="v">{{ $sus['mean'] === null ? '—' : number_format($sus['mean'], 1) }}</span>
+                <span class="s">{{ $sus['mean'] === null ? 'ยังไม่มีคำตอบ' : 'จาก '.$sus['n'].' คำตอบ '.($sus['mean'] >= QaSus::BENCHMARK ? 'สูงกว่าเกณฑ์ ' : 'ต่ำกว่าเกณฑ์ ').QaSus::BENCHMARK }}</span></div>
         </div>
     </x-filament::section>
 
@@ -67,11 +68,11 @@
     <x-filament::section>
         <x-slot name="heading">ผลรายคน</x-slot>
         @if ($people === [])
-            <p class="qa-small qa-muted">ยังไม่มีผู้ทดสอบบันทึกผลชุดย่อหรือตอบ SUS</p>
+            <p class="qa-small qa-muted">ยังไม่มีผู้ทดสอบบันทึกผลชุดย่อ</p>
         @else
             <div class="qa-table-wrap">
                 <table class="qa-table">
-                    <thead><tr><th>ผู้ทดสอบ</th>@foreach ($tasks as $t)<th>{{ $t['code'] }}</th>@endforeach<th>SUS</th></tr></thead>
+                    <thead><tr><th>ผู้ทดสอบ</th>@foreach ($tasks as $t)<th>{{ $t['code'] }}</th>@endforeach</tr></thead>
                     <tbody>
                         @foreach ($people as $p)
                             <tr wire:key="person-{{ $p->id }}">
@@ -86,7 +87,6 @@
                                         @endif
                                     </td>
                                 @endforeach
-                                <td class="qa-num">{{ $board->sus($p->id)?->score === null ? '—' : number_format($board->sus($p->id)->score, 1) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -104,8 +104,10 @@
                     $note = trim((string) $board->result($p->id, $t['code'])?->note);
                     if ($note !== '') $notes[] = [$p->name, $t['code'], $note];
                 }
-                $comment = trim((string) $board->sus($p->id)?->comment);
-                if ($comment !== '') $notes[] = [$p->name, 'SUS', $comment];
+            }
+            foreach ($board->susResponses() as $r) {
+                $comment = trim((string) $r->comment);
+                if ($comment !== '') $notes[] = [$r->tester?->name ?? 'ผู้ประเมิน', 'SUS', $comment];
             }
         @endphp
         @forelse ($notes as [$who, $where, $text])

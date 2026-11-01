@@ -70,7 +70,14 @@ class QuickUsabilityTest extends TestCase
                     'note' => $n === 1 && $code === 'QK-3' ? 'หาปุ่มถ่ายรูปไม่เจอตอนแรก' : null,
                 ]);
             }
-            QaSusResponse::create(['qa_tester_id' => $t->id, 'role' => 'teacher', 'answers' => [5, 1, 5, 1, 5, 1, 5, 1, 5, 1], 'score' => 70 + $n]);
+            $evaluator = QaTester::create(['name' => "ผู้ประเมิน {$n}", 'email' => "e{$n}@qa.test", 'password' => 'secret1234', 'role' => QaTester::ROLE_EVALUATOR]);
+            QaSusResponse::create([
+                'qa_tester_id' => $evaluator->id,
+                'role' => 'teacher',
+                'answers' => [5, 1, 5, 1, 5, 1, 5, 1, 5, 1],
+                'score' => 70 + $n,
+                'comment' => $n === 2 ? 'ปุ่มหายากนิดหน่อย' : null,
+            ]);
         }
         // Someone who only skipped is not a participant.
         QaResult::create(['qa_tester_id' => $this->tester(6)->id, 'case_code' => 'QK-1', 'status' => 'skip']);
@@ -78,7 +85,10 @@ class QuickUsabilityTest extends TestCase
         $this->asQa(QaTester::query()->first())->get('/qa/report')->assertOk()
             ->assertSee('5 / 5')
             ->assertSee('ครบตามเกณฑ์โครงงาน')
-            ->assertSee('73.0')                 // SUS mean of 71..75
+            ->assertSee('73.0')                 // SUS mean of 71..75, from the evaluators at /sus
+            ->assertSee('จาก 5 คำตอบ')
+            ->assertSee('ผู้ประเมิน 2')          // their comment, under the evaluator's name
+            ->assertSee('ปุ่มหายากนิดหน่อย')
             ->assertSee('80%')                  // QK-2: 4 of 5 alone
             ->assertSee('หาปุ่มถ่ายรูปไม่เจอตอนแรก')
             ->assertDontSee('ผู้ทดสอบ 6');
