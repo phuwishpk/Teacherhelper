@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -543,5 +544,16 @@ void main() {
       expect(input.hitTestable(), findsOneWidget);
     });
   }
+
+  // F13
+  test('the knowledge says the web can scan worksheets', () {
+    final text = [
+      for (final f in ['01-guide.md', '04-troubleshooting.md'])
+        File('../backend/resources/assistant/core/$f').readAsStringSync(),
+    ].join('\n');
+    expect(text, isNot(contains('การสแกนใช้ได้ในแอป Android เท่านั้น')));
+    expect(text, isNot(contains('สแกนใบงานใช้ได้เฉพาะแอป Android')));
+    expect(text, contains('CHAT-LIMIT'));
+  });
 }
 
