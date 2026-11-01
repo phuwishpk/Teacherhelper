@@ -155,21 +155,23 @@ class _StudentClassFeedBodyState extends ConsumerState<StudentClassFeedBody> {
           ),
         );
 
-        if (_fresh == 0) return listWidget;
-
+        // Always a Stack: swapping the list's parent would rebuild it and
+        // drop the reader back to the top.
         return Stack(
           alignment: Alignment.topCenter,
+          fit: StackFit.expand,
           children: [
             listWidget,
-            Positioned(
-              top: 8,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('feed_new_items'),
-                onPressed: _scrollToTop,
-                icon: const Icon(Icons.arrow_upward),
-                label: Text('มีรายการใหม่ $_fresh รายการ'),
+            if (_fresh > 0)
+              Positioned(
+                top: 8,
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('feed_new_items'),
+                  onPressed: _scrollToTop,
+                  icon: const Icon(Icons.arrow_upward),
+                  label: Text('มีรายการใหม่ $_fresh รายการ'),
+                ),
               ),
-            ),
           ],
         );
       },

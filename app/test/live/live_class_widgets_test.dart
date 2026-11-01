@@ -134,6 +134,37 @@ void main() {
     );
   });
 
+  testWidgets('new feed items leave the reader where they were', (
+    tester,
+  ) async {
+    double offset() => tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .pixels;
+
+    final posts = FakeClassPosts(feed: _feedItems(16));
+    final container = await _pumpFeed(tester, posts);
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    final reading = offset();
+    expect(reading, greaterThan(0));
+
+    posts.feedItems = [
+      ...posts.feedItems,
+      const FeedItem(
+        type: FeedType.assignment,
+        assignmentId: 17,
+        title: 'งานชิ้นที่ 17',
+      ),
+    ];
+    container.invalidate(classFeedProvider((courseId: 7, classroomId: 1)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('มีรายการใหม่ 1 รายการ'), findsOneWidget);
+    expect(offset(), reading);
+  });
+
   testWidgets('items added while at the top do not show the new-items button', (
     tester,
   ) async {
