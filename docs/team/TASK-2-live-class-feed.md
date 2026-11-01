@@ -80,7 +80,7 @@ users/{studentUid}/attendance/{courseId}_{classroomId}
 - [x] C8 test การเช็คชื่อและ security test (backend) (#293)
 
 **แอป**
-- [ ] C9 provider ของสัญญาณ (#294)
+- [x] C9 provider ของสัญญาณ (#294)
 - [ ] C10 แอปนักเรียนดึงข้อมูลใหม่เอง (#295)
 - [ ] C11 หน้าโพสต์ของครูดึงข้อมูลใหม่เอง (#296)
 - [ ] C12 ป้าย "อัปเดตสด" (#297)

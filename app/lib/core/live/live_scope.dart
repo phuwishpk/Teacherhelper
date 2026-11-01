@@ -32,3 +32,9 @@ Stream<int> liveChangeTicks(Ref ref, String collection) {
       .where((snapshot) => snapshot.docChanges.isNotEmpty)
       .map((_) => ++ticks);
 }
+
+/// True while the live layer can be read, for the "อัปเดตสด" badge.
+final liveAvailableProvider = Provider.autoDispose<bool>(
+  (ref) => liveUserScope(ref) != null,
+);
+
