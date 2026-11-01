@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Attendance\AttendanceBook;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Domain\Classrooms\ClosedClassrooms;
+use App\Domain\Firestore\LiveClassroom;
 use App\Domain\Gradebook\GradebookAccess;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
@@ -101,6 +102,8 @@ class AttendanceController extends Controller
             return $session;
         });
 
+        LiveClassroom::attendanceChanged($course->id, $classroom->id);
+
         return response()->json(['data' => self::detail($session, $classroom)], 201);
     }
 
@@ -149,6 +152,8 @@ class AttendanceController extends Controller
             AttendanceBook::syncGrades($course, $classroom->id, $teacher);
         });
 
+        LiveClassroom::attendanceChanged((int) $session->course_id, $classroom->id);
+
         return response()->json(['data' => self::detail($session->refresh(), $classroom)]);
     }
 
@@ -162,6 +167,8 @@ class AttendanceController extends Controller
             $session->delete();
             AttendanceBook::syncGrades($course, $session->classroom_id, $request->user());
         });
+
+        LiveClassroom::attendanceChanged((int) $session->course_id, (int) $session->classroom_id);
 
         return response()->noContent();
     }

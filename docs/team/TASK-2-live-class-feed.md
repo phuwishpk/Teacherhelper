@@ -76,7 +76,7 @@ users/{studentUid}/attendance/{courseId}_{classroomId}
 - [x] C4 ส่งสัญญาณเมื่อโพสต์เผยแพร่ แก้ หรือลบ (#289)
 - [x] C5 ส่งสัญญาณเมื่อการบ้านพร้อมส่ง (#290)
 - [x] C6 test ของจุดส่งสัญญาณ (#291)
-- [ ] C7 SignalAttendanceJob และการเช็คชื่อ (#292)
+- [x] C7 SignalAttendanceJob และการเช็คชื่อ (#292)
 - [ ] C8 test การเช็คชื่อและ security test (backend) (#293)
 
 **แอป**
