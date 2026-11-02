@@ -101,7 +101,7 @@ class AppSettingsStore {
         if (snap.exists) {
           final data = snap.data();
           if (data != null && data['onboarding_done_at'] is Timestamp) {
-            final at = (data['onboarding_done_at'] as Timestamp).toDate();
+            final at = (data['onboarding_done_at'] as Timestamp).toDate().toUtc();
             final device = (data['device'] as String?) ?? 'unknown';
             return (at: at, device: device);
           }
