@@ -99,4 +99,3 @@ class ServerStatusCard extends ConsumerWidget {
     );
   }
 }
-

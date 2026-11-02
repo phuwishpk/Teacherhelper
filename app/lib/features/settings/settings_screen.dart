@@ -60,8 +60,9 @@ class SettingsScreen extends ConsumerWidget {
                       title: const Text('แสดงน้องเช็คในแชท'),
                       subtitle: const Text('ปิดแล้วแชทจะใช้ไอคอนธรรมดา'),
                       value: ref.watch(mascotEnabledProvider),
-                      onChanged: (on) =>
-                          ref.read(mascotEnabledProvider.notifier).setEnabled(on),
+                      onChanged: (on) => ref
+                          .read(mascotEnabledProvider.notifier)
+                          .setEnabled(on),
                     ),
                   ),
                   const SizedBox(height: 8),

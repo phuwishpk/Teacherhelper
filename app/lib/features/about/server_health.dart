@@ -84,4 +84,3 @@ final healthRepositoryProvider = Provider<HealthRepository>(
 final serverHealthProvider = FutureProvider.autoDispose<ServerHealth>(
   (ref) => ref.watch(healthRepositoryProvider).fetch(),
 );
-

@@ -134,8 +134,10 @@ class SecureTokenStorage implements TokenStorage {
   }
 
   @override
-  Future<void> writeMascotEnabled(int userId, bool on) =>
-      _storage.write(key: '${_mascotEnabledKey}_$userId', value: on ? '1' : '0');
+  Future<void> writeMascotEnabled(int userId, bool on) => _storage.write(
+    key: '${_mascotEnabledKey}_$userId',
+    value: on ? '1' : '0',
+  );
 
   @override
   Future<bool> readOnboardingDone(int userId) async =>

@@ -65,7 +65,10 @@ class _StudentShellState extends ConsumerState<StudentShell> {
   @override
   void initState() {
     super.initState();
-    _onboardingSub = ref.listenManual(onboardingNeededProvider, (previous, next) {
+    _onboardingSub = ref.listenManual(onboardingNeededProvider, (
+      previous,
+      next,
+    ) {
       if (_onboardingShown) return;
       if (next.value == true) {
         _onboardingShown = true;

@@ -9,12 +9,7 @@ import 'live_scope.dart';
 
 /// Storage for app settings persisted on device and in Firestore (DESIGN §43).
 class AppSettingsStore {
-  AppSettingsStore({
-    required this.storage,
-    this.userId,
-    this.db,
-    this.uid,
-  });
+  AppSettingsStore({required this.storage, this.userId, this.db, this.uid});
 
   final TokenStorage storage;
   final int? userId;
@@ -27,7 +22,11 @@ class AppSettingsStore {
     if (firestore == null || userUid == null || userUid.isEmpty) {
       return null;
     }
-    return firestore.collection('users').doc(userUid).collection('settings').doc('app');
+    return firestore
+        .collection('users')
+        .doc(userUid)
+        .collection('settings')
+        .doc('app');
   }
 
   /// Reads whether the mascot is enabled.
@@ -101,7 +100,9 @@ class AppSettingsStore {
         if (snap.exists) {
           final data = snap.data();
           if (data != null && data['onboarding_done_at'] is Timestamp) {
-            final at = (data['onboarding_done_at'] as Timestamp).toDate().toUtc();
+            final at = (data['onboarding_done_at'] as Timestamp)
+                .toDate()
+                .toUtc();
             final device = (data['device'] as String?) ?? 'unknown';
             return (at: at, device: device);
           }
@@ -184,6 +185,6 @@ class MascotEnabledNotifier extends Notifier<bool> {
   Future<void> set(bool enabled) => setEnabled(enabled);
 }
 
-final mascotEnabledProvider =
-    NotifierProvider<MascotEnabledNotifier, bool>(MascotEnabledNotifier.new);
-
+final mascotEnabledProvider = NotifierProvider<MascotEnabledNotifier, bool>(
+  MascotEnabledNotifier.new,
+);

@@ -64,4 +64,3 @@ void main() {
     expect(health.queueLastRunAt, isNull);
   });
 }
-

@@ -78,7 +78,10 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
     // Fetch a newer on-device digit model (DESIGN §9.8) while the teacher
     // is online, so scanning later works offline with it.
     syncDigitModelInBackground(ref);
-    _onboardingSub = ref.listenManual(onboardingNeededProvider, (previous, next) {
+    _onboardingSub = ref.listenManual(onboardingNeededProvider, (
+      previous,
+      next,
+    ) {
       if (_onboardingShown) return;
       if (next.value == true) {
         _onboardingShown = true;
