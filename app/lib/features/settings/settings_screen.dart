@@ -60,8 +60,9 @@ class SettingsScreen extends ConsumerWidget {
                       title: const Text('แสดงน้องเช็คในแชท'),
                       subtitle: const Text('ปิดแล้วแชทจะใช้ไอคอนธรรมดา'),
                       value: ref.watch(mascotEnabledProvider),
-                      onChanged: (on) =>
-                          ref.read(mascotEnabledProvider.notifier).setEnabled(on),
+                      onChanged: (on) => ref
+                          .read(mascotEnabledProvider.notifier)
+                          .setEnabled(on),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -82,6 +83,26 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   const LiveStatusCard(),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      key: const ValueKey('settings_replay_onboarding'),
+                      leading: const Icon(Icons.slideshow_outlined),
+                      title: const Text('ดูวิธีใช้งานอีกครั้ง'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.welcome),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      key: const ValueKey('settings_about'),
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('เกี่ยวกับ Krucheck'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.about),
+                    ),
+                  ),
                 ],
               ),
             ),

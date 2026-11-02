@@ -9,12 +9,7 @@ import 'live_scope.dart';
 
 /// Storage for app settings persisted on device and in Firestore (DESIGN §43).
 class AppSettingsStore {
-  AppSettingsStore({
-    required this.storage,
-    this.userId,
-    this.db,
-    this.uid,
-  });
+  AppSettingsStore({required this.storage, this.userId, this.db, this.uid});
 
   final TokenStorage storage;
   final int? userId;
@@ -27,7 +22,11 @@ class AppSettingsStore {
     if (firestore == null || userUid == null || userUid.isEmpty) {
       return null;
     }
-    return firestore.collection('users').doc(userUid).collection('settings').doc('app');
+    return firestore
+        .collection('users')
+        .doc(userUid)
+        .collection('settings')
+        .doc('app');
   }
 
   /// Reads whether the mascot is enabled.
@@ -91,6 +90,52 @@ class AppSettingsStore {
       debugPrint('Failed to write mascotEnabled to Firestore: $e');
     }
   }
+
+  /// Reads onboarding done info (at, device) from Firestore.
+  Future<({DateTime at, String device})?> readOnboardingInfo() async {
+    try {
+      final doc = _doc;
+      if (doc != null) {
+        final snap = await doc.get();
+        if (snap.exists) {
+          final data = snap.data();
+          if (data != null && data['onboarding_done_at'] is Timestamp) {
+            final at = (data['onboarding_done_at'] as Timestamp)
+                .toDate()
+                .toUtc();
+            final device = (data['device'] as String?) ?? 'unknown';
+            return (at: at, device: device);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to read onboarding info from Firestore: $e');
+    }
+    return null;
+  }
+
+  /// Writes onboarding done to Firestore with merge if not set already.
+  Future<void> writeOnboardingDone({
+    required DateTime at,
+    required String device,
+  }) async {
+    try {
+      final doc = _doc;
+      if (doc != null) {
+        final snap = await doc.get();
+        if (snap.exists && snap.data()?['onboarding_done_at'] != null) {
+          // Do not overwrite first time
+          return;
+        }
+        await doc.set({
+          'onboarding_done_at': Timestamp.fromDate(at),
+          'device': device,
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Failed to write onboarding done to Firestore: $e');
+    }
+  }
 }
 
 final appSettingsStoreProvider = Provider<AppSettingsStore>((ref) {
@@ -140,6 +185,6 @@ class MascotEnabledNotifier extends Notifier<bool> {
   Future<void> set(bool enabled) => setEnabled(enabled);
 }
 
-final mascotEnabledProvider =
-    NotifierProvider<MascotEnabledNotifier, bool>(MascotEnabledNotifier.new);
-
+final mascotEnabledProvider = NotifierProvider<MascotEnabledNotifier, bool>(
+  MascotEnabledNotifier.new,
+);

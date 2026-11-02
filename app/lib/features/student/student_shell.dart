@@ -13,6 +13,7 @@ import '../hand_in/hand_in_repository.dart';
 import '../hand_in/student_assignments_page.dart';
 import '../mastery/mastery_page.dart';
 import '../notices/notices_providers.dart';
+import '../onboarding/onboarding_store.dart';
 import '../practice/practice_page.dart';
 import '../results/results_page.dart';
 import '../results/results_repository.dart';
@@ -58,6 +59,31 @@ class StudentShell extends ConsumerStatefulWidget {
 
 class _StudentShellState extends ConsumerState<StudentShell> {
   int _index = 0;
+  ProviderSubscription<AsyncValue<bool>>? _onboardingSub;
+  bool _onboardingShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _onboardingSub = ref.listenManual(onboardingNeededProvider, (
+      previous,
+      next,
+    ) {
+      if (_onboardingShown) return;
+      if (next.value == true) {
+        _onboardingShown = true;
+        if (!mounted) return;
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        context.push(AppRoutes.studentWelcome);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _onboardingSub?.close();
+    super.dispose();
+  }
 
   void _select(int i) => setState(() => _index = i);
 
