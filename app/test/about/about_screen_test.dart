@@ -44,9 +44,7 @@ void main() {
     await pumpScreen(
       tester,
       const AboutScreen(),
-      overrides: [
-        healthRepositoryProvider.overrideWithValue(repoOk),
-      ],
+      overrides: [healthRepositoryProvider.overrideWithValue(repoOk)],
     );
     expect(find.text('เซิร์ฟเวอร์ทำงานปกติ'), findsOneWidget);
     expect(find.textContaining('คิวงานรันล่าสุด'), findsOneWidget);
@@ -58,9 +56,7 @@ void main() {
     await pumpScreen(
       tester,
       const AboutScreen(),
-      overrides: [
-        healthRepositoryProvider.overrideWithValue(repoDegraded),
-      ],
+      overrides: [healthRepositoryProvider.overrideWithValue(repoDegraded)],
     );
     expect(
       find.text('เซิร์ฟเวอร์มีปัญหาบางส่วน (คิวงานไม่ได้รันตามปกติ)'),
@@ -74,23 +70,17 @@ void main() {
     await pumpScreen(
       tester,
       const AboutScreen(),
-      overrides: [
-        healthRepositoryProvider.overrideWithValue(repoUnreachable),
-      ],
+      overrides: [healthRepositoryProvider.overrideWithValue(repoUnreachable)],
     );
     expect(find.text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้'), findsOneWidget);
   });
 
   testWidgets('กด "ตรวจอีกครั้ง" แล้ว repository ถูกเรียกซ้ำ', (tester) async {
-    final repo = _FakeHealthRepo(
-      const ServerHealth(state: ServerState.ok),
-    );
+    final repo = _FakeHealthRepo(const ServerHealth(state: ServerState.ok));
     await pumpScreen(
       tester,
       const AboutScreen(),
-      overrides: [
-        healthRepositoryProvider.overrideWithValue(repo),
-      ],
+      overrides: [healthRepositoryProvider.overrideWithValue(repo)],
     );
     expect(repo.callCount, 1);
 
@@ -133,16 +123,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('คุณดูวิธีใช้งานครั้งแรกเมื่อ'), findsOneWidget);
+      expect(
+        find.textContaining('คุณดูวิธีใช้งานครั้งแรกเมื่อ'),
+        findsOneWidget,
+      );
       expect(find.textContaining('เว็บเบราว์เซอร์'), findsOneWidget);
     },
   );
 
-  for (final size in const [
-    Size(390, 844),
-    Size(820, 1180),
-    Size(1440, 900),
-  ]) {
+  for (final size in const [Size(390, 844), Size(820, 1180), Size(1440, 900)]) {
     testWidgets(
       'ที่ขนาด ${size.width.toInt()}×${size.height.toInt()} ไม่มี overflow',
       (tester) async {
@@ -166,6 +155,31 @@ void main() {
     );
   }
 
+  testWidgets('รายวิชาตรงกับวิชาที่ส่งโครงงานจริง', (tester) async {
+    await pumpScreen(
+      tester,
+      const AboutScreen(),
+      overrides: [
+        healthRepositoryProvider.overrideWithValue(
+          _FakeHealthRepo(const ServerHealth(state: ServerState.ok)),
+        ),
+      ],
+    );
+
+    await tester.scrollUntilVisible(
+      find.textContaining('KMITL'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.textContaining('03376133 Mobile Devices Software Development'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('03376132 AI in Education'), findsOneWidget);
+    expect(find.textContaining('โครงงานวิศวกรรมคอมพิวเตอร์'), findsNothing);
+    expect(find.textContaining('คณะวิศวกรรมศาสตร์'), findsNothing);
+  });
+
   testWidgets('เมนู settings_about เปิดหน้าเกี่ยวกับได้', (tester) async {
     final storage = InMemoryTokenStorage();
     await pumpScreen(
@@ -179,10 +193,7 @@ void main() {
         ),
       ],
       extraRoutes: [
-        GoRoute(
-          path: AppRoutes.about,
-          builder: (_, _) => const AboutScreen(),
-        ),
+        GoRoute(path: AppRoutes.about, builder: (_, _) => const AboutScreen()),
       ],
     );
 
@@ -197,4 +208,3 @@ void main() {
     expect(find.byType(AboutScreen), findsOneWidget);
   });
 }
-

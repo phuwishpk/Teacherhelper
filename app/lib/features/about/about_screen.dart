@@ -7,11 +7,11 @@ import '../onboarding/onboarding_store.dart';
 import 'server_status_card.dart';
 
 String _formatDeviceName(String device) => switch (device.toLowerCase()) {
-      'android' => 'มือถือ Android',
-      'ios' => 'iPhone/iPad',
-      'web' => 'เว็บเบราว์เซอร์',
-      _ => device,
-    };
+  'android' => 'มือถือ Android',
+  'ios' => 'iPhone/iPad',
+  'web' => 'เว็บเบราว์เซอร์',
+  _ => device,
+};
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -24,9 +24,7 @@ class AboutScreen extends ConsumerWidget {
     final info = infoAsync.value;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('เกี่ยวกับ Krucheck'),
-      ),
+      appBar: AppBar(title: const Text('เกี่ยวกับ Krucheck')),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -71,19 +69,25 @@ class AboutScreen extends ConsumerWidget {
                     ListTile(
                       leading: CircleAvatar(child: Icon(Icons.person_outline)),
                       title: Text('ภูวิชญ์ เกตุแก้ว'),
-                      subtitle: Text('สถาปัตยกรรมระบบ, Backend & DevOps (phuwishpk)'),
+                      subtitle: Text(
+                        'สถาปัตยกรรมระบบ, Backend & DevOps (phuwishpk)',
+                      ),
                     ),
                     Divider(height: 1),
                     ListTile(
                       leading: CircleAvatar(child: Icon(Icons.person_outline)),
                       title: Text('กรณ์ แดงทอง'),
-                      subtitle: Text('Mobile App & AI Assistant Mascot (korn-daengthong)'),
+                      subtitle: Text(
+                        'Mobile App & AI Assistant Mascot (korn-daengthong)',
+                      ),
                     ),
                     Divider(height: 1),
                     ListTile(
                       leading: CircleAvatar(child: Icon(Icons.person_outline)),
                       title: Text('สุวิมล ศรีประไหม'),
-                      subtitle: Text('Live Class Feed & Classroom Sync (Suwimon249)'),
+                      subtitle: Text(
+                        'Live Class Feed & Classroom Sync (Suwimon249)',
+                      ),
                     ),
                   ],
                 ),
@@ -100,9 +104,11 @@ class AboutScreen extends ConsumerWidget {
                 margin: EdgeInsets.zero,
                 child: const ListTile(
                   leading: Icon(Icons.school_outlined),
-                  title: Text('03376132 & 03376133 โครงงานวิศวกรรมคอมพิวเตอร์'),
+                  title: Text(
+                    '03376133 Mobile Devices Software Development\n03376132 AI in Education',
+                  ),
                   subtitle: Text(
-                    'ภาควิชาวิศวกรรมคอมพิวเตอร์ คณะวิศวกรรมศาสตร์\nสถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง (KMITL)',
+                    'สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง (KMITL)',
                   ),
                 ),
               ),
@@ -133,4 +139,3 @@ class AboutScreen extends ConsumerWidget {
     );
   }
 }
-
