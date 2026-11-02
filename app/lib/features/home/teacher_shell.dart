@@ -5,10 +5,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/live/live_session.dart';
+import '../../core/live/app_settings.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/breakpoints.dart';
 import '../../core/widgets/adaptive_shell.dart';
 import '../../core/widgets/function_menu.dart';
+import '../../core/widgets/mascot.dart';
+import '../../core/widgets/mascot_mood.dart';
 import '../../ml/ml_providers.dart';
 import '../assignments/assignments_page.dart';
 import '../assignments/assignments_providers.dart';
@@ -213,6 +216,9 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
         key: const ValueKey('assistant_button'),
         tooltip: 'ผู้ช่วย Krucheck',
         icon: Icons.smart_toy_outlined,
+        picture: ref.watch(mascotEnabledProvider)
+            ? const Mascot(mood: MascotMood.wave, size: 28)
+            : null,
         onPressed: openAssistant,
       ),
       endDrawer: expanded

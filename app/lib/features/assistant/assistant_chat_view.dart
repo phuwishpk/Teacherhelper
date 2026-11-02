@@ -138,6 +138,7 @@ class AssistantChatView extends ConsumerWidget {
                   ? () => ref.read(assistantChatProvider.notifier).retry()
                   : null,
               mood: mood,
+              mascotMoves: last,
             );
           },
         ),

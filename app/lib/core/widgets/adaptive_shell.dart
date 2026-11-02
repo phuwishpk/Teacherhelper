@@ -29,10 +29,14 @@ class ShellAction {
     required this.onPressed,
     this.badge = 0,
     this.key,
+    this.picture,
   });
 
   final String tooltip;
   final IconData icon;
+
+  /// Shown instead of [icon] on the assistant's button (น้องเช็ค, DESIGN §43).
+  final Widget? picture;
   final VoidCallback onPressed;
   final int badge;
   final Key? key;
@@ -139,25 +143,30 @@ class AdaptiveShell extends StatelessWidget {
   }
 
   /// The page with the assistant's button over its bottom left corner.
-  Widget _withAssistant(Widget page) => switch (assistant) {
-    final a? => Stack(
-      children: [
-        Positioned.fill(child: page),
-        Positioned(
-          left: 16,
-          bottom: 16,
-          child: FloatingActionButton.small(
-            key: a.key,
-            heroTag: 'shell_assistant',
-            tooltip: a.tooltip,
-            onPressed: a.onPressed,
-            child: Icon(a.icon),
-          ),
+  Widget _withAssistant(BuildContext context, Widget page) =>
+      switch (assistant) {
+        final a? => Stack(
+          children: [
+            Positioned.fill(child: page),
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: FloatingActionButton.small(
+                key: a.key,
+                heroTag: 'shell_assistant',
+                tooltip: a.tooltip,
+                onPressed: a.onPressed,
+                // A blue mascot needs a pale button, like the sidebar's.
+                backgroundColor: a.picture == null
+                    ? null
+                    : Theme.of(context).colorScheme.secondaryContainer,
+                child: a.picture ?? Icon(a.icon),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-    null => page,
-  };
+        null => page,
+      };
 
   Widget _actionButton(ShellAction action) => IconButton(
     key: action.key,
@@ -184,7 +193,7 @@ class AdaptiveShell extends StatelessWidget {
           actions: [for (final a in actions) _actionButton(a)],
         ),
         drawer: _drawer(),
-        body: _withAssistant(body),
+        body: _withAssistant(context, body),
         bottomNavigationBar: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: scheme.outlineVariant)),
@@ -243,7 +252,7 @@ class AdaptiveShell extends StatelessWidget {
               ],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: _withAssistant(body)),
+            Expanded(child: _withAssistant(context, body)),
           ],
         ),
         floatingActionButton: floatingActionButton,
@@ -305,7 +314,7 @@ class AdaptiveShell extends StatelessWidget {
                         child: FilledButton.tonalIcon(
                           key: a.key,
                           onPressed: a.onPressed,
-                          icon: Icon(a.icon, size: 20),
+                          icon: a.picture ?? Icon(a.icon, size: 20),
                           label: Text(a.tooltip),
                         ),
                       ),
