@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:eduvision/core/api/api_client.dart';
 import 'package:eduvision/core/auth/session.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/core/auth/user.dart';
+import 'package:eduvision/core/live/app_settings.dart';
 import 'package:eduvision/core/router/app_router.dart';
 import 'package:eduvision/features/onboarding/onboarding_screen.dart';
 import 'package:eduvision/features/onboarding/onboarding_store.dart';
@@ -11,6 +14,17 @@ import 'package:go_router/go_router.dart';
 
 import '../helpers/pump_screen.dart';
 
+/// Firestore keeps a write waiting while the device is offline.
+class _StuckSettings extends AppSettingsStore {
+  _StuckSettings(TokenStorage storage) : super(storage: storage);
+
+  @override
+  Future<void> writeOnboardingDone({
+    required DateTime at,
+    required String device,
+  }) => Completer<void>().future;
+}
+
 void main() {
   const teacher = User(id: 1, name: 'ครูสมศรี', role: 'teacher');
   const student = User(id: 2, name: 'ด.ช.มานะ', role: 'student');
@@ -19,6 +33,7 @@ void main() {
     WidgetTester tester, {
     User user = teacher,
     TokenStorage? storage,
+    AppSettingsStore? appSettings,
     Size size = const Size(800, 1200),
   }) async {
     tester.view.physicalSize = size;
@@ -36,6 +51,7 @@ void main() {
           OnboardingStore(
             userId: user.id,
             storage: store,
+            appSettings: appSettings,
             device: 'web',
           ),
         ),
@@ -105,14 +121,27 @@ void main() {
     expect(await storage.readOnboardingDone(teacher.id), isTrue);
   });
 
+  testWidgets('ข้ามได้แม้ Firestore ไม่ตอบ', (tester) async {
+    final storage = InMemoryTokenStorage();
+    await pumpOnboarding(
+      tester,
+      user: teacher,
+      storage: storage,
+      appSettings: _StuckSettings(storage),
+    );
+
+    await tester.tap(find.byKey(const Key('onboarding_skip')));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingScreen), findsNothing);
+    expect(await storage.readOnboardingDone(teacher.id), isTrue);
+  });
+
   testWidgets('ที่ขนาด 390×844, 820×1180 และ 1440×900 ไม่มี overflow', (
     tester,
   ) async {
-    const sizes = [
-      Size(390, 844),
-      Size(820, 1180),
-      Size(1440, 900),
-    ];
+    const sizes = [Size(390, 844), Size(820, 1180), Size(1440, 900)];
 
     for (final size in sizes) {
       await pumpOnboarding(tester, user: teacher, size: size);

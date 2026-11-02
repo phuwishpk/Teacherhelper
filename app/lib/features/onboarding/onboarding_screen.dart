@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +20,9 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  /// How long "ข้าม" and "เริ่มใช้งาน" wait for Firestore (DESIGN §44.2).
+  static const _cloudWait = Duration(seconds: 2);
+
   final PageController _controller = PageController();
   int _currentPage = 0;
 
@@ -29,10 +34,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _finish() async {
     final user = ref.read(currentUserProvider);
-    await ref.read(onboardingStoreProvider)?.markDone();
-    ref.invalidate(onboardingNeededProvider);
+    try {
+      await ref.read(onboardingStoreProvider)?.markDone().timeout(_cloudWait);
+    } on TimeoutException {
+      // The device already knows; Firestore holds its write while offline.
+    }
     if (!mounted) return;
-    final target = (user?.isStudent == true) ? AppRoutes.student : AppRoutes.home;
+    ref.invalidate(onboardingNeededProvider);
+    final target = (user?.isStudent == true)
+        ? AppRoutes.student
+        : AppRoutes.home;
     try {
       context.go(target);
     } catch (_) {
@@ -45,7 +56,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final pages = (user?.isStudent == true) ? studentOnboarding : teacherOnboarding;
+    final pages = (user?.isStudent == true)
+        ? studentOnboarding
+        : teacherOnboarding;
     final isCompact = context.windowSize == WindowSize.compact;
     final isLastPage = _currentPage >= pages.length - 1;
 
@@ -118,12 +131,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 children: [
                                   Text(
                                     page.title,
-                                    style: Theme.of(context).textTheme.headlineSmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineSmall,
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
                                     page.body,
-                                    style: Theme.of(context).textTheme.bodyLarge,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge,
                                   ),
                                 ],
                               ),
@@ -154,7 +171,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         decoration: BoxDecoration(
                           color: isCurrent
                               ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       );
