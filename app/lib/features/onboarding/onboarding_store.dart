@@ -19,7 +19,7 @@ String currentDeviceName() {
 
 /// Where "onboarding finished" lives: the device first, then Firestore
 /// `users/{uid}/settings/app` so another device of the same account skips it
-/// too (DESIGN §41). Uses [AppSettingsStore] so Firestore access is not
+/// too (DESIGN §44). Uses [AppSettingsStore] so Firestore access is not
 /// duplicated (DESIGN §43).
 class OnboardingStore {
   OnboardingStore({

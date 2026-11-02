@@ -1,6 +1,6 @@
 import '../../core/widgets/mascot_mood.dart';
 
-/// One slide of the first-run onboarding (DESIGN §41, §43).
+/// One slide of the first-run onboarding (DESIGN §44, §43).
 class OnboardingPage {
   const OnboardingPage({
     required this.mood,

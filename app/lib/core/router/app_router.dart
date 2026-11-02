@@ -148,11 +148,11 @@ abstract final class AppRoutes {
   /// Student shell.
   static const student = '/student';
 
-  /// First-run onboarding for teachers and students (DESIGN §41).
+  /// First-run onboarding for teachers and students (DESIGN §44).
   static const welcome = '/welcome';
   static const studentWelcome = '/student/welcome';
 
-  /// About Krucheck (DESIGN §41).
+  /// About Krucheck (DESIGN §44).
   static const about = '/about';
   static const studentAbout = '/student/about';
 

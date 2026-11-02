@@ -9,7 +9,7 @@ import '../../core/widgets/mascot.dart';
 import 'onboarding_pages.dart';
 import 'onboarding_store.dart';
 
-/// Swipeable first-run onboarding screen (DESIGN §41, §43).
+/// Swipeable first-run onboarding screen (DESIGN §44, §43).
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
