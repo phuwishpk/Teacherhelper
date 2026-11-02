@@ -85,6 +85,7 @@ import '../../features/scan/web_scan_screen.dart';
 import '../../features/help/help_content.dart';
 import '../../features/notices/notices_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/about/about_screen.dart';
 import '../../features/help/help_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/assistant/assistant_panel.dart';
@@ -150,6 +151,10 @@ abstract final class AppRoutes {
   /// First-run onboarding for teachers and students (DESIGN §41).
   static const welcome = '/welcome';
   static const studentWelcome = '/student/welcome';
+
+  /// About Krucheck (DESIGN §41).
+  static const about = '/about';
+  static const studentAbout = '/student/about';
 
   /// The in-app guide of each role (help_content.dart).
   static const help = '/help';
@@ -446,6 +451,7 @@ abstract final class AppRoutes {
       location == student ||
       location == studentAccount ||
       location == studentWelcome ||
+      location == studentAbout ||
       location == studentHelp ||
       location == studentNotices ||
       location == studentPassword ||
@@ -667,6 +673,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentWelcome,
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentAbout,
+        builder: (context, state) => const AboutScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentHelp,
@@ -1220,6 +1230,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.welcome,
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.about,
+        builder: (context, state) => const AboutScreen(),
       ),
       GoRoute(
         path: AppRoutes.help,

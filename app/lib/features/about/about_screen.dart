@@ -2,7 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/breakpoints.dart';
+import '../../core/util/thai_date.dart';
+import '../onboarding/onboarding_store.dart';
 import 'server_status_card.dart';
+
+String _formatDeviceName(String device) => switch (device.toLowerCase()) {
+      'android' => 'มือถือ Android',
+      'ios' => 'iPhone/iPad',
+      'web' => 'เว็บเบราว์เซอร์',
+      _ => device,
+    };
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -11,6 +20,8 @@ class AboutScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final infoAsync = ref.watch(onboardingInfoProvider);
+    final info = infoAsync.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -36,6 +47,15 @@ class AboutScreen extends ConsumerWidget {
                 'ระบบตรวจการบ้าน ข้อสอบ และผู้ช่วยจัดการชั้นเรียนอัจฉริยะ สำหรับครูและนักเรียน',
                 style: textTheme.bodyLarge,
               ),
+              if (info != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'คุณดูวิธีใช้งานครั้งแรกเมื่อ ${formatThaiDateTime(info.at.toLocal())} จาก${_formatDeviceName(info.device)}',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Text(
                 'ทีมผู้พัฒนา',
