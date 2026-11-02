@@ -48,9 +48,14 @@ class TeacherFlowApp {
     FakeApiServer? server,
     String? storedToken,
     List<Override> overrides = const [],
+
+    /// Accounts past the first-run slides, so a flow lands on its home. The
+    /// slides have their own flow, which passes an empty set (DESIGN §44).
+    Set<int> onboardingDone = const {1, 2},
   }) async {
     final fake = server ?? FakeApiServer();
-    final storage = InMemoryTokenStorage(token: storedToken);
+    final storage = InMemoryTokenStorage(token: storedToken)
+      ..onboardingDone.addAll(onboardingDone);
     final db = AppDatabase(
       DatabaseConnection(
         NativeDatabase.memory(),

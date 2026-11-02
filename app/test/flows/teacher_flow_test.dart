@@ -88,6 +88,33 @@ void main() {
     await app.stop(tester);
   });
 
+  testWidgets('a teacher new to this device gets the slides once, then home', (
+    tester,
+  ) async {
+    final app = await TeacherFlowApp.start(tester, onboardingDone: const {});
+    await openTeacherTab(tester);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'อีเมล'),
+      app.server.teacherEmail,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'รหัสผ่าน'),
+      app.server.teacherPassword,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'เข้าสู่ระบบ'));
+    await tester.pumpAndSettle();
+
+    expect(app.location, AppRoutes.welcome);
+    expect(find.text('สร้างการบ้านและพิมพ์ใบงาน'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('onboarding_skip')));
+    await tester.pumpAndSettle();
+
+    expect(app.location, AppRoutes.home);
+    expect(app.storage.onboardingDone, contains(1));
+    await app.stop(tester);
+  });
+
   testWidgets('a wrong password shows the API message and stores no token', (
     tester,
   ) async {
