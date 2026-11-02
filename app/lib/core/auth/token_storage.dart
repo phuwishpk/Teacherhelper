@@ -56,6 +56,10 @@ abstract class TokenStorage {
   Future<bool?> readMascotEnabled(int userId);
   Future<void> writeMascotEnabled(int userId, bool on);
 
+  /// Whether [userId] finished or skipped the first-run onboarding on this device.
+  Future<bool> readOnboardingDone(int userId);
+  Future<void> writeOnboardingDone(int userId);
+
   /// Removes both the token and the cached user (not the data owner).
   Future<void> clear();
 }
@@ -73,6 +77,7 @@ class SecureTokenStorage implements TokenStorage {
   static const _myIndicatorsPromptKey = 'my_indicators_prompt_closed';
   static const _googleSignUpKey = 'google_signup_started_at';
   static const _mascotEnabledKey = 'mascot_enabled';
+  static const _onboardingKey = 'onboarding_done';
   final FlutterSecureStorage _storage;
 
   @override
@@ -133,6 +138,14 @@ class SecureTokenStorage implements TokenStorage {
       _storage.write(key: '${_mascotEnabledKey}_$userId', value: on ? '1' : '0');
 
   @override
+  Future<bool> readOnboardingDone(int userId) async =>
+      await _storage.read(key: '${_onboardingKey}_$userId') == '1';
+
+  @override
+  Future<void> writeOnboardingDone(int userId) =>
+      _storage.write(key: '${_onboardingKey}_$userId', value: '1');
+
+  @override
   Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
 
   @override
@@ -184,6 +197,15 @@ class InMemoryTokenStorage implements TokenStorage {
   DateTime? googleSignUpStartedAt;
   final Set<int> myIndicatorsPromptClosed = {};
   final Map<int, bool> mascotEnabled = {};
+  final Set<int> onboardingDone = {};
+
+  @override
+  Future<bool> readOnboardingDone(int userId) async =>
+      onboardingDone.contains(userId);
+
+  @override
+  Future<void> writeOnboardingDone(int userId) async =>
+      onboardingDone.add(userId);
 
   @override
   Future<bool?> readMascotEnabled(int userId) async => mascotEnabled[userId];

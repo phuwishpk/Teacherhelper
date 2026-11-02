@@ -94,4 +94,18 @@ void main() {
     vault['google_signup_started_at'] = 'junk';
     expect(await storage.readGoogleSignUpStartedAt(), isNull);
   });
+
+  test('onboarding done is kept per user and survives clear()', () async {
+    final storage = SecureTokenStorage();
+    expect(await storage.readOnboardingDone(1), isFalse);
+    expect(await storage.readOnboardingDone(2), isFalse);
+
+    await storage.writeOnboardingDone(1);
+    expect(await storage.readOnboardingDone(1), isTrue);
+    expect(await storage.readOnboardingDone(2), isFalse);
+    expect(vault['onboarding_done_1'], '1');
+
+    await storage.clear();
+    expect(await storage.readOnboardingDone(1), isTrue);
+  });
 }
