@@ -17,6 +17,7 @@ import '../auth/sign_out_action.dart';
 import '../classrooms/classrooms_page.dart';
 import '../gradebook/grades_home_page.dart';
 import '../notices/notices_providers.dart';
+import '../onboarding/onboarding_store.dart';
 import '../review/review_home_page.dart';
 import '../review/review_providers.dart';
 import '../student/live_refresh.dart';
@@ -68,12 +69,30 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
   /// "ตัดเกรด" loads only once opened, like the student's "เกรด".
   bool _gradesOpened = false;
 
+  ProviderSubscription<AsyncValue<bool>>? _onboardingSub;
+  bool _onboardingShown = false;
+
   @override
   void initState() {
     super.initState();
     // Fetch a newer on-device digit model (DESIGN §9.8) while the teacher
     // is online, so scanning later works offline with it.
     syncDigitModelInBackground(ref);
+    _onboardingSub = ref.listenManual(onboardingNeededProvider, (previous, next) {
+      if (_onboardingShown) return;
+      if (next.value == true) {
+        _onboardingShown = true;
+        if (!mounted) return;
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        context.push(AppRoutes.welcome);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _onboardingSub?.close();
+    super.dispose();
   }
 
   void _select(int index) => setState(() {
