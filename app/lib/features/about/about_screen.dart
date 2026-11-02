@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/breakpoints.dart';
+import 'server_status_card.dart';
 
 class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
@@ -22,6 +23,8 @@ class AboutScreen extends ConsumerWidget {
           child: ListView(
             padding: EdgeInsets.all(context.pageGutter),
             children: [
+              const ServerStatusCard(),
+              const SizedBox(height: 24),
               Text(
                 'Krucheck',
                 style: textTheme.headlineMedium?.copyWith(
