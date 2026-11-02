@@ -52,6 +52,16 @@ class SettingsScreen extends ConsumerWidget {
                   const SizedBox(height: 8),
                   const GoogleClassroomCard(),
                   const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      key: const ValueKey('settings_replay_onboarding'),
+                      leading: const Icon(Icons.slideshow_outlined),
+                      title: const Text('ดูวิธีใช้งานอีกครั้ง'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.welcome),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   const ThemeModeSection(),
                   const SizedBox(height: 8),
                   Card(
