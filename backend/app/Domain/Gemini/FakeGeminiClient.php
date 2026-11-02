@@ -28,6 +28,7 @@ use Illuminate\Support\Str;
  *   [fake:max-tokens]    any purpose: a cut-off answer, finishReason MAX_TOKENS
  *   [fake:quota]         assistant_chat: HTTP 429
  *   [fake:error-once]    assistant_chat: HTTP 503 the first time, an answer on the retry
+ *   [fake:error-thrice]  assistant_chat: HTTP 503 three times, past AssistantChat's own retries
  *   [fake:plan:ID]       assistant_chat: a plan card of seven questions for assignment ID (assistantPlan())
  *   [fake:plan-new:CLASSROOM:COURSE:KIND]  the same card for a new assignment
  *   [fake:confirm]       assistant_chat: "โอเค สร้างเลย" (apply_plan)
@@ -210,6 +211,7 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
             'assistant_chat' => match (true) {
                 $has('error') => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('error-once') && $this->seen[$signature] === 1 => GeminiReply::error('HTTP 503: fake outage', 0, 503),
+                $has('error-thrice') && $this->seen[$signature] <= 3 => GeminiReply::error('HTTP 503: fake outage', 0, 503),
                 $has('quota') => GeminiReply::error('HTTP 429: Resource has been exhausted', 0, 429),
                 $has('invalid') => 'not json at all {',
                 $has('confirm') => ['answer' => 'กำลังสร้างข้อที่ติ๊กไว้ในการ์ด', 'apply_plan' => true],

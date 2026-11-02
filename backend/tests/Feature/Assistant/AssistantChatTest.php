@@ -5,13 +5,16 @@ namespace Tests\Feature\Assistant;
 use App\Domain\Assistant\AssistantChat;
 use App\Domain\Gemini\FakeGeminiClient;
 use App\Domain\Gemini\GeminiClient;
+use App\Domain\Gemini\GeminiReply;
 use App\Filament\Resources\AssistantConversations\Pages\ManageAssistantConversations;
 use App\Models\AssistantConversation;
 use App\Models\TeacherApiKey;
 use App\Models\User;
+use Closure;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Sleep;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -33,6 +36,7 @@ class AssistantChatTest extends TestCase
         $this->gemini = new FakeGeminiClient;
         $this->app->instance(GeminiClient::class, $this->gemini);
         $this->teacher = $this->makeTeacher();
+        Sleep::fake();
     }
 
     private function giveKey(User $teacher): void
@@ -87,7 +91,7 @@ class AssistantChatTest extends TestCase
     {
         $this->giveKey($this->teacher);
 
-        $failed = $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'ทดสอบ [fake:error-once]'])
+        $failed = $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'ทดสอบ [fake:error-thrice]'])
             ->assertStatus(502)
             ->assertJsonPath('code', 'ai_unavailable')
             ->assertJsonPath('ai_error_code', 'AI-SERVER')
@@ -109,6 +113,72 @@ class AssistantChatTest extends TestCase
 
         $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'เต็ม [fake:quota]', 'conversation_id' => $id])
             ->assertStatus(502)->assertJsonPath('ai_error_code', 'AI-QUOTA');
+    }
+
+    public function test_a_moment_of_trouble_at_google_is_never_seen_by_the_teacher(): void
+    {
+        $this->giveKey($this->teacher);
+
+        $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'ทดสอบ [fake:error-once]'])
+            ->assertOk()
+            ->assertJsonPath('data.messages.1.role', 'assistant');
+
+        Sleep::assertSleptTimes(1);
+        // Every try stays in ai_calls, and the failure is not in the chat.
+        $this->assertDatabaseCount('ai_calls', 2);
+        $this->assertDatabaseHas('ai_calls', ['error_code' => 'AI-SERVER', 'purpose' => 'assistant_chat']);
+        $this->assertDatabaseMissing('assistant_messages', ['role' => 'error']);
+    }
+
+    public function test_google_still_failing_after_the_retries_reaches_the_teacher(): void
+    {
+        $this->giveKey($this->teacher);
+
+        $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'ทดสอบ [fake:error]'])
+            ->assertStatus(502)
+            ->assertJsonPath('ai_error_code', 'AI-SERVER')
+            ->assertJsonPath('messages.1.role', 'error');
+
+        Sleep::assertSleptTimes(2);
+        $this->assertDatabaseCount('ai_calls', 3);
+        $this->assertSame(1, AssistantChat::usedToday($this->teacher));
+    }
+
+    public function test_only_googles_own_failures_are_asked_again(): void
+    {
+        $this->giveKey($this->teacher);
+
+        $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'เต็ม [fake:quota]'])
+            ->assertStatus(502)->assertJsonPath('ai_error_code', 'AI-QUOTA');
+
+        Sleep::assertNeverSlept();
+        $this->assertDatabaseCount('ai_calls', 1);
+    }
+
+    public function test_a_slow_failure_is_not_asked_again(): void
+    {
+        $this->giveKey($this->teacher);
+        $travel = fn () => $this->travel(31)->seconds();
+        $this->app->instance(GeminiClient::class, new class($travel) extends FakeGeminiClient
+        {
+            public function __construct(private readonly Closure $travel)
+            {
+                parent::__construct();
+            }
+
+            public function generate(array $requests, string $apiKey): array
+            {
+                ($this->travel)();
+
+                return array_map(fn () => GeminiReply::error('HTTP 503: slow outage', 0, 503), $requests);
+            }
+        });
+
+        $this->asUser($this->teacher)->postJson('/api/v1/assistant/messages', ['text' => 'ทดสอบ'])
+            ->assertStatus(502)->assertJsonPath('ai_error_code', 'AI-SERVER');
+
+        Sleep::assertNeverSlept();
+        $this->assertDatabaseCount('ai_calls', 1);
     }
 
     public function test_the_daily_limit_and_privacy_between_teachers(): void
