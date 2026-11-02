@@ -37,6 +37,8 @@ class ReviewHomePage extends ConsumerWidget {
           },
           child: ContentColumn(
             child: ListView(
+              // Clears the assistant's floating button, as the other tabs do.
+              padding: const EdgeInsets.only(bottom: 96),
               children: [
                 Card(
                   child: ListTile(

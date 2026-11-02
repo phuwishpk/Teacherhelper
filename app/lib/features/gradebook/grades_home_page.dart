@@ -110,6 +110,8 @@ class _GradesHomePageState extends ConsumerState<GradesHomePage> {
     return ContentColumn(
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
+        // Clears the assistant's floating button, as the other tabs do.
+        padding: const EdgeInsets.only(bottom: 96),
         children: [
           Text('ปีการศึกษา', style: theme.textTheme.labelLarge),
           const SizedBox(height: 4),
