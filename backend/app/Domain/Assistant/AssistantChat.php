@@ -6,6 +6,7 @@ use App\Domain\Documents\DocumentSelection;
 use App\Domain\Gemini\AiErrorCode;
 use App\Domain\Gemini\AiErrors;
 use App\Domain\Gemini\CallOutcome;
+use App\Domain\Gemini\GeminiCall;
 use App\Domain\Gemini\GeminiGateway;
 use App\Domain\Gemini\GeminiImage;
 use App\Domain\Gemini\GeminiKey;
@@ -19,6 +20,7 @@ use App\Models\SourceDocument;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 
 /**
@@ -61,6 +63,12 @@ final class AssistantChat
 
     /** Not an AI failure: the teacher's messages of the day are used up. */
     public const LIMIT_CODE = 'CHAT-LIMIT';
+
+    /** Seconds to wait before each new try after Google's own failure (AI-SERVER). */
+    private const SERVER_RETRY_WAITS = [1, 3];
+
+    /** No new try this many seconds after the first: the teacher and PHP are both waiting. */
+    private const SERVER_RETRY_WINDOW = 30;
 
     public function __construct(
         private readonly GeminiKeyResolver $keys,
@@ -196,7 +204,7 @@ final class AssistantChat
             ."\n\n".self::fileNote($files)
             ."\n\n".self::dataNote($teacher, $data !== null)
             .($data === null ? '' : "\n\n".$data);
-        $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $context)], $key)['chat'];
+        $outcome = $this->ask($this->requests->call($asked, $turns, $conversation->id, $context), $key);
         $calls = [$outcome->aiCallId];
 
         // The answer asked for data: fetch it and ask again, one message for the teacher.
@@ -209,7 +217,7 @@ final class AssistantChat
                 $fetched = "# STUDENT DATA\n(not available: {$e->getMessage()})";
             }
             $again = $context."\n\n".$fetched."\n\nThe STUDENT DATA above is what you asked for: answer the teacher now and do not set need_data.";
-            $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $again)], $key)['chat'];
+            $outcome = $this->ask($this->requests->call($asked, $turns, $conversation->id, $again), $key);
             $calls[] = $outcome->aiCallId;
         }
         // The answer asked to read the attached files: read them and ask again.
@@ -225,7 +233,7 @@ final class AssistantChat
                     DocumentSelection::resolve($teacher, ['document_ids' => array_column($files, 'id')])->files(),
                 );
                 $again = $context."\n\nThe ATTACHED FILES are included in this request: read them and answer now (make the card); do not set need_file.";
-                $outcome = $this->gateway->run(['chat' => $this->requests->call($asked, $turns, $conversation->id, $again, $parts)], $key)['chat'];
+                $outcome = $this->ask($this->requests->call($asked, $turns, $conversation->id, $again, $parts), $key);
                 $calls[] = $outcome->aiCallId;
             }
         }
@@ -285,6 +293,27 @@ final class AssistantChat
         }
 
         return ['conversation' => $conversation->refresh(), 'messages' => [$question, $reply], 'apply_message_id' => $applyId === null ? null : (int) $applyId];
+    }
+
+    /**
+     * One call to Gemini for the chat. Google's 5xx is usually over within
+     * seconds, and a chat has no queue to try again later as grading has, so
+     * it is asked again before the teacher sees an error (DESIGN §37.5).
+     * Every try is logged to ai_calls; a failed one costs no tokens.
+     */
+    private function ask(GeminiCall $call, GeminiKey $key): CallOutcome
+    {
+        $giveUpAt = now()->addSeconds(self::SERVER_RETRY_WINDOW);
+        $outcome = $this->gateway->run(['chat' => $call], $key)['chat'];
+        foreach (self::SERVER_RETRY_WAITS as $wait) {
+            if ($outcome->errorCode !== AiErrorCode::SERVER || now()->addSeconds($wait)->gte($giveUpAt)) {
+                break;
+            }
+            Sleep::for($wait)->seconds();
+            $outcome = $this->gateway->run(['chat' => $call], $key)['chat'];
+        }
+
+        return $outcome;
     }
 
     private static function failure(CallOutcome $outcome, AssistantConversation $conversation, AssistantMessage $question, AssistantMessage $reply): ApiException

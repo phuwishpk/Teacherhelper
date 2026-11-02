@@ -530,7 +530,15 @@ List<MenuGroup> teacherMenu(
           title: 'ผู้ช่วย Krucheck',
           icon: Icons.smart_toy_outlined,
           where: 'ถามวิธีใช้ระบบ การให้คะแนน และการตัดเกรด',
-          keywords: const ['ai', 'chat', 'แชท', 'ถาม', 'ช่วย', 'หุ่นยนต์'],
+          keywords: const [
+            'ai',
+            'chat',
+            'แชท',
+            'ถาม',
+            'ช่วย',
+            'หุ่นยนต์',
+            'น้องเช็ค',
+          ],
           run: a.openAssistant,
         ),
         MenuFunction(

@@ -4,6 +4,7 @@ import 'package:eduvision/core/api/api_client.dart';
 import 'package:eduvision/core/auth/token_storage.dart';
 import 'package:eduvision/core/live/app_settings.dart';
 import 'package:eduvision/core/theme/app_theme.dart';
+import 'package:eduvision/core/widgets/adaptive_shell.dart';
 import 'package:eduvision/core/widgets/mascot.dart';
 import 'package:eduvision/core/widgets/mascot_mood.dart';
 import 'package:eduvision/features/assistant/assistant.dart';
@@ -118,10 +119,7 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.light(),
           home: Scaffold(
-            body: AssistantPanel(
-              onClose: () {},
-              onNavigate: (_) {},
-            ),
+            body: AssistantPanel(onClose: () {}, onNavigate: (_) {}),
           ),
         ),
       ),
@@ -210,5 +208,59 @@ void main() {
     expect(find.byType(Mascot), findsNothing);
     expect(find.byIcon(Icons.smart_toy_outlined), findsOneWidget);
   });
-}
 
+  testWidgets('the button that opens the chat shows the mascot, or the robot '
+      'when it is switched off', (tester) async {
+    Future<void> pumpAt(Size size, bool mascotOn) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          key: UniqueKey(),
+          theme: AppTheme.light(),
+          home: AdaptiveShell(
+            title: 'Krucheck',
+            assistant: ShellAction(
+              key: const ValueKey('assistant_button'),
+              tooltip: 'ผู้ช่วย Krucheck',
+              icon: Icons.smart_toy_outlined,
+              picture: mascotOn
+                  ? const Mascot(mood: MascotMood.wave, size: 28)
+                  : null,
+              onPressed: () {},
+            ),
+            destinations: const [
+              ShellDestination('หน้าหลัก', Icons.home_outlined, Icons.home),
+              ShellDestination('ห้องเรียน', Icons.class_outlined, Icons.class_),
+            ],
+            selectedIndex: 0,
+            onSelected: (_) {},
+            body: const SizedBox(),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    final button = find.byKey(const ValueKey('assistant_button'));
+    Finder inButton(Finder of) => find.descendant(of: button, matching: of);
+
+    for (final size in const [Size(390, 844), Size(1440, 900)]) {
+      await pumpAt(size, true);
+      expect(inButton(find.byType(Mascot)), findsOneWidget);
+      expect(inButton(find.byIcon(Icons.smart_toy_outlined)), findsNothing);
+      if (size.width < 600) {
+        // The mascot is blue: on the theme's blue button it would disappear.
+        expect(
+          tester.widget<FloatingActionButton>(button).backgroundColor,
+          AppTheme.light().colorScheme.secondaryContainer,
+        );
+      }
+
+      await pumpAt(size, false);
+      expect(inButton(find.byType(Mascot)), findsNothing);
+      expect(inButton(find.byIcon(Icons.smart_toy_outlined)), findsOneWidget);
+    }
+  });
+}

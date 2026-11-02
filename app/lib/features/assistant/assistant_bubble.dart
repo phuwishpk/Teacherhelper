@@ -18,6 +18,7 @@ class AssistantBubble extends ConsumerWidget {
     this.onNavigate,
     this.onRetry,
     this.mood,
+    this.mascotMoves = true,
   });
 
   final AssistantMessage message;
@@ -30,6 +31,9 @@ class AssistantBubble extends ConsumerWidget {
 
   /// Mascot mood when shown beside an assistant answer or error (M6).
   final MascotMood? mood;
+
+  /// False on older answers, so a long chat is not a crowd in motion.
+  final bool mascotMoves;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -84,11 +88,7 @@ class AssistantBubble extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.description_outlined,
-                      size: 16,
-                      color: onColor,
-                    ),
+                    Icon(Icons.description_outlined, size: 16, color: onColor),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
@@ -127,8 +127,7 @@ class AssistantBubble extends ConsumerWidget {
                   ),
                 ),
             if (code != null) ErrorCodeLine(code),
-            if (message.errorCode == ErrorCode.keyInvalid &&
-                onNavigate != null)
+            if (message.errorCode == ErrorCode.keyInvalid && onNavigate != null)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -155,7 +154,9 @@ class AssistantBubble extends ConsumerWidget {
 
     if (message.isUser || !mascotOn) {
       return Align(
-        alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+        alignment: message.isUser
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: card,
@@ -171,7 +172,7 @@ class AssistantBubble extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Mascot(mood: mascotMood, size: 28),
+          Mascot(mood: mascotMood, size: 28, moves: mascotMoves),
           const SizedBox(width: 8),
           Flexible(
             child: ConstrainedBox(
@@ -272,10 +273,7 @@ class _AssistantThinkingBubbleState
     );
 
     if (!mascotOn) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: bubble,
-      );
+      return Align(alignment: Alignment.centerLeft, child: bubble);
     }
 
     return Align(

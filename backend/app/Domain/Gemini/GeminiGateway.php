@@ -22,7 +22,8 @@ use JsonException;
  *    guidance_by; DESIGN §21.12), so what steered a call can be traced.
  *
  * Transport errors are not retried here: GradeScanJob counts attempts and
- * releases itself with backoff.
+ * releases itself with backoff, and AssistantChat, with a teacher waiting,
+ * asks again after a short pause.
  */
 final class GeminiGateway
 {

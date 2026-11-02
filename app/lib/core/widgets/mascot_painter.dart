@@ -7,16 +7,28 @@ import 'mascot_mood.dart';
 /// files in the team guide (`mascot/nong-check-*.svg`), so a size is only a
 /// scale. Colours come from [MascotColors].
 class MascotPainter extends CustomPainter {
-  const MascotPainter({required this.mood, required this.colors, this.pulse});
+  const MascotPainter({
+    required this.mood,
+    required this.colors,
+    this.pulse,
+    this.wave,
+  });
 
   /// The side of the drawing grid.
   static const grid = 120.0;
+
+  /// Radians either way of the waving arm.
+  static const _waveAngle = 0.4;
 
   final MascotMood mood;
   final ColorScheme colors;
 
   /// 0 to 1 through one cycle of the thinking dots; null keeps them still.
   final double? pulse;
+
+  /// -1 to 1, how far the raised hand of [MascotMood.wave] is from its
+  /// resting place; null keeps it there.
+  final double? wave;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,7 +47,8 @@ class MascotPainter extends CustomPainter {
   bool shouldRepaint(MascotPainter oldDelegate) =>
       oldDelegate.mood != mood ||
       oldDelegate.colors != colors ||
-      oldDelegate.pulse != pulse;
+      oldDelegate.pulse != pulse ||
+      oldDelegate.wave != wave;
 
   void _shadowAndFeet(Canvas canvas) {
     _oval(canvas, 60, 114, 30, 3.5, colors.mascotInk.withValues(alpha: 0.12));
@@ -70,10 +83,18 @@ class MascotPainter extends CustomPainter {
     };
     final arm = _line(colors.mascotCover, 6.5);
     left.draw(canvas, arm);
+    canvas.save();
+    if (mood == MascotMood.wave && wave != null) {
+      // Turns about the shoulder, where the arm leaves the book.
+      canvas.translate(107, 60);
+      canvas.rotate(wave! * _waveAngle);
+      canvas.translate(-107, -60);
+    }
     right.draw(canvas, arm);
     if (mood == MascotMood.wave) {
       canvas.drawCircle(const Offset(113, 34), 5, _fill(colors.mascotCover));
     }
+    canvas.restore();
   }
 
   void _book(Canvas canvas) {
