@@ -226,7 +226,7 @@ void main() {
               tooltip: 'ผู้ช่วย Krucheck',
               icon: Icons.smart_toy_outlined,
               picture: mascotOn
-                  ? const Mascot(mood: MascotMood.wave, size: 28)
+                  ? (size) => Mascot(mood: MascotMood.wave, size: size)
                   : null,
               onPressed: () {},
             ),
@@ -250,7 +250,11 @@ void main() {
       await pumpAt(size, true);
       expect(inButton(find.byType(Mascot)), findsOneWidget);
       expect(inButton(find.byIcon(Icons.smart_toy_outlined)), findsNothing);
+      final mascot = tester.widget<Mascot>(inButton(find.byType(Mascot)));
+      expect(mascot.size, size.width < 600 ? 46 : 28);
       if (size.width < 600) {
+        // Big enough to find and press with a thumb.
+        expect(tester.getSize(button), const Size(56, 56));
         // The mascot is blue: on the theme's blue button it would disappear.
         expect(
           tester.widget<FloatingActionButton>(button).backgroundColor,

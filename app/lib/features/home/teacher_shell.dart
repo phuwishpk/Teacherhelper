@@ -217,7 +217,7 @@ class _TeacherShellState extends ConsumerState<TeacherShell> {
         tooltip: 'ผู้ช่วย Krucheck',
         icon: Icons.smart_toy_outlined,
         picture: ref.watch(mascotEnabledProvider)
-            ? const Mascot(mood: MascotMood.wave, size: 28)
+            ? (size) => Mascot(mood: MascotMood.wave, size: size)
             : null,
         onPressed: openAssistant,
       ),

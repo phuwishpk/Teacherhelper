@@ -35,8 +35,9 @@ class ShellAction {
   final String tooltip;
   final IconData icon;
 
-  /// Shown instead of [icon] on the assistant's button (น้องเช็ค, DESIGN §43).
-  final Widget? picture;
+  /// Drawn at the given size instead of [icon] on the assistant's button
+  /// (น้องเช็ค, DESIGN §43).
+  final Widget Function(double size)? picture;
   final VoidCallback onPressed;
   final int badge;
   final Key? key;
@@ -142,6 +143,11 @@ class AdaptiveShell extends StatelessWidget {
         : Icon(data);
   }
 
+  /// The assistant's picture beside its label in the sidebar, and alone
+  /// on the 56 px floating button of a phone or a tablet.
+  static const _sidebarPicture = 28.0;
+  static const _floatingPicture = 46.0;
+
   /// The page with the assistant's button over its bottom left corner.
   Widget _withAssistant(BuildContext context, Widget page) =>
       switch (assistant) {
@@ -151,7 +157,7 @@ class AdaptiveShell extends StatelessWidget {
             Positioned(
               left: 16,
               bottom: 16,
-              child: FloatingActionButton.small(
+              child: FloatingActionButton(
                 key: a.key,
                 heroTag: 'shell_assistant',
                 tooltip: a.tooltip,
@@ -160,7 +166,7 @@ class AdaptiveShell extends StatelessWidget {
                 backgroundColor: a.picture == null
                     ? null
                     : Theme.of(context).colorScheme.secondaryContainer,
-                child: a.picture ?? Icon(a.icon),
+                child: a.picture?.call(_floatingPicture) ?? Icon(a.icon),
               ),
             ),
           ],
@@ -314,7 +320,9 @@ class AdaptiveShell extends StatelessWidget {
                         child: FilledButton.tonalIcon(
                           key: a.key,
                           onPressed: a.onPressed,
-                          icon: a.picture ?? Icon(a.icon, size: 20),
+                          icon:
+                              a.picture?.call(_sidebarPicture) ??
+                              Icon(a.icon, size: 20),
                           label: Text(a.tooltip),
                         ),
                       ),
