@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/auth/token_storage.dart';
 import '../../core/live/app_settings.dart';
+import '../../core/live/live_connection.dart';
 import '../../core/live/live_scope.dart';
 
 String currentDeviceName() {
@@ -30,14 +31,10 @@ class OnboardingStore {
     AppSettingsStore? appSettings,
     required this.device,
     DateTime Function()? now,
-  })  : _now = now ?? DateTime.now,
-        _appSettings = appSettings ??
-            AppSettingsStore(
-              storage: storage,
-              userId: userId,
-              db: db,
-              uid: uid,
-            );
+  }) : _now = now ?? DateTime.now,
+       _appSettings =
+           appSettings ??
+           AppSettingsStore(storage: storage, userId: userId, db: db, uid: uid);
 
   final int userId;
   final TokenStorage storage;
@@ -89,14 +86,20 @@ final onboardingStoreProvider = Provider.autoDispose<OnboardingStore?>((ref) {
 });
 
 final onboardingNeededProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final user = ref.watch(currentUserProvider);
   final store = ref.watch(onboardingStoreProvider);
-  if (store == null) return false;
+  if (user == null || store == null) return false;
+  // Firebase signs in after the shell opens, so until it has answered only
+  // Firestore's silence is known, not that this account never saw the slides.
+  if (ref.watch(liveStatusProvider(user.id)) == LiveStatus.connecting) {
+    return false;
+  }
   return store.needed();
 });
 
 final onboardingInfoProvider =
     FutureProvider.autoDispose<({DateTime at, String device})?>((ref) async {
-  final store = ref.watch(onboardingStoreProvider);
-  if (store == null) return null;
-  return store.doneInfo();
-});
+      final store = ref.watch(onboardingStoreProvider);
+      if (store == null) return null;
+      return store.doneInfo();
+    });
