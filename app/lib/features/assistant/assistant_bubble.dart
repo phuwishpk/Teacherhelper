@@ -127,6 +127,17 @@ class AssistantBubble extends ConsumerWidget {
                   ),
                 ),
             if (code != null) ErrorCodeLine(code),
+            if (message.errorCode == ErrorCode.keyInvalid &&
+                onNavigate != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const ValueKey('assistant_error_settings'),
+                  onPressed: () => onNavigate!(AppRoutes.settings),
+                  icon: const Icon(Icons.key_outlined),
+                  label: const Text('ไปที่ตั้งค่า'),
+                ),
+              ),
             if (onRetry != null)
               Align(
                 alignment: Alignment.centerRight,
@@ -191,7 +202,18 @@ class _AssistantThinkingBubbleState
   late final _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1200),
-  )..repeat();
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The dots rest when the device asks for less motion.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat();
+    }
+  }
 
   @override
   void dispose() {

@@ -398,6 +398,7 @@ class AssistantChatState {
     this.loading = false,
     this.labels = const {},
     this.justApplied = false,
+    this.failedOpenId,
   });
 
   final AssistantConversation? conversation;
@@ -411,8 +412,15 @@ class AssistantChatState {
   /// A card was created just now, by its button or a typed confirmation.
   final bool justApplied;
 
-  /// The last message failed and nothing is running: "ลองใหม่" can go.
-  bool get canRetry => !sending && (messages.lastOrNull?.isError ?? false);
+  /// The conversation that failed to open (F1).
+  final int? failedOpenId;
+
+  /// The last message failed and nothing is running: "ลองใหม่" can go,
+  /// except when asking again cannot work today.
+  bool get canRetry =>
+      !sending &&
+      (messages.lastOrNull?.isError ?? false) &&
+      messages.last.errorCode != ErrorCode.chatLimit;
 }
 
 /// Kept while the teacher is signed in, so closing the desktop panel or
@@ -445,7 +453,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       );
     } catch (e) {
       if (!ref.mounted) return;
-      state = AssistantChatState(messages: [_localFailure(e)]);
+      state = AssistantChatState(
+        messages: [_localFailure(e)],
+        failedOpenId: id,
+      );
     }
   }
 
@@ -500,6 +511,7 @@ class AssistantChatController extends Notifier<AssistantChatState> {
   /// "ลองใหม่" on the last failure: the server asks its question again; a
   /// failure the server never saw sends the question again.
   Future<void> retry() async {
+    if (state.failedOpenId case final id?) return open(id);
     if (!state.canRetry) return;
     final messages = state.messages;
     final failure = messages.last;
@@ -512,7 +524,11 @@ class AssistantChatController extends Notifier<AssistantChatState> {
         sending: true,
         labels: state.labels,
       );
-      await _ask(before, () => _repo.retry(conversation.id));
+      await _ask(
+        before,
+        () => _repo.retry(conversation.id),
+        storedFailureId: failure.id,
+      );
       return;
     }
     final question = messages.length >= 2
@@ -531,10 +547,13 @@ class AssistantChatController extends Notifier<AssistantChatState> {
 
   /// Runs [call]; the question and its answer or failure follow [before].
   /// True when the server got the question (answered or stored a failure).
+  /// [storedFailureId]: a retry of that stored failure; if the connection
+  /// drops, "ลองใหม่" must retry it again, not send the question twice.
   Future<bool> _ask(
     List<AssistantMessage> before,
-    Future<AssistantReply> Function() call,
-  ) async {
+    Future<AssistantReply> Function() call, {
+    int? storedFailureId,
+  }) async {
     try {
       final reply = await call();
       if (!ref.mounted) return true;
@@ -553,6 +572,17 @@ class AssistantChatController extends Notifier<AssistantChatState> {
       return true;
     } catch (e) {
       if (!ref.mounted) return false;
+      // The retry reached the server but its answer did not reach the app.
+      if (apiErrorBody(e)?['code'] == 'nothing_to_retry') {
+        final id = state.conversation?.id;
+        state = AssistantChatState(
+          conversation: state.conversation,
+          messages: state.messages,
+          labels: state.labels,
+        );
+        if (id != null) await open(id);
+        return true;
+      }
       final stored = AssistantReply.tryParse(apiErrorBody(e));
       state = stored != null
           ? AssistantChatState(
@@ -564,7 +594,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
             )
           : AssistantChatState(
               conversation: state.conversation,
-              messages: [...state.messages, _localFailure(e)],
+              messages: [
+                ...state.messages,
+                _localFailure(e, id: storedFailureId),
+              ],
               labels: state.labels,
             );
       return stored != null;
@@ -607,9 +640,10 @@ class AssistantChatController extends Notifier<AssistantChatState> {
     ];
   }
 
-  static AssistantMessage _localFailure(Object error) {
+  static AssistantMessage _localFailure(Object error, {int? id}) {
     final code = errorCodeOf(error);
     return AssistantMessage(
+      id: id,
       role: AssistantMessage.error,
       content: switch (code?.code) {
         ErrorCode.offline =>
@@ -803,6 +837,7 @@ class AssistantAttachments {
 class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
   /// The same limit as the server's (AssistantChat::MAX_ATTACHMENTS).
   static const maxFiles = 5;
+  static const _tooMany = 'แนบได้ไม่เกิน $maxFiles ไฟล์ต่อคำถาม';
 
   @override
   AssistantAttachments build() {
@@ -811,18 +846,26 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
   }
 
   Future<void> pick() async {
-    if (state.uploading || state.files.length >= maxFiles) return;
+    if (state.uploading) return;
+    if (state.files.length >= maxFiles) {
+      state = AssistantAttachments(files: state.files, error: _tooMany);
+      return;
+    }
     final picked = await ref
         .read(documentFilePickerProvider)
         .pick(dialogTitle: 'แนบเอกสารของครู');
     if (picked.isEmpty || !ref.mounted) return;
+    final room = maxFiles - state.files.length;
     state = AssistantAttachments(files: state.files, uploading: true);
     try {
       final uploaded = await ref
           .read(answerKeyRepositoryProvider)
-          .upload(picked.take(maxFiles - state.files.length).toList());
+          .upload(picked.take(room).toList());
       if (!ref.mounted) return;
-      state = AssistantAttachments(files: [...state.files, ...uploaded]);
+      state = AssistantAttachments(
+        files: [...state.files, ...uploaded],
+        error: picked.length > room ? _tooMany : null,
+      );
     } catch (e) {
       if (!ref.mounted) return;
       state = AssistantAttachments(
@@ -837,6 +880,7 @@ class AssistantAttachmentsController extends Notifier<AssistantAttachments> {
       for (final f in state.files)
         if (f.id != id) f,
     ],
+    uploading: state.uploading,
   );
 
   void clear() => state = const AssistantAttachments();

@@ -16,6 +16,12 @@ class ErrorCode {
   /// The server took too long to answer.
   static const timeout = 'NET-TIMEOUT';
 
+  /// The day's questions to the assistant are used up (DESIGN §37.1).
+  static const chatLimit = 'CHAT-LIMIT';
+
+  /// Google no longer accepts the teacher's Gemini key (DESIGN §36).
+  static const keyInvalid = 'AI-KEY-INVALID';
+
   final String code;
   final int? callId;
 

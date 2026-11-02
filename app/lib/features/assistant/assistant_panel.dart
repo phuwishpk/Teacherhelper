@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/live/app_settings.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/breakpoints.dart';
 import '../../core/widgets/mascot.dart';
 import '../../core/widgets/mascot_mood.dart';
 import 'assistant.dart';
@@ -38,6 +39,7 @@ class AssistantPanel extends ConsumerStatefulWidget {
 
 class _AssistantPanelState extends ConsumerState<AssistantPanel> {
   final _input = TextEditingController();
+  final _inputFocus = FocusNode();
   bool _showList = false;
 
   static const _suggestions = [
@@ -52,13 +54,17 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
   @override
   void dispose() {
     _input.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
   void _send([String? text]) {
     final question = (text ?? _input.text).trim();
     if (question.isEmpty) return;
-    _input.clear();
+    // A file still uploading would miss the question.
+    if (ref.read(assistantAttachmentsProvider).uploading) return;
+    // A suggestion leaves what the teacher typed alone.
+    if (text == null) _input.clear();
     ref.read(assistantChatProvider.notifier).send(question);
   }
 
@@ -69,6 +75,16 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
     final status = ref.watch(assistantStatusProvider);
     final busy = chat.sending || chat.loading;
     final mascotOn = ref.watch(mascotEnabledProvider);
+
+    // The input is locked while the AI answers, which takes its focus. On a
+    // desktop the teacher types on; a phone's keyboard would hide the answer.
+    ref.listen(assistantChatProvider.select((c) => c.sending), (was, sending) {
+      if (was != true || sending) return;
+      if (context.windowSize != WindowSize.expanded) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _inputFocus.requestFocus();
+      });
+    });
 
     final Widget body;
     if (status.value case final s?) {
@@ -85,6 +101,7 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
               chat: chat,
               status: s,
               input: _input,
+              inputFocus: _inputFocus,
               suggestions: _suggestions,
               onSend: _send,
               onNavigate: widget.onNavigate,
@@ -164,18 +181,22 @@ class _AssistantPanelState extends ConsumerState<AssistantPanel> {
 
 
 /// The assistant as its own page, on a phone or a tablet.
-class AssistantScreen extends StatelessWidget {
+class AssistantScreen extends ConsumerWidget {
   const AssistantScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     void close() =>
         context.canPop() ? context.pop() : context.go(AppRoutes.home);
     return Scaffold(
       body: SafeArea(
         child: AssistantPanel(
           onClose: close,
-          onNavigate: (route) => context.push(route),
+          onNavigate: (route) async {
+            await context.push(route);
+            // A key added in settings counts as soon as the teacher is back.
+            if (context.mounted) ref.invalidate(assistantStatusProvider);
+          },
         ),
       ),
     );
