@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
@@ -66,7 +67,8 @@ String pageFileExtension(String? mimeType) => switch (mimeType) {
 
 /// "ดาวน์โหลดไฟล์" for what the app cannot draw (a PDF, or HEIC on a
 /// device without the codec): the bytes go to the app's cache and another
-/// app on the phone opens them.
+/// app on the phone opens them. On the web the browser saves the file
+/// (DESIGN §25.7; a PDF is also drawn in the page there).
 abstract class PageFileOpener {
   /// Returns null when another app opened the file, else a Thai reason.
   Future<String?> open(
@@ -77,17 +79,20 @@ abstract class PageFileOpener {
 }
 
 class LocalPageFileOpener implements PageFileOpener {
-  /// The Chrome preview runner has no files or other apps to hand to.
-  static const webUnsupported =
-      'บนเบราว์เซอร์ไม่มีแอปอื่นให้เปิดไฟล์นี้ ดูไฟล์ในแอปบนมือถือ Android';
-
   @override
   Future<String?> open(
     Uint8List bytes, {
     required String fileName,
     String? mimeType,
   }) async {
-    if (kIsWeb) return webUnsupported;
+    if (kIsWeb) {
+      await FilePicker.saveFile(
+        fileName: fileName,
+        bytes: bytes,
+        mimeType: mimeType ?? 'application/octet-stream',
+      );
+      return null;
+    }
     final dir = await getTemporaryDirectory();
     final target = p.join(dir.path, 'pages', fileName);
     await Directory(p.dirname(target)).create(recursive: true);

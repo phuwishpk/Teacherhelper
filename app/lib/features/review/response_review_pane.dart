@@ -389,15 +389,21 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                   mimeType: d.pageMimeType,
                   answerBox: d.answerBox,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  d.answerBox != null
-                      ? 'กรอบสีแดงคือตำแหน่งคำตอบที่ AI พบ แตะภาพเพื่อขยาย'
-                      : d.answerNotFound
-                      ? 'AI ไม่พบตำแหน่งคำตอบของข้อนี้ในภาพ แตะภาพเพื่อขยาย'
-                      : 'แตะภาพเพื่อขยาย',
-                  style: muted,
-                ),
+                // A PDF has no drawn box and no zoom (DESIGN §25.7).
+                if (d.pageMimeType != 'application/pdf') ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    d.answerBox != null
+                        ? 'กรอบสีแดงคือตำแหน่งคำตอบที่ AI พบ แตะภาพเพื่อขยาย'
+                        : d.answerNotFound
+                        ? 'AI ไม่พบตำแหน่งคำตอบของข้อนี้ในภาพ แตะภาพเพื่อขยาย'
+                        : 'แตะภาพเพื่อขยาย',
+                    style: muted,
+                  ),
+                ] else if (d.answerNotFound) ...[
+                  const SizedBox(height: 4),
+                  Text('AI ไม่พบตำแหน่งคำตอบของข้อนี้ในไฟล์', style: muted),
+                ],
               ] else if (d.hasCrop)
                 ResponseCropImage(responseId: d.id)
               else

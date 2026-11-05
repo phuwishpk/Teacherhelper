@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:eduvision/core/api/response_crops.dart';
 import 'package:eduvision/core/api/submission_pages.dart';
 import 'package:eduvision/core/widgets/content_column.dart';
+import 'package:eduvision/core/widgets/inline_pdf.dart';
 import 'package:eduvision/core/widgets/submission_page_image.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
@@ -63,6 +64,24 @@ class _Opener implements PageFileOpener {
   }
 }
 
+/// The browser's PDF viewer as the web build has it (DESIGN §25.7).
+class _InlinePdf implements InlinePdf {
+  final shown = <List<int>>[];
+  final tabs = <List<int>>[];
+
+  @override
+  Widget view(Uint8List bytes) {
+    shown.add(bytes);
+    return const ColoredBox(
+      key: ValueKey('fake_pdf_viewer'),
+      color: Color(0xFFEEEEEE),
+    );
+  }
+
+  @override
+  void openInNewTab(Uint8List bytes) => tabs.add(bytes);
+}
+
 /// GET /responses/{id} of a whole-page answer (DESIGN §19.4).
 Map<String, dynamic> _wholePage({
   int id = 11,
@@ -106,8 +125,12 @@ Future<FakeReviewRepository> _detail(
   SubmissionPageLoader? pages,
   PageFileOpener? opener,
   PageDecoder? decoder,
+  InlinePdf? inlinePdf,
+  Size size = const Size(800, 3600),
 }) async {
-  _phone(tester);
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final repo = FakeReviewRepository(
     rows: [queueRow(id: json['id'] as int)],
     responses: {json['id'] as int: json},
@@ -127,6 +150,7 @@ Future<FakeReviewRepository> _detail(
       pageDecoderProvider.overrideWithValue(
         decoder ?? (_) async => throw Exception('cannot decode'),
       ),
+      inlinePdfProvider.overrideWithValue(inlinePdf),
     ],
   );
   return repo;
@@ -157,6 +181,48 @@ void main() {
       expect(opener.opened.single.$1, [1, 2, 3, 9]);
       expect(opener.opened.single.$2, 'page-9.pdf');
       expect(opener.opened.single.$3, 'application/pdf');
+    });
+
+    testWidgets('on the web a PDF page is shown in the pane (DESIGN §25.7)', (
+      tester,
+    ) async {
+      final opener = _Opener();
+      final pdf = _InlinePdf();
+      await _detail(tester, _wholePage(), opener: opener, inlinePdf: pdf);
+
+      expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsOneWidget);
+      expect(pdf.shown.single, [1, 2, 3, 9]);
+      expect(find.text('แสดงภาพนี้บนเครื่องนี้ไม่ได้'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('page_pdf_new_tab')));
+      await tester.pumpAndSettle();
+      expect(pdf.tabs.single, [1, 2, 3, 9]);
+
+      await tester.tap(find.byKey(const ValueKey('page_download')));
+      await tester.pumpAndSettle();
+      expect(opener.opened.single.$2, 'page-9.pdf');
+    });
+
+    for (final width in [390.0, 820.0, 1440.0]) {
+      testWidgets('the PDF on the web fits a $width px window', (tester) async {
+        await _detail(
+          tester,
+          _wholePage(),
+          inlinePdf: _InlinePdf(),
+          size: Size(width, 3600),
+        );
+        expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('a photo on the web is still drawn, not put in the viewer', (
+      tester,
+    ) async {
+      final pdf = _InlinePdf();
+      await _detail(tester, _wholePage(mime: 'image/heic'), inlinePdf: pdf);
+      expect(pdf.shown, isEmpty);
+      expect(find.text('แสดงภาพนี้บนเครื่องนี้ไม่ได้'), findsOneWidget);
     });
 
     testWidgets('a file no app can open says why', (tester) async {
