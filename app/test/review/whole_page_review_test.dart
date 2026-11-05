@@ -6,6 +6,7 @@ import 'package:eduvision/core/api/response_crops.dart';
 import 'package:eduvision/core/api/submission_pages.dart';
 import 'package:eduvision/core/widgets/content_column.dart';
 import 'package:eduvision/core/widgets/inline_pdf.dart';
+import 'package:eduvision/core/widgets/pdf_page_images.dart';
 import 'package:eduvision/core/widgets/submission_page_image.dart';
 import 'package:eduvision/features/assignments/assignment.dart';
 import 'package:eduvision/features/assignments/assignments_repository.dart';
@@ -82,11 +83,32 @@ class _InlinePdf implements InlinePdf {
   void openInNewTab(Uint8List bytes) => tabs.add(bytes);
 }
 
+/// Pages of a PDF drawn as images (pdf.js on the web, PdfRenderer on
+/// Android, DESIGN §46).
+class _PdfPages implements PdfPageImages {
+  _PdfPages({this.fails = false});
+
+  final bool fails;
+  final asked = <(List<int>, int)>[];
+
+  @override
+  Future<PdfPageImage> render(Uint8List pdf, int pageNo) async {
+    asked.add((pdf, pageNo));
+    if (fails) throw Exception('pdf.js failed');
+    return PdfPageImage(
+      bytes: Uint8List.fromList([7, 7, pageNo]),
+      page: pageNo,
+      pages: 2,
+    );
+  }
+}
+
 /// GET /responses/{id} of a whole-page answer (DESIGN §19.4).
 Map<String, dynamic> _wholePage({
   int id = 11,
   String mime = 'application/pdf',
   List<Object>? box,
+  int? page,
   bool notFound = false,
   String? aiExplanation,
   String? explanation = 'ตรวจการทดอีกครั้ง',
@@ -107,6 +129,7 @@ Map<String, dynamic> _wholePage({
   'page_image_url': '/api/v1/submission-pages/9/image',
   'page_mime_type': mime,
   'answer_box': box,
+  'answer_page': page,
   'explanation': explanation,
   'explanation_edited': aiExplanation != null,
   'ai_explanation': aiExplanation,
@@ -126,6 +149,7 @@ Future<FakeReviewRepository> _detail(
   PageFileOpener? opener,
   PageDecoder? decoder,
   InlinePdf? inlinePdf,
+  PdfPageImages? pdfPages,
   Size size = const Size(800, 3600),
 }) async {
   tester.view.physicalSize = size;
@@ -151,6 +175,7 @@ Future<FakeReviewRepository> _detail(
         decoder ?? (_) async => throw Exception('cannot decode'),
       ),
       inlinePdfProvider.overrideWithValue(inlinePdf),
+      pdfPageImagesProvider.overrideWithValue(pdfPages),
     ],
   );
   return repo;
@@ -212,6 +237,116 @@ void main() {
           size: Size(width, 3600),
         );
         expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('a PDF answer is drawn on its page with the red box (§46)', (
+      tester,
+    ) async {
+      final image = (await tester.runAsync(
+        () => createTestImage(width: 200, height: 300),
+      ))!;
+      final pages = _PdfPages();
+      final viewer = _InlinePdf();
+      final opener = _Opener();
+      final decoded = <List<int>>[];
+      await _detail(
+        tester,
+        _wholePage(box: [100, 200, 400, 800], page: 2),
+        decoder: (bytes) async {
+          decoded.add(bytes);
+          return image;
+        },
+        pdfPages: pages,
+        inlinePdf: viewer,
+        opener: opener,
+      );
+
+      expect(pages.asked.single.$1, [1, 2, 3, 9]);
+      expect(pages.asked.single.$2, 2);
+      expect(decoded.single, [7, 7, 2], reason: 'the drawn page, not the PDF');
+      final canvas = tester.widget<CustomPaint>(
+        find.byKey(const ValueKey('page_canvas')),
+      );
+      expect((canvas.painter! as PagePainter).answerBox, [100, 200, 400, 800]);
+      expect(find.text('หน้า 2 จาก 2 ของไฟล์ PDF'), findsOneWidget);
+      expect(find.textContaining('กรอบสีแดงคือตำแหน่งคำตอบ'), findsOneWidget);
+      expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsNothing);
+
+      // The whole file is still one tap away.
+      await tester.tap(find.byKey(const ValueKey('page_pdf_new_tab')));
+      await tester.pumpAndSettle();
+      expect(viewer.tabs.single, [1, 2, 3, 9]);
+      await tester.tap(find.byKey(const ValueKey('page_download')));
+      await tester.pumpAndSettle();
+      expect(opener.opened.single.$2, 'page-9.pdf');
+
+      await tester.tap(find.byKey(const ValueKey('page_canvas')));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+    });
+
+    testWidgets('on Android the PDF page is drawn too, without a new tab', (
+      tester,
+    ) async {
+      final image = (await tester.runAsync(
+        () => createTestImage(width: 200, height: 300),
+      ))!;
+      await _detail(
+        tester,
+        _wholePage(box: [100, 200, 400, 800], page: 1),
+        decoder: (_) async => image,
+        pdfPages: _PdfPages(),
+      );
+      expect(find.byKey(const ValueKey('page_canvas')), findsOneWidget);
+      expect(find.byKey(const ValueKey('page_pdf_new_tab')), findsNothing);
+      expect(find.byKey(const ValueKey('page_download')), findsOneWidget);
+    });
+
+    testWidgets('without the page, or when it cannot be drawn, the PDF stays '
+        'whole', (tester) async {
+      final pages = _PdfPages();
+      await _detail(
+        tester,
+        _wholePage(box: [100, 200, 400, 800]),
+        pdfPages: pages,
+        inlinePdf: _InlinePdf(),
+      );
+      expect(pages.asked, isEmpty, reason: 'a box read before §46 has no page');
+      expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsOneWidget);
+      expect(find.textContaining('กรอบสีแดง'), findsNothing);
+    });
+
+    testWidgets('a page pdf.js cannot draw falls back to the viewer', (
+      tester,
+    ) async {
+      await _detail(
+        tester,
+        _wholePage(box: [100, 200, 400, 800], page: 2),
+        pdfPages: _PdfPages(fails: true),
+        inlinePdf: _InlinePdf(),
+      );
+      expect(find.byKey(const ValueKey('fake_pdf_viewer')), findsOneWidget);
+      expect(find.byKey(const ValueKey('page_canvas')), findsNothing);
+    });
+
+    for (final width in [390.0, 820.0, 1440.0]) {
+      testWidgets('the PDF answer page fits a $width px window', (
+        tester,
+      ) async {
+        final image = (await tester.runAsync(
+          () => createTestImage(width: 200, height: 300),
+        ))!;
+        await _detail(
+          tester,
+          _wholePage(box: [100, 200, 400, 800], page: 2),
+          decoder: (_) async => image,
+          pdfPages: _PdfPages(),
+          inlinePdf: _InlinePdf(),
+          size: Size(width, 3600),
+        );
+        expect(find.byKey(const ValueKey('page_canvas')), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

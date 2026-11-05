@@ -32,6 +32,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *  has_crop, has_final_crop, crop_url, final_crop_url,
  *  channel, late, total_overridden, submission_page_id, page_image_url, page_mime_type,
  *  answer_box ([ymin, xmin, ymax, xmax] 0–1000 on that page, or null),
+ *  answer_page (the page of the file the box is on, 1-based, or null when not known, §46),
  *  ai_explanation (Gemini's text once the teacher edited it), explanation_source,
  *  auto_rule (blank_ink "ไม่ได้ตอบ" | cnn_match "อ่านด้วย CNN" | null, §21.3),
  *  reviewed_by, reviewed_at, appeal: {...}|null, score_events: [...],
@@ -126,6 +127,7 @@ class ResponseDetailResource extends JsonResource
             'page_image_url' => self::pageImageUrl($response),
             'page_mime_type' => $response->submissionPage?->mime_type,
             'answer_box' => is_array($response->extraction['answer_box'] ?? null) ? $response->extraction['answer_box'] : null,
+            'answer_page' => self::answerPage($response),
             'ai_explanation' => $response->ai_explanation,
             'explanation_source' => $response->explanation_source,
             'auto_rule' => $response->auto_rule,
@@ -149,6 +151,25 @@ class ResponseDetailResource extends JsonResource
                     'created_at' => $e->created_at?->toIso8601String(),
                 ])->all(),
         ];
+    }
+
+    /**
+     * The page of the handed-in file the answer box is on (DESIGN §46): what
+     * Gemini said when it is within the file; a file of one page (a photo,
+     * or a box read before §46 asked for the page) is on its only page.
+     */
+    private static function answerPage(Response $response): ?int
+    {
+        $pages = $response->submissionPage?->page_count;
+        if ($pages === null || ! is_array($response->extraction['answer_box'] ?? null)) {
+            return null;
+        }
+        $page = $response->extraction['answer_page'] ?? null;
+        if (is_int($page)) {
+            return $page >= 1 && $page <= $pages ? $page : null;
+        }
+
+        return $pages === 1 ? 1 : null;
     }
 
     public static function pageImageUrl(Response $response): ?string

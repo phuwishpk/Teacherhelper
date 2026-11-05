@@ -5882,3 +5882,25 @@ match /users/{uid}/settings/app {
 | 1 | backend: schema, `ClassroomPostImporter`, `ImportClassroomPostJob`, ไฟล์, การแก้/ลบตาม, แจ้งเตือน, 409 `post_from_classroom` (ทดสอบด้วย HTTP จำลอง `ClassroomPostImportTest`) | เสร็จในโค้ด |
 | 2 | แอป: ป้าย เมนู ข้อความในฟอร์ม | เสร็จ |
 | 3 | ลองกับคอร์สจริงบน production (คอร์ส Math1 m4/9) | ยังไม่ทำ |
+
+## 46. กรอบคำตอบบนไฟล์ PDF ที่ส่งมา
+
+ตัดสินใจ 6 พ.ย. 2569 (ผู้ใช้แจ้งว่างานที่ดึงจาก Classroom ซึ่งเป็น PDF ไม่มีกรอบสีแดงตรงคำตอบแบบรูปถ่าย และเลือก "กรอบแดงเหมือนรูป" ซึ่งเพิ่ม pdf.js ให้เว็บ) ต่อจาก §25.7
+
+### 46.1 ทำไมเดิมไม่มี
+
+- Gemini ส่ง `answer_box` ของ PDF มาอยู่แล้ว แต่ไม่บอกว่าอยู่หน้าไหน PDF หลายหน้าจึงวาดกรอบไม่ได้
+- แอปวาดกรอบบนภาพเท่านั้น PDF บน Android เปิดในแอปอื่น บนเว็บอยู่ในตัวดูของเบราว์เซอร์ (§25.7) ซึ่งวาดอะไรทับไม่ได้
+
+### 46.2 backend
+
+- prompt `extract_page.general.v3` (ต่อจาก v2 เพิ่มประโยคเดียว) และ schema: `answer_page` (integer ≥ 1) = หน้าของไฟล์ที่กรอบอยู่ (1 = หน้าแรก รูปถ่ายเป็น 1 เสมอ) ไม่บังคับ
+- `MultiExtraction` แยก `answer_page` ออกเหมือน `answer_box` (ค่าที่ไม่ใช่จำนวนเต็ม ≥ 1 ทิ้งเป็น null ไม่ถือว่าผิด) `WholePageGrader` เก็บไว้ใน `responses.extraction.answer_page` ไม่มี migration
+- `GET /responses/{id}` เพิ่ม `answer_page`: ค่าที่ Gemini บอกเมื่ออยู่ในไฟล์ (≤ `submission_pages.page_count`) ไฟล์หน้าเดียว (รูปถ่าย หรือ PDF หน้าเดียวที่อ่านก่อน §46) เป็น 1 นอกนั้น null (PDF หลายหน้าที่อ่านก่อน §46 ต้องตรวจใหม่จึงได้หน้า)
+
+### 46.3 แอป
+
+- `PdfPageImages` (`core/widgets/pdf_page_images.dart`): หน้าหนึ่งของ PDF เป็นภาพ บนเว็บใช้ pdf.js ผ่าน `kruRenderPdfPage` ของ `web/pdf_render.js` (PNG ด้านยาว 2,000 px) บน Android ใช้ `PdfRenderer` ตัวเดียวกับไฟล์ข้อสอบ (§22.4) ไม่เพิ่ม package ของ Dart
+- `SubmissionPageImage`: PDF ที่มีทั้ง `answer_box` และ `answer_page` วาดหน้านั้นพร้อมกรอบสีแดงและแตะขยายได้เหมือนรูปถ่าย ใต้ภาพมี "หน้า N จาก M ของไฟล์ PDF" ปุ่ม "เปิดทั้งไฟล์ในแท็บใหม่" (เว็บ) และ "ดาวน์โหลดไฟล์" วาดไม่ได้หรือไม่รู้หน้า → ทั้งไฟล์แบบเดิม (§25.7 บนเว็บ, เปิดในแอปอื่นบน Android)
+- **pdf.js**: `pdfjs-dist@4.10.38` legacy build อยู่ใน `app/web/pdfjs/` (Apache-2.0, ตรวจ `dist.integrity` ของ npm แล้ว เปลี่ยนนามสกุลเป็น `.js` ให้ web server ส่งเป็น JavaScript) ราว 1.8 MB โหลดด้วย dynamic import ครั้งแรกที่ต้องวาด PDF ไม่โหลดพร้อมแอป เรียกด้วย `isEvalSupported: false`, `disableFontFace: true` จึงผ่าน CSP เดิม (`script-src 'self'`, `worker-src 'self' blob:`) โดยไม่ต้องแก้ header ลองใน Chrome แบบ headless ด้วย CSP ของ production แล้ว: วาดหน้า 2 ของ PDF ภาษาไทยสองหน้าได้ถูก ไม่มีข้อความ CSP
+- **test**: backend `MultiExtractionTest`, `PromptsAndSchemasTest`, `WholePageGradingTest` (หน้าในไฟล์, เกินไฟล์ = null, อ่านก่อน §46); app `whole_page_review_test.dart` (กรอบบนหน้าที่ถูก, Android ไม่มีแท็บใหม่, ไม่รู้หน้าหรือวาดไม่ได้ = ทั้งไฟล์, 390/820/1440 px) ⚠️ ยังไม่ได้ลองบนเครื่อง Android จริงและ Safari

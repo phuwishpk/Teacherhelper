@@ -533,6 +533,7 @@ class ResponseDetail {
     this.submissionPageId,
     this.pageMimeType,
     this.answerBox,
+    this.answerPage,
     this.aiExplanation,
     this.explanationSource,
     this.totalOverridden = false,
@@ -588,6 +589,10 @@ class ResponseDetail {
   /// Where on the page the answer is: `[ymin, xmin, ymax, xmax]`, each
   /// 0–1000 (Gemini's `box_2d`), or null.
   final List<double>? answerBox;
+
+  /// The page of the file [answerBox] is on (1-based), null when not known
+  /// (a box on a PDF read before DESIGN §46).
+  final int? answerPage;
 
   /// Gemini's explanation, kept once the teacher edited it (§19.4).
   final String? aiExplanation;
@@ -677,6 +682,7 @@ class ResponseDetail {
       submissionPageId: _int(json['submission_page_id']),
       pageMimeType: json['page_mime_type'] as String?,
       answerBox: _box(json['answer_box']),
+      answerPage: _int(json['answer_page']),
       aiExplanation: json['ai_explanation'] as String?,
       explanationSource: json['explanation_source'] as String?,
       totalOverridden: _bool(

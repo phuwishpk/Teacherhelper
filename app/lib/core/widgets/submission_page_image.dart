@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../api/submission_pages.dart';
 import 'content_column.dart';
 import 'inline_pdf.dart';
+import 'pdf_page_images.dart';
 
 /// Decodes the bytes of a handed-in file into an image; throws when this
 /// device cannot (a PDF, HEIC without the codec, a damaged file).
@@ -34,12 +35,15 @@ final pageDecoderProvider = Provider<PageDecoder>((ref) => decodePageImage);
 /// "แสดงภาพนี้บนเครื่องนี้ไม่ได้" with "ดาวน์โหลดไฟล์" (opened by another
 /// app); grading is not affected because Gemini reads those files itself.
 /// On the web a PDF is drawn by the browser's viewer instead (DESIGN §25.7).
+/// A PDF answer whose page is known is drawn as that page with its box, on
+/// the web (pdf.js) and on the phone (DESIGN §46).
 class SubmissionPageImage extends ConsumerWidget {
   const SubmissionPageImage({
     super.key,
     required this.pageId,
     this.mimeType,
     this.answerBox,
+    this.answerPage,
     this.height = 360,
   });
 
@@ -48,6 +52,10 @@ class SubmissionPageImage extends ConsumerWidget {
 
   /// `[ymin, xmin, ymax, xmax]`, 0–1000.
   final List<double>? answerBox;
+
+  /// The page of the file [answerBox] is on (1-based); a PDF is drawn as
+  /// that page when it is known.
+  final int? answerPage;
   final double height;
 
   bool get _isPdf => mimeType == 'application/pdf';
@@ -58,6 +66,9 @@ class SubmissionPageImage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final file = ref.watch(submissionPageProvider(pageId));
     final inlinePdf = _isPdf ? ref.watch(inlinePdfProvider) : null;
+    final pdfPages = _isPdf && answerBox != null && answerPage != null
+        ? ref.watch(pdfPageImagesProvider)
+        : null;
     final theme = Theme.of(context);
     Widget box(Widget child) => Container(
       height: height,
@@ -101,31 +112,44 @@ class SubmissionPageImage extends ConsumerWidget {
           ),
         );
       },
-      data: (bytes) => _isPdf
-          ? inlinePdf != null
-                ? _InlinePdfPage(
-                    pageId: pageId,
-                    bytes: bytes,
-                    viewer: inlinePdf,
-                    // A page of text needs more room than a photo's box.
-                    height: height < _pdfHeight ? _pdfHeight : height,
-                  )
-                : box(
-                    _Undrawable(
-                      pageId: pageId,
-                      bytes: bytes,
-                      mimeType: mimeType,
-                    ),
-                  )
-          : _DecodedPage(
-              key: ValueKey(pageId),
-              pageId: pageId,
-              bytes: bytes,
-              mimeType: mimeType,
-              answerBox: answerBox,
-              height: height,
-              frame: box,
-            ),
+      data: (bytes) {
+        if (!_isPdf) {
+          return _DecodedPage(
+            key: ValueKey(pageId),
+            pageId: pageId,
+            bytes: bytes,
+            mimeType: mimeType,
+            answerBox: answerBox,
+            height: height,
+            frame: box,
+          );
+        }
+        final whole = inlinePdf != null
+            ? _InlinePdfPage(
+                pageId: pageId,
+                bytes: bytes,
+                viewer: inlinePdf,
+                // A page of text needs more room than a photo's box.
+                height: height < _pdfHeight ? _pdfHeight : height,
+              )
+            : box(
+                _Undrawable(pageId: pageId, bytes: bytes, mimeType: mimeType),
+              );
+        final page = answerPage;
+        if (pdfPages == null || page == null) return whole;
+        return _PdfAnswerPage(
+          key: ValueKey('pdf_${pageId}_$page'),
+          pageId: pageId,
+          pdf: bytes,
+          pageNo: page,
+          pages: pdfPages,
+          answerBox: answerBox,
+          height: height,
+          frame: box,
+          inlinePdf: inlinePdf,
+          fallback: whole,
+        );
+      },
     );
   }
 }
@@ -350,6 +374,103 @@ class _InlinePdfPage extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The page of a PDF the answer is on, drawn with its red box like a
+/// photo (DESIGN §46), with the page number and the whole file a tap away.
+/// [fallback] (the whole PDF) when the page cannot be drawn.
+class _PdfAnswerPage extends StatefulWidget {
+  const _PdfAnswerPage({
+    super.key,
+    required this.pageId,
+    required this.pdf,
+    required this.pageNo,
+    required this.pages,
+    required this.answerBox,
+    required this.height,
+    required this.frame,
+    required this.inlinePdf,
+    required this.fallback,
+  });
+
+  final int pageId;
+  final Uint8List pdf;
+  final int pageNo;
+  final PdfPageImages pages;
+  final List<double>? answerBox;
+  final double height;
+  final Widget Function(Widget child) frame;
+  final InlinePdf? inlinePdf;
+  final Widget fallback;
+
+  @override
+  State<_PdfAnswerPage> createState() => _PdfAnswerPageState();
+}
+
+class _PdfAnswerPageState extends State<_PdfAnswerPage> {
+  late final Future<PdfPageImage> _page = widget.pages.render(
+    widget.pdf,
+    widget.pageNo,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PdfPageImage>(
+      future: _page,
+      builder: (context, snap) {
+        if (snap.hasError) return widget.fallback;
+        final page = snap.data;
+        if (page == null) {
+          return widget.frame(const CircularProgressIndicator.adaptive());
+        }
+        final theme = Theme.of(context);
+        final total = page.pages;
+        return Column(
+          key: const ValueKey('page_pdf_answer'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _DecodedPage(
+              pageId: widget.pageId,
+              bytes: page.bytes,
+              mimeType: 'image/png',
+              answerBox: widget.answerBox,
+              height: widget.height,
+              frame: widget.frame,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  total != null
+                      ? 'หน้า ${page.page} จาก $total ของไฟล์ PDF'
+                      : 'หน้า ${page.page} ของไฟล์ PDF',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (widget.inlinePdf case final viewer?)
+                  OutlinedButton.icon(
+                    key: const ValueKey('page_pdf_new_tab'),
+                    onPressed: () => viewer.openInNewTab(widget.pdf),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('เปิดทั้งไฟล์ในแท็บใหม่'),
+                  ),
+                _DownloadButton(
+                  pageId: widget.pageId,
+                  bytes: widget.pdf,
+                  mimeType: 'application/pdf',
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -76,7 +76,7 @@ class ExamSheetController extends Controller
             'submission.assignment:id,classroom_id,title,kind',
             'appeal',
             'scoreEvents',
-            'submissionPage:id,mime_type',
+            'submissionPage:id,mime_type,page_count',
         ]));
     }
 

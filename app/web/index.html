@@ -31,6 +31,9 @@
 
   <title>Krucheck</title>
   <link rel="manifest" href="manifest.json">
+  <!-- kruRenderPdfPage: the page of a handed-in PDF with the answer, drawn by
+       pdf.js from web/pdfjs for the red answer box (DESIGN §46). -->
+  <script type="module" src="pdf_render.js"></script>
   <!-- The Google Picker of "เลือกจาก Google Drive" (DESIGN §30.15): the
        teacher grants drive.file in the browser and picks a file; the file
        comes back to the app as a link. No-op until the app is built with the
