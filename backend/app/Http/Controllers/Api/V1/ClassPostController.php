@@ -152,6 +152,7 @@ class ClassPostController extends Controller
         $teacher = $request->user();
         $post = $this->own($request, $id);
         ClosedClassrooms::assertOpen($post->classroom);
+        ClassPostGoogle::assertNotPulled($post);
         $data = $request->validate([
             'state' => ['sometimes', Rule::in(ClassPost::STATES)],
             ...self::rules(),
@@ -244,6 +245,7 @@ class ClassPostController extends Controller
     {
         $post = $this->own($request, $id);
         ClosedClassrooms::assertOpen($post->classroom);
+        ClassPostGoogle::assertNotPulled($post, deleting: true);
 
         DB::transaction(function () use ($post) {
             $fileIds = $post->attachments()->whereNotNull('class_post_file_id')->pluck('class_post_file_id')->map(fn ($id) => (int) $id)->all();
@@ -267,6 +269,7 @@ class ClassPostController extends Controller
     {
         $post = $this->own($request, $id);
         ClosedClassrooms::assertOpen($post->classroom);
+        ClassPostGoogle::assertNotPulled($post);
         if (! $post->isPublished()) {
             throw new ApiException('โพสต์นี้ยังไม่ได้เผยแพร่', 'post_not_published', 409);
         }

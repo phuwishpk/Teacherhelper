@@ -18,10 +18,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $size_bytes
  * @property string $sha256
  * @property string|null $drive_file_id
+ * @property string|null $source_drive_file_id
  */
 class ClassPostFile extends Model
 {
-    protected $fillable = ['owner_id', 'path', 'original_name', 'mime_type', 'size_bytes', 'sha256', 'drive_file_id'];
+    protected $fillable = ['owner_id', 'path', 'original_name', 'mime_type', 'size_bytes', 'sha256', 'drive_file_id', 'source_drive_file_id'];
 
     /**
      * @return array<string, string>

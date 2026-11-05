@@ -312,6 +312,56 @@ void main() {
       expect(find.text('ส่งไป Google Classroom แล้ว'), findsOneWidget);
     });
 
+    testWidgets('a post pulled in from Classroom is changed there', (
+      tester,
+    ) async {
+      _size(tester);
+      final files = _FakeFiles();
+      final posts = FakeClassPosts(
+        posts: [
+          _withGoogle(
+            announcementFixture(id: 1, body: 'เนื้อหา เซต'),
+            const PostGoogle(
+              linked: true,
+              state: GoogleSendState.sent,
+              link: 'https://classroom.google.com/c/1/p/9',
+              inClassroom: true,
+              fromClassroom: true,
+            ),
+          ),
+          _withGoogle(
+            announcementFixture(id: 2, body: 'จากคอร์สที่เลิกผูกแล้ว'),
+            const PostGoogle(
+              state: GoogleSendState.sent,
+              link: 'https://classroom.google.com/c/1/p/8',
+              inClassroom: true,
+              fromClassroom: true,
+            ),
+          ),
+        ],
+      );
+      await pumpScreen(
+        tester,
+        const ClassPostsScreen(classroomId: 7),
+        overrides: _teacher(posts, files: files),
+        extraRoutes: _routes,
+      );
+      expect(find.text('จาก Google Classroom'), findsNWidgets(2));
+      expect(find.text('อยู่ใน Classroom แล้ว'), findsNothing);
+      // Still linked: no menu at all; unlinked: only "ลบ".
+      expect(find.byKey(const ValueKey('post_menu_1')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('post_menu_2')));
+      await tester.pumpAndSettle();
+      expect(find.text('แก้ไข'), findsNothing);
+      expect(find.text('ลบ'), findsOneWidget);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('post_open_classroom_1')));
+      await tester.pumpAndSettle();
+      expect(files.links, ['https://classroom.google.com/c/1/p/9']);
+    });
+
     for (final width in [390.0, 820.0, 1440.0]) {
       testWidgets('fits a $width px window', (tester) async {
         _size(tester, Size(width, 900));
@@ -574,9 +624,18 @@ void main() {
       expect(posts.created.single.$2.sendToGoogle, isFalse);
     });
 
-    testWidgets('an unlinked classroom has no checkbox', (tester) async {
+    testWidgets('an unlinked classroom has no checkbox and says so', (
+      tester,
+    ) async {
       await pump(tester);
       expect(find.byKey(const ValueKey('post_send_google')), findsNothing);
+      expect(
+        find.text(
+          'ห้องนี้ยังไม่ได้ผูกกับ Google Classroom ของคุณ '
+          'โพสต์จะอยู่ใน Krucheck เท่านั้น',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the files of a copy in Classroom are locked', (tester) async {
@@ -908,6 +967,23 @@ void main() {
     expect(failed.google.state, GoogleSendState.failed);
     expect(failed.google.lastError, 'ติดต่อ Google ไม่ได้');
     expect(failed.google.inClassroom, isFalse);
+    expect(failed.google.fromClassroom, isFalse);
+
+    final pulled = ClassPost.fromJson({
+      'id': 11,
+      'kind': 'announcement',
+      'author': {'id': 2, 'name': 'ครูสมศรี'},
+      'audience': 'all',
+      'attachments': <Object?>[],
+      'google': {
+        'linked': true,
+        'state': 'sent',
+        'link': 'https://classroom.google.com/c/1/p/9',
+        'in_classroom': true,
+        'origin': 'classroom',
+      },
+    });
+    expect(pulled.google.fromClassroom, isTrue);
 
     final student = ClassPost.fromJson({
       'id': 9,

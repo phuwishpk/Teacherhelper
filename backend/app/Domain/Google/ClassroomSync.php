@@ -27,6 +27,9 @@ use Illuminate\Support\Facades\Log;
  *
  * 1. courseWork.list per course: new courseWork created on the Classroom
  *    website is mirrored (ImportCourseWorkJob, one per courseWork);
+ *    then its announcements and materials (ClassroomPostImporter::scan,
+ *    DESIGN §45): new or edited ones come in as class posts, deleted ones
+ *    go;
  * 2. the submissions of posted or imported assignments that are not closed
  *    (GoogleSubmissionSync: new hand-ins, late policy, Classroom's grades
  *    and grade conflicts, auto roster sync for unknown submitters), the
@@ -48,12 +51,12 @@ final class ClassroomSync
     ) {}
 
     /**
-     * @return array{courses: int, imports: int, assignments: int, failed: int, rosters: int}
+     * @return array{courses: int, imports: int, posts: int, assignments: int, failed: int, rosters: int}
      */
     public function run(?int $classroomId = null): array
     {
         $deadline = microtime(true) + max(1, (int) config('eduvision.classroom_sync.budget_seconds'));
-        $stats = ['courses' => 0, 'imports' => 0, 'assignments' => 0, 'failed' => 0, 'rosters' => 0];
+        $stats = ['courses' => 0, 'imports' => 0, 'posts' => 0, 'assignments' => 0, 'failed' => 0, 'rosters' => 0];
 
         $links = $this->links($classroomId);
         foreach ($links as $link) {
@@ -64,8 +67,9 @@ final class ClassroomSync
             if ($account === null || $account->needsReconnect()) {
                 continue;
             }
+            $api = GoogleApi::forAccount($account, $this->tokens);
             try {
-                foreach (CourseWorkImporter::newCourseWork(GoogleApi::forAccount($account, $this->tokens), $link) as $work) {
+                foreach (CourseWorkImporter::newCourseWork($api, $link) as $work) {
                     ImportCourseWorkJob::dispatch($link->classroom_id, $work, $link->id);
                     $stats['imports']++;
                 }
@@ -73,6 +77,14 @@ final class ClassroomSync
             } catch (GoogleApiException $e) {
                 $stats['failed']++;
                 Log::warning('google.coursework_list_failed', ['classroom_id' => $link->classroom_id, 'kind' => $e->kind]);
+            }
+            if (microtime(true) < $deadline && $account->fresh()?->needsReconnect() === false) {
+                try {
+                    $stats['posts'] += ClassroomPostImporter::scan($api, $link);
+                } catch (GoogleApiException $e) {
+                    $stats['failed']++;
+                    Log::warning('google.posts_list_failed', ['classroom_id' => $link->classroom_id, 'kind' => $e->kind]);
+                }
             }
             $link->work_synced_at = now();
             $link->save();
