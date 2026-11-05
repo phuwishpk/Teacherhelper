@@ -469,6 +469,14 @@ class _PostFormState extends ConsumerState<_PostForm> {
                   ? null
                   : (v) => setState(() => _sendToGoogle = v ?? true),
             ),
+          ] else ...[
+            section('Google Classroom'),
+            Text(
+              'ห้องนี้ยังไม่ได้ผูกกับ Google Classroom ของคุณ '
+              'โพสต์จะอยู่ใน Krucheck เท่านั้น',
+              key: const ValueKey('post_google_unlinked'),
+              style: muted,
+            ),
           ],
           if (!_published) ...[
             section('เผยแพร่เมื่อไร'),

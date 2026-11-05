@@ -9,7 +9,8 @@ import 'post_files.dart';
 /// One post as it reads in the stream: who and when, the text, the
 /// attachments. [menu] is the teacher's edit/delete button; [teacherView]
 /// adds the state, the recipients and the Google Classroom copy
-/// ([onRetryGoogle] sends a failed one again, DESIGN §30.4).
+/// ([onRetryGoogle] sends a failed one again, DESIGN §30.4), or where a
+/// post pulled in from Classroom came from (DESIGN §45).
 class PostCard extends ConsumerWidget {
   const PostCard({
     super.key,
@@ -169,7 +170,9 @@ class PostCard extends ConsumerWidget {
         StatusChip(label: post.state.label, color: scheme.tertiary),
       if (teacherView && post.google.state == GoogleSendState.queued)
         StatusChip(label: 'กำลังส่งไป Classroom', color: scheme.tertiary),
-      if (teacherView && post.google.state == GoogleSendState.sent)
+      if (teacherView && post.google.fromClassroom)
+        StatusChip(label: 'จาก Google Classroom', color: scheme.primary)
+      else if (teacherView && post.google.state == GoogleSendState.sent)
         StatusChip(label: 'อยู่ใน Classroom แล้ว', color: scheme.primary),
       if (teacherView && post.google.state == GoogleSendState.failed)
         StatusChip(label: 'ส่งไป Classroom ไม่สำเร็จ', color: scheme.error),

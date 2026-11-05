@@ -122,8 +122,9 @@ class ClassPostsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
               child: ListView.separated(
                 itemCount: list.length + 1,
-                separatorBuilder: (_, i) =>
-                    i == 0 ? const SizedBox.shrink() : const SizedBox(height: 12),
+                separatorBuilder: (_, i) => i == 0
+                    ? const SizedBox.shrink()
+                    : const SizedBox(height: 12),
                 itemBuilder: (context, i) {
                   if (i == 0) {
                     return const Align(
@@ -135,14 +136,17 @@ class ClassPostsScreen extends ConsumerWidget {
                     );
                   }
                   final p = list[i - 1];
+                  // A post pulled in from Classroom is changed there; it can
+                  // only be deleted once the classroom is unlinked (§45).
+                  final pulled = p.google.fromClassroom;
                   return PostCard(
                     key: ValueKey('post_${p.id}'),
                     post: p,
                     teacherView: true,
-                    onRetryGoogle: p.isMine && open
+                    onRetryGoogle: p.isMine && open && !pulled
                         ? () => _retryGoogle(context, ref, p)
                         : null,
-                    menu: p.isMine && open
+                    menu: p.isMine && open && (!pulled || !p.google.linked)
                         ? PopupMenuButton<String>(
                             key: ValueKey('post_menu_${p.id}'),
                             tooltip: 'ตัวเลือก',
@@ -154,10 +158,11 @@ class ClassPostsScreen extends ConsumerWidget {
                               _ => _delete(context, ref, p),
                             },
                             itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Text('แก้ไข'),
-                              ),
+                              if (!pulled)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('แก้ไข'),
+                                ),
                               if (!p.isPublished)
                                 const PopupMenuItem(
                                   value: 'publish',

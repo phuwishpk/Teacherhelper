@@ -147,6 +147,7 @@ class PostGoogle {
     this.link,
     this.sentAt,
     this.inClassroom = false,
+    this.fromClassroom = false,
   });
 
   factory PostGoogle.fromJson(Map<String, dynamic> json) => PostGoogle(
@@ -156,6 +157,7 @@ class PostGoogle {
     link: json['link'] as String?,
     sentAt: _time(json['sent_at']),
     inClassroom: json['in_classroom'] == true,
+    fromClassroom: json['origin'] == 'classroom',
   );
 
   /// The author linked the classroom to a course of theirs.
@@ -169,6 +171,10 @@ class PostGoogle {
 
   /// The copy exists: its files can no longer be changed (DESIGN §30.4).
   final bool inClassroom;
+
+  /// The teacher wrote the post on the Classroom website and the sync
+  /// pulled it in (DESIGN §45): it is changed in Classroom, not here.
+  final bool fromClassroom;
 }
 
 class ClassPost {
