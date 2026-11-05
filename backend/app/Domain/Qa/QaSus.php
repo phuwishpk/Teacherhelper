@@ -2,6 +2,8 @@
 
 namespace App\Domain\Qa;
 
+use Illuminate\Validation\Rule;
+
 /**
  * The System Usability Scale as the literature defines it (DESIGN §39.9).
  *
@@ -75,6 +77,49 @@ final class QaSus
     public const PLATFORMS = ['web' => 'เว็บ', 'android' => 'Android', 'ios' => 'iOS'];
 
     public const EXPERIENCE = ['first' => 'ใช้ครั้งแรกในการทดสอบนี้', 'some' => 'เคยใช้มาบ้าง', 'regular' => 'ใช้เป็นประจำ'];
+
+    /**
+     * The validation of the questionnaire form, shared by /sus and
+     * /usability: the ten items, Bangor's adjective, device and experience.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, string>} rules, messages
+     */
+    public static function formRules(): array
+    {
+        $rules = [
+            'platform' => ['required', Rule::in(array_keys(self::PLATFORMS))],
+            'experience' => ['required', Rule::in(array_keys(self::EXPERIENCE))],
+            'adjective' => ['required', 'integer', 'between:1,7'],
+            'comment' => ['nullable', 'string', 'max:2000'],
+        ];
+        $messages = ['adjective.required' => 'เลือกความเป็นมิตรต่อผู้ใช้โดยรวม (ข้อ 11)', 'platform.required' => 'เลือกอุปกรณ์ที่ใช้', 'experience.required' => 'เลือกประสบการณ์กับ Krucheck'];
+        foreach (range(1, 10) as $n) {
+            $rules["q{$n}"] = ['required', 'integer', 'between:1,5'];
+            $messages["q{$n}.required"] = "ตอบข้อ {$n} (ไม่แน่ใจให้เลือก 3)";
+        }
+
+        return [$rules, $messages];
+    }
+
+    /**
+     * A qa_sus_responses row from a validated form.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function responseFrom(array $data): array
+    {
+        $answers = array_map(fn (int $n) => (int) $data["q{$n}"], range(1, 10));
+
+        return [
+            'answers' => $answers,
+            'score' => self::score($answers),
+            'adjective' => (int) $data['adjective'],
+            'platform' => $data['platform'],
+            'experience' => $data['experience'],
+            'comment' => filled($data['comment'] ?? null) ? trim((string) $data['comment']) : null,
+        ];
+    }
 
     /** 0–100, or null unless there are exactly ten answers of 1–5. */
     public static function score(array $answers): ?float

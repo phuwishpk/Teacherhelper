@@ -14,13 +14,17 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
  * usability results; `is_lead` marks the person running the tests. An
  * `evaluator` signs in to the separate SUS pages at /sus (guard `sus`, plain
  * pages of their own look, not a Filament panel) and only answers the SUS
- * questionnaire (§39.9).
+ * questionnaire (§39.9). A `participant` signed themselves up at
+ * /usability with a name, an occupation and the group's code, rates the
+ * four tasks of the short set there and answers SUS; the account has no
+ * usable email or password, so it opens nothing else (§39.10).
  *
  * @property int $id
  * @property string $name
+ * @property string|null $occupation
  * @property string $email
  * @property bool $is_lead
- * @property string $role tester|evaluator
+ * @property string $role tester|evaluator|participant
  */
 class QaTester extends Authenticatable implements FilamentUser, HasName
 {
@@ -30,9 +34,16 @@ class QaTester extends Authenticatable implements FilamentUser, HasName
     /** Answers the SUS questionnaire in /sus only (DESIGN §39.9). */
     public const ROLE_EVALUATOR = 'evaluator';
 
+    /** Signed up at /usability: the short set and SUS, nothing else (DESIGN §39.10). */
+    public const ROLE_PARTICIPANT = 'participant';
+
+    /** The roles a tester or an admin gives an account; participants sign themselves up. */
     public const ROLES = [self::ROLE_TESTER => 'ผู้ทดสอบ', self::ROLE_EVALUATOR => 'ผู้ประเมิน SUS'];
 
-    protected $fillable = ['name', 'email', 'password', 'is_lead', 'role'];
+    /** @var array<string, string> every role, for lists */
+    public const ROLE_LABELS = [...self::ROLES, self::ROLE_PARTICIPANT => 'ผู้เข้าร่วมทดสอบ'];
+
+    protected $fillable = ['name', 'occupation', 'email', 'password', 'is_lead', 'role'];
 
     protected $attributes = ['role' => self::ROLE_TESTER];
 
@@ -55,6 +66,11 @@ class QaTester extends Authenticatable implements FilamentUser, HasName
     public function isEvaluator(): bool
     {
         return $this->role === self::ROLE_EVALUATOR;
+    }
+
+    public function isParticipant(): bool
+    {
+        return $this->role === self::ROLE_PARTICIPANT;
     }
 
     public function getFilamentName(): string

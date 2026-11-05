@@ -10,7 +10,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 /**
  * The SUS questionnaire for evaluators (DESIGN §39.9): pages of their own
@@ -21,7 +20,7 @@ use Illuminate\Validation\Rule;
  */
 class SusController extends Controller
 {
-    private const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+    public const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 
     public function showLogin(): Response|RedirectResponse
     {
@@ -88,31 +87,13 @@ class SusController extends Controller
             return redirect()->route('sus.form', ['role' => $role]);
         }
 
-        $messages = ['adjective.required' => 'เลือกความเป็นมิตรต่อผู้ใช้โดยรวม (ข้อ 11)', 'platform.required' => 'เลือกอุปกรณ์ที่ใช้', 'experience.required' => 'เลือกประสบการณ์กับ Krucheck'];
-        foreach (range(1, 10) as $n) {
-            $messages["q{$n}.required"] = "ตอบข้อ {$n} (ไม่แน่ใจให้เลือก 3)";
-        }
-        $rules = [
-            'platform' => ['required', Rule::in(array_keys(QaSus::PLATFORMS))],
-            'experience' => ['required', Rule::in(array_keys(QaSus::EXPERIENCE))],
-            'adjective' => ['required', 'integer', 'between:1,7'],
-            'comment' => ['nullable', 'string', 'max:2000'],
-        ];
-        foreach (range(1, 10) as $n) {
-            $rules["q{$n}"] = ['required', 'integer', 'between:1,5'];
-        }
+        [$rules, $messages] = QaSus::formRules();
         $data = $request->validate($rules, $messages);
 
-        $answers = array_map(fn (int $n) => (int) $data["q{$n}"], range(1, 10));
         QaSusResponse::query()->create([
             'qa_tester_id' => $evaluator->id,
             'role' => $role,
-            'answers' => $answers,
-            'score' => QaSus::score($answers),
-            'adjective' => (int) $data['adjective'],
-            'platform' => $data['platform'],
-            'experience' => $data['experience'],
-            'comment' => filled($data['comment'] ?? null) ? trim($data['comment']) : null,
+            ...QaSus::responseFrom($data),
         ]);
 
         return redirect()->route('sus.form', ['role' => $role])->with('sus_sent', $role);

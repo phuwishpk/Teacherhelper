@@ -159,6 +159,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('admin-handoff-link', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
         // The SUS sign-in (DESIGN §39.9): per IP and email, like a login form.
         RateLimiter::for('sus-login', fn (Request $request) => Limit::perMinute(5)->by($request->ip().'|'.mb_strtolower((string) $request->input('email'))));
+        // Sign-up at /usability (DESIGN §39.10): a six-digit code, so per IP and
+        // for the whole site, which no handful of real participants comes near.
+        RateLimiter::for('usability-signup', fn (Request $request) => [
+            Limit::perMinute(5)->by('ip|'.$request->ip()),
+            Limit::perMinute(30)->by('all'),
+        ]);
         // The web app redeems an impersonation ticket once (§29.14): a bad one only answers 422.
         RateLimiter::for('impersonate', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
 

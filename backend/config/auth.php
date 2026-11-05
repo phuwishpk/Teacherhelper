@@ -55,6 +55,12 @@ return [
             'driver' => 'session',
             'provider' => 'qa_testers',
         ],
+
+        // The participants' pages at /usability (DESIGN §39.10): role participant.
+        'usability' => [
+            'driver' => 'session',
+            'provider' => 'qa_testers',
+        ],
     ],
 
     /*

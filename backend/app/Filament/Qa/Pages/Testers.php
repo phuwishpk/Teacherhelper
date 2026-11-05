@@ -4,6 +4,7 @@ namespace App\Filament\Qa\Pages;
 
 use App\Domain\Qa\QaBoard;
 use App\Domain\Qa\QaCatalog;
+use App\Domain\Qa\QaSignupCode;
 use App\Models\QaTester;
 use BackedEnum;
 use Filament\Facades\Filament;
@@ -17,7 +18,9 @@ use Illuminate\Validation\Rule;
  * "ผู้ทดสอบ" (DESIGN §39.6, §39.9): the testers and the SUS evaluators.
  * Any tester adds a tester or an evaluator (name, email, password, role);
  * only the lead removes people or makes a tester lead. Krucheck admins
- * manage the same accounts at /admin.
+ * manage the same accounts at /admin. The lead also opens sign-up for
+ * outside participants at /usability with a new group code, shown once,
+ * and closes it (§39.10).
  */
 class Testers extends Page
 {
@@ -42,6 +45,9 @@ class Testers extends Page
     /** QaTester::ROLE_TESTER or QaTester::ROLE_EVALUATOR. */
     public string $role = QaTester::ROLE_TESTER;
 
+    /** The group code just made, in clear until the page is left (it is kept hashed). */
+    public ?string $newCode = null;
+
     public function board(): QaBoard
     {
         return new QaBoard;
@@ -51,6 +57,40 @@ class Testers extends Page
     public function evaluators()
     {
         return QaTester::query()->where('role', QaTester::ROLE_EVALUATOR)->withCount('susResponses')->orderBy('name')->get();
+    }
+
+    /** @return Collection<int, QaTester> */
+    public function participants()
+    {
+        $codes = array_column(QaCatalog::ofKind(QaCatalog::QUICK), 'code');
+
+        return QaTester::query()->where('role', QaTester::ROLE_PARTICIPANT)
+            ->withCount(['results' => fn ($q) => $q->whereIn('case_code', $codes)->whereNotNull('status'), 'susResponses'])
+            ->orderBy('created_at')->get();
+    }
+
+    public function signupOpen(): bool
+    {
+        return QaSignupCode::isOpen();
+    }
+
+    public function renewSignupCode(): void
+    {
+        if (! $this->me()->is_lead) {
+            return;
+        }
+        $this->newCode = QaSignupCode::renew();
+        Notification::make()->title('สร้างรหัสกลุ่มใหม่แล้ว รหัสเดิมใช้ไม่ได้อีก')->success()->send();
+    }
+
+    public function closeSignup(): void
+    {
+        if (! $this->me()->is_lead) {
+            return;
+        }
+        QaSignupCode::close();
+        $this->newCode = null;
+        Notification::make()->title('ปิดรับผู้เข้าร่วมทดสอบแล้ว')->success()->send();
     }
 
     public function me(): QaTester

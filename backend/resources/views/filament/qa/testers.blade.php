@@ -37,6 +37,50 @@
     </x-filament::section>
 
     <x-filament::section>
+        <x-slot name="heading">ผู้เข้าร่วมทดสอบ ({{ $this->participants()->count() }} คน)</x-slot>
+        <x-slot name="description">คนนอกทีมลงทะเบียนเองที่ {{ url('/usability') }} ด้วยชื่อ อาชีพ และรหัสกลุ่ม แล้วให้คะแนนงานชุดย่อ {{ count(QaCatalog::ofKind(QaCatalog::QUICK)) }} งานกับทำ SUS เอง ผลอยู่ในรายงาน Usability</x-slot>
+        <div class="qa-row" style="margin-bottom:12px;">
+            @if ($this->signupOpen())
+                <x-filament::badge color="success">เปิดรับอยู่</x-filament::badge>
+            @else
+                <x-filament::badge color="gray">ปิดรับ</x-filament::badge>
+            @endif
+            @if ($me->is_lead)
+                <x-filament::button size="sm" wire:click="renewSignupCode" wire:confirm="สร้างรหัสกลุ่มใหม่? รหัสเดิมจะใช้ไม่ได้">{{ $this->signupOpen() ? 'สร้างรหัสใหม่' : 'เปิดรับและสร้างรหัส' }}</x-filament::button>
+                @if ($this->signupOpen())
+                    <x-filament::button size="sm" color="gray" wire:click="closeSignup">ปิดรับ</x-filament::button>
+                @endif
+            @else
+                <span class="qa-small qa-muted">หัวหน้าทดสอบเป็นผู้เปิดหรือปิดรับ</span>
+            @endif
+        </div>
+        @if ($newCode !== null)
+            <p class="qa-small">รหัสกลุ่ม <span class="qa-code" style="font-size:1.4rem;letter-spacing:.15em;">{{ $newCode }}</span> แสดงครั้งเดียว จดหรือบอกผู้เข้าร่วมตอนนี้ ระบบเก็บไว้แบบอ่านกลับไม่ได้</p>
+        @endif
+        @if ($this->participants()->isEmpty())
+            <p class="qa-muted qa-small">ยังไม่มีผู้เข้าร่วม</p>
+        @else
+            <div class="qa-table-wrap"><table class="qa-table">
+                <thead><tr><th>ชื่อ</th><th>อาชีพ</th><th class="qa-num">งานที่บันทึก</th><th>SUS</th><th>ลงทะเบียน</th>@if ($me->is_lead)<th></th>@endif</tr></thead>
+                <tbody>
+                @foreach ($this->participants() as $p)
+                    <tr wire:key="participant-{{ $p->id }}">
+                        <td>{{ $p->name }}</td>
+                        <td class="qa-small">{{ $p->occupation }}</td>
+                        <td class="qa-num">{{ $p->results_count }}/{{ count(QaCatalog::ofKind(QaCatalog::QUICK)) }}</td>
+                        <td class="qa-small">{{ $p->sus_responses_count > 0 ? 'ส่งแล้ว' : 'ยังไม่ส่ง' }}</td>
+                        <td class="qa-small qa-muted">{{ $p->created_at?->timezone('Asia/Bangkok')->format('d/m H:i') }}</td>
+                        @if ($me->is_lead)
+                            <td><x-filament::button size="xs" color="danger" wire:click="removeTester({{ $p->id }})" wire:confirm="ลบ {{ $p->name }} และคำตอบทั้งหมดของเขา?">ลบ</x-filament::button></td>
+                        @endif
+                    </tr>
+                @endforeach
+                </tbody>
+            </table></div>
+        @endif
+    </x-filament::section>
+
+    <x-filament::section>
         <x-slot name="heading">ผู้ประเมิน SUS ({{ $this->evaluators()->count() }} คน)</x-slot>
         <x-slot name="description">ผู้ประเมินตอบแบบประเมิน SUS ที่ {{ url('/sus') }} อย่างเดียว ไม่เห็น Test Lab ควรเป็นผู้ใช้ที่ไม่ได้อยู่ในทีมพัฒนาหรือทีมทดสอบ</x-slot>
         @if ($this->evaluators()->isEmpty())

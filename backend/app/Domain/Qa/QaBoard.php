@@ -109,12 +109,14 @@ final class QaBoard
         return [null, 'ยังไม่ทดสอบ', 'gray'];
     }
 
-    /** @return array{n: int, success: int, assisted: int, fail: int, avg_time: float|null, avg_errors: float|null} */
+    /** @return array{n: int, success: int, assisted: int, fail: int, avg_time: float|null, avg_errors: float|null, avg_ease: float|null} */
     public function usability(string $code): array
     {
         $rows = $this->resultsFor($code)->filter(fn (QaResult $r) => $r->status !== 'skip')->values();
         $times = $rows->filter(fn (QaResult $r) => $r->status !== 'fail' && $r->time_sec !== null)->pluck('time_sec');
         $errors = $rows->filter(fn (QaResult $r) => $r->error_count !== null)->pluck('error_count');
+        // Rated by participants themselves at /usability (DESIGN §39.10).
+        $ease = $rows->filter(fn (QaResult $r) => $r->ease !== null)->pluck('ease');
 
         return [
             'n' => $rows->count(),
@@ -123,6 +125,7 @@ final class QaBoard
             'fail' => $rows->where('status', 'fail')->count(),
             'avg_time' => $times->isEmpty() ? null : (float) $times->avg(),
             'avg_errors' => $errors->isEmpty() ? null : (float) $errors->avg(),
+            'avg_ease' => $ease->isEmpty() ? null : (float) $ease->avg(),
         ];
     }
 

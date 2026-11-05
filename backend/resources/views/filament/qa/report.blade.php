@@ -30,8 +30,9 @@
     <x-filament::section>
         <x-slot name="heading">วิธีทดสอบ</x-slot>
         <p class="qa-small">
-            ผู้ทดสอบภายนอกแต่ละคนทำ {{ count($tasks) }} งานบนระบบสาธิตโดยไม่มีคนบอกวิธี (think-aloud) ผู้ดูแลจับเวลาตั้งแต่ผู้ทดสอบอ่านโจทย์จบ
-            นับครั้งที่ทำผิด และบันทึกว่าสำเร็จเอง สำเร็จเมื่อมีคนช่วย หรือไม่สำเร็จ จากนั้นตอบแบบประเมิน SUS ที่หน้า /sus ด้วยบัญชีผู้ประเมิน (เกณฑ์เทียบ {{ QaSus::BENCHMARK }})
+            ผู้ทดสอบภายนอกแต่ละคนทำ {{ count($tasks) }} งานบนระบบสาธิตโดยไม่มีคนบอกวิธี ผู้เข้าร่วมลงทะเบียนเองที่ /usability ด้วยชื่อและอาชีพ
+            แล้วบันทึกเองว่าแต่ละงานทำได้เอง ทำได้เมื่อมีคนช่วย หรือทำไม่ได้ พร้อมให้คะแนนความง่าย 1–5 และตอบแบบประเมิน SUS ต่อทันที (เกณฑ์เทียบ {{ QaSus::BENCHMARK }})
+            ถ้าทีมสังเกตแทน ผู้ดูแลจับเวลาตั้งแต่ผู้ทดสอบอ่านโจทย์จบ นับครั้งที่ทำผิด และบันทึกผลที่ Test Lab
         </p>
         <div class="qa-stats" style="margin-top:12px;">
             <div class="qa-stat"><span class="k">ผู้ทดสอบ</span><span class="v">{{ count($people) }} / {{ $min }}</span>
@@ -45,7 +46,7 @@
         <x-slot name="heading">ผลต่องาน</x-slot>
         <div class="qa-table-wrap">
             <table class="qa-table">
-                <thead><tr><th>งาน</th><th>ผู้ทำ</th><th>สำเร็จเอง</th><th>มีคนช่วย</th><th>ไม่สำเร็จ</th><th>อัตราสำเร็จเอง</th><th>เวลาเฉลี่ย</th><th>ทำผิดเฉลี่ย</th></tr></thead>
+                <thead><tr><th>งาน</th><th>ผู้ทำ</th><th>สำเร็จเอง</th><th>มีคนช่วย</th><th>ไม่สำเร็จ</th><th>อัตราสำเร็จเอง</th><th>ความง่ายเฉลี่ย</th><th>เวลาเฉลี่ย</th><th>ทำผิดเฉลี่ย</th></tr></thead>
                 <tbody>
                     @foreach ($tasks as $t)
                         @php $u = $board->usability($t['code']); @endphp
@@ -56,6 +57,7 @@
                             <td class="qa-num">{{ $u['assisted'] }}</td>
                             <td class="qa-num">{{ $u['fail'] }}</td>
                             <td class="qa-num">{{ $u['n'] === 0 ? '—' : round($u['success'] / $u['n'] * 100).'%' }}</td>
+                            <td class="qa-num">{{ $u['avg_ease'] === null ? '—' : number_format($u['avg_ease'], 1).' / 5' }}</td>
                             <td class="qa-num">{{ $time($u['avg_time']) }}</td>
                             <td class="qa-num">{{ $u['avg_errors'] === null ? '—' : number_format($u['avg_errors'], 1) }}</td>
                         </tr>
@@ -72,11 +74,12 @@
         @else
             <div class="qa-table-wrap">
                 <table class="qa-table">
-                    <thead><tr><th>ผู้ทดสอบ</th>@foreach ($tasks as $t)<th>{{ $t['code'] }}</th>@endforeach</tr></thead>
+                    <thead><tr><th>ผู้ทดสอบ</th><th>อาชีพ</th>@foreach ($tasks as $t)<th>{{ $t['code'] }}</th>@endforeach<th>SUS</th></tr></thead>
                     <tbody>
                         @foreach ($people as $p)
                             <tr wire:key="person-{{ $p->id }}">
                                 <td>{{ $p->name }}</td>
+                                <td class="qa-small">{{ $p->occupation ?? '—' }}</td>
                                 @foreach ($tasks as $t)
                                     @php $r = $board->result($p->id, $t['code']); @endphp
                                     <td class="qa-small">
@@ -84,9 +87,12 @@
                                             <span class="qa-muted">—</span>
                                         @else
                                             {{ $statusLabels[$r->status][0] ?? $r->status }}@if ($r->time_sec !== null)<br><span class="qa-muted">{{ $time((float) $r->time_sec) }}</span>@endif
+                                            @if ($r->ease !== null)<br><span class="qa-muted">ง่าย {{ $r->ease }}/5</span>@endif
                                         @endif
                                     </td>
                                 @endforeach
+                                @php $own = $board->susResponses()->firstWhere('qa_tester_id', $p->id); @endphp
+                                <td class="qa-num">{{ $own === null ? '—' : number_format((float) $own->score, 1) }}</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -70,7 +70,7 @@ class QaTesterResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('ชื่อ')->searchable()->sortable(),
                 TextColumn::make('email')->label('อีเมล')->searchable(),
-                TextColumn::make('role')->label('บทบาท')->formatStateUsing(fn (string $state) => QaTester::ROLES[$state] ?? $state)->badge(),
+                TextColumn::make('role')->label('บทบาท')->formatStateUsing(fn (string $state) => QaTester::ROLE_LABELS[$state] ?? $state)->badge(),
                 IconColumn::make('is_lead')->label('หัวหน้า')->boolean(),
                 TextColumn::make('results_count')
                     ->label('ผลที่กรอก')

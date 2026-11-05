@@ -71,7 +71,7 @@
     .stack .choice span em { font-style: normal; font-weight: 400; color: var(--muted); margin-left: 6px; }
     .stack .choice input:checked + span em { color: inherit; opacity: .85; }
     label.field { display: grid; gap: 6px; font-weight: 600; }
-    input[type=email], input[type=password], textarea {
+    input[type=email], input[type=password], input[type=text], textarea {
         width: 100%; font: inherit; color: inherit; background: var(--paper);
         border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px;
     }
@@ -100,7 +100,7 @@
         @yield('header-end')
     </header>
     @yield('content')
-    <footer>แบบประเมิน System Usability Scale (SUS) · ใช้เพื่อปรับปรุง Krucheck เท่านั้น</footer>
+    <footer>@yield('footer', 'แบบประเมิน System Usability Scale (SUS) · ใช้เพื่อปรับปรุง Krucheck เท่านั้น')</footer>
 </div>
 </body>
 </html>

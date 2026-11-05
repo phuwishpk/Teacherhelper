@@ -7,6 +7,7 @@ use App\Http\Controllers\GoogleOAuthCallbackController;
 use App\Http\Controllers\GoogleSignInCallbackController;
 use App\Http\Controllers\ResultLinkController;
 use App\Http\Controllers\Sus\SusController;
+use App\Http\Controllers\Usability\UsabilityController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
@@ -80,4 +81,15 @@ Route::prefix('sus')->name('sus.')->group(function () {
     Route::post('logout', [SusController::class, 'logout'])->name('logout');
     Route::get('/', [SusController::class, 'show'])->name('form');
     Route::post('/', [SusController::class, 'store'])->name('store');
+});
+
+// Outside participants of the short usability set (DESIGN §39.10): sign up
+// with a name, an occupation and the group's code, rate the four tasks,
+// answer SUS. Same look as /sus, guard `usability`, role participant.
+Route::prefix('usability')->name('usability.')->group(function () {
+    Route::get('/', [UsabilityController::class, 'show'])->name('show');
+    Route::post('signup', [UsabilityController::class, 'signup'])->middleware('throttle:usability-signup')->name('signup');
+    Route::post('tasks/{code}', [UsabilityController::class, 'saveTask'])->where('code', '[A-Z0-9-]{1,20}')->name('task');
+    Route::get('sus', [UsabilityController::class, 'showSus'])->name('sus');
+    Route::post('sus', [UsabilityController::class, 'storeSus'])->name('sus.store');
 });
