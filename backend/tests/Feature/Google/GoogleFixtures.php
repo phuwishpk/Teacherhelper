@@ -99,6 +99,9 @@ trait GoogleFixtures
             'oauth2.googleapis.com/revoke' => Http::response([]),
             // The private announcement every publish sends (§19.7).
             'classroom.googleapis.com/v1/courses/*/announcements' => Http::response(['id' => 'announcement-1', 'alternateLink' => 'https://classroom.google.com/a/1']),
+            // Every sync round lists the posts written on the Classroom website (§45): none by default.
+            'classroom.googleapis.com/v1/courses/*/announcements?*' => Http::response(['announcements' => []]),
+            'classroom.googleapis.com/v1/courses/*/courseWorkMaterials?*' => Http::response(['courseWorkMaterial' => []]),
         ]);
     }
 

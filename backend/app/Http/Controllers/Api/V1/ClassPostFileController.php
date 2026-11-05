@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\ClassPosts\ClassPostFileTypes;
 use App\Domain\ClassPosts\ClassPosts;
 use App\Domain\Classrooms\ClassroomAccess;
 use App\Exceptions\ApiException;
@@ -27,31 +28,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ClassPostFileController extends Controller
 {
-    /** Detected MIME type => the extension the file is stored with. */
-    private const TYPES = [
-        'application/pdf' => 'pdf',
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
-        'image/heic' => 'heic',
-        'image/heif' => 'heic',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
-        'application/msword' => 'doc',
-        'application/vnd.ms-excel' => 'xls',
-        'application/vnd.ms-powerpoint' => 'ppt',
-    ];
-
-    /** Containers the detector reports for Office files: the name's extension then decides. */
-    private const CONTAINERS = [
-        'application/zip' => ['docx', 'xlsx', 'pptx'],
-        'application/octet-stream' => ['docx', 'xlsx', 'pptx'],
-        'application/vnd.ms-office' => ['doc', 'xls', 'ppt'],
-        'application/x-ole-storage' => ['doc', 'xls', 'ppt'],
-        'application/cdfv2' => ['doc', 'xls', 'ppt'],
-    ];
-
     /**
      * POST /api/v1/class-post-files multipart `file` -> 201 {data: {id,
      * name, mime_type, size_bytes, download_url}, usage: {used_bytes,
@@ -91,7 +67,7 @@ class ClassPostFileController extends Controller
             return ClassPostFile::create([
                 'owner_id' => $teacher->id,
                 'path' => $path,
-                'original_name' => self::name($upload, $extension),
+                'original_name' => ClassPostFileTypes::name($upload->getClientOriginalName(), $extension),
                 'mime_type' => $mime,
                 'size_bytes' => $size,
                 'sha256' => (string) hash_file('sha256', $upload->getRealPath()),
@@ -166,25 +142,15 @@ class ClassPostFileController extends Controller
     private static function type(UploadedFile $upload): array
     {
         // finfo on the bytes: UploadedFile::getMimeType() may fall back to the name.
-        $mime = strtolower((string) (new finfo(FILEINFO_MIME_TYPE))->file($upload->getRealPath()));
-        $named = strtolower((string) $upload->getClientOriginalExtension());
-        if (isset(self::TYPES[$mime])) {
-            return [$mime, self::TYPES[$mime]];
-        }
-        if (in_array($named, self::CONTAINERS[$mime] ?? [], true)) {
-            return [(string) array_search($named, self::TYPES, true), $named];
+        $type = ClassPostFileTypes::of(
+            (string) (new finfo(FILEINFO_MIME_TYPE))->file($upload->getRealPath()),
+            $upload->getClientOriginalName(),
+        );
+        if ($type !== null) {
+            return $type;
         }
         $message = 'แนบได้เฉพาะไฟล์ PDF รูปภาพ และไฟล์ Word, Excel, PowerPoint';
 
         throw new ApiException($message, 'file_type_unsupported', 422, ['file' => [$message]]);
-    }
-
-    /** The name the teacher gave, without a path, ending with the stored extension. */
-    private static function name(UploadedFile $upload, string $extension): string
-    {
-        $base = trim((string) preg_replace('/[\x00-\x1F\x7F\/\\\\]+/u', ' ', pathinfo($upload->getClientOriginalName(), PATHINFO_FILENAME)));
-        $base = $base === '' ? 'file' : Str::limit($base, 200, '');
-
-        return $base.'.'.$extension;
     }
 }

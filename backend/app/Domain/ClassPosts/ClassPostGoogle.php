@@ -8,6 +8,7 @@ use App\Domain\Google\GoogleAccessTokens;
 use App\Domain\Google\GoogleApi;
 use App\Domain\Google\GoogleApiException;
 use App\Domain\Google\GoogleErrors;
+use App\Exceptions\ApiException;
 use App\Jobs\DeleteClassPostGoogleJob;
 use App\Jobs\PushClassPostGoogleJob;
 use App\Models\ClassPost;
@@ -45,7 +46,7 @@ final class ClassPostGoogle
      */
     public function queue(ClassPost $post): ?ClassPostGooglePost
     {
-        if (! $post->isPublished() || ! $post->send_to_google) {
+        if (! $post->isPublished() || ! $post->send_to_google || self::pulled($post) !== null) {
             return null;
         }
         $link = ClassroomGoogleLink::of((int) $post->classroom_id, (int) $post->author_id);
@@ -77,7 +78,7 @@ final class ClassPostGoogle
         if ($row === null) {
             return;
         }
-        if ($row->isInClassroom()) {
+        if ($row->isInClassroom() && ! $row->fromClassroom()) { // never the teacher's original (DESIGN §45)
             DeleteClassPostGoogleJob::dispatch((int) $post->author_id, $row->course_id, $row->kind, (string) $row->google_id);
         }
         $row->delete();
@@ -99,7 +100,7 @@ final class ClassPostGoogle
     public function push(int $rowId): string
     {
         $row = ClassPostGooglePost::query()->find($rowId);
-        if ($row === null || $row->state === ClassPostGooglePost::STATE_SENT) {
+        if ($row === null || $row->state === ClassPostGooglePost::STATE_SENT || $row->fromClassroom()) {
             return self::SKIPPED;
         }
         $post = ClassPost::query()->with(['attachments.file', 'unit'])->find($row->class_post_id);
@@ -203,7 +204,7 @@ final class ClassPostGoogle
      * $linked says whether the author linked the classroom (a list computes
      * it once for all its posts); null looks it up.
      *
-     * @return array{linked: bool, state: string, last_error: string|null, link: string|null, sent_at: string|null, in_classroom: bool}
+     * @return array{linked: bool, state: string, last_error: string|null, link: string|null, sent_at: string|null, in_classroom: bool, origin: string}
      */
     public static function payload(ClassPost $post, ?bool $linked = null): array
     {
@@ -216,7 +217,40 @@ final class ClassPostGoogle
             'link' => $row?->alternate_link,
             'sent_at' => $row?->sent_at?->toIso8601String(),
             'in_classroom' => $row?->isInClassroom() ?? false,
+            'origin' => $row?->origin ?? ClassPostGooglePost::ORIGIN_KRUCHECK,
         ];
+    }
+
+    /** The Classroom row of a post pulled in from the Classroom website (DESIGN §45), else null. */
+    public static function pulled(ClassPost $post): ?ClassPostGooglePost
+    {
+        $row = $post->relationLoaded('googlePost') ? $post->googlePost : $post->googlePost()->first();
+
+        return $row !== null && $row->fromClassroom() ? $row : null;
+    }
+
+    /**
+     * Refuses changing a pulled post (DESIGN §45: Classroom only lets the
+     * project that created an item change it). Deleting is refused only
+     * while the author's link of the classroom is still that course: the
+     * next round would pull it back.
+     *
+     * @throws ApiException 409 post_from_classroom
+     */
+    public static function assertNotPulled(ClassPost $post, bool $deleting = false): void
+    {
+        $row = self::pulled($post);
+        if ($row === null) {
+            return;
+        }
+        if ($deleting && ClassroomGoogleLink::of((int) $post->classroom_id, (int) $post->author_id)?->course_id !== $row->course_id) {
+            return;
+        }
+        $message = $deleting
+            ? 'โพสต์นี้มาจาก Google Classroom ลบใน Classroom แล้ว Krucheck จะลบตามให้'
+            : 'โพสต์นี้มาจาก Google Classroom แก้ได้ใน Classroom เท่านั้น';
+
+        throw new ApiException($message, 'post_from_classroom', 409);
     }
 
     /**

@@ -32,6 +32,9 @@ final class GoogleApi
     /** A course roster or a courseWork's submissions never need more pages than this. */
     private const MAX_PAGES = 50;
 
+    /** pageSize of the post lists (DESIGN §45). */
+    private const PAGE_SIZE = 100;
+
     /**
      * @param  Closure(): string  $token
      * @param  (Closure(): void)|null  $forgetToken
@@ -172,6 +175,42 @@ final class GoogleApi
             'courseWorkStates' => 'PUBLISHED',
             'pageSize' => 100,
         ], 'courseWork');
+    }
+
+    /**
+     * courses.announcements.list of PUBLISHED announcements (DESIGN §45):
+     * the sync pulls in what the teacher wrote on the Classroom website.
+     *
+     * @return list<array<string, mixed>> raw Announcement resources
+     */
+    public function announcements(string $courseId): array
+    {
+        return $this->pages('announcements.list', self::coursePath($courseId, 'announcements'), [
+            'announcementStates' => 'PUBLISHED',
+            'pageSize' => self::PAGE_SIZE,
+        ], 'announcements');
+    }
+
+    /**
+     * courses.courseWorkMaterials.list of PUBLISHED materials (DESIGN §45).
+     *
+     * @return list<array<string, mixed>> raw CourseWorkMaterial resources
+     */
+    public function courseWorkMaterials(string $courseId): array
+    {
+        return $this->pages('courseWorkMaterials.list', self::coursePath($courseId, 'courseWorkMaterials'), [
+            'courseWorkMaterialStates' => 'PUBLISHED',
+            'pageSize' => self::PAGE_SIZE,
+        ], 'courseWorkMaterial');
+    }
+
+    /**
+     * Whether a list of this many items may have stopped at MAX_PAGES (so
+     * what is missing from it is not known to be gone).
+     */
+    public static function maybeTruncated(int $count): bool
+    {
+        return $count >= self::MAX_PAGES * self::PAGE_SIZE;
     }
 
     /**

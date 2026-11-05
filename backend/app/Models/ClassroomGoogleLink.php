@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $linked_at
  * @property Carbon|null $roster_synced_at the last roster sync (DESIGN §19.2)
  * @property Carbon|null $work_synced_at the last work sync (DESIGN §19.3)
+ * @property Carbon|null $posts_synced_at when the course's posts were last listed (DESIGN §45)
  */
 class ClassroomGoogleLink extends Model
 {
@@ -38,6 +39,7 @@ class ClassroomGoogleLink extends Model
         'linked_at',
         'roster_synced_at',
         'work_synced_at',
+        'posts_synced_at',
     ];
 
     /**
@@ -52,6 +54,7 @@ class ClassroomGoogleLink extends Model
             'linked_at' => 'datetime',
             'roster_synced_at' => 'datetime',
             'work_synced_at' => 'datetime',
+            'posts_synced_at' => 'datetime',
         ];
     }
 

@@ -104,6 +104,9 @@ return [
         // classrooms per round.
         'roster_minutes' => max(1, (int) env('CLASSROOM_ROSTER_SYNC_MINUTES', 15)),
         'max_rosters' => max(1, (int) env('CLASSROOM_SYNC_MAX_ROSTERS', 10)),
+        // Posts written on the Classroom website (DESIGN §45): at most this
+        // many announcements and materials come in per course per round.
+        'max_post_imports' => max(1, (int) env('CLASSROOM_SYNC_MAX_POST_IMPORTS', 20)),
     ],
 
     // Classroom import (DESIGN §24.10): the preview suggests binding the
