@@ -44,11 +44,12 @@ for var in FIREBASE_WEB_API_KEY FIREBASE_WEB_APP_ID FIREBASE_PROJECT_ID FIREBASE
 done
 
 SCRIPT_SRC="'self' 'wasm-unsafe-eval'"
-FRAME_SRC="'none'"
+# blob:: a handed-in PDF is shown in a frame from a blob: URL (DESIGN §25.7).
+FRAME_SRC="blob:"
 if [ -n "${FIREBASE_WEB_API_KEY:-}" ] && [ -n "${FIREBASE_WEB_APP_ID:-}" ] && [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
   SCRIPT_SRC="$SCRIPT_SRC https://www.gstatic.com"
   CONNECT_SRC="$CONNECT_SRC https://www.gstatic.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com"
-  FRAME_SRC="https://$FIREBASE_PROJECT_ID.firebaseapp.com"
+  FRAME_SRC="$FRAME_SRC https://$FIREBASE_PROJECT_ID.firebaseapp.com"
   echo "note: Firebase on the web for project $FIREBASE_PROJECT_ID" >&2
 else
   echo "note: no FIREBASE_WEB_* variables, the web build runs without Firebase" >&2
@@ -76,7 +77,9 @@ flutter build web --release \
 # - script-src 'wasm-unsafe-eval': CanvasKit is WebAssembly;
 # - fonts.gstatic.com: Flutter fetches Roboto and Noto Sans Thai from there;
 # - no-cache on the entry files, so a new upload shows up on the next reload;
-# - camera=(self): the camera scan and hand-in photos (DESIGN §25.6).
+# - camera=(self): the camera scan and hand-in photos (DESIGN §25.6);
+# - frame-src blob:: the browser's PDF viewer draws a handed-in PDF from a
+#   blob: URL the page made itself (DESIGN §25.7).
 cat > "$SITE/.htaccess" <<EOF
 # Written by tools/build-web.sh; do not edit on the server.
 <IfModule mod_headers.c>

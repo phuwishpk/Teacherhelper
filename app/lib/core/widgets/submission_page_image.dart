@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
 import '../api/submission_pages.dart';
 import 'content_column.dart';
+import 'inline_pdf.dart';
 
 /// Decodes the bytes of a handed-in file into an image; throws when this
 /// device cannot (a PDF, HEIC without the codec, a damaged file).
@@ -31,6 +33,7 @@ final pageDecoderProvider = Provider<PageDecoder>((ref) => decodePageImage);
 /// cannot draw (a PDF, HEIC on some phones and on the web) becomes the box
 /// "แสดงภาพนี้บนเครื่องนี้ไม่ได้" with "ดาวน์โหลดไฟล์" (opened by another
 /// app); grading is not affected because Gemini reads those files itself.
+/// On the web a PDF is drawn by the browser's viewer instead (DESIGN §25.7).
 class SubmissionPageImage extends ConsumerWidget {
   const SubmissionPageImage({
     super.key,
@@ -49,9 +52,12 @@ class SubmissionPageImage extends ConsumerWidget {
 
   bool get _isPdf => mimeType == 'application/pdf';
 
+  static const double _pdfHeight = 560;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final file = ref.watch(submissionPageProvider(pageId));
+    final inlinePdf = _isPdf ? ref.watch(inlinePdfProvider) : null;
     final theme = Theme.of(context);
     Widget box(Widget child) => Container(
       height: height,
@@ -96,7 +102,21 @@ class SubmissionPageImage extends ConsumerWidget {
         );
       },
       data: (bytes) => _isPdf
-          ? box(_Undrawable(pageId: pageId, bytes: bytes, mimeType: mimeType))
+          ? inlinePdf != null
+                ? _InlinePdfPage(
+                    pageId: pageId,
+                    bytes: bytes,
+                    viewer: inlinePdf,
+                    // A page of text needs more room than a photo's box.
+                    height: height < _pdfHeight ? _pdfHeight : height,
+                  )
+                : box(
+                    _Undrawable(
+                      pageId: pageId,
+                      bytes: bytes,
+                      mimeType: mimeType,
+                    ),
+                  )
           : _DecodedPage(
               key: ValueKey(pageId),
               pageId: pageId,
@@ -281,8 +301,61 @@ class PagePainter extends CustomPainter {
       old.image != image || old.answerBox != answerBox || old.color != color;
 }
 
+/// A PDF page on the web (DESIGN §25.7): the browser draws it in the pane;
+/// "เปิดในแท็บใหม่" shows it full screen (and is the way on a phone browser
+/// that does not draw a PDF inside a page), "ดาวน์โหลดไฟล์" keeps a copy.
+class _InlinePdfPage extends StatelessWidget {
+  const _InlinePdfPage({
+    required this.pageId,
+    required this.bytes,
+    required this.viewer,
+    required this.height,
+  });
+
+  final int pageId;
+  final Uint8List bytes;
+  final InlinePdf viewer;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('page_pdf_inline'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          label: 'ภาพงานทั้งหน้า (PDF)',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(height: height, child: viewer.view(bytes)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const ValueKey('page_pdf_new_tab'),
+              onPressed: () => viewer.openInNewTab(bytes),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('เปิดในแท็บใหม่'),
+            ),
+            _DownloadButton(
+              pageId: pageId,
+              bytes: bytes,
+              mimeType: 'application/pdf',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 /// "แสดงภาพนี้บนเครื่องนี้ไม่ได้" + "ดาวน์โหลดไฟล์".
-class _Undrawable extends ConsumerStatefulWidget {
+class _Undrawable extends StatelessWidget {
   const _Undrawable({
     required this.pageId,
     required this.bytes,
@@ -294,10 +367,54 @@ class _Undrawable extends ConsumerStatefulWidget {
   final String? mimeType;
 
   @override
-  ConsumerState<_Undrawable> createState() => _UndrawableState();
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pdf = mimeType == 'application/pdf';
+    final how = kIsWeb
+        ? 'ดาวน์โหลดไปเปิดในเครื่องได้'
+        : 'เปิดด้วยแอปอื่นในเครื่องได้';
+    return Column(
+      key: const ValueKey('page_undrawable'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          pdf ? Icons.picture_as_pdf_outlined : Icons.broken_image_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 4),
+        const Text('แสดงภาพนี้บนเครื่องนี้ไม่ได้', textAlign: TextAlign.center),
+        Text(
+          pdf
+              ? 'ไฟล์ PDF $how (AI อ่านไฟล์นี้ได้ตามปกติ)'
+              : '$how (AI อ่านไฟล์นี้ได้ตามปกติ)',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        _DownloadButton(pageId: pageId, bytes: bytes, mimeType: mimeType),
+      ],
+    );
+  }
 }
 
-class _UndrawableState extends ConsumerState<_Undrawable> {
+/// "ดาวน์โหลดไฟล์": another app opens it on Android, the browser saves it
+/// on the web.
+class _DownloadButton extends ConsumerStatefulWidget {
+  const _DownloadButton({
+    required this.pageId,
+    required this.bytes,
+    required this.mimeType,
+  });
+
+  final int pageId;
+  final Uint8List bytes;
+  final String? mimeType;
+
+  @override
+  ConsumerState<_DownloadButton> createState() => _DownloadButtonState();
+}
+
+class _DownloadButtonState extends ConsumerState<_DownloadButton> {
   bool _busy = false;
 
   Future<void> _download() async {
@@ -322,34 +439,10 @@ class _UndrawableState extends ConsumerState<_Undrawable> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final pdf = widget.mimeType == 'application/pdf';
-    return Column(
-      key: const ValueKey('page_undrawable'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          pdf ? Icons.picture_as_pdf_outlined : Icons.broken_image_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(height: 4),
-        const Text('แสดงภาพนี้บนเครื่องนี้ไม่ได้', textAlign: TextAlign.center),
-        Text(
-          pdf
-              ? 'ไฟล์ PDF เปิดด้วยแอปอื่นในเครื่องได้ (AI อ่านไฟล์นี้ได้ตามปกติ)'
-              : 'เปิดด้วยแอปอื่นในเครื่องได้ (AI อ่านไฟล์นี้ได้ตามปกติ)',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          key: const ValueKey('page_download'),
-          onPressed: _busy ? null : _download,
-          icon: const Icon(Icons.download_outlined),
-          label: const Text('ดาวน์โหลดไฟล์'),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    key: const ValueKey('page_download'),
+    onPressed: _busy ? null : _download,
+    icon: const Icon(Icons.download_outlined),
+    label: const Text('ดาวน์โหลดไฟล์'),
+  );
 }
