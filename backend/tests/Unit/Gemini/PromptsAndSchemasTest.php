@@ -29,7 +29,7 @@ class PromptsAndSchemasTest extends TestCase
             'rubric_draft open' => ['rubric_draft', 'open', 0.2, 2, 'medium', 4096],
             'practice_gen' => ['practice_gen', 'general', 0.8, 2, 'low', 4096],
             'extract_batch' => ['extract_batch', 'general', 0.0, 2, 'low', 4096],
-            'extract_page' => ['extract_page', 'general', 0.0, 2, 'low', 4096],
+            'extract_page' => ['extract_page', 'general', 0.0, 3, 'low', 4096],
             'answer_key_read' => ['answer_key_read', 'general', 0.0, 2, 'medium', 16384],
             'answer_key_draft' => ['answer_key_draft', 'general', 0.2, 3, 'medium', 4096],
             'document_read' => ['document_read', 'general', 0.0, 2, 'medium', 16384],
@@ -94,6 +94,9 @@ class PromptsAndSchemasTest extends TestCase
         $this->assertStringContainsString('Never copy them into your output.', $prompts->get('extract_page', 'general')->system);
         $this->assertStringContainsString('found = false', $prompts->get('extract_page', 'general')->user);
         $this->assertSame(['question_no', 'found'], ResponseSchemas::get('extract_page', 'general')['properties']['answers']['items']['required']);
+        // §46: the page of a PDF the answer is on, for the red box.
+        $this->assertStringContainsString('answer_page', $prompts->get('extract_page', 'general')->user);
+        $this->assertSame(['type' => 'integer', 'minimum' => 1], ResponseSchemas::get('extract_page', 'general')['properties']['answers']['items']['properties']['answer_page']);
     }
 
     public function test_show_work_v2_counts_a_step_that_carries_an_earlier_error_forward_as_valid(): void

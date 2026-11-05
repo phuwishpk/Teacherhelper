@@ -86,7 +86,7 @@ class ResponseController extends Controller
             'submission.assignment:id,classroom_id,title',
             'appeal',
             'scoreEvents',
-            'submissionPage:id,mime_type',
+            'submissionPage:id,mime_type,page_count',
         ]);
     }
 

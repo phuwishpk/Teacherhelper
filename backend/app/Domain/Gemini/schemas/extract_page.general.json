@@ -24,6 +24,10 @@
               "maximum": 1000
             }
           },
+          "answer_page": {
+            "type": "integer",
+            "minimum": 1
+          },
           "blank": {
             "type": "boolean"
           },

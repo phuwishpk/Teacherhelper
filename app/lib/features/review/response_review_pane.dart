@@ -8,6 +8,7 @@ import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../../core/widgets/response_crop_image.dart';
 import '../../core/widgets/small_spinner.dart';
+import '../../core/widgets/pdf_page_images.dart';
 import '../../core/widgets/submission_page_image.dart';
 import '../settings/ai_key_errors.dart';
 import 'exam_answer_panel.dart';
@@ -388,9 +389,14 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                   pageId: pageId,
                   mimeType: d.pageMimeType,
                   answerBox: d.answerBox,
+                  answerPage: d.answerPage,
                 ),
-                // A PDF has no drawn box and no zoom (DESIGN §25.7).
-                if (d.pageMimeType != 'application/pdf') ...[
+                // A whole PDF has no drawn box and no zoom (DESIGN §25.7);
+                // its answer page drawn as an image has both (§46).
+                if (d.pageMimeType != 'application/pdf' ||
+                    (d.answerBox != null &&
+                        d.answerPage != null &&
+                        ref.watch(pdfPageImagesProvider) != null)) ...[
                   const SizedBox(height: 4),
                   Text(
                     d.answerBox != null

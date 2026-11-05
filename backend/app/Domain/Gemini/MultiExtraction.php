@@ -39,13 +39,13 @@ final class MultiExtraction
     ];
 
     /** Fields that frame an answer rather than belong to its extraction. */
-    private const FRAME = ['question_no', 'found', 'answer_box'];
+    private const FRAME = ['question_no', 'found', 'answer_box', 'answer_page'];
 
     /**
      * @param  array<string, mixed>  $data  the output, envelope already valid
      * @param  array<int, array{type: string, criteria: int}>  $questions  question_no => type and rubric size
      * @param  bool  $withFound  extract_page: every answer says whether it was found on the page
-     * @return array{answers: array<int, array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null}>, invalid: array<int, string>}
+     * @return array{answers: array<int, array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null, answer_page: int|null}>, invalid: array<int, string>}
      */
     public static function split(array $data, array $questions, bool $withFound): array
     {
@@ -77,7 +77,7 @@ final class MultiExtraction
 
     /**
      * @param  array<string, mixed>  $item
-     * @return array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null}
+     * @return array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null, answer_page: int|null}
      *
      * @throws GeminiException
      */
@@ -91,7 +91,7 @@ final class MultiExtraction
             $found = $item['found'];
         }
         if (! $found) {
-            return ['found' => false, 'data' => null, 'answer_box' => null];
+            return ['found' => false, 'data' => null, 'answer_box' => null, 'answer_page' => null];
         }
 
         $extraction = array_diff_key($item, array_flip(self::FRAME));
@@ -104,6 +104,7 @@ final class MultiExtraction
             'found' => true,
             'data' => ExtractionValidator::normalize($type, $extraction, $criteria),
             'answer_box' => self::box($item['answer_box'] ?? null),
+            'answer_page' => is_int($item['answer_page'] ?? null) && $item['answer_page'] >= 1 ? $item['answer_page'] : null,
         ];
     }
 

@@ -211,6 +211,7 @@ class WholePageGradingTest extends TestCase
         $detail->assertJsonPath('data.page_image_url', "/api/v1/submission-pages/{$page->id}/image")
             ->assertJsonPath('data.page_mime_type', 'image/jpeg')
             ->assertJsonPath('data.answer_box', [160, 60, 230, 940])
+            ->assertJsonPath('data.answer_page', 1)
             ->assertJsonPath('data.channel', 'whole_page')
             ->assertJsonPath('data.late', true);
         $image = $this->asUser($this->teacher)->get("/api/v1/submission-pages/{$page->id}/image")->assertOk();
@@ -344,6 +345,23 @@ class WholePageGradingTest extends TestCase
         $call = array_values(array_filter($this->gemini->requests, fn ($r) => $r->purpose === 'extract_page'))[0];
         $this->assertSame(['application/pdf', 'high'], [$call->images[0]->mimeType, $call->images[0]->mediaResolution], 'a student PDF uses the page level, not GEMINI_MEDIA_DOCUMENT');
         $this->assertStringContainsString('a PDF with 2 pages', $call->userText);
+
+        // §46: the page the answer is on comes back with its box, within the file.
+        $short = $this->response('short');
+        $this->assertSame(1, $short->extraction['answer_page']);
+        $url = "/api/v1/responses/{$short->id}";
+        $this->asUser($this->teacher)->getJson($url)->assertOk()->assertJsonPath('data.answer_page', 1);
+        $short->forceFill(['extraction' => ['answer_page' => 2] + $short->extraction])->save();
+        $this->asUser($this->teacher)->getJson($url)->assertJsonPath('data.answer_page', 2);
+        $short->forceFill(['extraction' => ['answer_page' => 3] + $short->extraction])->save();
+        $this->asUser($this->teacher)->getJson($url)->assertJsonPath('data.answer_page', null);
+        // Read before §46: no page. A box on a file of one page is on that page.
+        $extraction = $short->extraction;
+        unset($extraction['answer_page']);
+        $short->forceFill(['extraction' => $extraction])->save();
+        $this->asUser($this->teacher)->getJson($url)->assertJsonPath('data.answer_page', null);
+        $page->forceFill(['page_count' => 1])->save();
+        $this->asUser($this->teacher)->getJson($url)->assertJsonPath('data.answer_page', 1);
     }
 
     /**

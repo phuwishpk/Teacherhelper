@@ -213,13 +213,13 @@ final class WholePageGrader
     }
 
     /**
-     * @param  array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null}  $answer
+     * @param  array{found: bool, data: array<string, mixed>|null, answer_box: list<int>|null, answer_page?: int|null}  $answer
      * @return array<string, mixed>
      */
     private static function stored(array $answer): array
     {
         return $answer['found']
-            ? ['found' => true, 'data' => $answer['data'], 'answer_box' => $answer['answer_box']]
+            ? ['found' => true, 'data' => $answer['data'], 'answer_box' => $answer['answer_box'], 'answer_page' => $answer['answer_page'] ?? null]
             : ['found' => false];
     }
 
@@ -303,7 +303,9 @@ final class WholePageGrader
             }
             [$pageId, $answer] = $chosen;
             $pageOf[$response->id] = $pageId;
-            $extractions[$response->id] = $answer['data'] + (is_array($answer['answer_box'] ?? null) ? ['answer_box' => $answer['answer_box']] : []);
+            $extractions[$response->id] = $answer['data']
+                + (is_array($answer['answer_box'] ?? null) ? ['answer_box' => $answer['answer_box']] : [])
+                + (is_int($answer['answer_page'] ?? null) ? ['answer_page' => $answer['answer_page']] : []);
             $traces[$response->id] = ['whole_page' => ['page_id' => $pageId, 'pages' => count($pageIds), 'page_conflict' => $conflict]];
             $graded[$response->id] = $question->type === Question::TYPE_MCQ
                 ? self::gradeMcq($question, $answer['data'], $conflict)

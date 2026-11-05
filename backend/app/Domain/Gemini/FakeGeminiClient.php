@@ -383,7 +383,7 @@ class FakeGeminiClient implements GeminiBatchClient, GeminiClient
             }
 
             $answer = $hints['type'] === Question::TYPE_MCQ ? $this->mcq($sub, $has) : $this->extract($sub, $has);
-            $answers[] = ['question_no' => $no] + ($page ? ['found' => true, 'answer_box' => [min(900, 80 * $no), 60, min(990, 80 * $no + 70), 940]] : []) + $answer;
+            $answers[] = ['question_no' => $no] + ($page ? ['found' => true, 'answer_box' => [min(900, 80 * $no), 60, min(990, 80 * $no + 70), 940], 'answer_page' => 1] : []) + $answer;
         }
 
         return ['answers' => $answers];

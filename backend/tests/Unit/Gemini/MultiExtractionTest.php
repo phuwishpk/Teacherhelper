@@ -18,7 +18,7 @@ class MultiExtractionTest extends TestCase
     public function test_each_answer_is_checked_on_its_own(): void
     {
         $out = MultiExtraction::split(['answers' => [
-            ['question_no' => 1, 'found' => true, 'answer_box' => [10, 20, 30, 40]] + self::short(),
+            ['question_no' => 1, 'found' => true, 'answer_box' => [10, 20, 30, 40], 'answer_page' => 2] + self::short(),
             ['question_no' => 2, 'found' => true, 'blank' => 'no'],
             ['question_no' => 3, 'found' => false],
             ['question_no' => 4, 'found' => true, 'blank' => false, 'suspicious_instruction' => false, 'legibility' => 'clear', 'selected_options' => ['B', 'B'], 'error_types' => []],
@@ -33,9 +33,11 @@ class MultiExtractionTest extends TestCase
 
         $this->assertSame([1, 3, 4], array_keys($out['answers']), 'question 5 was left out; question 9 was never asked');
         $this->assertSame([10, 20, 30, 40], $out['answers'][1]['answer_box']);
+        $this->assertSame(2, $out['answers'][1]['answer_page']);
+        $this->assertArrayNotHasKey('answer_page', $out['answers'][1]['data']);
         $this->assertSame('20', $out['answers'][1]['data']['answer_text']);
         $this->assertArrayNotHasKey('question_no', $out['answers'][1]['data']);
-        $this->assertSame(['found' => false, 'data' => null, 'answer_box' => null], $out['answers'][3]);
+        $this->assertSame(['found' => false, 'data' => null, 'answer_box' => null, 'answer_page' => null], $out['answers'][3]);
         $this->assertSame(['B'], $out['answers'][4]['data']['selected_options']);
         $this->assertSame([2], array_keys($out['invalid']));
     }
@@ -45,11 +47,12 @@ class MultiExtractionTest extends TestCase
         $out = MultiExtraction::split(['answers' => [
             ['question_no' => 1] + self::short(),
             ['question_no' => 1] + self::short(['answer_text' => '21']),
-            ['question_no' => 2, 'answer_box' => [500, 20, 100, 40]] + self::short(),
+            ['question_no' => 2, 'answer_box' => [500, 20, 100, 40], 'answer_page' => 0] + self::short(),
         ]], [1 => ['type' => 'short', 'criteria' => 0], 2 => ['type' => 'short', 'criteria' => 0]], withFound: false);
 
         $this->assertSame([2], array_keys($out['answers']));
         $this->assertNull($out['answers'][2]['answer_box'], 'an upside-down box is dropped, not an error');
+        $this->assertNull($out['answers'][2]['answer_page'], 'so is a page before the first');
         $this->assertSame(['question_no listed more than once'], array_values($out['invalid']));
     }
 
