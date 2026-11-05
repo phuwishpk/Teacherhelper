@@ -18,6 +18,16 @@ final class FirestoreConfig
             && trim((string) config('services.firebase.credentials')) !== '';
     }
 
+    /**
+     * Whether student names, numbers, codes, scores and answers are copied
+     * too (DESIGN §38.10). A second switch, off by default: main deploys by
+     * itself, and real student data must not start moving with a merge.
+     */
+    public static function recordsEnabled(): bool
+    {
+        return self::enabled() && (bool) config('services.firebase.firestore_records');
+    }
+
     public static function database(): string
     {
         $db = trim((string) config('services.firebase.firestore_database'));

@@ -12,6 +12,9 @@ namespace App\Domain\Qa;
  *   manual    integration tests a person runs against the real thing,
  *             because they need a paid or OAuth-only service, real devices
  *             or the production host
+ *   quick     the short usability set for five outside testers (DESIGN
+ *             §39.8): four tasks on the demo data, then SUS; its report
+ *             is /qa/report
  *   process   end-to-end usability scenarios that cross many functions
  *             (DESIGN §39.6), observed and timed
  *   function  one usability task per use case of the use case document,
@@ -27,16 +30,19 @@ final class QaCatalog
 
     public const MANUAL = 'manual';
 
+    public const QUICK = 'quick';
+
     public const PROCESS = 'process';
 
     public const FUNCTION = 'function';
 
     /** Both usability levels. */
-    public const USABILITY_KINDS = [self::PROCESS, self::FUNCTION];
+    public const USABILITY_KINDS = [self::QUICK, self::PROCESS, self::FUNCTION];
 
     public const KIND_LABELS = [
         self::AUTO => 'Integration อัตโนมัติ',
         self::MANUAL => 'Integration ทำมือ',
+        self::QUICK => 'Usability: ชุดย่อ 5 คน',
         self::PROCESS => 'Usability: กระบวนการ',
         self::FUNCTION => 'Usability: ฟังก์ชัน',
     ];
@@ -67,28 +73,12 @@ final class QaCatalog
         'fail' => ['ไม่เป็นตามที่เขียน', 'danger'],
     ];
 
-    /** The team's Thai wording of Brooke's SUS (1996), as in KICKOFF part 5. */
-    public const SUS = [
-        'ฉันคิดว่าฉันอยากใช้แอปนี้บ่อย ๆ',
-        'ฉันรู้สึกว่าแอปนี้ซับซ้อนเกินความจำเป็น',
-        'ฉันคิดว่าแอปนี้ใช้งานง่าย',
-        'ฉันคิดว่าฉันต้องมีคนคอยช่วยจึงจะใช้แอปนี้ได้',
-        'ฉันรู้สึกว่าฟังก์ชันต่าง ๆ ในแอปนี้ทำงานเข้ากันได้ดี',
-        'ฉันรู้สึกว่าแอปนี้มีความไม่สอดคล้องกันมากเกินไป',
-        'ฉันคิดว่าคนส่วนใหญ่จะเรียนรู้การใช้แอปนี้ได้อย่างรวดเร็ว',
-        'ฉันรู้สึกว่าแอปนี้ใช้งานยุ่งยาก',
-        'ฉันรู้สึกมั่นใจเมื่อใช้แอปนี้',
-        'ฉันต้องเรียนรู้หลายอย่างก่อนจึงจะเริ่มใช้แอปนี้ได้',
-    ];
-
-    public const SUS_BENCHMARK = 68;
-
     /**
      * @return list<array{code: string, kind: string, area: string, title: string, detail: string, workflow?: string, refs?: list<string>, why?: string, steps?: list<string>, expect?: string, role?: string, done?: string, measure?: string}>
      */
     public static function cases(): array
     {
-        return [...self::auto(), ...self::manual(), ...self::processes(), ...self::functions()];
+        return [...self::auto(), ...self::manual(), ...self::quick(), ...self::processes(), ...self::functions()];
     }
 
     public static function isUsability(string $kind): bool
@@ -148,23 +138,6 @@ final class QaCatalog
         return self::isUsability($kind) ? self::USABILITY_STATUSES : self::MANUAL_STATUSES;
     }
 
-    /** SUS 0–100: odd items (answer − 1), even items (5 − answer), sum × 2.5; null unless 10 answers of 1–5. */
-    public static function susScore(array $answers): ?float
-    {
-        if (count($answers) !== 10) {
-            return null;
-        }
-        $sum = 0;
-        foreach (array_values($answers) as $i => $a) {
-            if (! is_int($a) || $a < 1 || $a > 5) {
-                return null;
-            }
-            $sum += $i % 2 === 0 ? $a - 1 : 5 - $a;
-        }
-
-        return $sum * 2.5;
-    }
-
     /** @return list<array<string, mixed>> */
     private static function auto(): array
     {
@@ -202,7 +175,7 @@ final class QaCatalog
                 'backend', ['backend/tests/Feature/Gradebook/GradebookGridTest.php', 'backend/tests/Feature/Gradebook/GradebookPublishTest.php', 'backend/tests/Feature/Gradebook/GradebookCsvTest.php']),
             $c('IT-A10', 'แจ้งเตือนและข้อมูลสด', 'push ผ่าน FCM และกล่องแจ้งเตือนกับสถานะการตรวจใน Firestore (HTTP จำลอง)',
                 'จำลอง FCM HTTP v1 และ Firestore REST ตรวจข้อความที่ส่ง เอกสารที่เขียนใต้ users/{uid} และ custom token ของ Firebase',
-                'backend', ['backend/tests/Feature/Notifications/FcmNotifierTest.php', 'backend/tests/Feature/Firestore/FirestoreInboxTest.php', 'backend/tests/Feature/Firestore/LiveGradingTest.php', 'backend/tests/Feature/Firestore/FirebaseTokenTest.php']),
+                'backend', ['backend/tests/Feature/Notifications/FcmNotifierTest.php', 'backend/tests/Feature/Firestore/FirestoreInboxTest.php', 'backend/tests/Feature/Firestore/LiveGradingTest.php', 'backend/tests/Feature/Firestore/LiveRecordsTest.php', 'backend/tests/Feature/Firestore/FirebaseTokenTest.php']),
             $c('IT-A11', 'ผู้ช่วย Krucheck', 'แชท สร้างข้อ rubric ตัวชี้วัด ข้อมูลนักเรียนแบบรหัส และไฟล์ (Gemini จำลอง)',
                 'ตรวจการ์ดที่ผู้ช่วยเสนอและการกดยืนยัน การแทนชื่อนักเรียนด้วยรหัสก่อนส่งให้ Gemini และการอ่านไฟล์แนบ',
                 'backend', ['backend/tests/Feature/Assistant/AssistantChatTest.php', 'backend/tests/Feature/Assistant/AssistantCardsTest.php', 'backend/tests/Feature/Assistant/AssistantStudentDataTest.php', 'backend/tests/Feature/Assistant/AssistantFilesTest.php']),
@@ -271,6 +244,48 @@ final class QaCatalog
             $c('IT-M13', 'แอป', 'integration_test บน Android emulator', 'เป็น test อัตโนมัติแต่ต้องใช้ emulator ซึ่ง CI ยังไม่มี',
                 ['เปิด AVD', 'รัน flutter test integration_test/teacher_flow_test.dart -d <emulator>'],
                 'ผ่านทั้ง flow ครู: เข้าสู่ระบบ → ห้อง → การบ้าน → คำถาม → layout → คิวตรวจทาน → ออก'),
+        ];
+    }
+
+    public const QUICK_GROUP = 'ชุดย่อ 5 คน (รายงานโครงงาน)';
+
+    /** The course rubric asks for at least this many testers. */
+    public const QUICK_MIN_TESTERS = 5;
+
+    /**
+     * Four tasks of about 15 minutes in all on the demo data (DemoSeeder:
+     * published homework, one waiting for review, a gradebook), so an
+     * outside tester signs up for nothing and needs no Gemini key.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function quick(): array
+    {
+        $pre = 'ระบบสาธิต (eduvision:reset-demo) และบัญชีครูหรือนักเรียนสาธิตที่ผู้ดูแลการทดสอบให้';
+        $c = fn (string $code, string $actor, string $title, string $goal, array $steps, string $done, array $ucs, ?string $extra = null) => [
+            'code' => $code, 'kind' => self::QUICK, 'group' => self::QUICK_GROUP, 'area' => $actor, 'actor' => $actor,
+            'title' => $title, 'detail' => $goal, 'goal' => $goal, 'pre' => $extra === null ? $pre : "{$pre} {$extra}",
+            'steps' => $steps, 'done' => $done, 'outcome' => $done, 'ucs' => $ucs,
+        ];
+
+        return [
+            $c('QK-1', 'นักเรียน', 'ดูผลการบ้านและคำอธิบาย',
+                'นักเรียนรู้ว่าตัวเองได้กี่คะแนนและผิดตรงไหน',
+                ['เปิดเว็บแอปหรือแอป แท็บ **นักเรียน** แล้วเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่าน', 'เปิดผลของการบ้านที่เผยแพร่แล้ว', 'อ่านคะแนนรวมและคำอธิบายของข้อที่ได้ไม่เต็ม'],
+                'บอกคะแนนรวมได้ถูก และอธิบายด้วยคำของตัวเองว่าข้อที่ได้ไม่เต็มผิดเพราะอะไร', ['UC-S01', 'UC-S11']),
+            $c('QK-2', 'ครู', 'ตรวจทานแล้วเผยแพร่ผล',
+                'ครูตรวจผลที่ AI ให้ แก้หนึ่งข้อ แล้วปล่อยผลให้นักเรียน',
+                ['เข้าสู่ระบบด้วยบัญชีครูสาธิต', 'แท็บ **ตรวจทาน** เลือกการบ้านที่รอตรวจ', 'เปิดหนึ่งข้อ แก้คะแนนแล้วเลือกเหตุผลที่แก้ แล้ว **บันทึก**', 'อนุมัติข้อที่เหลือ', '**เผยแพร่ทั้งการบ้าน**'],
+                'ขึ้น "เผยแพร่แล้ว" และคะแนนของข้อที่แก้เป็นค่าที่ตั้งใจ', ['UC-T02', 'UC-T40', 'UC-T43']),
+            $c('QK-3', 'ครู', 'ส่งงานของนักเรียนด้วยรูป',
+                'ครูส่งงานกระดาษของนักเรียนหนึ่งคนให้ AI ตรวจ',
+                ['เมนู **อัปโหลดรูปเพื่อตรวจ**', 'เลือกวิชา การบ้าน และนักเรียน', '**ถ่ายรูป** งานบนกระดาษ หรือ **เลือกรูปหรือ PDF**', '**ส่งตรวจ**'],
+                'ขึ้น "ส่งตรวจแล้ว" หรือ "รับงานใหม่แล้ว รอครูกดตรวจ"', ['UC-T39'],
+                'และไฟล์งาน เช่น student1-answers.pdf จากหน้าเช็คลิสต์ทดสอบ'),
+            $c('QK-4', 'ครู', 'หาเกรดของนักเรียนในสมุดคะแนน',
+                'ครูตอบผู้ปกครองได้ว่าลูกได้เกรดอะไร',
+                ['แท็บ **ตัดเกรด**', 'เปิดสมุดคะแนนของรายวิชาสาธิต', 'หานักเรียน **เลขที่ 3**', 'อ่านคะแนนรวมและเกรด'],
+                'บอกคะแนนรวมและเกรดของเลขที่ 3 ได้ตรงกับที่ระบบแสดง', ['UC-T59']),
         ];
     }
 

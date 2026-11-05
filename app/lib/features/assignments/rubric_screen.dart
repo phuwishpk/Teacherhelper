@@ -13,6 +13,7 @@ import 'assignment.dart';
 import 'assignments_providers.dart';
 import 'assignments_repository.dart';
 import 'question.dart';
+import '../../core/api/error_codes.dart';
 
 /// Rubric of a show_work / open question: ask Gemini for a draft
 /// (`POST /questions/{id}/rubric/draft`, then poll), edit it, and approve it
@@ -43,6 +44,9 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
   bool _drafting = false;
   bool _saving = false;
   String? _error;
+
+  /// The code of a failed AI draft, shown under [_error].
+  ErrorCode? _errorCode;
   Timer? _poll;
 
   @override
@@ -82,6 +86,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
     setState(() {
       _drafting = true;
       _error = null;
+      _errorCode = null;
     });
     try {
       final notifier = ref.read(
@@ -111,7 +116,15 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
           final q = _question(a);
           final ready =
               q != null && hasRubricDraft(q) && rubricFingerprint(q) != before;
-          if (ready) {
+          if (q?.rubricDraftError case final failure?) {
+            // DESIGN §36.1: the job failed; say why with its code.
+            timer.cancel();
+            setState(() {
+              _drafting = false;
+              _error = failure.message;
+              _errorCode = failure.code;
+            });
+          } else if (ready) {
             timer.cancel();
             setState(() {
               _loadFrom(q);
@@ -375,6 +388,7 @@ class _RubricScreenState extends ConsumerState<RubricScreen> {
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                if (_errorCode case final code?) ErrorCodeLine(code),
               ],
               const SizedBox(height: 24),
               FilledButton.icon(

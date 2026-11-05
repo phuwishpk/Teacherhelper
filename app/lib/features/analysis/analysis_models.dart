@@ -1,6 +1,7 @@
 import '../../core/api/teacher_guidance.dart';
 import '../assignments/question.dart';
 import '../student/student_labels.dart';
+import '../../core/api/error_codes.dart';
 
 DateTime? _time(Object? v) => v is String ? DateTime.tryParse(v) : null;
 
@@ -102,6 +103,7 @@ class AnalysisSummary {
     this.generatedVia,
     this.generatedAt,
     this.sharedAt,
+    this.aiCode,
   });
 
   final int id;
@@ -123,6 +125,9 @@ class AnalysisSummary {
   /// The current student draft is not what the student sees yet.
   final bool awaitingApproval;
 
+  /// Why the last AI attempt failed (DESIGN §36.1), when [status] is failed.
+  final ErrorCode? aiCode;
+
   /// `batch` (the nightly round) or `now` ("วิเคราะห์ตอนนี้").
   final String? generatedVia;
   final DateTime? generatedAt;
@@ -136,6 +141,7 @@ class AnalysisSummary {
         status: AnalysisStatus.fromApi(json['status']),
         strengths: AnalysisItem.listFromJson(json['strengths']),
         areas: AnalysisItem.listFromJson(json['areas']),
+        aiCode: ErrorCode.fromFields(json['ai_error_code'], json['ai_call_id']),
         hasText: json['has_text'] == true,
         shared: json['shared'] == true,
         stale: json['stale'] == true,
@@ -161,6 +167,7 @@ class StudentAnalysis extends AnalysisSummary {
     super.generatedVia,
     super.generatedAt,
     super.sharedAt,
+    super.aiCode,
     this.teacherText,
     this.studentText,
     this.nextSteps = const [],
@@ -210,6 +217,7 @@ class StudentAnalysis extends AnalysisSummary {
         generatedVia: json['generated_via'] as String?,
         generatedAt: _time(json['generated_at']),
         sharedAt: _time(json['shared_at']),
+        aiCode: ErrorCode.fromFields(json['ai_error_code'], json['ai_call_id']),
         teacherText: json['teacher_text'] as String?,
         studentText: json['student_text'] as String?,
         nextSteps: _nextSteps(json['next_steps']),

@@ -24,9 +24,9 @@ final class QaBoard
 
     public function __construct()
     {
-        $this->testers = QaTester::query()->orderBy('name')->get();
+        $this->testers = QaTester::query()->where('role', QaTester::ROLE_TESTER)->orderBy('name')->get();
         $this->results = QaResult::query()->get();
-        $this->sus = QaSusResponse::query()->get()->keyBy('qa_tester_id');
+        $this->sus = QaSusResponse::query()->get();
     }
 
     /** @return Collection<int, QaTester> */
@@ -44,11 +44,6 @@ final class QaBoard
     public function resultsFor(string $code): Collection
     {
         return $this->results->filter(fn (QaResult $r) => $r->case_code === $code && $r->status !== null)->values();
-    }
-
-    public function sus(int $testerId): ?QaSusResponse
-    {
-        return $this->sus->get($testerId);
     }
 
     /**
@@ -114,12 +109,14 @@ final class QaBoard
         return [null, 'ยังไม่ทดสอบ', 'gray'];
     }
 
-    /** @return array{n: int, success: int, assisted: int, fail: int, avg_time: float|null, avg_errors: float|null} */
+    /** @return array{n: int, success: int, assisted: int, fail: int, avg_time: float|null, avg_errors: float|null, avg_ease: float|null} */
     public function usability(string $code): array
     {
         $rows = $this->resultsFor($code)->filter(fn (QaResult $r) => $r->status !== 'skip')->values();
         $times = $rows->filter(fn (QaResult $r) => $r->status !== 'fail' && $r->time_sec !== null)->pluck('time_sec');
         $errors = $rows->filter(fn (QaResult $r) => $r->error_count !== null)->pluck('error_count');
+        // Rated by participants themselves at /usability (DESIGN §39.10).
+        $ease = $rows->filter(fn (QaResult $r) => $r->ease !== null)->pluck('ease');
 
         return [
             'n' => $rows->count(),
@@ -128,6 +125,7 @@ final class QaBoard
             'fail' => $rows->where('status', 'fail')->count(),
             'avg_time' => $times->isEmpty() ? null : (float) $times->avg(),
             'avg_errors' => $errors->isEmpty() ? null : (float) $errors->avg(),
+            'avg_ease' => $ease->isEmpty() ? null : (float) $ease->avg(),
         ];
     }
 
@@ -140,10 +138,23 @@ final class QaBoard
         return ['attempts' => $rows->count(), 'success' => $rows->where('status', 'success')->count()];
     }
 
-    /** @return array{mean: float|null, n: int} */
-    public function susSummary(): array
+    /**
+     * SUS statistics of the evaluators (DESIGN §39.9), for one role of the
+     * app or all together.
+     *
+     * @return array{n: int, mean: float|null, sd: float|null, median: float|null, min: float|null, max: float|null, ci_low: float|null, ci_high: float|null}
+     */
+    public function susStats(?string $role = null): array
     {
-        return ['mean' => $this->sus->isEmpty() ? null : round((float) $this->sus->avg('score'), 1), 'n' => $this->sus->count()];
+        $rows = $role === null ? $this->sus : $this->sus->where('role', $role);
+
+        return QaSus::stats($rows->pluck('score')->map(fn ($s) => (float) $s)->values()->all());
+    }
+
+    /** @return Collection<int, QaSusResponse> */
+    public function susResponses(?string $role = null): Collection
+    {
+        return ($role === null ? $this->sus : $this->sus->where('role', $role))->values();
     }
 
     /**

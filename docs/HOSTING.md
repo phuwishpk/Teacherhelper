@@ -255,6 +255,7 @@ FIREBASE_TIMEOUT=10
 # ---- Firestore ชั้นข้อมูลสด (§6.5) ----
 FIRESTORE_ENABLED=false               # true = backend เขียนแจ้งเตือนและสถานะการตรวจลง Firestore (ใช้ไฟล์ service account เดิม)
 FIRESTORE_DATABASE=(default)
+FIRESTORE_MIRROR_RECORDS=false        # true = คัดลอกชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบของนักเรียนลง Firestore (DESIGN §38.10) อ่าน §6.5 ก่อนเปิด
 
 # ---- Google Classroom (§6.3) ----
 GOOGLE_OAUTH_CLIENT_ID=               # ว่างทั้งคู่ = endpoint ของ Classroom ตอบ 503 google_not_configured
@@ -327,6 +328,7 @@ Websites & Domains > **Scheduled Tasks** > Add Task (Task type = **Run a PHP scr
 | ตรวจว่าโมเดลจริงจับ prompt injection ได้ | `eduvision:gemini-check --injection` | ส่งภาพตัวอย่าง 5 ภาพใน `backend/tests/fixtures/injection` (ภาพสังเคราะห์ ไม่มีข้อมูลนักเรียน) = 5 request; ทุกภาพต้องขึ้น `ok` และบรรทัดสุดท้าย `injection: 5/5 as expected` ถ้ามี `MISMATCH` แจ้งผู้พัฒนาเพื่อปรับ prompt |
 | ตรวจ FCM | `eduvision:fcm-check` | §6.2 |
 | ตรวจ Firestore | `eduvision:firestore-check` | §6.5 |
+| คัดลอกข้อมูลนักเรียนลง Firestore ทั้งหมดหรือซ่อมสำเนา | `eduvision:mirror-records` | §6.5 เฉพาะเมื่อเปิด `FIRESTORE_MIRROR_RECORDS` |
 | สร้างดัชนีชื่อ test ของ Test Lab | `eduvision:qa-index` | ไม่ต้องรันบน server: workflow deploy สร้างให้ทุกครั้ง (DESIGN §39.5) |
 | ลงทะเบียนโมเดล | `eduvision:register-model <path เต็มของโฟลเดอร์โมเดล>` | §7 |
 | import ตัวชี้วัดจาก CSV | `eduvision:import-skills <path เต็มของไฟล์ csv>` | §8 (หรือใช้หน้า Filament) |
@@ -576,6 +578,15 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 - **จำกัด API key ของเว็บ** (ค่านี้อยู่ใน JS ที่ใครก็โหลดได้ และอยู่ใน branch `deploy` ที่ public): Google Cloud console > APIs & Services > Credentials > key ชื่อ "Browser key (auto created by Firebase)" > Application restrictions = **Websites** ใส่ `https://teacherhelper.phuwish.com/*` (และ `http://localhost:5173/*` ถ้าใช้ทดสอบในเครื่อง) > API restrictions = **Restrict key** เลือก Identity Toolkit API, Token Service API, Cloud Firestore API > Save ถ้า GitHub แจ้ง secret scanning alert ของ key นี้ใน branch `deploy` ให้ปิดเป็น "False positive" หลังจำกัด key แล้ว
 - ตรวจในเบราว์เซอร์: เปิดเว็บแอป ล็อกอิน ไปที่ ตั้งค่า > การ์ด "ข้อมูลสด (Firestore)" ต้องขึ้น "เชื่อมต่อแล้ว" ถ้าไม่ขึ้น เปิด DevTools > Console ดูว่ามีข้อความ `Content Security Policy` หรือไม่ แล้วแจ้งผู้พัฒนา
 
+**สำเนาข้อมูลนักเรียน (ไม่บังคับ ปิดเป็นค่าเริ่มต้น, DESIGN §38.10)** คัดลอกชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบไปไว้ใต้ `classrooms/{id}` ซึ่งแอปอ่านไม่ได้ เปิดดูได้จาก Firebase console และไม่ต้องแก้ rules
+
+1. **ถ้ามีนักเรียนจริงในระบบ** ต้องมีความยินยอมของผู้ปกครองที่ครอบคลุมข้อมูลชุดนี้ก่อน และตั้ง TTL ตามข้อ 4 เพิ่ม collection group `students`, `submissions`, `gradebook`
+2. `.env`: `FIRESTORE_MIRROR_RECORDS=true` → Run Now `eduvision:post-deploy`
+3. Run Now `eduvision:mirror-records` ต้องขึ้น `queued N classroom(s)` worker คัดลอกข้อมูลเก่าภายในไม่กี่นาที ดูผลที่ Firestore Database > Data > `classrooms` ข้อมูลใหม่หลังจากนี้ตามเองผ่านคิว
+4. หน้า `/privacy` เปลี่ยนข้อความตามสวิตช์นี้เอง
+
+ปิดด้วย `FIRESTORE_MIRROR_RECORDS=false` แล้ว Run Now `eduvision:post-deploy` ระบบหยุดเขียน แต่สำเนาเดิมยังอยู่ ต้องลบ collection `classrooms` ใน Firebase console เอง
+
 ลบบัญชีใน Filament = ลบเอกสารใต้ `users/{uid}` และผู้ใช้ใน Firebase Authentication ของบัญชีนั้นทันทีผ่านคิว (DESIGN §38.8; service account ของ FCM ที่สร้างจาก Firebase มีสิทธิ์อยู่แล้ว ถ้าใน log มี `firestore.user_purge_failed` พร้อม `PERMISSION_DENIED` ให้เพิ่ม role **Firebase Authentication Admin** ให้ service account ใน Google Cloud IAM)
 
 ปิดเมื่อไรก็ได้ด้วย `FIRESTORE_ENABLED=false` ข้อมูลใน Firestore ลบทิ้งได้ทั้งหมดโดยไม่กระทบระบบ (สร้างใหม่จาก MariaDB ได้)
@@ -588,6 +599,7 @@ Firestore เก็บ**สำเนา**ของแจ้งเตือนแ
 
 1. เข้า `/admin` ด้วยบัญชี admin > เมนู **ผู้ทดสอบระบบ (Test Lab)** > **เพิ่มผู้ทดสอบ** สร้างบัญชีหัวหน้าทดสอบ (เปิด "หัวหน้าทดสอบ") ใช้อีเมลจริงและรหัสผ่านอย่างน้อย 8 ตัว ผู้ทดสอบคนอื่นเพิ่มต่อได้เองในหน้า **ผู้ทดสอบ** ของ `/qa` (DESIGN §39.6) ส่งรหัสให้แต่ละคนเอง
 2. ผู้ทดสอบเข้า `https://<โดเมน>/qa` แล้วล็อกอินด้วยอีเมลกับรหัสผ่านนั้น บัญชีนี้เปิด `/admin` หรือแอปไม่ได้ และบัญชีของ Krucheck ก็เปิด `/qa` ไม่ได้
+   ผู้ประเมิน SUS (DESIGN §39.9) เป็นอีกบทบาท: เพิ่มในหน้า **ผู้ทดสอบ** ของ `/qa` โดยเลือก "ผู้ประเมิน SUS" แล้วให้เข้า `https://<โดเมน>/sus` หลังใช้งานแอปเสร็จทันที (เป็นหน้าแยกที่มีหน้าล็อกอินของตัวเอง ไม่ใช่หน้า `/qa`) ผู้ประเมินเห็นแค่แบบประเมิน ผลอยู่ที่ `/qa/sus`
 3. หน้าภาพรวมอ่านผล CI จาก GitHub (ต้องเรียก `https://api.github.com` ได้) ถ้าขึ้น "อ่านผล CI จาก GitHub ไม่ได้ตอนนี้" ตลอด ให้ตรวจว่า hosting ออก HTTPS ไป api.github.com ได้ ระบบลองใหม่ทุก 1 นาที
 4. หน้ารายละเอียดของรายการอัตโนมัติแสดงรายชื่อ test จาก `backend/resources/qa/test-index.json` ที่ deploy สร้าง ถ้าขึ้น "เซิร์ฟเวอร์นี้ไม่มีรายชื่อ test" แปลว่า deploy รอบนั้นไม่ได้สร้างไฟล์ ให้ Run workflow deploy อีกครั้ง
 

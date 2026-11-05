@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Domain\Firestore\LiveGrading;
+use App\Domain\Firestore\LiveRecords;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -87,7 +88,8 @@ class Submission extends Model
     /** @return BelongsTo<Assignment, $this> */
     /**
      * A new hand-in or a new status is copied to Firestore for the live
-     * screens (DESIGN §38.9); a no-op while Firestore is off.
+     * screens (DESIGN §38.9); a no-op while Firestore is off. The score and
+     * status also go to the student record copy when that is on (§38.10).
      */
     protected static function booted(): void
     {
@@ -95,7 +97,11 @@ class Submission extends Model
             if ($submission->wasRecentlyCreated || $submission->wasChanged('status')) {
                 LiveGrading::queue($submission);
             }
+            if ($submission->wasRecentlyCreated || $submission->wasChanged(['status', 'total_score', 'total_override'])) {
+                LiveRecords::queueSubmission($submission);
+            }
         });
+        static::deleted(fn (Submission $submission) => LiveRecords::queueSubmission($submission));
     }
 
     public function assignment(): BelongsTo

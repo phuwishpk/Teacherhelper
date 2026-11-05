@@ -425,7 +425,10 @@ class AnswerKeyTest extends TestCase
         $this->asUser($this->teacher)->postJson($url, ['document_ids' => $ids])
             ->assertStatus(202)
             ->assertJsonPath('data.answer_key.extraction_status', 'failed')
-            ->assertJsonPath('data.answer_key.extraction.error', 'AI อ่านเฉลยไม่สำเร็จ ลองถ่ายรูปให้ชัดขึ้น แนบไฟล์ใหม่ หรือพิมพ์เฉลยเอง');
+            ->assertJsonPath('data.answer_key.extraction.error', 'AI อ่านเฉลยไม่สำเร็จ ลองถ่ายรูปให้ชัดขึ้น แนบไฟล์ใหม่ หรือพิมพ์เฉลยเอง')
+            // DESIGN §36.1: the code and the ai_calls row of the last try.
+            ->assertJsonPath('data.answer_key.extraction.ai_error_code', 'AI-OUTPUT')
+            ->assertJsonPath('data.answer_key.extraction.ai_call_id', AiCall::query()->max('id'));
         $this->assertSame(['invalid_output', 'invalid_output'], AiCall::query()->pluck('status')->all(), 'one retry of invalid output');
         $this->assertSame(0, $this->assignment->questions()->count());
 

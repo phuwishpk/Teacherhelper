@@ -82,6 +82,7 @@ import '../../features/review/review_labels.dart';
 import '../../features/review/review_queue_screen.dart';
 import '../../features/scan/scan_screen.dart';
 import '../../features/scan/web_scan_screen.dart';
+import '../../features/notes/teacher_notes_screen.dart';
 import '../../features/help/help_content.dart';
 import '../../features/notices/notices_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
@@ -279,6 +280,9 @@ abstract final class AppRoutes {
 
   /// The weekly timetable (DESIGN §29.12), the teacher's and the student's.
   static const timetable = '/timetable';
+
+  /// "บันทึกครู": photos and notes on the device and in Firestore (DESIGN §40).
+  static const teacherNotes = '/notes';
   static const studentTimetable = '/student/timetable';
 
   /// Joining a classroom with its class code (DESIGN §29.13.3): the page
@@ -906,6 +910,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.timetable,
         builder: (context, state) => const TimetableScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teacherNotes,
+        builder: (context, state) => const TeacherNotesScreen(),
       ),
       GoRoute(
         path: AppRoutes.assistant,

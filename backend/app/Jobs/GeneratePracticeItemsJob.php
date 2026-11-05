@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Domain\Gemini\AiErrorCode;
+use App\Domain\Gemini\AiJobFailures;
 use App\Domain\Gemini\GeminiException;
 use App\Domain\Gemini\GeminiKeyResolver;
 use App\Domain\Gemini\PracticeGenerator;
@@ -12,6 +14,7 @@ use App\Models\Skill;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * POST /skills/{id}/practice-items/generate (DESIGN §9.6, §10.6, §14.1):
@@ -52,10 +55,12 @@ class GeneratePracticeItemsJob implements ShouldQueue
         if ($skill === null || $school === null) {
             return;
         }
+        AiJobFailures::forget(AiJobFailures::PRACTICE, $this->failureId());
 
         $key = $keys->forTeacher($this->teacherId);
         if ($key === null) {
             Log::warning('practice_gen.no_ai_key', ['skill_id' => $skill->id, 'teacher_id' => $this->teacherId]);
+            AiJobFailures::record(AiJobFailures::PRACTICE, $this->failureId(), AiErrorCode::KEY_MISSING, null, AiErrorCode::message(AiErrorCode::KEY_MISSING));
 
             return;
         }
@@ -67,6 +72,7 @@ class GeneratePracticeItemsJob implements ShouldQueue
                 throw $e; // transient: the queue retries with backoff
             }
             Log::warning('practice_gen.failed', ['skill_id' => $skill->id, 'status' => $e->status]);
+            AiJobFailures::record(AiJobFailures::PRACTICE, $this->failureId(), $e->code(), $e->aiCallId, self::MESSAGE);
             $this->fail($e);
 
             return;
@@ -74,5 +80,27 @@ class GeneratePracticeItemsJob implements ShouldQueue
 
         $items = $bank->storeDrafts($school->id, $skill->id, $draft);
         Log::info('practice_gen.stored', ['skill_id' => $skill->id, 'school_id' => $school->id, 'items' => count($items)]);
+    }
+
+    /** What the practice bank says when the generation failed. */
+    public const MESSAGE = 'AI สร้างแบบฝึกไม่สำเร็จ ลองอีกครั้ง หรือเขียนข้อเอง';
+
+    /** The cache id of this teacher's request for this indicator (AiJobFailures). */
+    public static function failureKey(int $teacherId, int $skillId): string
+    {
+        return "{$teacherId}:{$skillId}";
+    }
+
+    private function failureId(): string
+    {
+        return self::failureKey($this->teacherId, $this->skillId);
+    }
+
+    /** After the last try (a transient failure every time, or a crash). */
+    public function failed(Throwable $e): void
+    {
+        if (! AiJobFailures::get(AiJobFailures::PRACTICE, $this->failureId())) {
+            AiJobFailures::recordThrowable(AiJobFailures::PRACTICE, $this->failureId(), $e, self::MESSAGE);
+        }
     }
 }

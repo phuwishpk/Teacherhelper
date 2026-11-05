@@ -6,6 +6,7 @@ import '../../core/auth/auth_repository.dart';
 import '../../core/api/api_retry.dart';
 import '../../core/auth/session.dart';
 import 'practice_models.dart';
+import '../../core/api/error_codes.dart';
 
 /// Student practice (DESIGN §9.7, §14.1).
 abstract class StudentPracticeRepository {
@@ -74,6 +75,10 @@ abstract class PracticeBankRepository {
   /// `PATCH /practice-items/{id}`: edit, approve or retire.
   Future<PracticeItem> update(int itemId, PracticeItemPatch patch);
 
+  /// The teacher's last AI generation for [skillId] failed (DESIGN §36.1):
+  /// `generation_error` of `GET /practice-items?skill=`, or null.
+  Future<({String message, ErrorCode code})?> generationError(int skillId);
+
   /// `GET /skills/{id}/resources`.
   Future<List<LearningResource>> resources(int skillId);
 
@@ -101,6 +106,30 @@ class ApiPracticeBankRepository implements PracticeBankRepository {
       query: {'skill': ?skillId, 'status': ?status?.apiValue},
     );
     return rows.map(PracticeItem.fromJson).toList();
+  }
+
+  @override
+  Future<({String message, ErrorCode code})?> generationError(
+    int skillId,
+  ) async {
+    final res = await _dio.get<Object?>(
+      '/practice-items',
+      queryParameters: {'skill': skillId, 'status': 'draft'},
+    );
+    final error = res.data is Map
+        ? (res.data as Map)['generation_error']
+        : null;
+    if (error is! Map) return null;
+    final code = ErrorCode.fromFields(
+      error['ai_error_code'],
+      error['ai_call_id'],
+    );
+    return code == null
+        ? null
+        : (
+            message: error['message'] as String? ?? 'AI สร้างแบบฝึกไม่สำเร็จ',
+            code: code,
+          );
   }
 
   @override
@@ -165,6 +194,13 @@ final practiceBankProvider = FutureProvider.autoDispose
           .watch(practiceBankRepositoryProvider)
           .list(skillId: filter.skillId, status: filter.status);
     }, retry: apiRetry);
+
+/// The teacher's last failed AI generation for an indicator (DESIGN §36.1).
+final practiceGenerationErrorProvider = FutureProvider.autoDispose
+    .family<({String message, ErrorCode code})?, int>((ref, skillId) {
+      watchSignedInUser(ref, keepAlive: false);
+      return ref.watch(practiceBankRepositoryProvider).generationError(skillId);
+    });
 
 final skillResourcesProvider = FutureProvider.autoDispose
     .family<List<LearningResource>, int>((ref, skillId) {

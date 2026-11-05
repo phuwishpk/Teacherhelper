@@ -11,6 +11,7 @@ import '../exams/exam_providers.dart';
 import '../review/review_labels.dart';
 import 'assignments_providers.dart';
 import 'question.dart';
+import '../../core/api/error_codes.dart';
 
 /// "มี n ข้อยังไม่ผูกตัวชี้วัด …" (DESIGN §20.3): a warning, never a block.
 /// Same wording as the server's `unmapped_warning`, so the mapping screen
@@ -45,6 +46,7 @@ class SuggestState {
     this.finishedAt,
     this.errorCode,
     this.errorMessage,
+    this.aiCode,
     this.suggestedQuestionCount,
     this.droppedCodeCount,
     this.guidance,
@@ -58,6 +60,9 @@ class SuggestState {
   /// (also when an exam lost its plan's or course's indicators).
   final String? errorCode;
   final String? errorMessage;
+
+  /// The AI failure's code and ai_calls id (DESIGN §36.1).
+  final ErrorCode? aiCode;
 
   /// Questions Gemini found at least one indicator of the plan for.
   final int? suggestedQuestionCount;
@@ -79,6 +84,9 @@ class SuggestState {
       finishedAt: _date(json['finished_at']),
       errorCode: error is Map ? error['code'] as String? : null,
       errorMessage: error is Map ? error['message'] as String? : null,
+      aiCode: error is Map
+          ? ErrorCode.fromFields(error['ai_error_code'], error['ai_call_id'])
+          : null,
       suggestedQuestionCount: (json['suggested_question_count'] as num?)
           ?.toInt(),
       droppedCodeCount: (json['dropped_code_count'] as num?)?.toInt(),

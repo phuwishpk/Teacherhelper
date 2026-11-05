@@ -20,6 +20,7 @@ import 'courses_providers.dart';
 import 'courses_repository.dart';
 import 'indicator_widgets.dart';
 import 'subject_field.dart';
+import '../../core/api/error_codes.dart';
 
 /// Waits for a course document to be read (polling `GET
 /// /document-extractions/{id}` while the queue worker runs it), then shows
@@ -408,6 +409,7 @@ class _CourseImportScreenState extends ConsumerState<CourseImportScreen> {
             ? _FailedView(
                 message: _extraction.error,
                 guidance: _extraction.guidance,
+                code: _extraction.errorCode,
               )
             : _WaitingView(guidance: _extraction.guidance),
       );
@@ -806,10 +808,11 @@ class _WaitingView extends StatelessWidget {
 }
 
 class _FailedView extends StatelessWidget {
-  const _FailedView({this.message, this.guidance});
+  const _FailedView({this.message, this.guidance, this.code});
 
   final String? message;
   final String? guidance;
+  final ErrorCode? code;
 
   @override
   Widget build(BuildContext context) {
@@ -818,14 +821,17 @@ class _FailedView extends StatelessWidget {
           message ?? 'AI อ่านเอกสารไม่สำเร็จ ลองแนบไฟล์ใหม่ หรือกรอกในฟอร์มเอง',
     );
     final g = guidance;
-    if (g == null) return error;
+    final c = code;
+    if (g == null && c == null) return error;
     return Column(
       children: [
         Expanded(child: error),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: GuidanceUsedNote(guidance: g),
-        ),
+        if (c != null) ErrorCodeLine(c),
+        if (g != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: GuidanceUsedNote(guidance: g),
+          ),
       ],
     );
   }

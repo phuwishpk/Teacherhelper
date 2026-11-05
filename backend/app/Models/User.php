@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Firestore\LiveRecords;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -78,6 +79,16 @@ class User extends Authenticatable implements FilamentUser
             'deleted_at' => 'datetime',
             'assistant_data_ack_at' => 'datetime',
         ];
+    }
+
+    /** A student's name and code are copied with the rosters (DESIGN §38.10). */
+    protected static function booted(): void
+    {
+        static::saved(function (User $user) {
+            if ($user->isStudent() && $user->wasChanged(['name', 'student_code'])) {
+                LiveRecords::queueRosters($user);
+            }
+        });
     }
 
     /** @return BelongsTo<School, $this> */

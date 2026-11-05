@@ -5284,6 +5284,17 @@ CREATE TABLE classroom_teachers (
 - **แอป**: `errorCodeOf` อ่านรหัสจาก body หรือจากชนิดของการเชื่อมต่อ `ErrorCodeLine` แสดง "รหัส AI-QUOTA · #48213" พร้อมปุ่มคัดลอก ใต้ error ของหน้าตั้งค่า key และ `showAiError` ใส่รหัสในแถบด้านล่างพร้อม "คัดลอกรหัส" (หรือ "ไปใส่ key" เมื่อปัญหาคือ key)
 - **Filament "การเรียก AI"**: คอลัมน์ # (ค้นด้วย "#48213" หรือรหัส), รหัส, ครู, HTTP ตัวกรองตามรหัส และชื่องานครบทุก purpose
 
+### 36.1 รหัสของงาน AI เบื้องหลัง
+
+ทำ 21 ต.ค. 2569 (ต่อจาก §36 ที่ทำเฉพาะงานที่ตอบในคำขอเดียวกัน) gateway ใส่ `errorCode` และ `aiCallId` ใน `CallOutcome` และ `GeminiException` ทุกครั้งอยู่แล้ว งานในคิวเก็บสองค่านี้ไว้ที่ผลของงานนั้น แล้วแอปแสดง `ErrorCodeLine` ("รหัส AI-QUOTA · #48213" พร้อมปุ่มคัดลอก) ตรงที่ครูเห็นว่าล้ม
+
+- **อ่านไฟล์** (เฉลย ข้อสอบ รายวิชาและแผน): `document_extractions.error_code` และ `ai_call_id` (คอลัมน์ใหม่) ตั้งใน `fail()` ของ `AnswerKeyService`, `ExamDocuments`, `CourseDocuments` (ไม่มี key = `AI-KEY-MISSING`, คิวลองครบแล้วยังล้ม = `AI-TIMEOUT`, ไฟล์อ่านไม่ได้ = ไม่มีรหัสเพราะไม่ใช่ความผิดของ AI) ล้างเมื่อขออ่านใหม่หรืออ่านสำเร็จ `toApi()` ส่ง `ai_error_code`, `ai_call_id` แอปแสดงในการ์ดอ่านเฉลยไม่สำเร็จ หน้าตรวจผลอ่านข้อสอบ และหน้านำเข้ารายวิชา
+- **ตรวจสแกนและตรวจทั้งหน้า**: `responses.fuzzy_trace.ai_error_code` / `ai_call_id` (ไม่มีคอลัมน์ใหม่) จาก `GradeApplier::applyFailure` และผลของ `WholePageGrader` (รหัสเก็บในผลของหน้าแล้วตามไปที่คำตอบตอนรวม) ข้อที่รอตรวจเองเพราะไม่มี key หรือ key ใช้ไม่ได้มีรหัสเสมอ คิวตรวจทานและ `GET /responses/{id}` ส่ง `ai_error_code`, `ai_call_id` แอปแสดงใต้ประกาศ "ตรวจเอง" ในบานตรวจทาน
+- **เสนอตัวชี้วัด**: `error` ในสถานะ (cache) มี `ai_error_code`, `ai_call_id` (`IndicatorSuggester` ส่งต่อรหัสที่เคยหายไป) แอปแสดงใต้ข้อความเสนอไม่สำเร็จในหน้าจับคู่
+- **วิเคราะห์รายคน (รอบกลางคืน)**: `student_analyses.error_code` และ `ai_call_id` (คอลัมน์ใหม่) จาก `markFailed` (batch ล้มทั้งชุด = `AI-ERROR` ไม่มี id) ล้างเมื่อเขียนสำเร็จ payload ส่งเฉพาะแถวที่สถานะ failed แอปแสดงใต้บรรทัดสถานะในหน้าวิเคราะห์รายคน
+- **ร่าง rubric และสร้างแบบฝึก** (เดิมไม่มีที่เก็บ): `AiJobFailures` เก็บใน cache 7 วัน (`ai-job-failure:rubric:{question}`, `ai-job-failure:practice:{teacher}:{skill}`) ทั้งตอนไม่มี key ตอน Gemini ล้ม และใน `failed()` ของ job เมื่อคิวลองครบ ล้างเมื่อขอใหม่และเมื่องานเริ่มทำ `QuestionResource.rubric_draft_error` และ `generation_error` ของ `GET /practice-items?skill=` (เฉพาะของครูที่ขอ) หน้า rubric หยุดรอและแสดงข้อความพร้อมรหัสทันที คลังแบบฝึกแสดงใต้ชื่อตัวชี้วัด
+- คำอธิบายรายข้อที่เขียนไม่สำเร็จยังเก็บแค่ `explanation_error` (สถานะ) ยังไม่มีรหัส
+
 ## 37. ผู้ช่วย Krucheck (แชทกับ AI)
 
 ตัดสินใจ 20 ต.ค. 2569 (ผู้ใช้ขอปุ่มแชทกับ AI ที่แนะนำการใช้ระบบ การให้คะแนน และการตัดเกรด และต่อไปสั่งให้ทำงานจากเอกสารได้) ทำเป็นขั้น รหัสข้อผิดพลาดใช้ชุดของ §36
@@ -5402,10 +5413,10 @@ CREATE TABLE classroom_teachers (
 ### 38.1 หลักการ
 
 - **MariaDB ยังเป็นแหล่งความจริงเพียงแหล่งเดียว** (§8) ทุก API เขียน MariaDB เหมือนเดิม Firestore เก็บเฉพาะ**สำเนาที่หน้าจอต้องเปลี่ยนเอง** โดยไม่ต้องดึงเพื่อรีเฟรช (ตอนนี้ทุกหน้าใช้ pull-to-refresh) ข้อมูลใน Firestore สร้างใหม่ได้ทั้งหมดจาก MariaDB และลบทิ้งได้โดยระบบยังทำงานครบ
-- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3 (มีข้อยกเว้นเดียวคือ `users/{uid}/settings/app` ดูด้านล่าง)
+- **backend เป็นผู้เขียน แอปเป็นผู้อ่าน** (ยกเว้นสองจุด: แอปเขียน `users/{uid}/notes` ของ "บันทึกครู" เอง §40 และ `users/{uid}/settings/app` เอง §43) queue job หรือ listener เรียก Firestore REST API (`documents:commit`) ด้วย service account เดียวกับ FCM (§9.9) ขอ access token ผ่าน `AccessTokens` เดิมโดยเพิ่ม scope `https://www.googleapis.com/auth/datastore` ไม่มี composer package ใหม่ เป็น outbound HTTPS จาก Scheduled Task ตาม §3.3 **Firestore ล่มต้องไม่ทำให้งานหลักล้ม** (กติกาเดียวกับ `Notifier`: จับ exception แล้ว log หนึ่งบรรทัด) แอปไม่เขียน Firestore ในขั้น 1–3
 - **ข้อยกเว้นการเขียนจากแอป**: เอกสาร `users/{uid}/settings/app` (§43) แอปเขียนเองได้เพื่อเก็บการตั้งค่า เช่น `mascot_enabled` (bool) ไม่มี `expires_at` เพราะเป็นการตั้งค่าถาวรของผู้ใช้ข้ามเครื่อง และไม่มีข้อมูลนักเรียนหรือเนื้อหาแชทใด ๆ
 - **แอปยืนยันตัวกับ Firebase ด้วย custom token**: หลังเข้าสู่ระบบด้วย Sanctum แอปเรียก `POST /auth/firebase-token` server เซ็น JWT ด้วย private key ของ service account (`firebase/php-jwt`) `uid = "u{users.id}"` claims มีแค่ `role` อายุ 1 ชั่วโมง แอปเรียก `signInWithCustomToken` แล้ว Firebase Auth ถือ refresh token ของตัวเองต่อไป (ไม่ต้องขอ custom token ซ้ำจนกว่าจะออกจากระบบ) security rules ตรวจ `request.auth.uid` เท่านั้น ไม่ใช้ claims ชี้ห้อง (จำกัด 1000 ไบต์ นักเรียนอยู่หลายห้อง)
-- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นใน Firestore ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
+- **PDPA (§16.2)**: ห้ามใส่คะแนน รูป ลายมือ ข้อความคำตอบ หรือชื่อเต็มของนักเรียนคนอื่นในเอกสารที่แอปอ่านได้ (ใต้ `users/{uid}`) รูปและลายมือห้ามขึ้น Firestore ทุกกรณี ข้อยกเว้นเดียวคือสำเนาข้อมูลนักเรียนฝั่ง server ใต้ `classrooms/{id}` ซึ่งปิดเป็นค่าเริ่มต้นและแอปอ่านไม่ได้ (§38.10 แก้ 1 พ.ย. 2569) ทุก document มี `expires_at` (timestamp, `created_at` + 90 วัน) **แต่ยังไม่ได้ตั้ง TTL policy** (ตัดสินใจ 21 ต.ค. 2569: TTL ไม่บังคับ ตั้งใน Google Cloud console เมื่อพร้อม HOSTING §6.5 ข้อ 4) จนกว่าจะตั้ง เอกสารใน Firestore อยู่จนกว่าจะลบด้วยมือ ซึ่งยอมรับได้เพราะเนื้อหามีแค่ข้อความแจ้งเตือนกับ id ตามกติกาข้างต้น และแอปแสดงแค่ 100 รายการล่าสุด เมื่อเปิด TTL ภายหลัง Firestore จะลบเอกสารที่เลย `expires_at` ย้อนหลังทั้งหมดเอง **ต้องตั้ง TTL ก่อนใช้กับนักเรียนจริง** การลบบัญชี (§31) ลบ subtree `users/{uid}` และผู้ใช้ใน Firebase Auth ทันทีผ่านคิว (§38.8)
 - **ไม่ตั้งค่า = ระบบทำงานครบเหมือนเดิม** `FIRESTORE_ENABLED=false` หรือไม่มี `FIREBASE_CREDENTIALS` → `NullLiveStore` (ไม่เขียนอะไร) และ `POST /auth/firebase-token` ตอบ 503 `firestore_not_configured` แอปจึงใช้หน้าแบบดึงมือเหมือนเดิม test ทั้งหมดรันโดยไม่มี Firebase (`Http::fake` ของ endpoint `:commit` ฝั่ง server, `LiveSession` ที่ปิดอยู่ฝั่งแอป)
 
 ### 38.2 โครงสร้างเอกสาร
@@ -5420,6 +5431,9 @@ CREATE TABLE classroom_teachers (
 | `users/{uid}/class_feed/{classroomId}` | `classroom_id`, `updated_at`, `expires_at` (ไม่มีเนื้อหาหรือหัวข้อโพสต์) | `SignalClassFeedJob` ให้ทุกคนในห้อง (§38.11) | 4 |
 | `users/{studentUid}/attendance/{courseId}_{classroomId}` | `course_id`, `classroom_id`, `updated_at`, `expires_at` (ไม่มีสถานะเช็คชื่อ) | `SignalAttendanceJob` ให้นักเรียนทุกคนของห้อง (§38.11) | 4 |
 | `users/{uid}/settings/app` | `mascot_enabled` (bool), `onboarding_done_at` (timestamp), `device` (string) **ไม่มีข้อมูลนักเรียน/แชท** | แอป (ครู) (§43) | 4 |
+| `classrooms/{id}/students/{studentId}` | `classroom_id`, `student_id`, `name`, `student_number`, `student_code`, `updated_at`, `expires_at` | `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
+| `classrooms/{id}/submissions/{submissionId}` | `classroom_id`, `assignment_id`, `assignment_title`, `student_id`, `status`, `total_score`, `published`, `answers[]` (`question_id`, `position`, `type`, `answer`, `score`, `max_points`), `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
+| `classrooms/{id}/gradebook/{entryId}` | `classroom_id`, `student_id`, `assignment_id`, `gradebook_item_id`, `score`, `excused`, `updated_at`, `expires_at` | `MirrorRecordJob` และ `MirrorClassroomRecordsJob` (§38.10) **อ่านได้เฉพาะ server** | 5 |
 
 uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`) ไม่เก็บคอลัมน์ใหม่ใน MariaDB
 
@@ -5432,6 +5446,7 @@ uid ใน Firestore เป็น `u{users.id}` เสมอ (`FirestoreUid::of`
 | 2ข | งานที่เหลือของขั้น 1–2: ลบข้อมูลสดเมื่อลบบัญชี การ์ด "ข้อมูลสด" ในหน้าตั้งค่า Firebase บนเว็บ production (CSP และ Actions variables) (§38.8) | เสร็จในโค้ด 21 ต.ค. 2569 ⚠️ ต้องเพิ่ม Web app ใน Firebase และ Actions variables แล้วลองในเบราว์เซอร์จริง |
 | 3 | สถานะการตรวจสด: แถบความคืบหน้าหน้าการบ้านของครู และสถานะงานของนักเรียน (§38.9) | เสร็จในโค้ด 22 ต.ค. 2569 |
 | 4 | ฟีดโพสต์ของห้องและเช็คชื่อสด | เสร็จในโค้ด 1 พ.ย. 2569 (§38.11) |
+| 5 | สำเนาข้อมูลนักเรียน: รายชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบ ฝั่ง server (§38.10) | เสร็จในโค้ด 1 พ.ย. 2569 ⚠️ ปิดอยู่จนกว่าจะตั้ง `FIRESTORE_MIRROR_RECORDS=true` แล้ว Run Now `eduvision:mirror-records` |
 
 ### 38.4 backend (ขั้น 1)
 
@@ -5494,6 +5509,22 @@ service cloud.firestore {
 - `core/live/live_scope.dart`: `liveUserScope` (Firestore + uid เมื่อ uid ตรงกับผู้ใช้ที่ล็อกอิน) และ `liveChangeTicks` ใช้ร่วมกับกล่องแจ้งเตือน (§38.7)
 - rules ไม่เปลี่ยน (ยังอยู่ใต้ `users/{uid}`) TTL ถ้าตั้ง ให้เพิ่ม collection group `assignments` และ `submissions` (HOSTING §6.5 ข้อ 4)
 
+### 38.10 ขั้น 5: สำเนาข้อมูลนักเรียน
+
+ตัดสินใจ 1 พ.ย. 2569 (ผู้พัฒนาขอให้เก็บชื่อ เลขที่ เลขประจำตัว คะแนน และคำตอบใน Firestore ด้วย) แก้กติกา PDPA ของ §38.1 โดยมีเงื่อนไขข้างล่าง MariaDB ยังเป็นแหล่งความจริง แอปยังอ่านข้อมูลชุดนี้จาก API เหมือนเดิม
+
+- **อยู่นอก `users/{uid}` โดยตั้งใจ** `firebase/firestore.rules` ไม่เปิดให้ client อ่านนอก `users/{uid}` เลย สำเนาใต้ `classrooms/{id}` จึงเข้าถึงได้เฉพาะ server (service account) และผู้ดูแลโครงการ Firebase นักเรียนจึงอ่านคะแนนที่ยังไม่เผยแพร่หรือข้อมูลของเพื่อนไม่ได้ ไม่ต้องแก้ rules และไม่ต้องมี `members` ถ้าวันหน้าจะให้แอปอ่าน ต้องออกแบบ rule รายห้องและซ่อนคะแนนที่ยังไม่เผยแพร่ก่อน test `test_no_client_rule_opens_the_student_records` คุมข้อนี้
+- **สวิตช์แยก** `FIRESTORE_MIRROR_RECORDS` (`false` เป็นค่าเริ่มต้น) ใช้คู่กับ `FIRESTORE_ENABLED` เพราะ `main` deploy เอง ข้อมูลนักเรียนจริงจึงไม่เริ่มส่งเพียงเพราะ merge ปิดสวิตช์แล้วงานที่ค้างในคิวไม่เขียนอะไร แต่สำเนาที่อยู่ใน Firestore แล้วไม่ถูกลบเอง ต้องลบใน console
+- **ก่อนใช้กับนักเรียนจริง** ต้องมีความยินยอมของผู้ปกครองที่ครอบคลุมการเก็บชื่อ คะแนน และคำตอบที่ Firebase และตั้ง TTL ของ collection group `students`, `submissions`, `gradebook` ถ้าตั้ง TTL แล้วสำเนาที่ไม่เปลี่ยน 90 วันจะหายไป รัน `eduvision:mirror-records` เพื่อสร้างใหม่ได้ หน้า `/privacy` เปลี่ยนข้อความตามสวิตช์นี้เอง
+- **ไม่เก็บ** อีเมล รูป ลายมือ path ของไฟล์ `extraction` ดิบ `fuzzy_trace` คำอธิบายคะแนน แชท เกรดที่ตัดแล้วของสมุดคะแนน (`gradebook_published_grades`) และชื่อในเอกสารคะแนน (ใช้ `student_id` เทียบกับ `students`) `answer` ยาวสุด 1,000 ตัวอักษร เพื่อให้ไม่เกิน 1 MiB ต่อเอกสาร
+- **คำตอบเป็นข้อความ**: ข้อปรนัยจาก `selected_options` หรือจาก `mcq_fill` ด้วยเกณฑ์ `McqGrader::FILLED_FROM`, `short` จาก `answer_text`, `show_work` จาก `steps` กับ `final_answer_text`, `open` จาก `transcription`, ข้อสอบกระดาษจาก `exam_answer` (ค่าที่ครูแก้ใน `resolved` ก่อน) `score` คือ `Response::effectiveScore()` `total_score` คือ `COALESCE(total_override, total_score)`
+- **การเปลี่ยนรายแถว**: `Submission` (ใหม่, ลบ, `status`, `total_score`, `total_override`), `Response` (ใหม่, `extraction`, `exam_answer`, `mcq_fill`, `ai_score`, `final_score`), `GradebookEntry` (บันทึก, ลบ) ส่ง `MirrorRecordJob` (unique ต่อแถวจนกว่าจะเริ่มรัน) ซึ่งอ่านแถวตอนรัน แล้วเขียนหรือลบเอกสาร เขียนผ่าน `LiveStore` จึงไม่ทำให้งานหลักล้ม `tries = 1`
+- **ทั้งห้อง**: `ClassroomStudent` (attach, detach, `updateExistingPivot`) และการแก้ `name` หรือ `student_code` ส่ง `MirrorClassroomRecordsJob` แบบ `rosterOnly` การรวมบัญชี ลบหรือกู้บัญชี แก้ชื่องาน และลบห้อง ซึ่งเขียนด้วย query builder หรือกระทบหลายแถว ส่งแบบเต็มห้อง job เขียนทุกเอกสาร แล้วอ่านรายชื่อเอกสารใน Firestore เพื่อลบตัวที่ไม่มีใน MariaDB ห้องที่ลบแล้วถูกลบทั้งชุดด้วย `deleteSubcollections` job นี้เรียก `FirestoreClient` ตรงเพื่อให้ล้มแล้วลองใหม่ (`tries = 3`) เพราะการลบต้องไม่หาย commit ละ 50 เอกสารเพื่อไม่ให้เกิน 10 MiB
+- **การ update แบบ query builder ที่ไม่ต้องตาม**: `ClassroomStudent::query()->update` ที่เหลือแตะแค่คอลัมน์ Google และ PIN ซึ่งไม่ได้คัดลอก `AssignmentController::destroy` ไม่ต้องตามเพราะ `submissions.assignment_id` เป็น `RESTRICT` ลบได้เฉพาะงานที่ไม่มีคนส่ง
+- `eduvision:mirror-records` (Plesk Run Now) ส่งทุกห้องที่ยังไม่ถูกลบเข้าคิว ใช้ครั้งแรกหลังเปิดสวิตช์ เพราะข้อมูลเก่าไม่ถูกคัดลอกเอง และใช้ซ่อมเมื่อ `MirrorRecordJob` เขียนไม่สำเร็จ
+- โควตา Spark: แต่ละแถวที่เปลี่ยนเขียนหนึ่งครั้ง sync เต็มห้องเขียนเท่าจำนวนเอกสารของห้องและอ่านเท่ากัน ห้อง 40 คน 20 งานประมาณ 840 เขียน ถ้า backfill หลายห้องวันเดียวให้ดู Firestore > Usage (20,000 เขียนต่อวัน)
+- test: `tests/Feature/Firestore/LiveRecordsTest.php`
+
 ### 38.11 ขั้น 4: ฟีดห้องเรียนและเช็คชื่อสด
 
 - **เอกสารทั้งสองชนิดและเหตุผลที่ไม่มีเนื้อหา**: เอกสารอยู่ใน Firestore ใต้ `users/{uid}` ของแต่ละคน:
@@ -5513,7 +5544,7 @@ service cloud.firestore {
     - `LiveBadge`: ป้าย "อัปเดตสด" แสดงบนการ์ดโพสต์ล่าสุด หน้ารายการโพสต์ และการ์ดการเข้าเรียนวันนี้เฉพาะเมื่อชั้นข้อมูลสดเปิดใช้งานอยู่
     - ปุ่มรายการใหม่ (`feed_new_items`): หากผู้ใช้กำลังเลื่อนดูฟีดโพสต์อยู่ด้านล่าง เมื่อมีโพสต์ใหม่จะแสดงปุ่มลอย "มีรายการใหม่ N รายการ" แทนที่จะกระตุกเลื่อนฟีดทันที กดแล้วจะ scroll กลับขึ้นบนสุดและซ่อนปุ่ม แต่หากอยู่บนสุดอยู่แล้วจะแสดงรายการใหม่ทันทีโดยไม่ขึ้นปุ่ม
     - การ์ด "การเข้าเรียนวันนี้" (`TodayAttendanceCard`): บนหน้าแรกของนักเรียน แสดงสถานะคาบเรียนของวันนี้ (เช่น มาสาย, มาตรงเวลา) และไม่กินพื้นที่หากไม่มีคาบเรียนวันนี้หรือโหลดไม่สำเร็จ
-- **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) โดยปกติอยู่ที่ 1–5 วินาที
+- **ความหน่วงตามรอบของ worker**: การส่งสัญญาณทำผ่าน background queue (`default`) ความหน่วงที่หน้าจอเปลี่ยนขึ้นอยู่กับรอบการดึงงานของ worker (`queue:work` หรือ cron บน Scheduled Tasks) บน production worker รันทุกนาทีจึงช้าได้ราว 1 นาที
 - **test ที่มี**:
   - backend: `LiveClassroomTest` (ผู้รับและ fields), `LiveClassFeedTest`, `LiveAttendanceTest`, `LiveClassroomPrivacyTest` (ยืนยันว่าไม่มีเนื้อหาโพสต์/สถานะเช็คชื่อใน Firestore และผู้ใช้คนอื่นไม่ได้รับสัญญาณ)
   - app: `live_class_widgets_test.dart` (widget test ของ LiveBadge, ปุ่มรายการใหม่, TodayAttendanceCard และการแสดงผล 3 ขนาดหน้าจอ 390, 820, 1440 px), `live_class_flow_test.dart` (integration flow ของ StudentShell ตามสัญญาณโพสต์และการเข้าเรียน), `live_class_signal_test.dart` (security test ตรวจว่า uid อื่นไม่ trigger refetch, uid ไม่ตรงไม่ฟัง, แอปไม่เขียน Firestore เอง, และ firestore.rules ยังคงมี uid guard ไม่มี match /classrooms)
@@ -5541,6 +5572,7 @@ service cloud.firestore {
 - `qa_testers`: `name`, `email` UNIQUE, `password` (hash), `is_lead` (หัวหน้าทดสอบ: กด "อ่านผล CI ใหม่" ได้), `remember_token`
 - `qa_results`: `qa_tester_id` (FK cascade), `case_code` VARCHAR(20), `status` VARCHAR(20) NULL, `time_sec` INT UNSIGNED NULL, `error_count` SMALLINT UNSIGNED NULL, `note` TEXT NULL; UNIQUE (`qa_tester_id`, `case_code`)
 - `qa_sus_responses`: `qa_tester_id` (FK cascade, UNIQUE), `role` (`teacher`/`student`), `answers` JSON, `score` DECIMAL(5,1), `comment`
+- `qa_settings` (§39.10): `key` PK, `value` TEXT เก็บรหัสกลุ่มของ `/usability` แบบ hash, `qa_testers.occupation` VARCHAR(100) NULL และ `qa_results.ease` TINYINT UNSIGNED NULL (1–5)
 - ไม่มีตารางใดชี้ไป `users` จึงไม่กระทบ §31.3
 
 ### 39.4 หน้า
@@ -5549,7 +5581,7 @@ service cloud.firestore {
 - **แผนทดสอบ `/qa/plan`**: กติกาเลือกอัตโนมัติหรือทำมือ ขั้นตอนการทดสอบ และทุกรายการ กรองตามชนิดได้
 - **รายละเอียด `/qa/cases/{code}`** (`TestCaseDetail`): อัตโนมัติแสดงสิ่งที่ตรวจ ผล workflow ล่าสุดพร้อม commit และเวลา และ**ทุกไฟล์ test พร้อมรายชื่อ test ทุกตัวในไฟล์** (ลิงก์ไปไฟล์บน GitHub) ทำมือแสดงเหตุผล ขั้นตอน ผลที่คาดหวัง usability แสดงงาน เกณฑ์ สิ่งที่สังเกต และทั้งสองแบบแสดงผลของผู้ทดสอบทุกคนพร้อมบันทึกและเวลา
 - **กรอกผล `/qa/run`** (`MyResults`): การ์ดของทุกรายการทำมือและ usability แต่ละใบบันทึกเอง (`save(code)` ตรวจ status ตามชนิด รายการอัตโนมัติไม่รับ เขียนเฉพาะแถวของผู้ล็อกอิน)
-- **แบบประเมิน SUS `/qa/sus`**: 10 ข้อ คะแนนขึ้นทันทีเมื่อตอบครบ หนึ่งคำตอบต่อคน
+- **แบบประเมิน SUS `/qa/sus`**: 10 ข้อ คะแนนขึ้นทันทีเมื่อตอบครบ หนึ่งคำตอบต่อคน (ถูกแทนด้วย §39.9: ผู้ประเมินตอบที่ `/sus` และ `/qa/sus` เป็นหน้าผล)
 - **admin `/admin/qa-testers`** "ผู้ทดสอบระบบ (Test Lab)": admin ของ Krucheck สร้าง แก้ ลบบัญชีผู้ทดสอบ (ลบแล้วผลของคนนั้นหายด้วย) และปุ่มเปิด Test Lab
 
 ### 39.5 รายชื่อ test และผล CI
@@ -5579,6 +5611,72 @@ service cloud.firestore {
 - **ที่เก็บ**: `backend/resources/qa/manual-test/README.md` (128 ข้อ: 1–80 ตั้งแต่ครูสมัครจนประกาศเกรด, 81–128 เส้นทาง Google Classroom ที่ครูมีชั้นเรียนใน Classroom และนักเรียนเข้าชั้นเรียนของครู ตั้งแต่เชื่อมบัญชี ผูกห้อง นักเรียนที่มีแค่ใน Classroom เข้าสู่ระบบด้วย Google แล้วเชื่อมเอง โพสต์ ส่งงานใน Classroom ส่งคะแนนกลับ คะแนนไม่ตรงกัน จนถึงนำเข้าและส่งออกคะแนนผ่าน Google Sheets เพิ่ม 25 ต.ค. 2569) และ `files/*.pdf` อยู่ใน backend เพราะเครื่อง self-hosted คัดลอกแค่ `backend/` (§26) ไฟล์ทดสอบเป็นการบ้านสมมติ "คณิตศาสตร์พื้นฐาน ม.4" 4 ข้อ 6 คะแนน (สมการกำลังสอง ฟังก์ชัน ลำดับเลขคณิต เลขยกกำลัง): ใบโจทย์ เฉลยพร้อมเกณฑ์ คำตอบ นร.1 ถูกทุกข้อ และคำตอบ นร.2 ที่ผิดแบบต่าง ๆ (ผิดเครื่องหมาย ใช้สูตรถูกแต่คูณผิด ท่องกฎไม่อธิบาย) ไม่มีข้อมูลหรือลายมือนักเรียนจริง (§16.2)
 - **หน้า** `ManualTestChecklist` (`ManualChecklist` แปลง Markdown แบบ GFM, `html_input` escape): การ์ดดาวน์โหลดไฟล์ทดสอบด้านบน ลิงก์ `files/…` ในเนื้อหาชี้ไปที่ `GET /qa/checklist/files/{file}` (เฉพาะบัญชี Test Lab, ชื่อไฟล์ต้องตรง `[a-z0-9-].pdf` ในโฟลเดอร์ files เท่านั้น) ช่อง `- [ ]` ติ๊กได้ แถบความคืบหน้าติดด้านบน เครื่องหมายเก็บใน localStorage ของเบราว์เซอร์ (key เปลี่ยนเมื่อ README เปลี่ยน) ไม่ใช่ผลทดสอบ ผลจริงยังบันทึกที่ "ผลของฉัน" (PR-01, PR-03, PR-05)
 - `ManualChecklistTest` ตรวจว่าทุกไฟล์ที่เช็คลิสต์ลิงก์มีอยู่จริง
+
+### 39.8 ชุด usability ย่อสำหรับผู้ทดสอบ 5 คน และรายงาน (`/qa/report`)
+
+เพิ่ม 28 ต.ค. 2569 (ผู้ใช้ขอ: เกณฑ์โครงงานต้องมีรายงาน Usability Testing กับผู้ใช้อย่างน้อย 5 คน ให้ตรวจน้อยที่สุด)
+
+- **kind ใหม่ `quick`** (`QaCatalog::QUICK`, กลุ่ม "ชุดย่อ 5 คน (รายงานโครงงาน)" แสดงก่อนกลุ่มอื่นในหน้าบันทึกผล) 4 งาน รวมราว 15 นาทีต่อคน บนระบบสาธิต (`eduvision:reset-demo`, DemoSeeder มีการบ้านที่เผยแพร่แล้ว การบ้านรอตรวจทาน และสมุดคะแนน) ผู้ทดสอบจึงไม่ต้องสมัครหรือใส่ Gemini key: QK-1 นักเรียนดูผลและคำอธิบาย, QK-2 ครูตรวจทาน แก้หนึ่งข้อ แล้วเผยแพร่, QK-3 ครูส่งงานนักเรียนด้วยรูป, QK-4 ครูหาเกรดของเลขที่ 3 จากนั้นตอบ SUS ที่ `/qa/sus` เดิม บันทึกผลด้วยสถานะ เวลา จำนวนครั้งที่ทำผิด และสิ่งที่ผู้ทดสอบพูด แบบเดียวกับ usability อื่น
+- **หน้า "รายงาน Usability"** (`UsabilityReport`): จำนวนผู้ทดสอบเทียบเกณฑ์ 5 คน (`QUICK_MIN_TESTERS`) SUS เฉลี่ยเทียบ 68 ตารางผลต่องาน (ผู้ทำ สำเร็จเอง มีคนช่วย ไม่สำเร็จ อัตราสำเร็จเอง เวลาเฉลี่ย ทำผิดเฉลี่ย) ผลรายคน และบันทึกของผู้ทดสอบ ปุ่มพิมพ์หรือบันทึกเป็น PDF ซ่อนเมนูตอนพิมพ์ ผู้ทดสอบที่มีแต่ "ข้าม" ไม่นับ
+- **ผู้ทดสอบภายนอกบันทึกเองได้แล้ว** (§39.10): ลงทะเบียนที่ `/usability` บัญชีเดียวทำทั้งงานและ SUS ข้อด้านล่างเรื่องสองบัญชีใช้เฉพาะเมื่อทีมสังเกตและบันทึกให้แทน
+- **SUS ของชุดนี้** (ปรับ 1 พ.ย. 2569 ตอนรวมกับ §39.9): บัญชีผู้ทดสอบเข้า `/sus` ไม่ได้ ผู้ทดสอบภายนอกแต่ละคนจึงมีสองบัญชี คือผู้ทดสอบที่ `/qa` กับผู้ประเมินที่ `/sus` (อีเมลห้ามซ้ำ บัญชีที่สองใช้อีเมลสมมติได้ เพราะเป็นแค่ชื่อเข้าระบบ) รายงานแสดง SUS รวมจาก `QaBoard::susStats()` ไม่แสดงรายคน เพราะบัญชีสองชนิดไม่ผูกกัน ถ้าผู้ประเมินตอบทั้งฝั่งครูและฝั่งนักเรียน นับเป็นสองคำตอบ
+- กระบวนการ 12 ชุดและฟังก์ชัน 144 ข้อยังอยู่เหมือนเดิมสำหรับทีม test: `QuickUsabilityTest`
+
+### 39.9 SUS โดยผู้ประเมินแยก role ที่หน้า `/sus` ตามมาตรฐาน
+
+ตัดสินใจ 22 ต.ค. 2569 (ผู้ใช้ขอ: แบบประเมิน SUS แยกจากผู้ทดสอบ usability และ integration เป็นอีก role เข้าอีกหน้าหนึ่ง และประเมินตามมาตรฐาน) แทน SUS ของผู้ทดสอบใน §39.2–§39.6
+
+- **role**: `qa_testers.role` = `tester` (ค่าเริ่มต้น เข้า `/qa`) หรือ `evaluator` (เข้า `/sus` อย่างเดียว) `QaTester::canAccessPanel`: panel `qa` เฉพาะ tester, หน้า `/sus` ล็อกอินได้เฉพาะ evaluator (guard `sus`) ผู้ประเมินไม่เป็นหัวหน้า ผู้ทดสอบทุกคนเพิ่มผู้ประเมินได้ในหน้า "ผู้ทดสอบ" (เลือกบทบาท) หัวหน้าลบได้ admin จัดการที่ `/admin` (คอลัมน์และตัวเลือกบทบาท) ผู้ทดสอบไม่ทำ SUS อีก เพราะตามวิธีมาตรฐานผู้ตอบคือผู้ใช้ที่เพิ่งใช้ระบบ ไม่ใช่ทีมที่รู้จักระบบ
+- **หน้า `/sus` แยกจาก Test Lab ทั้งหน้าและหน้าตา** (ปรับ 23 ต.ค. 2569 ผู้ใช้ขอให้เปิดคนละหน้าและ UI ไม่เหมือนกัน): ไม่ใช่ Filament panel แต่เป็นหน้า Blade ธรรมดา (`App\Http\Controllers\Sus\SusController`, view `resources/views/sus/`) หน้าตาแบบแบบสอบถามคอลัมน์เดียว ตัวเลือกปุ่มใหญ่กดง่ายบนมือถือ สีอ่อนและมืดตามเครื่อง ไม่มี JavaScript (CSP `default-src 'none'` อนุญาตแค่ inline style และส่งฟอร์มมาที่เว็บนี้) ส่ง `no-store` และ `noindex` route: `GET/POST /sus/login` (throttle `sus-login` 5 ครั้งต่อนาทีต่อ IP และอีเมล), `POST /sus/logout`, `GET /sus` (`?role=teacher|student`), `POST /sus` guard `sus` บน provider `qa_testers` ล็อกอินด้วย `role = evaluator` เท่านั้น session แยกจาก guard `qa` ผู้ไม่ได้ล็อกอินที่เปิด `/sus` ถูกส่งไป `/sus/login` (`bootstrap/app.php`) เนื้อหา: คำชี้แจงตามวิธีของ Brooke (1996): ตอบทันทีหลังใช้งานก่อนพูดคุยกับผู้ดำเนินการ ตอบทุกข้อด้วยความรู้สึกแรก ข้อที่ไม่แน่ใจเลือก 3 ข้อความสลับบวกกับลบ ข้อ 1–10 แสดงข้อความต้นฉบับภาษาอังกฤษคู่กับคำแปลของทีม (ใช้คำว่า "ระบบนี้" ตามต้นฉบับ ไม่ใช่ฉบับแปลที่ตีพิมพ์และตรวจความตรงแล้ว ต้องระบุในรายงาน) มาตรา 1–5 ข้อ 11 คือคำถามความเป็นมิตรต่อผู้ใช้โดยรวม 7 ระดับของ Bangor, Kortum และ Miller (2009) พร้อมอุปกรณ์ที่ใช้และประสบการณ์กับระบบ ประเมินแยกตามฝั่งของแอป (ครู/นักเรียน) ฝั่งละครั้ง ส่งแล้วแก้ไม่ได้ ผู้ประเมินไม่เห็นคะแนนของตัวเอง
+- **ตาราง**: `qa_sus_responses` สร้างใหม่: `qa_tester_id`, `role`, `answers` JSON, `score` DECIMAL(5,1), `adjective` TINYINT NULL (1–7), `platform` (`web`/`android`/`ios`), `experience` (`first`/`some`/`regular`), `comment`, UNIQUE (`qa_tester_id`, `role`) คำตอบเดิมของผู้ทดสอบถูกทิ้ง (ไม่ใช่ข้อมูล SUS ตามมาตรฐาน)
+- **คะแนนและการแปลผล** (`App\Domain\Qa\QaSus`): คะแนน = (ข้อคี่ − 1) + (5 − ข้อคู่) รวม × 2.5 (0–100 ไม่ใช่เปอร์เซ็นต์) สถิติ n ค่าเฉลี่ย SD มัธยฐาน ต่ำสุด–สูงสุด และช่วงเชื่อมั่น 95% ด้วยการแจกแจง t เกรดตาม curved grading scale ของ Sauro & Lewis (2016) (A+ ≥ 84.1 … C ≥ 65.0 … D ≥ 51.7, F ต่ำกว่า) การยอมรับตาม Bangor และคณะ (2008) (≥ 70 ยอมรับได้, 50–69.9 ก้ำกึ่ง, < 50 ยอมรับไม่ได้) คำคุณศัพท์จากค่าเฉลี่ย SUS ของแต่ละคำใน Bangor และคณะ (2009) และเทียบค่าเฉลี่ยอ้างอิง 68 (Sauro, 2011) ว่าสูงหรือต่ำกว่าอย่างมีนัยสำคัญเมื่อช่วงเชื่อมั่นไม่คร่อม 68 ⚠️ เกณฑ์เกรดและค่าเฉลี่ยของคำคุณศัพท์ต้องตรวจกับต้นฉบับก่อนอ้างในรายงาน
+- **หน้า "ผล SUS" `/qa/sus`** (`SusResults`, ผู้ทดสอบอ่านได้): ตารางสรุปตามมาตรฐานแยกฝั่งครู ฝั่งนักเรียน และรวม, รายข้อ (ค่าเฉลี่ยคำตอบและคะแนนข้อ 0–4 ข้อที่ต่ำกว่า 2 คือจุดที่ควรปรับ), การกระจายของข้อ 11, คำตอบรายคน และผู้ประเมินที่ยังไม่ส่ง หน้าภาพรวมแสดงค่าเฉลี่ยและเกรด
+- test: `SusTest` (สูตร, เกรด, การยอมรับ, คำคุณศัพท์, สถิติและช่วงเชื่อมั่น, `/sus` เป็นหน้าของตัวเองไม่มี script และมี CSP, ผู้ทดสอบล็อกอิน `/sus` ไม่ได้ ผู้ประเมินเข้า `/qa` ไม่ได้, throttle การล็อกอิน, ตรวจคำตอบทุกข้อ ฝั่งละครั้ง ไม่เห็นคะแนน, หน้าผลสรุป, การเพิ่มผู้ประเมิน)
+
+
+### 39.10 ผู้ทดสอบภายนอกลงทะเบียนเองที่ `/usability`
+
+ตัดสินใจ 5 พ.ย. 2569 (ผู้ใช้ขอ: แยกการทดสอบ usability 5 คนออกมาให้ลงทะเบียนเอง กรอกแค่ชื่อกับอาชีพ ใส่รหัสแล้วเข้าได้เลย ข้างในมีแค่ให้คะแนนตามหัวข้อแล้วบันทึก เลือกงาน 4 ข้อ + SUS และรหัสกลุ่มเดียว) แทนการที่ทีมต้องสร้างสองบัญชีต่อคนตาม §39.8
+
+- **บทบาท `participant`** ใน `qa_testers` (guard `usability`) ลงทะเบียนเองด้วยชื่อ อาชีพ และรหัสกลุ่ม อีเมลเป็น `participant-{uuid}@usability.invalid` และรหัสผ่านสุ่ม ไม่มีใครพิมพ์ บัญชีจึงอยู่แค่ใน session ของเบราว์เซอร์นั้น ปิดเบราว์เซอร์แล้วต้องลงทะเบียนใหม่ (นับเป็นคนใหม่ หัวหน้าลบรายการซ้ำได้) เข้า `/qa` และ `/sus` ไม่ได้ `QaTester::ROLES` ยังเป็นสองบทบาทที่ทีมหรือ admin ตั้งให้ได้ `ROLE_LABELS` มีครบสามสำหรับแสดง
+- **รหัสกลุ่ม** (`QaSignupCode`): ตัวเลข 6 หลัก หัวหน้าทดสอบสร้างที่หน้า "ผู้ทดสอบ" แสดงครั้งเดียวแล้วเก็บแบบ hash ใน `qa_settings` สร้างใหม่แทนรหัสเดิม และปิดรับได้ ไม่มีรหัส = ปิดรับ ไม่ใช้ `.env` เพราะต้องเปลี่ยนจากหน้าเว็บได้โดยไม่เข้าเซิร์ฟเวอร์ การลงทะเบียนจำกัด 5 ครั้งต่อนาทีต่อ IP และ 30 ครั้งต่อนาทีทั้งเว็บ (`usability-signup`)
+- **หน้า** (`UsabilityController`, view `resources/views/usability/` บน layout ของ `/sus` ไม่มี JavaScript CSP เดียวกัน `no-store` และ `noindex`): `GET /usability` คือหน้าลงทะเบียน หรือการ์ดงานชุดย่อ 4 งานเมื่อเข้าแล้ว แต่ละการ์ดบอกเป้าหมาย ขั้นตอน และเกณฑ์สำเร็จ ผู้เข้าร่วมเลือก "ทำได้เอง / ทำได้ แต่มีคนช่วย / ทำไม่ได้" ให้ความง่าย 1–5 และเขียนความเห็นได้ บันทึกทีละงานและแก้ได้ (`POST /usability/tasks/{code}` รับเฉพาะรหัสของชุดย่อ เขียน `qa_results` พร้อม `ease`) ครบทุกงานแล้วจึงเปิด `GET /usability/sus` ซึ่งใช้คำถาม SUS ชุดเดียวกับ `/sus` (`sus/_questions`, `QaSus::formRules`) ตอบได้ครั้งเดียว เก็บเป็น role `teacher` เพราะงาน 3 ใน 4 เป็นงานครู
+- **ฝั่งทีม**: หน้า "ผู้ทดสอบ" มีส่วน "ผู้เข้าร่วมทดสอบ" (สถานะเปิดรับ ปุ่มของหัวหน้า รายชื่อ อาชีพ งานที่บันทึก และ SUS) "รายงาน Usability" นับผู้เข้าร่วมก่อนผู้ทดสอบในทีม เพิ่มคอลัมน์อาชีพ ความง่ายเฉลี่ยต่องาน (`QaBoard::usability()['avg_ease']`) และ SUS รายคน เวลาและจำนวนครั้งที่ทำผิดมีเฉพาะผลที่ทีมสังเกตและบันทึกเอง
+- **ข้อจำกัด**: บัญชีสาธิตของ Krucheck ยังต้องได้จากผู้ดำเนินการทดสอบ หน้านี้ไม่แสดงรหัสผ่านสาธิต เพราะ repo เป็น public
+- test: `UsabilitySignupTest`
+
+## 40. บันทึกครู: เก็บในเครื่อง (drift) และ Firestore
+
+ตัดสินใจ 27 ต.ค. 2569 (ผู้ใช้ขอ: เกณฑ์โครงงานข้อ "Local Database + Firestore ที่บันทึกและอ่านข้อมูลได้จริง" อยากมีข้อมูลที่เก็บสองที่ชัด ๆ เช่นรูปภาพ ผู้ใช้เลือก "บันทึกครู" แทนการเก็บรูปงานนักเรียน เพราะ §38.1 ห้ามรูปและลายมือของนักเรียนใน Firestore)
+
+### 40.1 คืออะไร
+
+ครูถ่ายรูป (กระดาน สื่อการสอน) หรือเลือกรูป พิมพ์ข้อความสั้น และเลือกห้องเรียนได้ (ไม่บังคับ) เมนู "บันทึกครู" (`/notes`, `TeacherNotesScreen`) แสดงบันทึกใหม่สุดก่อนเป็นการ์ดรูปพร้อมข้อความ ห้อง วันเวลา และป้ายว่าอยู่ที่ไหน ครูเท่านั้น ไม่มีข้อมูลนักเรียน (ฟอร์มบอกให้ไม่ถ่ายหน้า ชื่อ หรือผลงานนักเรียน)
+
+### 40.2 เก็บสองที่
+
+| ที่ | เก็บอะไร | ใครเขียน |
+|---|---|---|
+| drift ในเครื่อง ตาราง `teacher_notes` (schema 3) | `id` (uuid), `user_id`, `classroom_id`, `classroom_name`, `body`, `photo` (รูปตามที่ถ่าย), `thumb` (PNG ด้านยาว ≤ 360 px), `created_at`, `updated_at`, `synced_at`, `deleted` | แอป บันทึกทันทีแม้ออฟไลน์ |
+| Firestore `users/{uid}/notes/{id}` | `body`, `classroom_id`, `classroom_name`, `thumb` (bytes ≤ 300 KB), `device` (`android`/`ios`/`web`), `created_at`, `updated_at` | แอปเขียนเอง ด้วย Firebase session ของ §38.6 |
+
+- **MariaDB ไม่เก็บบันทึก** (ต่างจาก §38.1 ที่ Firestore เป็นแค่สำเนา): บันทึกเป็นของครูเพื่อความสะดวก ถ้า Firestore ถูกล้าง บันทึกยังอยู่ในเครื่องที่เขียน รูปเต็มอยู่เฉพาะในเครื่องที่ถ่าย เครื่องอื่นเห็นรูปย่อ
+- **เว็บ** ไม่มี drift: อ่านและเขียน Firestore อย่างเดียว ถ้ายังไม่เชื่อมข้อมูลสด หน้าแสดงคำอธิบายแทน
+- รูปย่อทำในเครื่องด้วย `dart:ui` (PNG ด้านยาว 360 px ถ้าเกิน 300 KB ลดเป็น 240 และ 160) ไม่มี package ใหม่
+
+### 40.3 ซิงก์
+
+`TeacherNotesStore`: บันทึกเขียน drift ก่อน แล้ว `syncPending()` ส่งทุกแถวที่ `synced_at` ว่างหรือเก่ากว่า `updated_at` ไป Firestore (`set` ทั้ง document) ลบ = ตั้ง `deleted` แล้วลบใน Firestore ก่อนลบแถว (tombstone รอจนลบได้) ซิงก์เมื่อบันทึก เมื่อลบ เมื่อเปิดหน้า เมื่อเชื่อมข้อมูลสดได้ระหว่างเปิดหน้า และปุ่ม "ซิงก์ตอนนี้" หยุดเงียบเมื่อติดต่อ Firestore ไม่ได้ รายการที่แสดงรวมแถวในเครื่องกับ document ใน Firestore ตาม `id` (แถวในเครื่องชนะ เพราะมีรูปเต็ม) ป้าย: "อยู่ในเครื่องนี้เท่านั้น" (ยังไม่มี Firestore) "รอซิงก์" "ซิงก์แล้ว" และ "จาก…" สำหรับบันทึกที่มาจากเครื่องอื่น เครื่องเดียวกันหลายบัญชีเห็นเฉพาะของตัวเอง (`user_id`)
+
+### 40.4 กฎและการลบ
+
+- `firebase/firestore.rules`: เพิ่ม `match /users/{uid}/notes/{noteId}` ให้เจ้าของลบได้ และสร้าง/แก้ได้เมื่อ field มีเฉพาะชุดข้างบน `body` ≤ 2,000 ตัวอักษร `thumb` ≤ 300 KB `device` อยู่ในสามค่า และเวลาเป็น timestamp ที่อื่นใต้ `users/{uid}` ยังเขียนไม่ได้ **ต้องวางกฎใหม่ใน Firebase console แล้ว Publish** (firebase/README.md)
+- ลบบัญชี: `PurgeLiveUserJob` ลบทุก subcollection ใต้ `users/{uid}` อยู่แล้ว จึงลบบันทึกด้วย ข้อมูลในเครื่องหายเมื่อลบแอปหรือข้อมูลแอป
+- โควตา Spark: หนึ่งบันทึกคือหนึ่งการเขียน รูปย่อทำให้ document ใหญ่สุดราว 300 KB (ขีดของ Firestore 1 MiB)
+
+### 40.5 test
+
+`test/notes/teacher_notes_store_test.dart` (drift ในหน่วยความจำกับ `fake_cloud_firestore`: ออฟไลน์แล้วซิงก์ทีหลัง, บันทึกจากเครื่องอื่น, ลบสองที่และ tombstone, แยกบัญชี, เว็บใช้ Firestore อย่างเดียว, ข้อความยาวเกิน, ขนาดรูปย่อ) และ `teacher_notes_screen_test.dart` ที่ 390/820/1440 px
 
 ---
 

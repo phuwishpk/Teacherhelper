@@ -5,11 +5,12 @@ namespace App\Providers\Filament;
 use App\Filament\Qa\Pages\ManualTestChecklist;
 use App\Filament\Qa\Pages\MyResults;
 use App\Filament\Qa\Pages\QaOverview;
-use App\Filament\Qa\Pages\SusSurvey;
+use App\Filament\Qa\Pages\SusResults;
 use App\Filament\Qa\Pages\TeamBoard;
 use App\Filament\Qa\Pages\TestCaseDetail;
 use App\Filament\Qa\Pages\Testers;
 use App\Filament\Qa\Pages\TestPlan;
+use App\Filament\Qa\Pages\UsabilityReport;
 use App\Http\Controllers\Qa\ManualChecklistFileController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -48,7 +49,8 @@ class QaPanelProvider extends PanelProvider
                 ManualTestChecklist::class,
                 TestCaseDetail::class,
                 MyResults::class,
-                SusSurvey::class,
+                UsabilityReport::class,
+                SusResults::class,
                 TeamBoard::class,
                 Testers::class,
             ])

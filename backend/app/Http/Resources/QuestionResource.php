@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\AnswerKeys\KeyCompleteness;
+use App\Domain\Gemini\AiJobFailures;
 use App\Models\Question;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -42,6 +43,8 @@ class QuestionResource extends JsonResource
             'model_answer' => $this->model_answer,
             'key_complete' => KeyCompleteness::complete($this->resource),
             'rubric_status' => $this->rubric_status,
+            // DESIGN §36.1: the last AI rubric draft failed (code, ai_calls id, message).
+            'rubric_draft_error' => $this->needsRubric() ? AiJobFailures::get(AiJobFailures::RUBRIC, (string) $this->id) : null,
             'skills' => SkillResource::collection($this->whenLoaded('skills')),
             'rubric_criteria' => RubricCriterionResource::collection($this->whenLoaded('rubricCriteria')),
             'created_at' => $this->created_at?->toIso8601String(),

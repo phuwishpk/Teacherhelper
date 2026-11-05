@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../core/api/teacher_guidance.dart';
 import 'assignment.dart';
 import 'question.dart';
+import '../../core/api/error_codes.dart';
 
 /// Pages Gemini reads in one call; a longer PDF needs a page range
 /// (DESIGN §19.5, server `eduvision.documents.max_pages`).
@@ -175,6 +176,7 @@ class KeyExtraction {
     required this.id,
     required this.status,
     this.error,
+    this.errorCode,
     this.kind,
     this.notesTh,
     this.guidance,
@@ -185,6 +187,9 @@ class KeyExtraction {
   /// `queued`, `done` or `failed`.
   final String status;
   final String? error;
+
+  /// The AI failure's code and ai_calls id (DESIGN §36.1).
+  final ErrorCode? errorCode;
 
   /// `answer_key_read` or `answer_key_draft`.
   final String? kind;
@@ -208,6 +213,7 @@ class KeyExtraction {
     id: (json['id'] as num).toInt(),
     status: json['status'] as String? ?? 'queued',
     error: json['error'] as String?,
+    errorCode: ErrorCode.fromFields(json['ai_error_code'], json['ai_call_id']),
     kind: json['kind'] as String?,
     notesTh: json['notes_th'] as String?,
     guidance: normalizeGuidance(json['guidance'] as String?),

@@ -12,6 +12,7 @@ import '../review/review_labels.dart';
 import 'practice_item_editor.dart';
 import 'practice_models.dart';
 import 'practice_repository.dart';
+import '../../core/api/error_codes.dart';
 
 /// The school's practice bank for teachers (DESIGN §9.6, §14.1): generate
 /// drafts with AI per skill, review and edit them, approve or retire.
@@ -74,6 +75,7 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
           .read(practiceBankRepositoryProvider)
           .generate(skill.id, count: count);
       if (!mounted) return;
+      ref.invalidate(practiceGenerationErrorProvider(skill.id));
       setState(() {
         _skill = skill;
         _status = PracticeItemStatus.draft;
@@ -133,7 +135,12 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
         label: const Text('สร้างข้อใหม่ด้วย AI'),
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(practiceBankProvider(_filter).future),
+        onRefresh: () {
+          if (_skill case final skill?) {
+            ref.invalidate(practiceGenerationErrorProvider(skill.id));
+          }
+          return ref.refresh(practiceBankProvider(_filter).future);
+        },
         child: ContentColumn(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: CustomScrollView(
@@ -180,6 +187,8 @@ class _PracticeBankScreenState extends ConsumerState<PracticeBankScreen> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
+                    if (_skill case final skill?)
+                      _GenerationError(skillId: skill.id),
                     const SizedBox(height: 8),
                     SegmentedButton<PracticeItemStatus>(
                       segments: const [
@@ -363,6 +372,36 @@ class PracticeItemCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "AI สร้างแบบฝึกไม่สำเร็จ" with its code, under the indicator (DESIGN §36.1).
+class _GenerationError extends ConsumerWidget {
+  const _GenerationError({required this.skillId});
+
+  final int skillId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final failure = ref.watch(practiceGenerationErrorProvider(skillId)).value;
+    if (failure == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      key: const ValueKey('practice_generation_error'),
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            failure.message,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+          ErrorCodeLine(failure.code),
+        ],
       ),
     );
   }
