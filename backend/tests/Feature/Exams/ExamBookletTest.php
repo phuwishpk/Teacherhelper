@@ -209,4 +209,39 @@ class ExamBookletTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'answer_key_incomplete')
             ->assertJsonPath('errors.questions.0', 'ข้อ 1: ยังไม่มีโจทย์');
     }
+
+    public function test_the_hint_of_a_written_question_names_the_page_of_its_box(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $open = $this->addSection($exam, ['type' => 'open', 'question_count' => 5]);
+        $this->fillExam($exam);
+
+        $plan = app(ExamBooklet::class)->plan($exam->refresh(), $this->version($exam, 1));
+
+        $html = [];
+        foreach ($plan->pages as $blocks) {
+            foreach ($blocks as $block) {
+                $html[$block['numbers'][0] ?? 0] = $block['html'];
+            }
+        }
+        $this->assertStringContainsString('เขียนตอบในกระดาษคำตอบหน้า 2', $html[7], 'question 7 is the first box of written page 2');
+        $this->assertStringContainsString('เขียนตอบในกระดาษคำตอบหน้า 3', $html[9]);
+        $this->assertStringContainsString('เขียนตอบในกระดาษคำตอบหน้า 4', $html[11]);
+        $this->assertStringNotContainsString('เขียนตอบในกระดาษคำตอบ', $html[1]);
+        $this->assertSame(5, count($open['questions']));
+    }
+
+    public function test_the_booklet_still_prints_when_the_written_pages_overflow(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 12]);
+        $this->fillExam($exam);
+
+        $plan = app(ExamBooklet::class)->plan($exam->refresh(), $this->version($exam, 1));
+
+        $html = $plan->pages[0][1]['html'];
+        $this->assertStringContainsString('เขียนตอบในกระดาษคำตอบ', $html);
+        $this->assertStringNotContainsString('ในกระดาษคำตอบหน้า', $html, 'no page number when the sheet does not fit');
+    }
 }

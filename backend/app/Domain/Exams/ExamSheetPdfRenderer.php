@@ -3,6 +3,7 @@
 namespace App\Domain\Exams;
 
 use App\Domain\Worksheets\ArucoMarkers;
+use App\Domain\Worksheets\PromptHtml;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\WorksheetGeometry;
 use App\Domain\Worksheets\WorksheetLayoutException;
@@ -78,7 +79,7 @@ class ExamSheetPdfRenderer
             foreach ($plan->pages as $page) {
                 $mpdf->AddPage();
                 WorksheetPdfRenderer::drawMarkers($mpdf, $markers);
-                $this->drawHeader($mpdf, $exam, $student, $page['page'], $plan->pageCount());
+                $this->drawHeader($mpdf, $exam, $student, $page['page'], self::pagesOnSheet($plan, $student));
                 WorksheetPdfRenderer::drawQr($mpdf, $student === self::SHARED_SHEET
                     ? $this->qrSigner->signCodeSheet($exam->id, $page['page'], $layout->version)
                     : $this->qrSigner->signExamSheet($exam->id, $student?->id ?? 0, $page['page'], $layout->version));
@@ -97,9 +98,64 @@ class ExamSheetPdfRenderer
                 }
                 $this->drawFooter($mpdf, $layout->version, $student === null, $student === self::SHARED_SHEET);
             }
+            // The written pages belong to a named student's sheet; the key sheet and the shared sheet have none (§22.20.3).
+            if ($student instanceof WorksheetStudent) {
+                for ($index = 0; $index < $plan->writtenPageCount(); $index++) {
+                    $this->drawWrittenPage($mpdf, $exam, $layout, $plan, $student, $index, $markers);
+                }
+            }
         }
 
         return $mpdf->Output('', Destination::STRING_RETURN);
+    }
+
+    /** The y of "หน้า x/y": a student's sheet counts its written pages, the key sheet and the shared sheet do not. */
+    public static function pagesOnSheet(ExamSheetPlan $plan, WorksheetStudent|string|null $student): int
+    {
+        return $student instanceof WorksheetStudent ? $plan->pageCount() : $plan->bubblePageCount();
+    }
+
+    /**
+     * One written page (DESIGN §22.20.3): markers, header, the worksheet QR
+     * EV1 naming the student, then for each question its label and its
+     * writing box drawn by the worksheet's own routines, so the phone crops
+     * what the layout JSON says.
+     */
+    private function drawWrittenPage(Mpdf $mpdf, Assignment $exam, Layout $layout, ExamSheetPlan $plan, WorksheetStudent $student, int $index, ArucoMarkers $markers): void
+    {
+        $pageNo = $plan->bubblePageCount() + $index + 1;
+        $mpdf->AddPage();
+        WorksheetPdfRenderer::drawMarkers($mpdf, $markers);
+        $this->drawHeader($mpdf, $exam, $student, $pageNo, $plan->pageCount());
+        WorksheetPdfRenderer::drawQr($mpdf, $this->qrSigner->sign($exam->id, $student->id, $pageNo, $layout->version));
+
+        foreach ($plan->writtenBlocks as $block) {
+            if ($block['page_index'] !== $index) {
+                continue;
+            }
+            $mpdf->SetFont(WorksheetMpdfFactory::FONT, 'B', 12);
+            $mpdf->SetTextColor(0, 0, 0);
+            $mpdf->SetXY(WorksheetGeometry::CONTENT_LEFT, $block['label_top']);
+            $mpdf->WriteCell(
+                WorksheetGeometry::contentWidth(), ExamWrittenLayout::LABEL_H,
+                'ข้อ '.$block['number'].'  ('.PromptHtml::points($block['points']).' คะแนน)', 0, 0, 'L',
+            );
+            WorksheetPdfRenderer::drawLines($mpdf, $block['region']);
+        }
+
+        $mpdf->SetFont(WorksheetMpdfFactory::FONT, 'B', 11);
+        $mpdf->SetTextColor(0, 0, 0);
+        $mpdf->SetXY(WorksheetGeometry::TITLE_X, ExamWrittenLayout::INSTRUCTION_Y);
+        $mpdf->WriteCell(150, 6, 'เขียนคำตอบในกรอบของแต่ละข้อเท่านั้น', 0, 0, 'L');
+        $mpdf->SetFont(WorksheetMpdfFactory::FONT, '', 8);
+        $mpdf->SetTextColor(120, 120, 120);
+        $mpdf->SetXY(WorksheetGeometry::CONTENT_LEFT + 12, WorksheetGeometry::FOOTER_Y);
+        $mpdf->WriteCell(
+            WorksheetGeometry::contentWidth() - 24, 4,
+            'Krucheck · กระดาษคำตอบ เวอร์ชัน '.$layout->version.' · อย่าพับหรือขีดเขียนบนมุมและ QR',
+            0, 0, 'C',
+        );
+        $mpdf->SetTextColor(0, 0, 0);
     }
 
     private function drawHeader(Mpdf $mpdf, Assignment $exam, WorksheetStudent|string|null $student, int $page, int $pageCount): void

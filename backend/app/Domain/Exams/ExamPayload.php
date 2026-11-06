@@ -57,6 +57,7 @@ final class ExamPayload
         $numeric = $questions->where('type', Question::TYPE_NUMERIC)->count();
         // Written questions are not on the bubble sheet (§22.20.3).
         $sheetCount = $questions->reject(fn (Question $q) => $q->needsRubric())->count();
+        $writtenPages = ExamWrittenLayout::pageCount($exam);
 
         return [
             'exam' => (new AssignmentResource($exam))->resolve(),
@@ -67,6 +68,11 @@ final class ExamPayload
             'versions_ready' => ExamVersions::ready($exam),
             'structure_locked_at' => $exam->structure_locked_at?->toIso8601String(),
             'sheet' => ExamSheetCapacity::of($sheetCount - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
+            // The written pages after the bubble pages (§22.20.3); apart from `sheet` so its shape stays what older apps read.
+            'written_sheet' => [
+                'pages' => $writtenPages,
+                'overflow' => $writtenPages > (int) config('eduvision.exams.max_written_pages'),
+            ],
             'page_images' => ExamPageImage::query()->where('assignment_id', $exam->id)->orderBy('source_document_id')->orderBy('page_no')->get()
                 ->map(fn (ExamPageImage $p) => $p->toApi())->values()->all(),
             'figures_pending' => ExamFigures::pending($exam),

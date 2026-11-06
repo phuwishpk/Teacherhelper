@@ -11,6 +11,7 @@ use App\Domain\Worksheets\WorksheetMpdfFactory;
 use App\Domain\Worksheets\WorksheetStudent;
 use App\Models\Assignment;
 use App\Models\Layout;
+use App\Models\Question;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -60,6 +61,11 @@ class ExamSheetPdfTest extends TestCase
             public function signCodeSheet(int $assignmentId, int $page, int $layoutVersion): string
             {
                 return $this->log[] = parent::signCodeSheet($assignmentId, $page, $layoutVersion);
+            }
+
+            public function sign(int $assignmentId, int $studentId, int $page, int $layoutVersion): string
+            {
+                return $this->log[] = parent::sign($assignmentId, $studentId, $page, $layoutVersion);
             }
         };
 
@@ -135,6 +141,61 @@ class ExamSheetPdfTest extends TestCase
 
         $this->assertSame(1, PdfStreams::pageCount($pdf));
         $this->assertSame([(new QrSigner(self::KEY))->signExamSheet($exam->id, 0, 1, 1)], $this->signed);
+    }
+
+    /** DESIGN §22.20.3: the bubble pages (EVX1) are followed by the written pages (EV1, the worksheet QR). */
+    public function test_a_student_gets_written_pages_with_a_worksheet_qr_after_the_bubble_pages(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 5]);
+        $this->fillExam($exam);
+        $layout = $this->layoutOf($exam, 2);
+        $this->assertSame(['exam', 'written', 'written', 'written'], array_column($layout->pages, 'sheet'));
+
+        $pdf = $this->renderer()->render($exam, $layout, [new WorksheetStudent(4001, 'เด็กหญิงสมใจ ใจดี', 1)]);
+
+        $this->assertSame(4, PdfStreams::pageCount($pdf));
+        $signer = new QrSigner(self::KEY);
+        $this->assertSame([
+            $signer->signExamSheet($exam->id, 4001, 1, 2),
+            $signer->sign($exam->id, 4001, 2, 2),
+            $signer->sign($exam->id, 4001, 3, 2),
+            $signer->sign($exam->id, 4001, 4, 2),
+        ], $this->signed);
+        $this->assertStringStartsWith('EV1.', $this->signed[1]);
+        $this->assertNotNull($signer->verify($this->signed[1]), 'a written page carries a worksheet QR the scan route accepts');
+        $this->assertSame(4001, $signer->verify($this->signed[3])->studentId);
+        $this->assertSame(4, $signer->verify($this->signed[3])->page);
+    }
+
+    public function test_the_key_sheet_of_a_written_exam_has_only_the_bubble_pages(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 5]);
+        $this->fillExam($exam);
+
+        $pdf = $this->renderer()->render($exam, $this->layoutOf($exam), [null]);
+
+        $this->assertSame(1, PdfStreams::pageCount($pdf), 'the key of a written question is its rubric');
+        $this->assertSame([(new QrSigner(self::KEY))->signExamSheet($exam->id, 0, 1, 1)], $this->signed);
+        $plan = ExamSheetLayout::forExam($exam);
+        $this->assertSame(1, ExamSheetPdfRenderer::pagesOnSheet($plan, null), 'the key sheet says หน้า 1/1');
+        $this->assertSame(1, ExamSheetPdfRenderer::pagesOnSheet($plan, ExamSheetPdfRenderer::SHARED_SHEET));
+        $this->assertSame(4, ExamSheetPdfRenderer::pagesOnSheet($plan, new WorksheetStudent(4001, 'เด็กหญิงสมใจ ใจดี', 1)), 'a student sheet says หน้า x/4');
+    }
+
+    public function test_it_refuses_to_print_written_pages_from_a_stale_layout(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 2]);
+        $this->fillExam($exam);
+        $layout = $this->layoutOf($exam);
+        Question::query()->where('assignment_id', $exam->id)->update(['answer_lines' => 12]);
+
+        $this->expectException(WorksheetLayoutException::class);
+        $this->renderer()->render($exam->refresh(), $layout, [new WorksheetStudent(4001, 'เด็กหญิงสมใจ ใจดี', 1)]);
     }
 
     /** DESIGN §22.19: one sheet for everyone, the student named by the grid on every page. */

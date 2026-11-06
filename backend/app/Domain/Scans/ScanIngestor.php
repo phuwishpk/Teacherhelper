@@ -3,6 +3,7 @@
 namespace App\Domain\Scans;
 
 use App\Domain\Classrooms\ClosedClassrooms;
+use App\Domain\Exams\ExamWritten;
 use App\Domain\Worksheets\QrSigner;
 use App\Domain\Worksheets\QrSigningKeyMissing;
 use App\Domain\Worksheets\WorksheetQr;
@@ -78,6 +79,11 @@ final class ScanIngestor
             throw new ApiException('ไม่พบการบ้านของใบงานนี้ในระบบ', 'qr_invalid', 422);
         }
         Gate::forUser($user)->authorize('scan', $assignment);
+        if ($assignment->isExam()) {
+            // The written pages of an exam are filed by step 4 of DESIGN §22.20.9 (with the exam's status rules);
+            // until then this homework route must not file them as a homework scan. Step 4 replaces this guard.
+            throw new ApiException(ExamWritten::NOT_READY_MESSAGE, 'exam_written_not_ready', 422);
+        }
         ClosedClassrooms::assertOpen($assignment->classroom); // §24.6
 
         $layout = $assignment->layouts()->where('version', $qr->layoutVersion)->first();

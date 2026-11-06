@@ -3,7 +3,9 @@
 namespace App\Domain\Exams;
 
 use App\Domain\Worksheets\ArucoMarkers;
+use App\Domain\Worksheets\RegionGeometry;
 use App\Domain\Worksheets\WorksheetGeometry;
+use App\Models\Question;
 
 /**
  * The pages of an exam answer sheet with every bubble in page millimetres
@@ -28,18 +30,48 @@ final readonly class ExamSheetPlan
     public const CODE_SHEET_NO = 0;
 
     /**
-     * @param  list<array<string, mixed>>  $pages
+     * @param  list<array<string, mixed>>  $pages  the bubble pages
+     * @param  list<array{question: Question, number: int, points: float, label_top: float, region: RegionGeometry, page_index: int}>  $writtenBlocks  ExamWrittenLayout::blocks()
      */
-    public function __construct(public array $pages, public int $versionCount, public int $codeDigits = 0) {}
+    public function __construct(
+        public array $pages,
+        public int $versionCount,
+        public int $codeDigits = 0,
+        public array $writtenBlocks = [],
+    ) {}
 
-    public function pageCount(): int
+    /** This plan with the written pages of DESIGN §22.20.3 after the bubble pages. */
+    public function withWritten(array $blocks): self
+    {
+        return new self($this->pages, $this->versionCount, $this->codeDigits, $blocks);
+    }
+
+    /** Pages of bubbles, 1–2 (§22.7). */
+    public function bubblePageCount(): int
     {
         return count($this->pages);
     }
 
+    /** Pages of written boxes after them (§22.20.3). */
+    public function writtenPageCount(): int
+    {
+        return $this->writtenBlocks === [] ? 0 : $this->writtenBlocks[array_key_last($this->writtenBlocks)]['page_index'] + 1;
+    }
+
+    /** All pages of one student's sheet: the "y" of "หน้า x/y". */
+    public function pageCount(): int
+    {
+        return $this->bubblePageCount() + $this->writtenPageCount();
+    }
+
     public function overflows(): bool
     {
-        return $this->pageCount() > ExamSheetCapacity::MAX_PAGES;
+        return $this->bubblePageCount() > ExamSheetCapacity::MAX_PAGES;
+    }
+
+    public function writtenOverflows(): bool
+    {
+        return $this->writtenPageCount() > (int) config('eduvision.exams.max_written_pages');
     }
 
     /**
@@ -108,6 +140,23 @@ final readonly class ExamSheetPlan
                 'frame_mm' => WorksheetGeometry::frameMm(),
                 'answer_area' => ExamSheetGeometry::answerArea(),
                 'regions' => $regions,
+            ];
+        }
+
+        // The written pages of the same layout version: worksheet regions the phone crops (§22.20.3).
+        for ($index = 0; $index < $this->writtenPageCount(); $index++) {
+            $out[] = [
+                'assignment_id' => $assignmentId,
+                'version' => $version,
+                'page' => $this->bubblePageCount() + $index + 1,
+                'page_count' => $this->pageCount(),
+                'sheet' => 'written',
+                'marker' => $markers->layoutJson(),
+                'frame_mm' => WorksheetGeometry::frameMm(),
+                'regions' => array_map(
+                    fn (array $b) => $b['region']->toLayoutJson($b['question']),
+                    array_values(array_filter($this->writtenBlocks, fn (array $b) => $b['page_index'] === $index)),
+                ),
             ];
         }
 
