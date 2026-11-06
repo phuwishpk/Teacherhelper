@@ -167,8 +167,8 @@ class WorksheetPdfRenderer
         $region = $placed->region();
         $this->withoutPageBreaks($mpdf, fn () => match ($region->kind) {
             'mcq' => $this->drawMcq($mpdf, $region),
-            'box' => $this->drawBox($mpdf, $region->rect, 'ตอบ'),
-            default => $this->drawLines($mpdf, $region),
+            'box' => self::drawBox($mpdf, $region->rect, 'ตอบ'),
+            default => self::drawLines($mpdf, $region),
         });
     }
 
@@ -204,7 +204,7 @@ class WorksheetPdfRenderer
     /**
      * @param  array{x: float, y: float, w: float, h: float}  $rect
      */
-    private function drawBox(Mpdf $mpdf, array $rect, string $label): void
+    public static function drawBox(Mpdf $mpdf, array $rect, string $label): void
     {
         $mpdf->SetFont(WorksheetMpdfFactory::FONT, '', 12);
         $mpdf->SetXY($rect['x'] - 26, $rect['y']);
@@ -215,7 +215,7 @@ class WorksheetPdfRenderer
         $mpdf->Rect($rect['x'], $rect['y'], $rect['w'], $rect['h'], 'D');
     }
 
-    private function drawLines(Mpdf $mpdf, RegionGeometry $region): void
+    public static function drawLines(Mpdf $mpdf, RegionGeometry $region): void
     {
         $rect = $region->rect;
         $mpdf->SetDrawColor(0, 0, 0);
@@ -241,7 +241,7 @@ class WorksheetPdfRenderer
         $mpdf->SetDrawColor(0, 0, 0);
 
         if ($region->final !== null) {
-            $this->drawBox($mpdf, $region->final, 'คำตอบ');
+            self::drawBox($mpdf, $region->final, 'คำตอบ');
         }
     }
 
