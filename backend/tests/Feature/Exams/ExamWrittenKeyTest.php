@@ -130,4 +130,35 @@ class ExamWrittenKeyTest extends TestCase
 
         $this->assertNull(Question::query()->findOrFail($id)->answer_key);
     }
+
+    public function test_the_rubric_draft_works_for_exam_questions_with_no_prompt(): void
+    {
+        $open = $this->addSection($this->exam, ['type' => 'open', 'question_count' => 1, 'default_points' => 4]);
+        $showWork = $this->addSection($this->exam, ['type' => 'show_work', 'question_count' => 1, 'default_points' => 4]);
+        $openId = $open['questions'][0]['id'];
+        $showWorkId = $showWork['questions'][0]['id'];
+
+        // QUEUE_CONNECTION=sync: DraftRubricJob runs inline with FakeGeminiClient.
+        $this->asUser($this->teacher)->postJson("/api/v1/questions/{$openId}/rubric/draft")->assertStatus(202);
+        $this->asUser($this->teacher)->postJson("/api/v1/questions/{$showWorkId}/rubric/draft")->assertStatus(202);
+
+        $openQuestion = Question::query()->with('rubricCriteria')->findOrFail($openId);
+        $this->assertSame('draft', $openQuestion->rubric_status);
+        $this->assertCount(3, $openQuestion->rubricCriteria);
+        $this->assertSame(['ai'], $openQuestion->rubricCriteria->pluck('source')->unique()->values()->all());
+        $showWorkQuestion = Question::query()->findOrFail($showWorkId);
+        $this->assertSame('draft', $showWorkQuestion->rubric_status);
+        $this->assertCount(4, $showWorkQuestion->answer_key['reference_steps']);
+        $this->assertNull($this->exam->refresh()->key_approved_at);
+        $this->assertFalse($this->examJson($this->exam)['key_complete']);
+    }
+
+    public function test_another_teacher_cannot_draft_a_rubric_for_an_exam_question(): void
+    {
+        $open = $this->addSection($this->exam, ['type' => 'open', 'question_count' => 1, 'default_points' => 4]);
+        $stranger = $this->makeTeacher();
+
+        $this->asUser($stranger)->postJson("/api/v1/questions/{$open['questions'][0]['id']}/rubric/draft")->assertNotFound();
+        $this->asUser($stranger)->putJson("/api/v1/questions/{$open['questions'][0]['id']}/rubric", ['criteria' => $this->twoCriteria()])->assertNotFound();
+    }
 }
