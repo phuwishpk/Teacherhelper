@@ -39,7 +39,7 @@ final class ExamEditor
     public const MAX_INSTRUCTIONS = 2000;
 
     /** Fields of a question PATCH on an exam. */
-    public const QUESTION_FIELDS = ['prompt_text', 'options', 'max_points', 'answer_key', 'lock_options', 'approve', 'position', 'skill_ids'];
+    public const QUESTION_FIELDS = ['prompt_text', 'options', 'max_points', 'answer_key', 'lock_options', 'approve', 'position', 'skill_ids', 'answer_lines'];
 
     public const SECTION_FIELDS = ['title', 'instructions', 'type', 'option_count', 'numeric', 'default_points', 'question_count', 'position'];
 
@@ -120,8 +120,12 @@ final class ExamEditor
 
             if (abs($section->default_points - $oldPoints) > 0.0001) {
                 // Questions still at the old default follow the new one; points set per question stay.
-                Question::query()->where('section_id', $section->id)->where('max_points', $oldPoints)
-                    ->update(['max_points' => $section->default_points]);
+                $atDefault = Question::query()->where('section_id', $section->id)->where('max_points', $oldPoints);
+                if ($section->isWritten()) {
+                    // Their approved rubrics add up to the old points (§22.20.2).
+                    (clone $atDefault)->where('rubric_status', Question::RUBRIC_APPROVED)->update(['rubric_status' => Question::RUBRIC_DRAFT]);
+                }
+                $atDefault->update(['max_points' => $section->default_points]);
             }
             if ($section->type === ExamSection::TYPE_MCQ && $section->option_count !== $oldOptions) {
                 $this->resizeOptions($exam, $section);
@@ -180,6 +184,7 @@ final class ExamEditor
                 'prompt_text' => $data['prompt_text'] ?? '',
                 'max_points' => $data['max_points'] ?? $section->default_points,
                 'answer_key' => $data['answer_key'] ?? null,
+                'answer_lines' => $data['answer_lines'] ?? null,
                 'lock_options' => $data['lock_options'] ?? false,
                 'origin' => Question::ORIGIN_TEACHER,
                 'approved_at' => now(),
@@ -211,10 +216,16 @@ final class ExamEditor
                 self::assertUnlocked($exam);
             }
 
-            foreach (['prompt_text', 'max_points', 'lock_options'] as $field) {
+            $oldPoints = (float) $question->max_points;
+            foreach (['prompt_text', 'max_points', 'lock_options', 'answer_lines'] as $field) {
                 if (array_key_exists($field, $data)) {
                     $question->{$field} = $data[$field];
                 }
+            }
+            // The criteria of an approved rubric add up to the old points; the teacher sets them again (§22.20.2).
+            if ($question->needsRubric() && $question->rubric_status === Question::RUBRIC_APPROVED
+                && abs((float) $question->max_points - $oldPoints) > 0.001) {
+                $question->rubric_status = Question::RUBRIC_DRAFT;
             }
             if (array_key_exists('answer_key', $data)) {
                 $question->answer_key = $data['answer_key'];
@@ -606,8 +617,12 @@ final class ExamEditor
     {
         $input = array_intersect_key($input, array_flip(self::QUESTION_FIELDS));
         $mcq = $section->type === ExamSection::TYPE_MCQ;
+        $written = $section->isWritten();
         $rules = [
             'prompt_text' => ['sometimes', 'nullable', 'string', 'max:'.QuestionData::MAX_PROMPT],
+            'answer_lines' => $written
+                ? ['sometimes', 'required', 'integer', 'min:1', 'max:'.QuestionData::MAX_ANSWER_LINES]
+                : ['prohibited'],
             'options' => $mcq ? ['sometimes', 'nullable', 'array', 'list', 'max:'.(int) $section->option_count] : ['prohibited'],
             'options.*' => ['nullable', 'array'],
             'options.*.text' => ['nullable', 'string', 'max:'.self::MAX_OPTION_TEXT],
@@ -628,7 +643,12 @@ final class ExamEditor
         ];
         $messages = [
             'prompt_text.max' => 'โจทย์ยาวเกิน '.QuestionData::MAX_PROMPT.' ตัวอักษร',
-            'options.prohibited' => 'ข้อถูก/ผิดและข้อเติมตัวเลขไม่มีตัวเลือกให้พิมพ์',
+            'answer_lines.prohibited' => 'จำนวนบรรทัดใช้กับข้อเขียนเท่านั้น',
+            'answer_lines.required' => 'กรุณากำหนดจำนวนบรรทัดสำหรับเขียนคำตอบ',
+            'answer_lines.integer' => 'จำนวนบรรทัดต้องเป็นตัวเลข',
+            'answer_lines.min' => 'ต้องมีอย่างน้อย 1 บรรทัด',
+            'answer_lines.max' => 'กำหนดได้ไม่เกิน '.QuestionData::MAX_ANSWER_LINES.' บรรทัด',
+            'options.prohibited' => 'ข้อถูก/ผิด ข้อเติมตัวเลข และข้อเขียนไม่มีตัวเลือกให้พิมพ์',
             'options.max' => "ตอนนี้มี {$section->option_count} ตัวเลือก",
             'options.list' => 'ตัวเลือกต้องเป็นรายการตามลำดับ ก ข ค ง',
             'options.*.text.max' => 'ตัวเลือกยาวเกิน '.self::MAX_OPTION_TEXT.' ตัวอักษร',
@@ -660,7 +680,13 @@ final class ExamEditor
             $out['max_points'] = round((float) $v['max_points'], 2);
         }
         if (array_key_exists('answer_key', $input)) {
-            $out['answer_key'] = ExamAnswerKey::normalise($section, $input['answer_key'], 'answer_key.');
+            // A written question keeps the homework key shape (final answer, steps), not accepted options/values.
+            $out['answer_key'] = $written
+                ? QuestionData::validatedKey($section->type, $input['answer_key'])
+                : ExamAnswerKey::normalise($section, $input['answer_key'], 'answer_key.');
+        }
+        if ($written && array_key_exists('answer_lines', $v)) {
+            $out['answer_lines'] = (int) $v['answer_lines'];
         }
         if ($mcq && array_key_exists('lock_options', $v)) {
             $out['lock_options'] = (bool) $v['lock_options'];

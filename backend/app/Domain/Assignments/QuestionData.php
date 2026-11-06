@@ -114,6 +114,25 @@ final class QuestionData
     }
 
     /**
+     * The key of a written exam question (DESIGN §22.20.2), checked by the
+     * homework rules of its type: show_work needs `final.accepted`, open has
+     * no key. Null clears the key.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws ValidationException keyed `answer_key.*`
+     */
+    public static function validatedKey(string $type, mixed $key): ?array
+    {
+        if ($key === null) {
+            return null;
+        }
+        $validated = Validator::make(['answer_key' => $key], self::answerKeyRules($type), self::messages())->validate();
+
+        return self::normaliseKey($type, $validated['answer_key'] ?? null);
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     private static function answerKeyRules(?string $type): array
