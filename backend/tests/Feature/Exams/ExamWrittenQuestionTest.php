@@ -114,10 +114,16 @@ class ExamWrittenQuestionTest extends TestCase
         [$first, $second] = Question::query()->where('section_id', $open['id'])->orderBy('position')->get()->all();
         $this->approveRubric($first, 4);
         $this->approveRubric($second, 4);
+        Question::query()->where('section_id', $open['id'])->update(['approved_at' => now()]);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->exam->id}/answer-key/approve")->assertOk();
+        $this->assertNotNull($this->exam->refresh()->key_approved_at);
 
         $this->asUser($this->teacher)->patchJson("/api/v1/questions/{$first->id}", ['max_points' => 5])->assertOk();
         $this->assertSame(Question::RUBRIC_DRAFT, $first->refresh()->rubric_status);
         $this->assertSame(Question::RUBRIC_APPROVED, $second->refresh()->rubric_status);
+        $this->exam->refresh();
+        $this->assertNull($this->exam->key_approved_at, 'the key approval is withdrawn with the rubric');
+        $this->assertSame('draft', $this->exam->status);
 
         $this->asUser($this->teacher)->patchJson("/api/v1/exam-sections/{$open['id']}", ['default_points' => 6])->assertOk();
         $this->assertEquals(6, $second->refresh()->max_points);

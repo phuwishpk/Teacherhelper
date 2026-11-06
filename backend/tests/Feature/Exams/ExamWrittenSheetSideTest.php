@@ -98,4 +98,18 @@ class ExamWrittenSheetSideTest extends TestCase
         $this->assertSame([], array_intersect($this->writtenIds, array_column($listed, 'id')));
         $this->assertCount(6, $listed);
     }
+
+    public function test_an_essay_only_exam_has_no_key_sheet_and_stays_unlocked(): void
+    {
+        Queue::fake();
+        $essay = $this->createExam(['title' => 'สอบเขียนล้วน']);
+        $this->addSection($essay, ['type' => 'open', 'question_count' => 2]);
+
+        $this->asUser($this->teacher)->postJson("/api/v1/exams/{$essay->id}/prints", ['kind' => 'key_sheet'])
+            ->assertStatus(422)->assertJsonPath('code', 'assignment_empty')
+            ->assertJsonPath('message', 'ข้อสอบนี้ไม่มีข้อฝน จึงไม่มีกระดาษเฉลย (เฉลยของข้อเขียนคือ rubric)');
+
+        $this->assertNull($essay->refresh()->structure_locked_at, 'a refused print does not lock the structure');
+        $this->assertSame(0, $essay->worksheetPrints()->count());
+    }
 }

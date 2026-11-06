@@ -6,7 +6,7 @@ import 'package:eduvision/features/assignments/key_document_sources.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../assignments/answer_key_fixtures.dart';
+import '../assignments/answer_key_fixtures.dart' show FakeDocumentPicker;
 import '../helpers/pump_screen.dart';
 import 'exam_fakes.dart';
 import 'exam_test_helpers.dart';
@@ -217,6 +217,111 @@ void main() {
     expect(find.byKey(const ValueKey('key_values_61')), findsNothing);
     expect(find.text('เขียนตอบ'), findsNothing);
   });
+
+  testWidgets('after the rubric screen the exam is read again', (tester) async {
+    final repo = withWritten();
+    await pumpExamScreen(
+      tester,
+      const ExamQuestionScreen(examId: 40, questionId: 51),
+      repo: repo,
+    );
+    expect(find.text('rubric ยังไม่อนุมัติ'), findsOneWidget);
+
+    // The teacher approves the rubric on the screen the button opens.
+    repo.detailJson = examJson(
+      sections: [
+        ...(examJson()['sections'] as List).cast<Map<String, dynamic>>(),
+        ...(writtenSectionsJson()
+          ..[0]['questions'] = [
+            questionJson(
+              id: 51,
+              sectionId: 5,
+              position: 5,
+              type: 'open',
+              prompt: 'อธิบายวัฏจักรของน้ำ',
+              points: 5,
+              answerLines: 8,
+              rubricStatus: 'approved',
+            ),
+          ]),
+      ],
+    );
+    final getsBefore = repo.calls.where((c) => c.$1 == 'get').length;
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('exam_question_rubric')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('rubric /assignments/40/questions/51/rubric'),
+      findsOneWidget,
+    );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(
+      repo.calls.where((c) => c.$1 == 'get').length,
+      greaterThan(getsBefore),
+    );
+    expect(find.text('rubric อนุมัติแล้ว'), findsOneWidget);
+    expect(find.text('rubric ยังไม่อนุมัติ'), findsNothing);
+  });
+
+  testWidgets('a choice section goes before the written sections', (
+    tester,
+  ) async {
+    final repo = await pumpExamScreen(
+      tester,
+      const ExamScreen(examId: 40),
+      repo: withWritten(),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('exam_add_section')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('section_submit')));
+    await tester.pumpAndSettle();
+
+    final body = (repo.calls.firstWhere((c) => c.$1 == 'addSection').$2 as Map)
+        .cast<String, Object?>();
+    expect(body['type'], 'mcq');
+    expect(
+      body['position'],
+      4,
+      reason: 'the first written section is number 4',
+    );
+  });
+
+  testWidgets(
+    'a written section and a section of an exam without written ones send no position',
+    (tester) async {
+      final repo = await pumpExamScreen(
+        tester,
+        const ExamScreen(examId: 40),
+        repo: withWritten(),
+      );
+      await tester.tap(find.byKey(const ValueKey('exam_add_section')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('อัตนัย'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('section_submit')));
+      await tester.pumpAndSettle();
+      final written =
+          (repo.calls.firstWhere((c) => c.$1 == 'addSection').$2 as Map)
+              .cast<String, Object?>();
+      expect(written['type'], 'open');
+      expect(written.containsKey('position'), isFalse);
+
+      final plain = await pumpExamScreen(tester, const ExamScreen(examId: 40));
+      await tester.tap(find.byKey(const ValueKey('exam_add_section')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('section_submit')));
+      await tester.pumpAndSettle();
+      final choice =
+          (plain.calls.firstWhere((c) => c.$1 == 'addSection').$2 as Map)
+              .cast<String, Object?>();
+      expect(choice.containsKey('position'), isFalse);
+    },
+  );
 
   for (final width in [390.0, 820.0, 1440.0]) {
     testWidgets('the written question form fits ${width.toInt()} px', (

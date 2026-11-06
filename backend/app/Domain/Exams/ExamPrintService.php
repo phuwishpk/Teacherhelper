@@ -121,6 +121,10 @@ class ExamPrintService
             if ($questions->isEmpty()) {
                 throw new ApiException('ข้อสอบนี้ยังไม่มีข้อ เพิ่มตอนและข้อก่อน', 'assignment_empty', 422);
             }
+            if (ExamSheetLayout::items($exam) === []) {
+                // Only written questions: the key sheet would have no pages (§22.20.2: their key is the rubric).
+                throw new ApiException('ข้อสอบนี้ไม่มีข้อฝน จึงไม่มีกระดาษเฉลย (เฉลยของข้อเขียนคือ rubric)', 'assignment_empty', 422);
+            }
 
             return;
         }

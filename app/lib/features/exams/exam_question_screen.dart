@@ -558,6 +558,13 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
     );
   }
 
+  /// The rubric screen belongs to the homework: it reloads the assignment, not
+  /// this exam, so read the exam again when the teacher comes back.
+  Future<void> _openRubric(ExamQuestion q) async {
+    await context.push(AppRoutes.rubric(widget.detail.exam.id, q.id));
+    if (mounted) await _notifier.refresh();
+  }
+
   /// A written question: lines of the writing box, the final answer of a
   /// show_work, and the rubric that is its key (DESIGN §22.20.2).
   List<Widget> _writtenFields(ThemeData theme) {
@@ -617,10 +624,7 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
         alignment: AlignmentDirectional.centerStart,
         child: OutlinedButton.icon(
           key: const ValueKey('exam_question_rubric'),
-          onPressed: q == null || _busy
-              ? null
-              : () =>
-                    context.push(AppRoutes.rubric(widget.detail.exam.id, q.id)),
+          onPressed: q == null || _busy ? null : () => _openRubric(q),
           icon: const Icon(Icons.rule),
           label: const Text('ตั้ง rubric'),
         ),

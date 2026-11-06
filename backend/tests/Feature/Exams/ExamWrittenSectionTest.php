@@ -128,4 +128,23 @@ class ExamWrittenSectionTest extends TestCase
             ->assertStatus(409)->assertJsonPath('code', 'exam_structure_locked');
         $this->assertSame(1, ExamSection::query()->where('assignment_id', $exam->id)->count());
     }
+
+    public function test_a_choice_section_can_be_inserted_before_a_written_one(): void
+    {
+        $exam = $this->createExam();
+        $open = $this->addSection($exam, ['type' => 'open', 'question_count' => 1]);
+
+        $mcq = $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 2, 'position' => 1]);
+
+        $this->assertSame(
+            [$mcq['id'], $open['id']],
+            ExamSection::query()->where('assignment_id', $exam->id)->orderBy('position')->pluck('id')->all(),
+        );
+        $this->assertSame(
+            [1, 2, 3],
+            Question::query()->where('assignment_id', $exam->id)->orderBy('position')->pluck('position')->all(),
+            'the written question is renumbered after the new bubble questions',
+        );
+        $this->assertSame('open', Question::query()->where('assignment_id', $exam->id)->orderByDesc('position')->value('type'));
+    }
 }

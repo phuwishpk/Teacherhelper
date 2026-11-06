@@ -48,8 +48,14 @@ class ExamScreen extends ConsumerWidget {
       allowWritten: d.allowsWritten,
     );
     if (draft == null || !context.mounted) return;
+    // The server keeps written sections last, so a choice section is put
+    // in front of the first written one instead of after it.
+    final firstWritten = d.sections.where((s) => s.type.isWritten).firstOrNull;
+    final placed = !draft.type.isWritten && firstWritten != null
+        ? draft.atPosition(firstWritten.position)
+        : draft;
     try {
-      await _notifier(ref).addSection(draft);
+      await _notifier(ref).addSection(placed);
       if (context.mounted) showMessage(context, 'เพิ่มตอนแล้ว');
     } catch (e) {
       if (context.mounted) showExamError(context, e);

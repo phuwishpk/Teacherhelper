@@ -1106,6 +1106,7 @@ class ExamSectionDraft {
     this.numeric,
     this.defaultPoints = 1,
     this.questionCount = 0,
+    this.position,
   });
 
   final ExamSectionType type;
@@ -1114,6 +1115,21 @@ class ExamSectionDraft {
   final int? optionCount;
   final NumericSpec? numeric;
   final double defaultPoints;
+
+  /// Where to put a new section (1-based). A choice section goes before the
+  /// written ones, which must come last (DESIGN §22.20.2).
+  final int? position;
+
+  ExamSectionDraft atPosition(int position) => ExamSectionDraft(
+    type: type,
+    title: title,
+    instructions: instructions,
+    optionCount: optionCount,
+    numeric: numeric,
+    defaultPoints: defaultPoints,
+    questionCount: questionCount,
+    position: position,
+  );
 
   /// Blank questions created with a new section (0–100).
   final int questionCount;
@@ -1127,6 +1143,7 @@ class ExamSectionDraft {
       'numeric': (numeric ?? const NumericSpec(digits: 1)).toJson(),
     'default_points': defaultPoints,
     'question_count': questionCount,
+    'position': ?position,
   };
 
   /// The PATCH body against [current]: the type never changes, and the
