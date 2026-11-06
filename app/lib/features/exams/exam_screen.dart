@@ -712,6 +712,13 @@ class _QuestionTile extends StatelessWidget {
         ),
       if (q.anyFigurePending)
         StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.onSurfaceVariant),
+      if (q.type.isWritten)
+        StatusChip(
+          label: q.rubricApproved
+              ? 'rubric อนุมัติแล้ว'
+              : 'rubric ยังไม่อนุมัติ',
+          color: q.rubricApproved ? scheme.primary : scheme.error,
+        ),
       if (q.lockOptions)
         StatusChip(label: 'ห้ามสลับตัวเลือก', color: scheme.secondary),
       if (q.lockOptionsSuggested)
@@ -733,11 +740,16 @@ class _QuestionTile extends StatelessWidget {
         children: [
           Text(
             [
-              key == null ? 'ยังไม่มีเฉลย' : 'เฉลย ${key.describe(q.type)}',
+              if (q.type.isWritten)
+                '${q.answerLines ?? kExamDefaultAnswerLines} บรรทัด'
+              else
+                key == null ? 'ยังไม่มีเฉลย' : 'เฉลย ${key.describe(q.type)}',
               '${formatPoints(q.maxPoints)} คะแนน',
               if (q.hasPromptImage) 'มีภาพ',
             ].join(' · '),
-            style: key == null ? TextStyle(color: scheme.error) : null,
+            style: !q.type.isWritten && key == null
+                ? TextStyle(color: scheme.error)
+                : null,
           ),
           if (chips.isNotEmpty) ...[
             const SizedBox(height: 4),

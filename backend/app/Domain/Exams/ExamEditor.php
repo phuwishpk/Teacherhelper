@@ -210,7 +210,9 @@ final class ExamEditor
             $section = $question->section;
             $data = self::questionData($changes, $section, $exam, $question);
 
+            // The lines of a writing box change the written pages of the sheet (§22.20.2).
             $structural = (array_key_exists('lock_options', $data) && $data['lock_options'] !== $question->lock_options)
+                || (array_key_exists('answer_lines', $data) && $data['answer_lines'] !== $question->answer_lines)
                 || (($data['position'] ?? null) !== null && $data['position'] !== self::indexInSection($question));
             if ($structural) {
                 self::assertUnlocked($exam);

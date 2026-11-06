@@ -59,6 +59,10 @@ const kExamMaxDigits = 5;
 const kExamMaxAcceptedValues = 10;
 const kExamMaxDurationMinutes = 600;
 
+/// Lines of the writing box of a written question (DESIGN §22.20.2).
+const kExamDefaultAnswerLines = 8;
+const kExamMaxAnswerLines = 15;
+
 /// Columns of the student-ID grid of a shared answer sheet (§22.19).
 const kExamMinCodeDigits = 4;
 const kExamMaxCodeDigits = 13;

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/router/app_router.dart';
 import '../../core/widgets/async_view.dart';
 import '../../core/widgets/content_column.dart';
 import '../assignments/answer_key_models.dart';
@@ -111,6 +113,12 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
   );
   late final Set<int> _selected = {...?widget.question?.key?.options};
   late bool _lock = widget.question?.lockOptions ?? false;
+  late final _lines = TextEditingController(
+    text: '${widget.question?.answerLines ?? kExamDefaultAnswerLines}',
+  );
+  late final _final = TextEditingController(
+    text: widget.question?.finalAccepted.join(', ') ?? '',
+  );
 
   /// New images of a question not saved yet (position 0 = the prompt).
   final Map<int, PickedDocument> _pending = {};
@@ -121,6 +129,7 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
   ExamQuestion? get _question => widget.question;
   bool get _creating => _question == null;
   bool get _mcq => _section.type == ExamSectionType.mcq;
+  bool get _written => _section.type.isWritten;
   bool get _locked => widget.detail.structureLocked;
 
   ExamOption? _optionOf(int position) =>
@@ -142,6 +151,8 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
     _prompt.dispose();
     _points.dispose();
     _values.dispose();
+    _lines.dispose();
+    _final.dispose();
     for (final c in _optionTexts) {
       c.dispose();
     }
@@ -181,10 +192,22 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
     promptText: _prompt.text,
     options: _mcq ? [for (final c in _optionTexts) c.text] : null,
     maxPoints: double.tryParse(_points.text.trim()),
-    key: _key(),
+    key: _written ? null : _key(),
     lockOptions: _mcq && (!_locked || _creating) ? _lock : null,
     approve: approve,
+    answerLines: _written && (!_locked || _creating)
+        ? int.tryParse(_lines.text.trim())
+        : null,
+    finalAccepted: _section.type == ExamSectionType.showWork
+        ? _finalAnswers()
+        : null,
   );
+
+  /// "12, ๑๒" -> ["12", "๑๒"]: the accepted final answers of a show_work.
+  List<String> _finalAnswers() => [
+    for (final a in _final.text.split(','))
+      if (a.trim().isNotEmpty) a.trim(),
+  ];
 
   Future<void> _save({bool approve = false}) async {
     if (!_formKey.currentState!.validate()) return;
@@ -388,8 +411,14 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
               const SizedBox(height: 8),
               Text(
                 q.blank
-                    ? 'ข้อว่าง ยังไม่ได้กรอก: ${widget.detail.isManual ? 'ใส่โจทย์' : 'ใส่เฉลย'}'
+                    ? 'ข้อว่าง ยังไม่ได้กรอก: ${_written
+                              ? 'ตั้ง rubric '
+                              : widget.detail.isManual
+                              ? 'ใส่โจทย์'
+                              : 'ใส่เฉลย'}'
                           'แล้วข้อนี้จะอนุมัติเอง'
+                    : _written
+                    ? 'ข้อนี้ยังไม่อนุมัติ ตรวจโจทย์แล้วกด "บันทึกและอนุมัติ"'
                     : 'ข้อนี้ยังไม่อนุมัติ ตรวจโจทย์และเฉลยแล้วกด "บันทึกและอนุมัติ"',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
@@ -482,9 +511,13 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
                 ),
             ],
             const SizedBox(height: 16),
-            Text('เฉลย', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            _keyField(theme),
+            if (_written)
+              ..._writtenFields(theme)
+            else ...[
+              Text('เฉลย', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              _keyField(theme),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               key: const ValueKey('exam_question_points'),
@@ -523,6 +556,76 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
         ),
       ),
     );
+  }
+
+  /// A written question: lines of the writing box, the final answer of a
+  /// show_work, and the rubric that is its key (DESIGN §22.20.2).
+  List<Widget> _writtenFields(ThemeData theme) {
+    final q = _question;
+    final linesLocked = _locked && !_creating;
+    final approved = q?.rubricApproved ?? false;
+    return [
+      TextFormField(
+        key: const ValueKey('exam_question_lines'),
+        controller: _lines,
+        enabled: !linesLocked,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: 'จำนวนบรรทัดของกรอบเขียน',
+          helperText: linesLocked
+              ? 'พิมพ์แล้ว เปลี่ยนได้หลังปลดล็อกโครงสร้าง'
+              : 'บรรทัดละ 10 มม. 1–$kExamMaxAnswerLines บรรทัด',
+        ),
+        validator: (v) {
+          final n = int.tryParse(v?.trim() ?? '');
+          return n == null || n < 1 || n > kExamMaxAnswerLines
+              ? 'จำนวนบรรทัด 1–$kExamMaxAnswerLines'
+              : null;
+        },
+      ),
+      if (_section.type == ExamSectionType.showWork) ...[
+        const SizedBox(height: 16),
+        TextFormField(
+          key: const ValueKey('exam_question_final'),
+          controller: _final,
+          decoration: const InputDecoration(
+            labelText: 'คำตอบสุดท้าย',
+            helperText: 'หลายคำตอบที่ยอมรับคั่นด้วยจุลภาค เช่น 12, ๑๒',
+          ),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Text('เกณฑ์การให้คะแนน (rubric)', style: theme.textTheme.titleSmall),
+      const SizedBox(height: 8),
+      if (q != null)
+        Text(
+          approved ? 'rubric อนุมัติแล้ว' : 'rubric ยังไม่อนุมัติ',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: approved
+                ? theme.colorScheme.primary
+                : theme.colorScheme.error,
+          ),
+        )
+      else
+        Text(
+          'บันทึกข้อก่อนแล้วจึงตั้ง rubric',
+          style: theme.textTheme.bodySmall,
+        ),
+      const SizedBox(height: 8),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: OutlinedButton.icon(
+          key: const ValueKey('exam_question_rubric'),
+          onPressed: q == null || _busy
+              ? null
+              : () =>
+                    context.push(AppRoutes.rubric(widget.detail.exam.id, q.id)),
+          icon: const Icon(Icons.rule),
+          label: const Text('ตั้ง rubric'),
+        ),
+      ),
+    ];
   }
 
   Widget _keyField(ThemeData theme) {

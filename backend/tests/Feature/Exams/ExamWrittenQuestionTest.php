@@ -145,4 +145,18 @@ class ExamWrittenQuestionTest extends TestCase
         $this->assertSame(1, $json['sheet']['pages']);
         $this->assertFalse($json['sheet']['overflow']);
     }
+
+    public function test_changing_the_lines_of_a_printed_exam_needs_the_structure_unlocked(): void
+    {
+        $open = $this->addSection($this->exam, ['type' => 'open', 'question_count' => 1]);
+        $id = $open['questions'][0]['id'];
+        $this->exam->forceFill(['structure_locked_at' => now()])->save();
+
+        $this->asUser($this->teacher)->patchJson("/api/v1/questions/{$id}", ['answer_lines' => 10])
+            ->assertStatus(409)->assertJsonPath('code', 'exam_structure_locked');
+        $this->assertSame(8, Question::query()->findOrFail($id)->answer_lines);
+
+        $this->asUser($this->teacher)->patchJson("/api/v1/questions/{$id}", ['answer_lines' => 8, 'prompt_text' => 'โจทย์ใหม่'])
+            ->assertOk();
+    }
 }
