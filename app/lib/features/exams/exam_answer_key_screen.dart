@@ -73,7 +73,7 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
   @override
   void initState() {
     super.initState();
-    for (final q in _d.questions) {
+    for (final q in _d.choiceQuestions) {
       _init(q);
     }
   }
@@ -92,7 +92,7 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
   void didUpdateWidget(covariant _KeyGrid old) {
     super.didUpdateWidget(old);
     // Questions added elsewhere (another screen) get a row.
-    for (final q in _d.questions) {
+    for (final q in _d.choiceQuestions) {
       if (!_values.containsKey(q.id) && !_options.containsKey(q.id)) _init(q);
     }
   }
@@ -136,7 +136,7 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
   }
 
   List<ExamQuestion> get _changed => [
-    for (final q in _d.questions)
+    for (final q in _d.choiceQuestions)
       if (_dirty(q)) q,
   ];
 
@@ -242,11 +242,12 @@ class _KeyGridState extends ConsumerState<_KeyGrid> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final questions = _d.questions;
+    final questions = _d.choiceQuestions;
     final changed = _changed.length;
     final keyed = questions.where((q) => _typed(q).key != null).length;
     final rows = <Object>[
-      for (final s in _d.sections) ...[s, ...s.questions],
+      for (final s in _d.sections)
+        if (!s.type.isWritten) ...[s, ...s.questions],
     ];
     final canApprove =
         !_d.isManual && !_d.keyApproved && changed == 0 && _d.keyComplete;

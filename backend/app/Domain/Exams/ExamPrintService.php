@@ -70,6 +70,9 @@ class ExamPrintService
             if ($sheet && $exam->isManualExam()) {
                 throw new ApiException('ข้อสอบที่ครูตรวจเองไม่มีกระดาษคำตอบ พิมพ์ได้เฉพาะเล่มข้อสอบ', 'exam_manual_grading', 422);
             }
+            if ($kind === WorksheetPrint::KIND_ANSWER_SHEET) {
+                ExamWritten::assertSheetsReady($exam); // step 1 of §22.20.9; removed in step 2
+            }
             $versionNo = $kind === WorksheetPrint::KIND_EXAM_BOOKLET ? self::versionNo($exam, $input['version_no'] ?? null) : null;
             $this->assertPrintable($exam, $kind);
 
@@ -117,6 +120,10 @@ class ExamPrintService
         if ($kind === WorksheetPrint::KIND_KEY_SHEET) {
             if ($questions->isEmpty()) {
                 throw new ApiException('ข้อสอบนี้ยังไม่มีข้อ เพิ่มตอนและข้อก่อน', 'assignment_empty', 422);
+            }
+            if (ExamSheetLayout::items($exam) === []) {
+                // Only written questions: the key sheet would have no pages (§22.20.2: their key is the rubric).
+                throw new ApiException('ข้อสอบนี้ไม่มีข้อฝน จึงไม่มีกระดาษเฉลย (เฉลยของข้อเขียนคือ rubric)', 'assignment_empty', 422);
             }
 
             return;

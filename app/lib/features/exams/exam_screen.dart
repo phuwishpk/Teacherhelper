@@ -45,10 +45,17 @@ class ExamScreen extends ConsumerWidget {
     final draft = await showExamSectionDialog(
       context,
       nextPosition: d.sections.length + 1,
+      allowWritten: d.allowsWritten,
     );
     if (draft == null || !context.mounted) return;
+    // The server keeps written sections last, so a choice section is put
+    // in front of the first written one instead of after it.
+    final firstWritten = d.sections.where((s) => s.type.isWritten).firstOrNull;
+    final placed = !draft.type.isWritten && firstWritten != null
+        ? draft.atPosition(firstWritten.position)
+        : draft;
     try {
-      await _notifier(ref).addSection(draft);
+      await _notifier(ref).addSection(placed);
       if (context.mounted) showMessage(context, 'เพิ่มตอนแล้ว');
     } catch (e) {
       if (context.mounted) showExamError(context, e);
@@ -711,6 +718,13 @@ class _QuestionTile extends StatelessWidget {
         ),
       if (q.anyFigurePending)
         StatusChip(label: 'ยังไม่มีภาพประกอบ', color: scheme.onSurfaceVariant),
+      if (q.type.isWritten)
+        StatusChip(
+          label: q.rubricApproved
+              ? 'rubric อนุมัติแล้ว'
+              : 'rubric ยังไม่อนุมัติ',
+          color: q.rubricApproved ? scheme.primary : scheme.error,
+        ),
       if (q.lockOptions)
         StatusChip(label: 'ห้ามสลับตัวเลือก', color: scheme.secondary),
       if (q.lockOptionsSuggested)
@@ -732,11 +746,16 @@ class _QuestionTile extends StatelessWidget {
         children: [
           Text(
             [
-              key == null ? 'ยังไม่มีเฉลย' : 'เฉลย ${key.describe(q.type)}',
+              if (q.type.isWritten)
+                '${q.answerLines ?? kExamDefaultAnswerLines} บรรทัด'
+              else
+                key == null ? 'ยังไม่มีเฉลย' : 'เฉลย ${key.describe(q.type)}',
               '${formatPoints(q.maxPoints)} คะแนน',
               if (q.hasPromptImage) 'มีภาพ',
             ].join(' · '),
-            style: key == null ? TextStyle(color: scheme.error) : null,
+            style: !q.type.isWritten && key == null
+                ? TextStyle(color: scheme.error)
+                : null,
           ),
           if (chips.isNotEmpty) ...[
             const SizedBox(height: 4),

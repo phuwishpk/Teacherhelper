@@ -2,6 +2,7 @@
 
 namespace App\Domain\Exams;
 
+use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use Illuminate\Validation\ValidationException;
 
@@ -65,6 +66,9 @@ final class ExamSettings
         $method = $data['grading_method'] ?? $assignment->grading_method;
         if ($method !== $assignment->grading_method) {
             if ($method === Assignment::GRADING_MANUAL) {
+                if (ExamWritten::hasWritten($assignment)) {
+                    throw new ApiException(ExamWritten::MANUAL_MESSAGE, 'exam_manual_grading', 422);
+                }
                 ExamEditor::assertNoScannedSheets($assignment);
             }
             $assignment->grading_method = $method;
@@ -116,6 +120,9 @@ final class ExamSettings
 
         if ($identity === $assignment->sheet_identity && $digits === $assignment->student_code_digits) {
             return;
+        }
+        if ($identity === Assignment::IDENTITY_CODE && ExamWritten::hasWritten($assignment)) {
+            throw new ApiException(ExamWritten::QR_ONLY_MESSAGE, 'exam_written_needs_qr_sheet', 422);
         }
         ExamEditor::assertUnlocked($assignment);
         $assignment->sheet_identity = $identity;

@@ -84,6 +84,11 @@ trait ExamTestHelpers
     {
         $questions = Question::query()->where('assignment_id', $exam->id)->with('options')->get();
         foreach ($questions as $question) {
+            if ($question->needsRubric()) {
+                $this->fillWritten($question, $prompts, $keys);
+
+                continue;
+            }
             $question->forceFill([
                 'prompt_text' => $prompts ? 'ข้อใดถูกต้องสำหรับโจทย์ข้อที่ '.$question->position : '',
                 'answer_key' => $keys ? ($question->type === Question::TYPE_NUMERIC ? ['accepted_values' => ['1']] : ['accepted_options' => [1]]) : null,
@@ -93,6 +98,28 @@ trait ExamTestHelpers
                 $option->update(['text' => 'ตัวเลือก '.$option->position]);
             }
         }
+    }
+
+    /**
+     * A written question's "key" is its rubric (§22.20.2): the criteria add up
+     * to the points (open), a final answer (show_work), then approved.
+     */
+    private function fillWritten(Question $question, bool $prompts, bool $keys): void
+    {
+        $question->forceFill([
+            'prompt_text' => $prompts ? 'อธิบายคำตอบของข้อที่ '.$question->position : '',
+            'approved_at' => now(),
+        ])->save();
+        if (! $keys) {
+            return;
+        }
+        $question->rubricCriteria()->delete();
+        if ($question->type === Question::TYPE_OPEN) {
+            $question->rubricCriteria()->create(['position' => 1, 'description' => 'ตอบตรงประเด็น', 'points' => $question->max_points, 'is_core' => true, 'source' => 'teacher']);
+        } else {
+            $question->forceFill(['answer_key' => ['final' => ['accepted' => ['1']], 'reference_steps' => []]])->save();
+        }
+        $question->forceFill(['rubric_status' => Question::RUBRIC_APPROVED])->save();
     }
 
     /** fillExam() then the key approval gate (DESIGN §22.3). */

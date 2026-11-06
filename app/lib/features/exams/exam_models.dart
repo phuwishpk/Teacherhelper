@@ -21,12 +21,19 @@ enum ExamGradingMethod {
 enum ExamSectionType {
   mcq('mcq', 'ปรนัย'),
   trueFalse('true_false', 'ถูก/ผิด'),
-  numeric('numeric', 'เติมตัวเลข');
+  numeric('numeric', 'เติมตัวเลข'),
+
+  /// Written by hand and graded against a rubric (DESIGN §22.20).
+  open('open', 'อัตนัย'),
+  showWork('show_work', 'แสดงวิธีทำ');
 
   const ExamSectionType(this.apiValue, this.label);
 
   final String apiValue;
   final String label;
+
+  /// A section the students write by hand, not bubbles on the sheet.
+  bool get isWritten => this == open || this == showWork;
 
   static ExamSectionType fromApi(String? value) => values.firstWhere(
     (t) => t.apiValue == value,
@@ -51,6 +58,10 @@ const kExamMaxVersions = 4;
 const kExamMaxDigits = 5;
 const kExamMaxAcceptedValues = 10;
 const kExamMaxDurationMinutes = 600;
+
+/// Lines of the writing box of a written question (DESIGN §22.20.2).
+const kExamDefaultAnswerLines = 8;
+const kExamMaxAnswerLines = 15;
 
 /// Columns of the student-ID grid of a shared answer sheet (§22.19).
 const kExamMinCodeDigits = 4;
@@ -381,6 +392,9 @@ class ExamQuestion {
     this.figureSource,
     this.figurePending = false,
     this.skillIds = const [],
+    this.answerLines,
+    this.rubricStatus = 'not_needed',
+    this.finalAccepted = const [],
   });
 
   final int id;
@@ -417,6 +431,17 @@ class ExamQuestion {
 
   /// The prompt figure waits for its page image.
   final bool figurePending;
+
+  /// Lines of the writing box (written questions only, §22.20.2).
+  final int? answerLines;
+
+  /// `not_needed` (choice questions), `draft` or `approved` (written ones).
+  final String rubricStatus;
+
+  /// show_work: the accepted final answers (`answer_key.final.accepted`).
+  final List<String> finalAccepted;
+
+  bool get rubricApproved => rubricStatus == 'approved';
 
   bool get approved => approvedAt != null;
 
@@ -458,8 +483,22 @@ class ExamQuestion {
         for (final id in (json['skill_ids'] as List?) ?? const [])
           if (id is num) id.toInt(),
       ],
+      answerLines: (json['answer_lines'] as num?)?.toInt(),
+      rubricStatus: json['rubric_status'] as String? ?? 'not_needed',
+      finalAccepted: _finalAccepted(json['answer_key']),
     );
   }
+}
+
+/// `answer_key.final.accepted` of a show_work question, else empty.
+List<String> _finalAccepted(Object? key) {
+  final fin = key is Map ? key['final'] : null;
+  final accepted = fin is Map ? fin['accepted'] : null;
+  return [
+    if (accepted is List)
+      for (final a in accepted)
+        if (a != null) a.toString(),
+  ];
 }
 
 /// One section of an exam (`exam_sections`, §22.2).
@@ -499,7 +538,9 @@ class ExamSection {
   int get choiceCount => switch (type) {
     ExamSectionType.mcq => optionCount ?? 4,
     ExamSectionType.trueFalse => 2,
-    ExamSectionType.numeric => 0,
+    ExamSectionType.numeric ||
+    ExamSectionType.open ||
+    ExamSectionType.showWork => 0,
   };
 
   /// "ตอนที่ 2" plus the teacher's title when there is one.
@@ -514,6 +555,8 @@ class ExamSection {
     ExamSectionType.trueFalse => 'ถูก/ผิด',
     ExamSectionType.numeric =>
       'เติมตัวเลข ${(numeric ?? const NumericSpec(digits: 1)).summary}',
+    ExamSectionType.open => 'เขียนตอบ (อัตนัย)',
+    ExamSectionType.showWork => 'เขียนตอบ (แสดงวิธีทำ)',
   };
 
   /// "ข้อ 1–20", or null for an empty section.
@@ -567,13 +610,14 @@ class ExamIncomplete {
   final int questionId;
   final int position;
 
-  /// `not_approved`, `no_key` or `no_prompt`.
+  /// `not_approved`, `no_key`, `no_prompt` or `no_rubric`.
   final List<String> reasons;
 
   static String reasonLabel(String reason) => switch (reason) {
     'not_approved' => 'ยังไม่อนุมัติ',
     'no_key' => 'ยังไม่มีเฉลย',
     'no_prompt' => 'ยังไม่มีโจทย์',
+    'no_rubric' => 'rubric ยังไม่อนุมัติ',
     _ => reason,
   };
 
@@ -651,6 +695,17 @@ class ExamDetail {
   ];
 
   int get questionCount => sections.fold(0, (n, s) => n + s.questions.length);
+
+  /// Questions answered with bubbles on the sheet: the written ones are set
+  /// by their rubric instead (§22.20).
+  List<ExamQuestion> get choiceQuestions => [
+    for (final s in sections)
+      if (!s.type.isWritten) ...s.questions,
+  ];
+
+  /// Whether a written section may be added: an app exam whose sheets name
+  /// the student by QR (§22.20.1).
+  bool get allowsWritten => !exam.isManualExam && !exam.usesCodeSheets;
 
   /// Questions without an indicator: their results are not counted in the
   /// charts (§20.3, a warning only).
@@ -1051,6 +1106,7 @@ class ExamSectionDraft {
     this.numeric,
     this.defaultPoints = 1,
     this.questionCount = 0,
+    this.position,
   });
 
   final ExamSectionType type;
@@ -1059,6 +1115,21 @@ class ExamSectionDraft {
   final int? optionCount;
   final NumericSpec? numeric;
   final double defaultPoints;
+
+  /// Where to put a new section (1-based). A choice section goes before the
+  /// written ones, which must come last (DESIGN §22.20.2).
+  final int? position;
+
+  ExamSectionDraft atPosition(int position) => ExamSectionDraft(
+    type: type,
+    title: title,
+    instructions: instructions,
+    optionCount: optionCount,
+    numeric: numeric,
+    defaultPoints: defaultPoints,
+    questionCount: questionCount,
+    position: position,
+  );
 
   /// Blank questions created with a new section (0–100).
   final int questionCount;
@@ -1072,6 +1143,7 @@ class ExamSectionDraft {
       'numeric': (numeric ?? const NumericSpec(digits: 1)).toJson(),
     'default_points': defaultPoints,
     'question_count': questionCount,
+    'position': ?position,
   };
 
   /// The PATCH body against [current]: the type never changes, and the
@@ -1115,6 +1187,8 @@ class ExamQuestionDraft {
     this.key,
     this.lockOptions,
     this.approve = false,
+    this.answerLines,
+    this.finalAccepted,
   });
 
   final ExamSectionType type;
@@ -1123,6 +1197,12 @@ class ExamQuestionDraft {
   final double? maxPoints;
   final ExamKey? key;
   final bool? lockOptions;
+
+  /// Written questions: lines of the writing box.
+  final int? answerLines;
+
+  /// show_work: the accepted final answers.
+  final List<String>? finalAccepted;
 
   /// "อนุมัติข้อนี้" (PATCH only).
   final bool approve;
@@ -1134,7 +1214,16 @@ class ExamQuestionDraft {
         for (final o in options!) {'text': o.trim().isEmpty ? null : o.trim()},
       ],
     'max_points': ?maxPoints,
-    'answer_key': key?.toJson(type),
+    if (type.isWritten) ...{
+      'answer_lines': ?answerLines,
+      // Only show_work has a key: the final answer; the rubric screen sets the rest.
+      if (type == ExamSectionType.showWork &&
+          (finalAccepted?.isNotEmpty ?? false))
+        'answer_key': {
+          'final': {'accepted': finalAccepted},
+        },
+    } else
+      'answer_key': key?.toJson(type),
     if (type == ExamSectionType.mcq && lockOptions != null)
       'lock_options': lockOptions,
     if (approve && !create) 'approve': true,

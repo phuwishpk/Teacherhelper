@@ -39,7 +39,11 @@ final class ExamQuestionCopier
 
     public const OPTION_COUNT_MISMATCH = 'option_count_mismatch';
 
+    /** A written question's key is its rubric, which is not copied in round one (§22.20). */
+    public const WRITTEN_NOT_COPYABLE = 'written_not_copyable';
+
     private const REASONS_TH = [
+        self::WRITTEN_NOT_COPYABLE => 'ข้อเขียนยังคัดลอกไปข้อสอบอื่นไม่ได้',
         self::TYPE_MISMATCH => 'ชนิดของข้อไม่ตรงกับตอนปลายทาง',
         self::OPTION_COUNT_MISMATCH => 'จำนวนตัวเลือกไม่ตรงกับตอนปลายทาง',
     ];
@@ -71,6 +75,7 @@ final class ExamQuestionCopier
 
         return Question::query()
             ->whereNotNull('section_id')
+            ->whereHas('section', fn (Builder $s) => $s->whereIn('type', ExamSection::TYPES))
             ->whereIn('assignment_id', $exams->select('id'))
             ->when($text !== '', fn (Builder $q) => $q->where('prompt_text', 'like', '%'.addcslashes($text, '%_\\').'%'))
             ->with(['options', 'skills:id', 'section', 'assignment:id,title,course_id'])
@@ -123,6 +128,16 @@ final class ExamQuestionCopier
             ExamEditor::assertUnlocked($exam);
             $append = new ExamAppend($exam);
             $skipped = [];
+            $copyable = [];
+            foreach ($ordered as $source) {
+                if ($source->section?->isWritten()) {
+                    $skipped[] = ['question_id' => $source->id, 'reason' => self::WRITTEN_NOT_COPYABLE, 'reason_th' => self::REASONS_TH[self::WRITTEN_NOT_COPYABLE]];
+
+                    continue;
+                }
+                $copyable[] = $source;
+            }
+            $ordered = $copyable;
             /** @var list<array{0: ExamSection, 1: Question}> $plan */
             $plan = [];
 
@@ -184,7 +199,7 @@ final class ExamQuestionCopier
 
     private static function mismatch(Question $source, ExamSection $target): ?string
     {
-        if ($source->type !== $target->type) {
+        if ($source->type !== $target->type || $target->isWritten()) {
             return self::TYPE_MISMATCH;
         }
         if ($target->type === ExamSection::TYPE_MCQ && (int) $source->section?->option_count !== (int) $target->option_count) {

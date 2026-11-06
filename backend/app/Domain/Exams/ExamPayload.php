@@ -55,6 +55,8 @@ final class ExamPayload
             ->get();
         $bySection = $questions->groupBy('section_id');
         $numeric = $questions->where('type', Question::TYPE_NUMERIC)->count();
+        // Written questions are not on the bubble sheet (§22.20.3).
+        $sheetCount = $questions->reject(fn (Question $q) => $q->needsRubric())->count();
 
         return [
             'exam' => (new AssignmentResource($exam))->resolve(),
@@ -64,7 +66,7 @@ final class ExamPayload
             'booklet_incomplete_questions' => ExamKeyCheck::bookletProblems($exam, $questions),
             'versions_ready' => ExamVersions::ready($exam),
             'structure_locked_at' => $exam->structure_locked_at?->toIso8601String(),
-            'sheet' => ExamSheetCapacity::of($questions->count() - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
+            'sheet' => ExamSheetCapacity::of($sheetCount - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
             'page_images' => ExamPageImage::query()->where('assignment_id', $exam->id)->orderBy('source_document_id')->orderBy('page_no')->get()
                 ->map(fn (ExamPageImage $p) => $p->toApi())->values()->all(),
             'figures_pending' => ExamFigures::pending($exam),
@@ -117,6 +119,8 @@ final class ExamPayload
             'prompt_text' => $question->prompt_text,
             'has_prompt_image' => $question->prompt_image_path !== null,
             'max_points' => (float) $question->max_points,
+            'answer_lines' => $question->answer_lines,
+            'rubric_status' => $question->rubric_status,
             'options' => $options->map(fn (QuestionOption $o) => [
                 'id' => $o->id,
                 'position' => $o->position,

@@ -54,7 +54,7 @@ final class ExamSheetLayout
         $items = [];
         foreach (Question::query()->where('assignment_id', $exam->id)->orderBy('position')->get(['id', 'section_id', 'position']) as $question) {
             $section = $sections->get($question->section_id);
-            if ($section instanceof ExamSection) {
+            if ($section instanceof ExamSection && ! $section->isWritten()) {
                 $items[] = ExamSheetItem::forSection($section, (int) $question->position);
             }
         }

@@ -173,6 +173,8 @@ Map<String, dynamic> questionJson({
   bool image = false,
   double points = 1,
   List<int> skillIds = const [],
+  int? answerLines,
+  String rubricStatus = 'not_needed',
 }) => {
   'id': id,
   'assignment_id': 40,
@@ -193,6 +195,8 @@ Map<String, dynamic> questionJson({
       },
   ],
   'answer_key': key,
+  'answer_lines': answerLines,
+  'rubric_status': rubricStatus,
   'approved_at': approved ? '2026-09-30T10:00:00+00:00' : null,
   'origin': 'teacher',
   'blank': blank,
@@ -203,6 +207,81 @@ Map<String, dynamic> questionJson({
   'has_prompt': prompt.isNotEmpty || image,
   'updated_at': '2026-09-30T10:00:00+00:00',
 };
+
+/// An `open` section (q51 with a draft rubric, q52 blank) and a `show_work`
+/// section (q61 with an approved rubric and a final answer), as the server
+/// returns them after the choice sections of [examJson] (DESIGN §22.20).
+List<Map<String, dynamic>> writtenSectionsJson({int firstSectionId = 5}) => [
+  {
+    'id': firstSectionId,
+    'assignment_id': 40,
+    'position': 4,
+    'title': 'เขียนตอบ',
+    'instructions': null,
+    'type': 'open',
+    'option_count': null,
+    'numeric': null,
+    'default_points': 5,
+    'question_count': 2,
+    'first_number': 5,
+    'last_number': 6,
+    'questions': [
+      questionJson(
+        id: 51,
+        sectionId: firstSectionId,
+        position: 5,
+        type: 'open',
+        prompt: 'อธิบายวัฏจักรของน้ำ',
+        points: 5,
+        answerLines: 8,
+        rubricStatus: 'draft',
+      ),
+      questionJson(
+        id: 52,
+        sectionId: firstSectionId,
+        position: 6,
+        type: 'open',
+        points: 5,
+        answerLines: 8,
+        rubricStatus: 'draft',
+        blank: true,
+        approved: false,
+      ),
+    ],
+  },
+  {
+    'id': firstSectionId + 1,
+    'assignment_id': 40,
+    'position': 5,
+    'title': null,
+    'instructions': null,
+    'type': 'show_work',
+    'option_count': null,
+    'numeric': null,
+    'default_points': 4,
+    'question_count': 1,
+    'first_number': 7,
+    'last_number': 7,
+    'questions': [
+      questionJson(
+        id: 61,
+        sectionId: firstSectionId + 1,
+        position: 7,
+        type: 'show_work',
+        prompt: 'จงหาค่าของ (−15) + 8 × (−2)',
+        points: 4,
+        answerLines: 6,
+        rubricStatus: 'approved',
+        key: {
+          'final': {
+            'accepted': ['-31'],
+          },
+          'reference_steps': ['คูณก่อน', 'แล้วจึงบวก'],
+        },
+      ),
+    ],
+  },
+];
 
 /// `GET /exams/{id}/versions` for [examJson]: version ข swaps q11/q12 and
 /// shows q11's options as ค ก ง ข.

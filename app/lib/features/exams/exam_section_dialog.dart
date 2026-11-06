@@ -7,20 +7,27 @@ import 'exam_models.dart';
 /// type (new sections only), option count (mcq 2–6), the digit block of a
 /// numeric section, the default points and, for a new section, how many
 /// blank questions to create. Structural fields are read-only while the
-/// structure is locked.
+/// structure is locked. The written types (อัตนัย, แสดงวิธีทำ) are offered
+/// only when [allowWritten] (an app exam with QR sheets, DESIGN §22.20.1).
 Future<ExamSectionDraft?> showExamSectionDialog(
   BuildContext context, {
   ExamSection? existing,
   bool structureLocked = false,
   int nextPosition = 1,
+  bool allowWritten = false,
 }) => showDialog<ExamSectionDraft>(
   context: context,
   builder: (_) => ExamSectionDialog(
     existing: existing,
     structureLocked: structureLocked,
     nextPosition: nextPosition,
+    allowWritten: allowWritten,
   ),
 );
+
+/// Default points of a new section: a written question is worth more (§22.20.2).
+const _kChoicePoints = '1';
+const _kWrittenPoints = '5';
 
 class ExamSectionDialog extends StatefulWidget {
   const ExamSectionDialog({
@@ -28,11 +35,13 @@ class ExamSectionDialog extends StatefulWidget {
     this.existing,
     this.structureLocked = false,
     this.nextPosition = 1,
+    this.allowWritten = false,
   });
 
   final ExamSection? existing;
   final bool structureLocked;
   final int nextPosition;
+  final bool allowWritten;
 
   @override
   State<ExamSectionDialog> createState() => _ExamSectionDialogState();
@@ -50,11 +59,21 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
   late final _count = TextEditingController(text: '10');
   late ExamSectionType _type = widget.existing?.type ?? ExamSectionType.mcq;
   late int _options = widget.existing?.optionCount ?? 4;
+
+  /// The teacher typed the points: a change of type no longer resets them.
+  bool _pointsEdited = false;
   late int _digits = widget.existing?.numeric?.digits ?? 2;
   late bool _negative = widget.existing?.numeric?.allowNegative ?? false;
   late bool _decimal = widget.existing?.numeric?.allowDecimal ?? false;
 
   bool get _creating => widget.existing == null;
+
+  void _chooseType(ExamSectionType type) => setState(() {
+    _type = type;
+    if (!_pointsEdited) {
+      _points.text = type.isWritten ? _kWrittenPoints : _kChoicePoints;
+    }
+  });
 
   bool get _structureEditable => !widget.structureLocked;
 
@@ -128,18 +147,29 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
               const SizedBox(height: 8),
               Text('ชนิดของข้อ', style: theme.textTheme.labelLarge),
               const SizedBox(height: 8),
-              SegmentedButton<ExamSectionType>(
+              Wrap(
                 key: const ValueKey('section_type'),
-                showSelectedIcon: false,
-                segments: [
+                spacing: 8,
+                runSpacing: 4,
+                children: [
                   for (final t in ExamSectionType.values)
-                    ButtonSegment(value: t, label: Text(t.label)),
+                    if (!t.isWritten || widget.allowWritten || _type == t)
+                      ChoiceChip(
+                        key: ValueKey('section_type_${t.apiValue}'),
+                        label: Text(t.label),
+                        selected: _type == t,
+                        onSelected: _creating ? (_) => _chooseType(t) : null,
+                      ),
                 ],
-                selected: {_type},
-                onSelectionChanged: _creating
-                    ? (s) => setState(() => _type = s.first)
-                    : null,
               ),
+              if (_creating && !widget.allowWritten)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'ข้อเขียนใช้กับข้อสอบตรวจด้วยแอปที่ใช้กระดาษแบบ QR รายคนเท่านั้น',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
               if (!_creating)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -178,6 +208,11 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
               if (_type == ExamSectionType.trueFalse)
                 Text(
                   'ข้อถูก/ผิดมี 2 วงเสมอ (ถ ผ)',
+                  style: theme.textTheme.bodySmall,
+                ),
+              if (_type.isWritten)
+                Text(
+                  'นักเรียนเขียนตอบเองบนกระดาษคำตอบ ตั้งเกณฑ์ให้คะแนน (rubric) ของแต่ละข้อหลังสร้างตอน',
                   style: theme.textTheme.bodySmall,
                 ),
               if (_type == ExamSectionType.numeric) ...[
@@ -228,6 +263,7 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
               TextFormField(
                 key: const ValueKey('section_points'),
                 controller: _points,
+                onChanged: (_) => _pointsEdited = true,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -249,9 +285,11 @@ class _ExamSectionDialogState extends State<ExamSectionDialog> {
                   controller: _count,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'จำนวนข้อ',
-                    helperText: 'สร้างข้อว่างรอกรอกโจทย์และเฉลย',
+                    helperText: _type.isWritten
+                        ? 'สร้างข้อว่างรอกรอกโจทย์และตั้ง rubric'
+                        : 'สร้างข้อว่างรอกรอกโจทย์และเฉลย',
                   ),
                   validator: (v) {
                     final n = int.tryParse(v?.trim() ?? '');

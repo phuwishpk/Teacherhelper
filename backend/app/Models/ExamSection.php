@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $position
  * @property string|null $title
  * @property string|null $instructions
- * @property string $type mcq|true_false|numeric
+ * @property string $type mcq|true_false|numeric|open|show_work
  * @property int|null $option_count mcq: 2–6
  * @property int|null $numeric_digits numeric: 1–5
  * @property bool $numeric_allow_negative
@@ -34,7 +34,18 @@ class ExamSection extends Model
 
     public const TYPE_NUMERIC = 'numeric';
 
+    /** The sheet types: bubbles on the answer sheet. The file import validates against these only. */
     public const TYPES = [self::TYPE_MCQ, self::TYPE_TRUE_FALSE, self::TYPE_NUMERIC];
+
+    /** DESIGN §22.20: open (อัตนัย) and show_work (แสดงวิธีทำ) are written by hand and graded against a rubric. */
+    public const TYPE_OPEN = 'open';
+
+    public const TYPE_SHOW_WORK = 'show_work';
+
+    public const WRITTEN_TYPES = [self::TYPE_OPEN, self::TYPE_SHOW_WORK];
+
+    /** Lines of the writing box of a new written question. */
+    public const DEFAULT_ANSWER_LINES = 8;
 
     public const MIN_OPTIONS = 2;
 
@@ -77,7 +88,17 @@ class ExamSection extends Model
         ];
     }
 
-    /** Options a question of this section has: option_count (mcq), 2 (ถูก/ผิด) or none (numeric). */
+    public static function isWrittenType(string $type): bool
+    {
+        return in_array($type, self::WRITTEN_TYPES, true);
+    }
+
+    public function isWritten(): bool
+    {
+        return self::isWrittenType((string) $this->type);
+    }
+
+    /** Options a question of this section has: option_count (mcq), 2 (ถูก/ผิด) or none (numeric, written). */
     public function choiceCount(): int
     {
         return match ($this->type) {

@@ -74,6 +74,7 @@ class ExamBooklet
     div.bk-note { font-size: 11.5pt; color: #333333; padding-top: 2mm; }
     div.bk-sec { font-size: 14pt; font-weight: bold; padding-top: 1mm; }
     div.bk-ins { font-size: 12.5pt; padding-bottom: 1.5mm; }
+    div.bk-write { font-size: 12pt; padding: 1mm 0 0 9mm; color: #555555; }
     div.opts { padding: 1mm 0 0 9mm; }
     table.opts { border-collapse: collapse; }
     table.opts td { font-size: 13pt; vertical-align: top; padding: 0.4mm 2mm 0.4mm 0; }
@@ -286,6 +287,10 @@ class ExamBooklet
 
         if ($question->type === Question::TYPE_MCQ) {
             $html .= self::optionsHtml($question, $order, $scale);
+        }
+        if ($question->needsRubric()) {
+            // The page of the writing box is added when the written pages exist (DESIGN §22.20.3, step 2).
+            $html .= '<div class="bk-write" lang="th">เขียนตอบในกระดาษคำตอบ</div>';
         }
 
         return $html;
