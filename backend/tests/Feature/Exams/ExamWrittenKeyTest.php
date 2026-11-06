@@ -8,6 +8,7 @@ use App\Models\Assignment;
 use App\Models\Question;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -47,7 +48,7 @@ class ExamWrittenKeyTest extends TestCase
         ];
     }
 
-    private function approveKey(): \Illuminate\Testing\TestResponse
+    private function approveKey(): TestResponse
     {
         return $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->exam->id}/answer-key/approve");
     }
