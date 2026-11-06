@@ -37,10 +37,37 @@ final class ExamSheetLayout
             self::items($exam),
             max(1, (int) $exam->version_count),
             $exam->usesCodeSheets() ? (int) $exam->student_code_digits : 0,
-        );
+        )->withWritten(ExamWrittenLayout::blocks($exam));
         self::assertFits($plan);
 
         return $plan;
+    }
+
+    /**
+     * The sheet page each written question is on, by question id (DESIGN
+     * §22.20.3), for the booklet. Empty without written questions, and
+     * empty (never an error) when the sheet does not fit: the booklet then
+     * prints without a page number.
+     *
+     * @return array<int, int>
+     */
+    public static function writtenPageOf(Assignment $exam): array
+    {
+        $blocks = ExamWrittenLayout::blocks($exam);
+        if ($blocks === []) {
+            return [];
+        }
+        $plan = self::plan(self::items($exam), max(1, (int) $exam->version_count), $exam->usesCodeSheets() ? (int) $exam->student_code_digits : 0)
+            ->withWritten($blocks);
+        if ($plan->overflows() || $plan->writtenOverflows()) {
+            return [];
+        }
+        $pages = [];
+        foreach ($blocks as $block) {
+            $pages[(int) $block['question']->id] = $plan->bubblePageCount() + $block['page_index'] + 1;
+        }
+
+        return $pages;
     }
 
     /**
@@ -73,6 +100,11 @@ final class ExamSheetLayout
                 'exam_sheet_overflow',
                 422,
             );
+        }
+        if ($plan->writtenOverflows()) {
+            $max = (int) config('eduvision.exams.max_written_pages');
+
+            throw new ApiException("ข้อเขียนยาวเกิน {$max} หน้า ลดจำนวนข้อหรือจำนวนบรรทัด", 'exam_sheet_overflow', 422);
         }
     }
 

@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Exams;
 
+use App\Domain\Exams\ExamSheetLayout;
 use App\Domain\Exams\ExamWrittenLayout;
+use App\Domain\Worksheets\ArucoMarkers;
+use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\Question;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,5 +68,85 @@ class ExamWrittenLayoutTest extends TestCase
         $this->addSection($this->exam, ['type' => 'open', 'question_count' => 1]);
         $blocks = ExamWrittenLayout::blocks($this->exam);
         $this->assertSame([5], array_column($blocks, 'number'), 'numbers are the question positions after the bubble questions');
+    }
+
+    public function test_the_layout_json_appends_the_written_pages_after_the_bubble_pages(): void
+    {
+        $this->addSection($this->exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $open = $this->addSection($this->exam, ['type' => 'open', 'question_count' => 5]);
+
+        $plan = ExamSheetLayout::forExam($this->exam);
+        $pages = $plan->toLayoutPages($this->exam->id, 1, ArucoMarkers::load());
+
+        $this->assertSame([1, 3, 4], [$plan->bubblePageCount(), $plan->writtenPageCount(), $plan->pageCount()]);
+        $this->assertSame(['exam', 'written', 'written', 'written'], array_column($pages, 'sheet'));
+        $this->assertSame([1, 2, 3, 4], array_column($pages, 'page'));
+        $this->assertSame([4, 4, 4, 4], array_column($pages, 'page_count'), 'every page knows the whole sheet');
+        $ids = array_column($open['questions'], 'id');
+        $this->assertSame(array_map(fn ($id) => "q{$id}", array_slice($ids, 0, 2)), array_column($pages[1]['regions'], 'region_id'));
+        $first = $pages[1]['regions'][0];
+        $this->assertSame(['lines', $ids[0], 8], [$first['kind'], $first['question_id'], $first['line_count']]);
+        foreach ($pages[1]['regions'] as $region) {
+            $r = $region['rect'];
+            $this->assertGreaterThanOrEqual(0, $r['x']);
+            $this->assertGreaterThanOrEqual(0, $r['y']);
+            $this->assertLessThanOrEqual(1, $r['x'] + $r['w']);
+            $this->assertLessThanOrEqual(1, $r['y'] + $r['h']);
+        }
+        $this->assertCount(1, $pages[3]['regions']);
+    }
+
+    public function test_a_show_work_region_carries_its_final_answer_box(): void
+    {
+        $this->addSection($this->exam, ['type' => 'show_work', 'question_count' => 1]);
+
+        $region = ExamSheetLayout::forExam($this->exam)->toLayoutPages($this->exam->id, 1, ArucoMarkers::load())[0]['regions'][0];
+
+        $this->assertSame('lines', $region['kind']);
+        $this->assertArrayHasKey('final_answer', $region);
+        $this->assertGreaterThan($region['rect']['y'] + $region['rect']['h'], $region['final_answer']['rect']['y']);
+    }
+
+    public function test_an_exam_without_written_questions_has_the_layout_it_always_had(): void
+    {
+        $this->addSection($this->exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+
+        $plan = ExamSheetLayout::forExam($this->exam);
+        $pages = $plan->toLayoutPages($this->exam->id, 1, ArucoMarkers::load());
+
+        $this->assertSame(0, $plan->writtenPageCount());
+        $this->assertSame(['exam'], array_column($pages, 'sheet'));
+        $this->assertSame([1], array_column($pages, 'page_count'));
+        $this->assertEquals(
+            ExamSheetLayout::plan(ExamSheetLayout::items($this->exam), 1)->toLayoutPages($this->exam->id, 1, ArucoMarkers::load()),
+            $pages,
+        );
+    }
+
+    public function test_written_pages_over_the_limit_are_exam_sheet_overflow(): void
+    {
+        $this->addSection($this->exam, ['type' => 'open', 'question_count' => 12]);
+
+        try {
+            ExamSheetLayout::forExam($this->exam);
+            $this->fail('twelve 8-line boxes need six pages');
+        } catch (ApiException $e) {
+            $this->assertSame('exam_sheet_overflow', $e->errorCode);
+            $this->assertSame('ข้อเขียนยาวเกิน 4 หน้า ลดจำนวนข้อหรือจำนวนบรรทัด', $e->getMessage());
+        }
+        $this->assertSame([], ExamSheetLayout::writtenPageOf($this->exam), 'the booklet falls back to no page number');
+    }
+
+    public function test_each_written_question_knows_its_sheet_page(): void
+    {
+        $this->addSection($this->exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $open = $this->addSection($this->exam, ['type' => 'open', 'question_count' => 5]);
+
+        $pages = ExamSheetLayout::writtenPageOf($this->exam);
+
+        $this->assertSame(
+            array_combine(array_column($open['questions'], 'id'), [2, 2, 3, 3, 4]),
+            $pages,
+        );
     }
 }

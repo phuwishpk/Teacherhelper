@@ -159,6 +159,10 @@ return [
         'image_max_px' => 1600,
         // Answer sheets rendered per RenderAnswerSheetsJob (DESIGN §22.6: 20 students).
         'sheet_batch_size' => max(1, (int) env('EXAM_SHEET_BATCH_SIZE', 20)),
+        // Written pages of an answer sheet (DESIGN §22.20.3): at most this many after the bubble pages,
+        // and students per RenderAnswerSheetsJob when the exam has them (a sheet is then up to 6 pages).
+        'max_written_pages' => max(1, (int) env('EXAM_MAX_WRITTEN_PAGES', 4)),
+        'sheet_batch_size_written' => max(1, (int) env('EXAM_SHEET_BATCH_SIZE_WRITTEN', 10)),
     ],
 
     // Gradebook (DESIGN §23.2): the templates a teacher starts a course's
