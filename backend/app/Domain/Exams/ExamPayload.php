@@ -67,10 +67,11 @@ final class ExamPayload
             'booklet_incomplete_questions' => ExamKeyCheck::bookletProblems($exam, $questions),
             'versions_ready' => ExamVersions::ready($exam),
             'structure_locked_at' => $exam->structure_locked_at?->toIso8601String(),
-            'sheet' => [
-                ...ExamSheetCapacity::of($sheetCount - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
-                'written_pages' => $writtenPages,
-                'written_overflow' => $writtenPages > (int) config('eduvision.exams.max_written_pages'),
+            'sheet' => ExamSheetCapacity::of($sheetCount - $numeric, $numeric, ExamSheetCapacity::reservedRows($exam)),
+            // The written pages after the bubble pages (§22.20.3); apart from `sheet` so its shape stays what older apps read.
+            'written_sheet' => [
+                'pages' => $writtenPages,
+                'overflow' => $writtenPages > (int) config('eduvision.exams.max_written_pages'),
             ],
             'page_images' => ExamPageImage::query()->where('assignment_id', $exam->id)->orderBy('source_document_id')->orderBy('page_no')->get()
                 ->map(fn (ExamPageImage $p) => $p->toApi())->values()->all(),
