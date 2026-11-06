@@ -29,10 +29,14 @@ final class ExamKeyCheck
 
     public const NO_PROMPT = 'no_prompt';
 
+    /** A written question whose rubric the teacher has not approved (DESIGN §22.20.2). */
+    public const NO_RUBRIC = 'no_rubric';
+
     private const REASONS_TH = [
         self::NOT_APPROVED => 'ยังไม่อนุมัติ',
         self::NO_KEY => 'ยังไม่มีเฉลย',
         self::NO_PROMPT => 'ยังไม่มีโจทย์',
+        self::NO_RUBRIC => 'rubric ยังไม่อนุมัติ',
     ];
 
     /**
@@ -45,7 +49,7 @@ final class ExamKeyCheck
     {
         return self::problems($exam, $questions, fn (Question $q) => [
             ...($q->approved_at === null ? [self::NOT_APPROVED] : []),
-            ...(self::hasKey($q) ? [] : [self::NO_KEY]),
+            ...self::keyReasons($q),
         ]);
     }
 
@@ -63,8 +67,23 @@ final class ExamKeyCheck
         ]);
     }
 
+    /**
+     * A written question's key is its rubric (and, for show_work, a final
+     * answer); every other question's key is its accepted options or values.
+     */
     public static function hasKey(Question $question): bool
     {
+        if ($question->needsRubric()) {
+            if (! $question->rubricApproved()) {
+                return false;
+            }
+            if ($question->type === Question::TYPE_OPEN) {
+                return true;
+            }
+            $accepted = is_array($question->answer_key) ? ($question->answer_key['final']['accepted'] ?? []) : [];
+
+            return is_array($accepted) && $accepted !== [];
+        }
         $section = $question->section;
 
         return $section instanceof ExamSection && ExamAnswerKey::complete($section, $question->answer_key);
@@ -131,6 +150,16 @@ final class ExamKeyCheck
     public static function questions(Assignment $exam): Collection
     {
         return Question::query()->where('assignment_id', $exam->id)->with('section')->orderBy('position')->get();
+    }
+
+    /** @return list<string> */
+    private static function keyReasons(Question $question): array
+    {
+        if ($question->needsRubric() && ! $question->rubricApproved()) {
+            return [self::NO_RUBRIC];
+        }
+
+        return self::hasKey($question) ? [] : [self::NO_KEY];
     }
 
     /**

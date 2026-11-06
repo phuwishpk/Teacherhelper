@@ -2,6 +2,7 @@
 
 namespace App\Domain\Assignments;
 
+use App\Domain\Exams\ExamEditor;
 use App\Domain\Gemini\RubricDraft;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
@@ -57,6 +58,10 @@ class RubricService
             }
             $question->rubric_status = Question::RUBRIC_APPROVED;
             $question->save();
+            if ($assignment->isExam()) {
+                // A blank written question is approved by getting its rubric (DESIGN §22.4, §22.20.2).
+                ExamEditor::autoApprove($question, $assignment);
+            }
 
             return $question;
         });

@@ -315,6 +315,11 @@ final class ExamEditor
 
                     continue;
                 }
+                if ($question->section?->isWritten()) {
+                    $errors["answers.{$i}.question_id"] = ['ข้อเขียนตั้งเกณฑ์ที่หน้า rubric'];
+
+                    continue;
+                }
                 if (array_key_exists($question->id, $keys)) {
                     $errors["answers.{$i}.question_id"] = ['ส่งเฉลยของข้อนี้ซ้ำ'];
 
@@ -681,9 +686,15 @@ final class ExamEditor
         }
         if (array_key_exists('answer_key', $input)) {
             // A written question keeps the homework key shape (final answer, steps), not accepted options/values.
+            $key = $input['answer_key'];
+            if ($section->type === ExamSection::TYPE_SHOW_WORK && is_array($key) && ! array_key_exists('reference_steps', $key)
+                && is_array($current?->answer_key)) {
+                // The steps are set on the rubric screen; saving the final answer must not wipe them.
+                $key['reference_steps'] = $current->answer_key['reference_steps'] ?? [];
+            }
             $out['answer_key'] = $written
-                ? QuestionData::validatedKey($section->type, $input['answer_key'])
-                : ExamAnswerKey::normalise($section, $input['answer_key'], 'answer_key.');
+                ? QuestionData::validatedKey($section->type, $key)
+                : ExamAnswerKey::normalise($section, $key, 'answer_key.');
         }
         if ($written && array_key_exists('answer_lines', $v)) {
             $out['answer_lines'] = (int) $v['answer_lines'];
