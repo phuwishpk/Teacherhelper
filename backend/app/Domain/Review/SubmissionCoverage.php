@@ -134,6 +134,15 @@ final class SubmissionCoverage
     {
         $expected = array_fill_keys(array_keys($positions), null);
         $layout = $this->layout($this->versionOf($submission)) ?? $this->layout($this->assignment->current_layout_version);
+        // A written region names its question directly (DESIGN §22.20.5): it needs no version to be placed.
+        foreach ((array) ($layout?->pages ?? []) as $index => $page) {
+            foreach ((array) ($page['regions'] ?? []) as $region) {
+                $questionId = (int) ($region['question_id'] ?? 0);
+                if (($page['sheet'] ?? null) === 'written' && array_key_exists($questionId, $expected)) {
+                    $expected[$questionId] = (int) ($page['page'] ?? $index + 1);
+                }
+            }
+        }
         $versionNo = ExamSheetRead::query()
             ->whereIn('scan_id', Scan::query()->select('id')->where('submission_id', $submission->id)->where('state', Scan::STATE_ACTIVE))
             ->whereNotNull('version_no')

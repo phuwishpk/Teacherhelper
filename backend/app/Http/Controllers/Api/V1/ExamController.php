@@ -11,7 +11,6 @@ use App\Domain\Exams\ExamPrintService;
 use App\Domain\Exams\ExamScanKit;
 use App\Domain\Exams\ExamSheetStatus;
 use App\Domain\Exams\ExamVersions;
-use App\Domain\Exams\ExamWritten;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WorksheetPrintResource;
 use App\Models\Assignment;
@@ -152,7 +151,6 @@ class ExamController extends Controller
         $exam = self::ownQuery($request)->with('classroom')->findOrFail($id);
         Gate::authorize('scan', $exam);
         ExamScanKit::assertScannable($exam);
-        ExamWritten::assertSheetsReady($exam); // step 1 of §22.20.9; removed in step 2
 
         return response()->json(['data' => ExamScanKit::payload($exam)]);
     }

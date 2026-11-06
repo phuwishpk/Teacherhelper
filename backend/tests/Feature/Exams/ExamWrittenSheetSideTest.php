@@ -4,28 +4,22 @@ namespace Tests\Feature\Exams;
 
 use App\Domain\Exams\ExamSheetLayout;
 use App\Domain\Worksheets\PdfMerger;
-use App\Domain\Worksheets\QrSigner;
 use App\Jobs\MergeWorksheetsJob;
 use App\Jobs\RenderAnswerSheetsJob;
 use App\Models\Assignment;
 use App\Models\ExamSection;
 use App\Models\ExamVersion;
 use App\Models\Question;
-use App\Models\Submission;
 use App\Models\WorksheetPrint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * DESIGN §22.20.3 and the step-1 guard of §22.20.9: written questions are
- * not bubble rows, not shuffled and not in the key by sheet number; until
- * step 2 gives them pages, the answer sheet and scan-kit of an exam that
- * has them answer 422 exam_written_not_ready.
+ * DESIGN §22.20.3: written questions are
+ * not bubble rows, not shuffled and not in the key by sheet number.
  */
 class ExamWrittenSheetSideTest extends TestCase
 {
@@ -73,15 +67,11 @@ class ExamWrittenSheetSideTest extends TestCase
         }
     }
 
-    public function test_only_the_scan_kit_is_still_refused_for_written_exams(): void
+    public function test_every_sheet_kind_can_be_printed_for_a_written_exam(): void
     {
         Queue::fake();
         $this->enroll(3);
         $url = "/api/v1/exams/{$this->exam->id}/prints";
-
-        $this->asUser($this->teacher)->getJson("/api/v1/exams/{$this->exam->id}/scan-kit")
-            ->assertStatus(422)->assertJsonPath('code', 'exam_written_not_ready')
-            ->assertJsonPath('message', 'ยังพิมพ์กระดาษคำตอบหรือเตรียมสแกนข้อสอบที่มีข้อเขียนไม่ได้ (กำลังพัฒนา)');
 
         $this->asUser($this->teacher)->postJson($url, ['kind' => 'answer_sheet'])->assertStatus(202);
         $this->asUser($this->teacher)->postJson($url, ['kind' => 'exam_booklet', 'version_no' => 1])->assertStatus(202);
@@ -168,27 +158,5 @@ class ExamWrittenSheetSideTest extends TestCase
 
         $this->assertNull($essay->refresh()->structure_locked_at, 'a refused print does not lock the structure');
         $this->assertSame(0, $essay->worksheetPrints()->count());
-    }
-
-    public function test_the_homework_scan_route_refuses_the_pages_of_an_exam(): void
-    {
-        $student = $this->enrollStudent($this->classroom, 1, 'นักเรียนที่สแกน')['student'];
-        $this->asUser($this->teacher)->postJson("/api/v1/exams/{$this->exam->id}/prints", ['kind' => 'answer_sheet'])->assertStatus(202);
-        $version = (int) $this->exam->refresh()->current_layout_version;
-        $questionId = $this->writtenIds[0];
-        $meta = [
-            'client_scan_id' => (string) Str::uuid(),
-            'qr' => app(QrSigner::class)->sign($this->exam->id, $student->id, 2, $version),
-            'scanned_at' => '2026-11-07T09:15:00+07:00',
-            'blur_score' => 180.0,
-            'regions' => [['region_id' => "q{$questionId}", 'question_id' => $questionId, 'file' => "crop_q{$questionId}", 'ink_ratio' => 0.2]],
-        ];
-        $webp = fn () => UploadedFile::fake()->createWithContent('page.webp', (string) file_get_contents(base_path('tests/fixtures/scans/page.webp')));
-
-        $this->asUser($this->teacher)->post('/api/v1/scans', ['meta' => json_encode($meta), 'page' => $webp(), "crop_q{$questionId}" => $webp()], ['Accept' => 'application/json'])
-            ->assertStatus(422)->assertJsonPath('code', 'exam_written_not_ready');
-
-        $this->assertSame(0, Submission::query()->where('assignment_id', $this->exam->id)->count(), 'no submission was filed');
-        $this->assertSame(0, Question::query()->findOrFail($questionId)->responses()->count());
     }
 }

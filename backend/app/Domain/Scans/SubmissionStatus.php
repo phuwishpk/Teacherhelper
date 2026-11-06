@@ -2,7 +2,10 @@
 
 namespace App\Domain\Scans;
 
+use App\Models\Assignment;
+use App\Models\ExamSheetRead;
 use App\Models\Response;
+use App\Models\Scan;
 use App\Models\Submission;
 
 /**
@@ -46,6 +49,34 @@ final class SubmissionStatus
         }
         $submission->save();
 
-        return $status;
+        return $status === Submission::STATUS_PUBLISHED ? $status : self::holdIncompleteExam($submission);
+    }
+
+    /**
+     * An exam submission with a page still waiting for its version, or with a
+     * page of its sheet missing (bubble or written, DESIGN §22.11, §22.20.5),
+     * stays in needs_review even when every answer so far is reviewed, so it
+     * is never published incomplete.
+     */
+    private static function holdIncompleteExam(Submission $submission): string
+    {
+        $status = $submission->status;
+        if (! in_array($status, [Submission::STATUS_AWAITING_SCAN, Submission::STATUS_REVIEWED], true)) {
+            return $status;
+        }
+        $exam = Assignment::query()->find($submission->assignment_id);
+        if (! $exam instanceof Assignment || ! $exam->isExam()) {
+            return $status;
+        }
+        $active = Scan::query()->where('submission_id', $submission->id)->where('state', Scan::STATE_ACTIVE);
+        $pages = (clone $active)->distinct()->pluck('page_no')->count();
+        $waiting = ExamSheetRead::query()->whereIn('scan_id', (clone $active)->select('id'))->whereNull('version_no')->exists();
+        $pageCount = $exam->currentLayout()?->pageCount() ?? 0;
+        if ($pages > 0 && ($waiting || $pages < $pageCount)) {
+            $submission->status = Submission::STATUS_NEEDS_REVIEW;
+            $submission->save();
+        }
+
+        return $submission->status;
     }
 }

@@ -242,7 +242,7 @@ class ExamSheetScanTest extends TestCase
         $this->assertSame(Submission::STATUS_REVIEWED, Submission::query()->firstOrFail()->status);
 
         $status = $this->asUser($this->teacher)->getJson("/api/v1/exams/{$exam->id}/sheet-status")->assertOk()->json();
-        $this->assertSame(['scanned' => 1, 'total' => 3, 'missing_numbers' => [1, 3], 'page_count' => 2, 'max_score' => 120, 'published' => 0, 'ready_to_publish' => 1, 'waiting_review' => 0], $status['summary']);
+        $this->assertSame(['scanned' => 1, 'total' => 3, 'missing_numbers' => [1, 3], 'page_count' => 2, 'max_score' => 120, 'written_pending' => 0, 'published' => 0, 'ready_to_publish' => 1, 'waiting_review' => 0], $status['summary']);
         $this->assertSame([1, 2], $status['data'][1]['pages_received']);
         $this->assertSame(2, $status['data'][1]['version_no']);
         $this->assertEquals(120, $status['data'][1]['score']);

@@ -73,8 +73,12 @@ final class ExamSheetGrader
             }
         }
 
-        $existing = Response::query()->where('submission_id', $submission->id)->get()->keyBy('question_id');
+        $existing = Response::query()->where('submission_id', $submission->id)->with('question:id,type')->get()->keyBy('question_id');
         foreach ($existing as $questionId => $response) {
+            // A written answer belongs to the written page (§22.20.5): only the bubble answers are rebuilt here.
+            if ($response->question?->needsRubric()) {
+                continue;
+            }
             if (! isset($desired[(int) $questionId])) {
                 $response->delete();
             }

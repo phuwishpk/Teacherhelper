@@ -18,8 +18,6 @@ final class ExamWritten
 
     public const LAST_MESSAGE = 'ตอนเขียนตอบต้องอยู่หลังตอนที่ฝนทุกตอน';
 
-    public const NOT_READY_MESSAGE = 'ยังพิมพ์กระดาษคำตอบหรือเตรียมสแกนข้อสอบที่มีข้อเขียนไม่ได้ (กำลังพัฒนา)';
-
     /** Whether the exam has a section the students write by hand. */
     public static function hasWritten(Assignment $exam): bool
     {
@@ -30,18 +28,14 @@ final class ExamWritten
     }
 
     /**
-     * The answer sheet has written pages since step 2 of DESIGN §22.20.9, but
-     * the app cannot read them before step 3, so an exam that has written
-     * questions still gives out no scan-kit. Step 3 deletes this check and
-     * its caller.
+     * Whether POST /scans takes this layout page of an exam: only a written
+     * page of an `app` exam with sheets that name the student by QR (§22.20.5).
      *
-     * @throws ApiException 422 exam_written_not_ready
+     * @param  array<string, mixed>  $page  a `layouts.pages` entry
      */
-    public static function assertSheetsReady(Assignment $exam): void
+    public static function takesScan(Assignment $exam, array $page): bool
     {
-        if (self::hasWritten($exam)) {
-            throw new ApiException(self::NOT_READY_MESSAGE, 'exam_written_not_ready', 422);
-        }
+        return ($page['sheet'] ?? null) === 'written' && ! $exam->isManualExam() && ! $exam->usesCodeSheets();
     }
 
     /**

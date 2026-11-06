@@ -379,11 +379,11 @@ class ExamSheetReviewTest extends TestCase
         $other = $this->upload($exam, $this->students[1], 1, $unclear)->assertCreated()->json('scan_id');
         $rows = collect($this->asUser($this->teacher)->getJson("/api/v1/exams/{$exam->id}/sheet-status")->assertOk()->json('data'))->keyBy('student_id');
         $this->assertSame([
-            ['scan_id' => $one, 'page_no' => 1, 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_TEACHER, 'version_doubtful' => false],
-            ['scan_id' => $two, 'page_no' => 2, 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_PAGE_ONE, 'version_doubtful' => false],
+            ['scan_id' => $one, 'page_no' => 1, 'kind' => 'bubble', 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_TEACHER, 'version_doubtful' => false],
+            ['scan_id' => $two, 'page_no' => 2, 'kind' => 'bubble', 'version_no' => 2, 'version_source' => ExamSheetRead::SOURCE_PAGE_ONE, 'version_doubtful' => false],
         ], $rows[$student->id]['pages']);
         $this->assertSame([
-            ['scan_id' => $other, 'page_no' => 1, 'version_no' => 1, 'version_source' => ExamSheetRead::SOURCE_BUBBLE, 'version_doubtful' => true],
+            ['scan_id' => $other, 'page_no' => 1, 'kind' => 'bubble', 'version_no' => 1, 'version_source' => ExamSheetRead::SOURCE_BUBBLE, 'version_doubtful' => true],
         ], $rows[$this->students[1]->id]['pages']);
         $this->assertSame([], $rows[$this->students[2]->id]['pages']);
     }

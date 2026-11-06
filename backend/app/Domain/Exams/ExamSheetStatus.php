@@ -55,7 +55,7 @@ final class ExamSheetStatus
             ->whereIn('scan_id', Scan::query()->select('id')->whereIn('submission_id', $submissionIds)->where('state', Scan::STATE_ACTIVE))
             ->get()
             ->keyBy('scan_id');
-        $responses = Response::query()->whereIn('submission_id', $submissionIds)->get()->groupBy('submission_id');
+        $responses = Response::query()->whereIn('submission_id', $submissionIds)->with('question:id,type')->get()->groupBy('submission_id');
 
         $rows = [];
         $scanned = 0;
@@ -71,6 +71,7 @@ final class ExamSheetStatus
             $needsVersion = false;
             $score = null;
             $doubts = 0;
+            $writtenPending = 0;
             if ($submission instanceof Submission) {
                 foreach ($scans->get($submission->id) ?? [] as $scan) {
                     $pages[] = (int) $scan->page_no;
@@ -78,6 +79,8 @@ final class ExamSheetStatus
                     $pageRows[] = [
                         'scan_id' => (int) $scan->id,
                         'page_no' => (int) $scan->page_no,
+                        // A written page (DESIGN §22.20) is filed by POST /scans and has no reading, so no version.
+                        'kind' => $read instanceof ExamSheetRead ? 'bubble' : 'written',
                         'version_no' => $read?->version_no,
                         'version_source' => $read?->version_source,
                         'version_doubtful' => collect((array) ($read?->doubts ?? []))
@@ -96,6 +99,8 @@ final class ExamSheetStatus
                     $score = round((float) $answers->sum(fn (Response $r) => (float) $r->effectiveScore()), 2);
                 }
                 $doubts = $answers->filter(fn (Response $r) => $r->priority_band === 'check' && $r->reviewed_at === null)->count();
+                // Written answers still being graded or waiting for the teacher.
+                $writtenPending = $answers->filter(fn (Response $r) => $r->question?->needsRubric() && $r->reviewed_at === null)->count();
             }
             $pages = array_values(array_unique($pages));
             sort($pages);
@@ -124,6 +129,7 @@ final class ExamSheetStatus
                 'score' => $score,
                 'status' => $submission?->status ?? 'missing',
                 'doubt_count' => $doubts,
+                'written_pending' => $writtenPending,
                 'needs_version' => $needsVersion,
                 'pages' => collect($pageRows)->sortBy('page_no')->values()->all(),
             ];
@@ -137,6 +143,7 @@ final class ExamSheetStatus
                 'missing_numbers' => $missing,
                 'page_count' => $pageCount,
                 'max_score' => round((float) $exam->questions()->sum('max_points'), 2),
+                'written_pending' => array_sum(array_column($rows, 'written_pending')),
                 ...$publish,
             ],
         ];
