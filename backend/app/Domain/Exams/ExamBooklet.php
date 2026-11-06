@@ -100,6 +100,8 @@ class ExamBooklet
         ]];
         $orders = $version->option_orders;
         $seen = [];
+        // The page of each written question's box on the answer sheet (§22.20.3), none when it does not fit.
+        $writtenPages = ExamSheetLayout::writtenPageOf($exam);
         foreach ($ordered as $index => $question) {
             /** @var Question $question */
             $number = $index + 1;
@@ -111,7 +113,7 @@ class ExamBooklet
             }
             $order = isset($orders[$question->id]) ? array_map('intval', $orders[$question->id]) : null;
             $blocks[] = [
-                'html' => fn (float $f) => $heading.self::questionHtml($question, $section, $number, $order, $f),
+                'html' => fn (float $f) => $heading.self::questionHtml($question, $section, $number, $order, $f, $writtenPages[(int) $question->id] ?? null),
                 'numbers' => [$number],
             ];
         }
@@ -272,7 +274,7 @@ class ExamBooklet
     /**
      * @param  list<int>|null  $order  original option position by displayed position, null = not shuffled
      */
-    private static function questionHtml(Question $question, ?ExamSection $section, int $number, ?array $order, float $scale): string
+    private static function questionHtml(Question $question, ?ExamSection $section, int $number, ?array $order, float $scale, ?int $writtenPage = null): string
     {
         $points = '';
         if ($section !== null && abs((float) $question->max_points - (float) $section->default_points) > 0.001) {
@@ -289,8 +291,7 @@ class ExamBooklet
             $html .= self::optionsHtml($question, $order, $scale);
         }
         if ($question->needsRubric()) {
-            // The page of the writing box is added when the written pages exist (DESIGN §22.20.3, step 2).
-            $html .= '<div class="bk-write" lang="th">เขียนตอบในกระดาษคำตอบ</div>';
+            $html .= '<div class="bk-write" lang="th">เขียนตอบในกระดาษคำตอบ'.($writtenPage !== null ? 'หน้า '.$writtenPage : '').'</div>';
         }
 
         return $html;

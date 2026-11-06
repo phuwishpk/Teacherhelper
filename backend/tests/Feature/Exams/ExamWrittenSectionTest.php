@@ -147,4 +147,19 @@ class ExamWrittenSectionTest extends TestCase
         );
         $this->assertSame('open', Question::query()->where('assignment_id', $exam->id)->orderByDesc('position')->value('type'));
     }
+
+    public function test_the_exam_payload_counts_the_written_pages(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $this->assertSame(['pages' => 1, 'overflow' => false, 'written_pages' => 0, 'written_overflow' => false], $this->examJson($exam)['sheet']);
+
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 5]);
+        $this->assertSame(['pages' => 1, 'overflow' => false, 'written_pages' => 3, 'written_overflow' => false], $this->examJson($exam)['sheet']);
+
+        $this->addSection($exam, ['type' => 'show_work', 'question_count' => 6]);
+        $sheet = $this->examJson($exam)['sheet'];
+        $this->assertGreaterThan(4, $sheet['written_pages']);
+        $this->assertTrue($sheet['written_overflow']);
+    }
 }

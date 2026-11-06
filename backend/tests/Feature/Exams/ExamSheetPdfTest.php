@@ -11,6 +11,7 @@ use App\Domain\Worksheets\WorksheetMpdfFactory;
 use App\Domain\Worksheets\WorksheetStudent;
 use App\Models\Assignment;
 use App\Models\Layout;
+use App\Models\Question;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -191,7 +192,7 @@ class ExamSheetPdfTest extends TestCase
         $this->addSection($exam, ['type' => 'open', 'question_count' => 2]);
         $this->fillExam($exam);
         $layout = $this->layoutOf($exam);
-        \App\Models\Question::query()->where('assignment_id', $exam->id)->update(['answer_lines' => 12]);
+        Question::query()->where('assignment_id', $exam->id)->update(['answer_lines' => 12]);
 
         $this->expectException(WorksheetLayoutException::class);
         $this->renderer()->render($exam->refresh(), $layout, [new WorksheetStudent(4001, 'เด็กหญิงสมใจ ใจดี', 1)]);
