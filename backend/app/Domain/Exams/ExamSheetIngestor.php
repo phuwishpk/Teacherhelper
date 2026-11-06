@@ -174,18 +174,8 @@ final class ExamSheetIngestor
      */
     public static function refreshStatus(Submission $submission, Assignment $exam, bool $reopen = false): void
     {
-        $status = SubmissionStatus::refresh($submission, $reopen);
-        if ($status === Submission::STATUS_PUBLISHED) {
-            return;
-        }
-        $active = Scan::query()->where('submission_id', $submission->id)->where('state', Scan::STATE_ACTIVE);
-        $pages = (clone $active)->distinct()->pluck('page_no')->count();
-        $waiting = ExamSheetRead::query()->whereIn('scan_id', (clone $active)->select('id'))->whereNull('version_no')->exists();
-        $pageCount = $exam->currentLayout()?->pageCount() ?? 0;
-        if ($pages > 0 && ($waiting || $pages < $pageCount) && in_array($status, [Submission::STATUS_AWAITING_SCAN, Submission::STATUS_REVIEWED], true)) {
-            $submission->status = Submission::STATUS_NEEDS_REVIEW;
-            $submission->save();
-        }
+        // The exam rule lives in SubmissionStatus now, so every caller applies it (§22.20.5).
+        SubmissionStatus::refresh($submission, $reopen);
     }
 
     /**

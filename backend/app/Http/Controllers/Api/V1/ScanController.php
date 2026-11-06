@@ -37,13 +37,15 @@ class ScanController extends Controller
 
     /**
      * POST /api/v1/scans/{id}/confirm-replace -> 200 {scan_id, submission_id,
-     * state: "active"}; 409 scan_superseded / scan_files_missing. A page of
-     * an exam answer sheet is confirmed by ExamSheetIngestor (§22.11).
+     * state: "active"}; 409 scan_superseded / scan_files_missing. A bubble
+     * page of an exam answer sheet is confirmed by ExamSheetIngestor (§22.11);
+     * a written page of an exam is a worksheet page and goes the worksheet
+     * way, so its crops are written and graded again (§22.20.5).
      */
     public function confirmReplace(Request $request, int $id, ExamSheetIngestor $exams): JsonResponse
     {
         $scan = self::find($request, $id);
-        if ($scan->submission->assignment->isExam()) {
+        if ($scan->submission->assignment->isExam() && $scan->examSheetRead()->exists()) {
             Gate::authorize('confirmReplace', $scan);
             $outcome = new ScanOutcome($exams->confirmReplace($request->user(), $scan), 200);
 

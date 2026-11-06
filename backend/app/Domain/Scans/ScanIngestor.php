@@ -79,16 +79,20 @@ final class ScanIngestor
             throw new ApiException('ไม่พบการบ้านของใบงานนี้ในระบบ', 'qr_invalid', 422);
         }
         Gate::forUser($user)->authorize('scan', $assignment);
-        if ($assignment->isExam()) {
-            // The written pages of an exam are filed by step 4 of DESIGN §22.20.9 (with the exam's status rules);
-            // until then this homework route must not file them as a homework scan. Step 4 replaces this guard.
-            throw new ApiException(ExamWritten::NOT_READY_MESSAGE, 'exam_written_not_ready', 422);
-        }
         ClosedClassrooms::assertOpen($assignment->classroom); // §24.6
 
         $layout = $assignment->layouts()->where('version', $qr->layoutVersion)->first();
         if ($layout === null) {
             throw new ApiException("ไม่พบ layout เวอร์ชัน {$qr->layoutVersion} ของการบ้านนี้", 'layout_unknown', 422);
+        }
+
+        if ($assignment->isExam() && $qr->layoutVersion !== (int) $assignment->current_layout_version) {
+            // After "ปลดล็อกโครงสร้าง" and a reprint the old sheets no longer match; POST /exam-sheets refuses them the same way.
+            throw new ApiException(
+                "กระดาษนี้พิมพ์จาก layout เวอร์ชัน {$qr->layoutVersion} แต่ข้อสอบใช้เวอร์ชัน {$assignment->current_layout_version} แล้ว พิมพ์กระดาษคำตอบใหม่",
+                'layout_unknown',
+                422,
+            );
         }
 
         $page = LayoutPageMatcher::page($layout, $qr->page);
@@ -98,6 +102,11 @@ final class ScanIngestor
                 'page_mismatch',
                 422,
             );
+        }
+
+        if ($assignment->isExam() && ! ExamWritten::takesScan($assignment, $page)) {
+            // The bubble pages of an exam go to POST /exam-sheets; only its written pages are worksheet pages (§22.20.5).
+            throw new ApiException('หน้านี้ของข้อสอบไม่ใช่หน้าเขียนตอบ ให้สแกนที่หน้าสแกนกระดาษคำตอบข้อสอบ', 'page_mismatch', 422);
         }
 
         [$studentId, $identityMismatch, $import, $importStudentId] = $this->resolveStudent($qr, $assignment, $meta);
