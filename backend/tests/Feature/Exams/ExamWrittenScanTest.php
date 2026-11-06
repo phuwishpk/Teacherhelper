@@ -243,4 +243,72 @@ class ExamWrittenScanTest extends TestCase
         $this->asUser($this->student)->getJson('/api/v1/student/results')->assertOk();
         $this->asUser($this->student)->getJson("/api/v1/student/results/{$this->submission()->id}")->assertOk();
     }
+
+    private function publishWholeSheet(): void
+    {
+        $this->postWritten()->assertSuccessful();
+        $this->upload($this->exam, $this->student, 1, $this->reading($this->exam, 1, [1 => 1, 2 => 2, 3 => 3, 4 => 4]))->assertSuccessful();
+        $this->reviewWritten();
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$this->exam->id}/publish")->assertOk();
+        $this->assertNotNull($this->submission()->refresh()->published_at);
+    }
+
+    public function test_a_written_page_scanned_again_after_publishing_is_graded_again_when_confirmed(): void
+    {
+        $this->publishWholeSheet();
+        $oldScan = Response::query()->where('submission_id', $this->submission()->id)->whereIn('question_id', $this->writtenIds)->value('scan_id');
+
+        $pending = $this->postWritten()->assertStatus(202)->assertJsonPath('state', 'pending_confirm')->json('scan_id');
+        $this->assertNotSame((int) $oldScan, (int) $pending);
+        $this->asUser($this->teacher)->postJson("/api/v1/scans/{$pending}/confirm-replace")->assertOk()->assertJsonPath('state', 'active');
+
+        $written = Response::query()->where('submission_id', $this->submission()->id)->whereIn('question_id', $this->writtenIds)->get();
+        $this->assertCount(2, $written);
+        foreach ($written as $response) {
+            $this->assertSame((int) $pending, (int) $response->scan_id, 'the answer now comes from the new page');
+            $this->assertContains($response->grading_state, [Response::STATE_QUEUED, Response::STATE_SCORED, Response::STATE_MANUAL]);
+            $this->assertNull($response->reviewed_at, 'the new reading waits for the teacher');
+        }
+        $submission = $this->submission()->refresh();
+        $this->assertNull($submission->published_at, 'it is reopened until the teacher reviews it again');
+        $this->assertNotSame(Submission::STATUS_REVIEWED, $submission->status);
+    }
+
+    public function test_the_option_analysis_leaves_the_written_questions_out(): void
+    {
+        $this->publishWholeSheet();
+
+        $questions = $this->asUser($this->teacher)->getJson("/api/v1/exams/{$this->exam->id}/option-analysis")->assertOk()->json('data.questions');
+
+        $ids = array_column($questions, 'question_id');
+        $this->assertSame([], array_intersect($this->writtenIds, $ids), 'a written question has no options to count');
+        $this->assertCount(4, $questions);
+    }
+
+    public function test_a_written_page_of_an_older_layout_version_is_refused(): void
+    {
+        $current = $this->exam->currentLayout();
+        $this->exam->layouts()->create(['version' => 2, 'pages' => $current->pages]);
+        $oldVersion = (int) $current->version;
+        $this->exam->forceFill(['current_layout_version' => 2])->save();
+        $this->exam->refresh();
+
+        $regions = [];
+        $files = ['page' => $this->webp('page.webp')];
+        foreach ($this->writtenIds as $id) {
+            $regions[] = ['region_id' => "q{$id}", 'question_id' => $id, 'file' => "crop_q{$id}", 'ink_ratio' => 0.2];
+            $files["crop_q{$id}"] = $this->webp('crop.webp');
+        }
+        $meta = [
+            'client_scan_id' => (string) Str::uuid(),
+            'qr' => app(QrSigner::class)->sign($this->exam->id, $this->student->id, 2, $oldVersion),
+            'scanned_at' => '2026-11-07T09:15:00+07:00',
+            'blur_score' => 180.0,
+            'regions' => $regions,
+        ];
+
+        $this->asUser($this->teacher)->post('/api/v1/scans', ['meta' => json_encode($meta), ...$files], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('code', 'layout_unknown');
+        $this->assertSame(0, Submission::query()->where('assignment_id', $this->exam->id)->count());
+    }
 }

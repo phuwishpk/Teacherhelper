@@ -86,6 +86,15 @@ final class ScanIngestor
             throw new ApiException("ไม่พบ layout เวอร์ชัน {$qr->layoutVersion} ของการบ้านนี้", 'layout_unknown', 422);
         }
 
+        if ($assignment->isExam() && $qr->layoutVersion !== (int) $assignment->current_layout_version) {
+            // After "ปลดล็อกโครงสร้าง" and a reprint the old sheets no longer match; POST /exam-sheets refuses them the same way.
+            throw new ApiException(
+                "กระดาษนี้พิมพ์จาก layout เวอร์ชัน {$qr->layoutVersion} แต่ข้อสอบใช้เวอร์ชัน {$assignment->current_layout_version} แล้ว พิมพ์กระดาษคำตอบใหม่",
+                'layout_unknown',
+                422,
+            );
+        }
+
         $page = LayoutPageMatcher::page($layout, $qr->page);
         if ($page === null) {
             throw new ApiException(

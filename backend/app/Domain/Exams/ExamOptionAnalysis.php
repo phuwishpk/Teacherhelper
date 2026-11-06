@@ -53,6 +53,8 @@ final class ExamOptionAnalysis
     {
         $questions = Question::query()
             ->where('assignment_id', $exam->id)
+            // A written question has no options to count (§22.20.6).
+            ->whereNotIn('type', [Question::TYPE_OPEN, Question::TYPE_SHOW_WORK])
             ->with('section')
             ->orderBy('position')
             ->get();
