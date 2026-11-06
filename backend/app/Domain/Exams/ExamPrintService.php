@@ -70,6 +70,9 @@ class ExamPrintService
             if ($sheet && $exam->isManualExam()) {
                 throw new ApiException('ข้อสอบที่ครูตรวจเองไม่มีกระดาษคำตอบ พิมพ์ได้เฉพาะเล่มข้อสอบ', 'exam_manual_grading', 422);
             }
+            if ($kind === WorksheetPrint::KIND_ANSWER_SHEET) {
+                ExamWritten::assertSheetsReady($exam); // step 1 of §22.20.9; removed in step 2
+            }
             $versionNo = $kind === WorksheetPrint::KIND_EXAM_BOOKLET ? self::versionNo($exam, $input['version_no'] ?? null) : null;
             $this->assertPrintable($exam, $kind);
 

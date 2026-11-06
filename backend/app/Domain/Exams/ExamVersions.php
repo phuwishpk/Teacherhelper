@@ -87,7 +87,8 @@ final class ExamVersions
         $order = [];
         foreach ($sections as $section) {
             $ids = ($bySection->get($section->id) ?? collect())->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-            array_push($order, ...(count($ids) > 1 ? $randomizer->shuffleArray($ids) : $ids));
+            // A written section keeps its order in every version: it has no bubble numbers to shuffle (§22.20.2).
+            array_push($order, ...(count($ids) > 1 && ! $section->isWritten() ? $randomizer->shuffleArray($ids) : $ids));
         }
 
         $sectionsById = $sections->keyBy('id');
@@ -166,8 +167,8 @@ final class ExamVersions
         foreach (array_values($version->question_order) as $index => $questionId) {
             /** @var Question|null $question */
             $question = $questionsById->get((int) $questionId);
-            if ($question === null) {
-                continue;
+            if ($question === null || Question::typeNeedsRubric($question->type)) {
+                continue; // a written question has no sheet number: it is last, so the numbers above do not move
             }
             $order = isset($orders[$questionId]) ? array_map('intval', $orders[$questionId]) : null;
             $key = $question->answer_key;

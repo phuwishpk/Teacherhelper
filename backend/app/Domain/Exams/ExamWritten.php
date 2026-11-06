@@ -18,6 +18,8 @@ final class ExamWritten
 
     public const LAST_MESSAGE = 'ตอนเขียนตอบต้องอยู่หลังตอนที่ฝนทุกตอน';
 
+    public const NOT_READY_MESSAGE = 'ยังพิมพ์กระดาษคำตอบหรือเตรียมสแกนข้อสอบที่มีข้อเขียนไม่ได้ (กำลังพัฒนา)';
+
     /** Whether the exam has a section the students write by hand. */
     public static function hasWritten(Assignment $exam): bool
     {
@@ -25,6 +27,20 @@ final class ExamWritten
             ->where('assignment_id', $exam->id)
             ->whereIn('type', ExamSection::WRITTEN_TYPES)
             ->exists();
+    }
+
+    /**
+     * Step 1 of DESIGN §22.20.9 gives written questions no answer-sheet pages
+     * yet, so an exam that has them cannot print its answer sheet or give out
+     * a scan-kit. Step 2 deletes this check and its two callers.
+     *
+     * @throws ApiException 422 exam_written_not_ready
+     */
+    public static function assertSheetsReady(Assignment $exam): void
+    {
+        if (self::hasWritten($exam)) {
+            throw new ApiException(self::NOT_READY_MESSAGE, 'exam_written_not_ready', 422);
+        }
     }
 
     /**
