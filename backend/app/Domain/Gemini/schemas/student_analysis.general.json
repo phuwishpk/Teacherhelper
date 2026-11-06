@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "teacher_text": { "type": "string" },
+    "student_text": { "type": "string" },
+    "next_step_skill_codes": { "type": "array", "maxItems": 10, "items": { "type": "string" } }
+  },
+  "required": ["teacher_text", "student_text", "next_step_skill_codes"]
+}

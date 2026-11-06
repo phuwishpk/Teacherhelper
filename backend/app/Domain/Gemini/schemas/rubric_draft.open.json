@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "properties": {
+          "description_th": { "type": "string" },
+          "points": { "type": "number", "minimum": 0 },
+          "is_core": { "type": "boolean" }
+        },
+        "required": ["description_th", "points", "is_core"]
+      }
+    }
+  },
+  "required": ["criteria"]
+}

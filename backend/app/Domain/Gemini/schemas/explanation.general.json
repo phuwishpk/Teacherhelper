@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "explanation_th": { "type": "string" },
+    "next_step_th": { "type": "string" }
+  },
+  "required": ["explanation_th", "next_step_th"]
+}

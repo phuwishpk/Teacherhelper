@@ -1,0 +1,69 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Domain\ClassPosts\ClassPosts;
+use App\Jobs\BuildAnalysisBatchesJob;
+use App\Jobs\ClassroomSyncJob;
+use App\Jobs\PollAnalysisBatchJob;
+use App\Jobs\QueueHeartbeatJob;
+use Closure;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+/**
+ * Wrapper the Plesk Scheduled Task runs every minute (no daemons on shared
+ * hosting). Dispatches the heartbeat and, when due, a Google Classroom sync
+ * round (ClassroomSyncJob), the nightly student analysis after 01:00
+ * Asia/Bangkok (BuildAnalysisBatchesJob, once a day) and a poll of every
+ * pending analysis batch (PollAnalysisBatchJob, each minute), then runs one bounded worker pass with
+ * exactly the options from DESIGN §7.2. No --tries: GradeScanJob (Phase 3)
+ * counts its own attempts. --memory is queue:work's graceful-exit threshold
+ * (MB, default 128 like queue:work itself); raise it only when the host's PHP
+ * memory_limit is higher, or for a coverage run that holds a whole test
+ * suite in the same process.
+ */
+class QueueWorkCommand extends Command
+{
+    protected $signature = 'eduvision:queue-work
+                            {--memory=128 : Memory in MB after which the worker pass stops gracefully (queue:work --memory)}';
+
+    protected $description = 'Dispatch the queue heartbeat, then run one bounded queue:work pass (cron entry point)';
+
+    public function handle(): int
+    {
+        QueueHeartbeatJob::dispatch();
+        // The Google Classroom sync round, at most every 5 minutes (DESIGN §19.3, §19.10).
+        $this->safely('classroom_sync', fn () => ClassroomSyncJob::dispatchIfDue());
+        // Phase 9 (DESIGN §20.8): the nightly Batch API round and its polls.
+        $this->safely('analysis_build', fn () => BuildAnalysisBatchesJob::dispatchIfDue());
+        $this->safely('analysis_poll', fn () => PollAnalysisBatchJob::dispatchDue());
+        // Class posts (DESIGN §30.1, §30.2): publish the scheduled ones that are due,
+        // and once an hour delete uploads nobody attached.
+        $this->safely('class_posts_due', fn () => ClassPosts::publishDue());
+        $this->safely('class_posts_orphans', fn () => Cache::add('class-posts:orphans', 1, 3600) ? ClassPosts::purgeOrphans() : 0);
+
+        return $this->call('queue:work', [
+            '--queue' => 'grading,default,pdf',
+            '--stop-when-empty' => true,
+            '--max-time' => 50,
+            '--memory' => max(32, (int) $this->option('memory')),
+        ]);
+    }
+
+    /**
+     * One periodic step that must never stop the rest: an error there (the
+     * batch poll queries and may recover stale batches, for instance) is
+     * logged, and grading still gets its worker pass this minute.
+     */
+    private function safely(string $step, Closure $dispatch): void
+    {
+        try {
+            $dispatch();
+        } catch (Throwable $e) {
+            Log::error('queue_work.dispatch_failed', ['step' => $step, 'exception' => $e]);
+        }
+    }
+}

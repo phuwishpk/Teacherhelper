@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "blank": { "type": "boolean" },
+    "suspicious_instruction": { "type": "boolean" },
+    "legibility": { "type": "string", "enum": ["clear", "readable", "hard"] },
+    "selected_options": { "type": "array", "maxItems": 4, "items": { "type": "string", "enum": ["A", "B", "C", "D"] } },
+    "error_types": { "type": "array", "maxItems": 9, "items": { "type": "string", "enum": [
+      "concept", "procedure", "calculation", "careless", "incomplete",
+      "misread_question", "spelling_grammar", "no_answer", "other"] } },
+    "summary_th": { "type": "string" }
+  },
+  "required": ["blank", "suspicious_instruction", "legibility", "selected_options", "error_types"]
+}

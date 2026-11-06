@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "blank": { "type": "boolean" },
+    "suspicious_instruction": { "type": "boolean" },
+    "legibility": { "type": "string", "enum": ["clear", "readable", "hard"] },
+    "steps": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "properties": {
+          "line": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string" },
+          "valid": { "type": "boolean" },
+          "note_th": { "type": "string" }
+        },
+        "required": ["line", "text", "valid"]
+      }
+    },
+    "final_answer_text": { "type": "string" },
+    "final_answer_match": { "type": "string", "enum": ["exact", "equivalent", "partial", "different", "missing"] },
+    "error_types": { "type": "array", "maxItems": 9, "items": { "type": "string", "enum": [
+      "concept", "procedure", "calculation", "careless", "incomplete",
+      "misread_question", "spelling_grammar", "no_answer", "other"] } },
+    "summary_th": { "type": "string" }
+  },
+  "required": ["blank", "suspicious_instruction", "legibility", "steps",
+               "final_answer_text", "final_answer_match", "error_types"]
+}

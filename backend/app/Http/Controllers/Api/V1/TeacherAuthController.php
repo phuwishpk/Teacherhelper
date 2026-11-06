@@ -1,0 +1,173 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Domain\Auth\Google\GoogleSignIn;
+use App\Domain\Auth\Google\GoogleSignInConfig;
+use App\Domain\Auth\Google\GoogleSignInErrors;
+use App\Domain\Auth\Google\GoogleSignInTickets;
+use App\Domain\Auth\Google\VerifiedGoogleIdentity;
+use App\Domain\Auth\Impersonations;
+use App\Domain\Teachers\Workspaces;
+use App\Exceptions\ApiException;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\TeacherLoginRequest;
+use App\Http\Requests\Api\V1\TeacherRegisterRequest;
+use App\Http\Resources\UserResource;
+use App\Models\User;
+use App\Models\UserGoogleIdentity;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\PersonalAccessToken;
+
+/**
+ * Teacher auth (DESIGN §9.1, §7.4): register, login (teachers and admins), logout.
+ */
+class TeacherAuthController extends Controller
+{
+    /** Sanctum token lifetime for teachers (DESIGN §7.4). */
+    public const TOKEN_TTL_DAYS = 30;
+
+    /**
+     * POST /api/v1/auth/teacher/register -> 201 {user}
+     *
+     * DESIGN §29.13.2: the teacher gets a workspace of their own (a `schools`
+     * row nobody picks or sees, Workspaces::create) and a `pending` account
+     * that can log in only after an admin approves it in Filament
+     * (UserResource "approve", status=active + approved_by). school_name? is
+     * the teacher's own school name (§29.11); school_id and school_code of
+     * older app builds are ignored.
+     *
+     * google_link_ticket (DESIGN §24.9.5): the Google account of a 404
+     * google_not_linked is linked as the account is created (`registration`)
+     * and signs in once an admin approves. 422 link_ticket_invalid, 409
+     * google_already_linked.
+     */
+    public function register(TeacherRegisterRequest $request, GoogleSignInTickets $tickets, GoogleSignIn $signIn): JsonResponse
+    {
+        $data = $request->validated();
+
+        $ticket = $data['google_link_ticket'] ?? null;
+        $google = $ticket === null || $ticket === '' ? null : self::registrationIdentity($tickets, $ticket);
+
+        $schoolName = trim((string) ($data['school_name'] ?? ''));
+
+        $user = DB::transaction(function () use ($data, $schoolName, $google, $ticket, $tickets, $signIn) {
+            $school = Workspaces::create($data['name'], $schoolName);
+            $user = User::create([
+                'school_id' => $school->id,
+                'school_name' => $schoolName === '' ? null : $schoolName,
+                'role' => User::ROLE_TEACHER,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'status' => User::STATUS_PENDING,
+            ])->setRelation('school', $school);
+            if ($google !== null) {
+                if ($tickets->consumeLink($ticket) === null) {
+                    throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
+                }
+                $signIn->link($user, $google, UserGoogleIdentity::VIA_REGISTRATION, $user);
+            }
+
+            return $user;
+        });
+
+        return response()->json([
+            'user' => new UserResource($user),
+        ], 201);
+    }
+
+    /**
+     * The Google account behind a registration's link ticket, checked
+     * against existing links (nothing spent yet).
+     *
+     * @throws ApiException
+     */
+    private static function registrationIdentity(GoogleSignInTickets $tickets, string $ticket): VerifiedGoogleIdentity
+    {
+        if (! GoogleSignInConfig::enabled()) {
+            throw GoogleSignInErrors::notConfigured();
+        }
+        $google = $tickets->peekLink($ticket);
+        if ($google === null) {
+            throw GoogleSignInErrors::linkTicketInvalid('google_link_ticket');
+        }
+        if (UserGoogleIdentity::query()->where('google_sub', $google->sub)->exists()) {
+            GoogleSignIn::log('register', 'google_already_linked');
+
+            throw GoogleSignInErrors::alreadyLinked();
+        }
+
+        return $google;
+    }
+
+    /** Sanctum token lifetime for admins: their token only opens the panel handoff. */
+    public const ADMIN_TOKEN_TTL_DAYS = 1;
+
+    /**
+     * POST /api/v1/auth/teacher/login -> 200 {token, user}
+     *
+     * The unified login page of the app (DESIGN §7.4) sends teachers and
+     * admins here. The token carries the ability of the account's role:
+     * `teacher` opens the teacher API as before; `admin` opens nothing but
+     * /me, logout and POST /auth/admin-handoff (`role:admin`), because the
+     * admin works in the Filament panel. `user.role` tells the app which.
+     */
+    public function login(TeacherLoginRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $user = User::query()
+            ->where('email', $data['email'])
+            ->whereIn('role', [User::ROLE_TEACHER, User::ROLE_ADMIN])
+            ->first();
+
+        if ($user === null || $user->password === null || ! Hash::check($data['password'], $user->password)) {
+            throw new ApiException(
+                'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+                'invalid_credentials',
+                422,
+                ['email' => ['อีเมลหรือรหัสผ่านไม่ถูกต้อง']],
+            );
+        }
+
+        if (! $user->isActive()) {
+            throw new ApiException(
+                $user->status === User::STATUS_PENDING
+                    ? 'บัญชีของคุณกำลังรอการอนุมัติจากผู้ดูแลระบบ'
+                    : 'บัญชีของคุณถูกระงับการใช้งาน',
+                'account_not_active',
+                403,
+            );
+        }
+
+        $ttlDays = $user->isAdmin()
+            ? (int) config('eduvision.token_ttl_days.admin', self::ADMIN_TOKEN_TTL_DAYS)
+            : (int) config('eduvision.token_ttl_days.teacher', self::TOKEN_TTL_DAYS);
+        $token = $user->createToken($data['device_name'] ?? 'app', [$user->role], now()->addDays($ttlDays));
+
+        return response()->json([
+            'token' => $token->plainTextToken,
+            'user' => new UserResource($user->loadMissing('school')),
+        ]);
+    }
+
+    /**
+     * POST /api/v1/auth/logout -> 204. Revokes only the token used for this request.
+     */
+    public function logout(Request $request): Response
+    {
+        $token = $request->user()->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            // An admin's "เข้าใช้แทน" session ends here (DESIGN §29.14).
+            Impersonations::stop($request->user(), $token);
+        }
+        $token->delete();
+
+        return response()->noContent();
+    }
+}
