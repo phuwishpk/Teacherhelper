@@ -70,9 +70,6 @@ class ExamPrintService
             if ($sheet && $exam->isManualExam()) {
                 throw new ApiException('ข้อสอบที่ครูตรวจเองไม่มีกระดาษคำตอบ พิมพ์ได้เฉพาะเล่มข้อสอบ', 'exam_manual_grading', 422);
             }
-            if ($kind === WorksheetPrint::KIND_ANSWER_SHEET) {
-                ExamWritten::assertSheetsReady($exam); // step 1 of §22.20.9; removed in step 2
-            }
             $versionNo = $kind === WorksheetPrint::KIND_EXAM_BOOKLET ? self::versionNo($exam, $input['version_no'] ?? null) : null;
             $this->assertPrintable($exam, $kind);
 
@@ -103,7 +100,7 @@ class ExamPrintService
                 'status' => WorksheetPrint::STATUS_QUEUED,
             ]);
 
-            return [$print, self::jobs($print, $studentIds, $shared)];
+            return [$print, self::jobs($print, $studentIds, $shared, ExamWritten::hasWritten($exam))];
         }, allowClosed: true);
 
         Bus::chain($jobs)->onQueue('pdf')->dispatch();
@@ -184,7 +181,7 @@ class ExamPrintService
      * @param  list<int>  $studentIds
      * @return list<object>
      */
-    private static function jobs(WorksheetPrint $print, array $studentIds, bool $shared = false): array
+    private static function jobs(WorksheetPrint $print, array $studentIds, bool $shared = false, bool $written = false): array
     {
         if ($print->kind === WorksheetPrint::KIND_EXAM_BOOKLET) {
             return [new RenderExamBookletJob($print->id)];
@@ -193,7 +190,9 @@ class ExamPrintService
             return [new RenderAnswerSheetsJob($print->id, 0, []), new MergeWorksheetsJob($print->id, 1)];
         }
 
-        $chunks = array_chunk($studentIds, (int) config('eduvision.exams.sheet_batch_size', 20));
+        // A sheet with written pages has up to six pages, so fewer students fit the 50 s of a job (§22.20.3).
+        $size = (int) config($written ? 'eduvision.exams.sheet_batch_size_written' : 'eduvision.exams.sheet_batch_size', 20);
+        $chunks = array_chunk($studentIds, $size);
         $jobs = [];
         foreach ($chunks as $index => $ids) {
             $jobs[] = new RenderAnswerSheetsJob($print->id, $index, $ids);

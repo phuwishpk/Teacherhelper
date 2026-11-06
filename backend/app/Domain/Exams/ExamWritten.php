@@ -30,9 +30,10 @@ final class ExamWritten
     }
 
     /**
-     * Step 1 of DESIGN §22.20.9 gives written questions no answer-sheet pages
-     * yet, so an exam that has them cannot print its answer sheet or give out
-     * a scan-kit. Step 2 deletes this check and its two callers.
+     * The answer sheet has written pages since step 2 of DESIGN §22.20.9, but
+     * the app cannot read them before step 3, so an exam that has written
+     * questions still gives out no scan-kit. Step 3 deletes this check and
+     * its caller.
      *
      * @throws ApiException 422 exam_written_not_ready
      */

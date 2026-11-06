@@ -3,11 +3,16 @@
 namespace Tests\Feature\Exams;
 
 use App\Domain\Exams\ExamSheetLayout;
+use App\Domain\Worksheets\PdfMerger;
+use App\Jobs\MergeWorksheetsJob;
+use App\Jobs\RenderAnswerSheetsJob;
 use App\Models\Assignment;
 use App\Models\ExamSection;
 use App\Models\ExamVersion;
 use App\Models\Question;
+use App\Models\WorksheetPrint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -64,20 +69,68 @@ class ExamWrittenSheetSideTest extends TestCase
         }
     }
 
-    public function test_sheet_prints_and_scan_kit_are_refused_for_written_exams(): void
+    public function test_only_the_scan_kit_is_still_refused_for_written_exams(): void
     {
         Queue::fake();
+        $this->enroll(3);
         $url = "/api/v1/exams/{$this->exam->id}/prints";
 
-        $this->asUser($this->teacher)->postJson($url, ['kind' => 'answer_sheet'])
-            ->assertStatus(422)->assertJsonPath('code', 'exam_written_not_ready');
         $this->asUser($this->teacher)->getJson("/api/v1/exams/{$this->exam->id}/scan-kit")
             ->assertStatus(422)->assertJsonPath('code', 'exam_written_not_ready')
             ->assertJsonPath('message', 'ยังพิมพ์กระดาษคำตอบหรือเตรียมสแกนข้อสอบที่มีข้อเขียนไม่ได้ (กำลังพัฒนา)');
-        $this->assertNull($this->exam->refresh()->structure_locked_at, 'a refused print does not lock the structure');
 
+        $this->asUser($this->teacher)->postJson($url, ['kind' => 'answer_sheet'])->assertStatus(202);
         $this->asUser($this->teacher)->postJson($url, ['kind' => 'exam_booklet', 'version_no' => 1])->assertStatus(202);
         $this->asUser($this->teacher)->postJson($url, ['kind' => 'key_sheet'])->assertStatus(202);
+    }
+
+    public function test_a_written_exam_prints_every_page_of_every_student_in_one_pdf(): void
+    {
+        $this->enroll(3);
+
+        $id = $this->asUser($this->teacher)->postJson("/api/v1/exams/{$this->exam->id}/prints", ['kind' => 'answer_sheet'])
+            ->assertStatus(202)->json('data.id');
+
+        $print = WorksheetPrint::query()->findOrFail($id);
+        $this->assertSame('ready', $print->status);
+        $this->assertSame(6, PdfMerger::pageCount(Storage::disk('local')->path($print->file_path)), '3 students x (1 bubble page + 1 written page)');
+        $layout = $this->exam->refresh()->currentLayout();
+        $this->assertSame($layout->version, $print->layout_version);
+        $this->assertSame(['exam', 'written'], array_column($layout->pages, 'sheet'));
+        $this->assertNotNull($this->exam->structure_locked_at);
+    }
+
+    public function test_the_key_sheet_of_a_written_exam_is_one_bubble_page(): void
+    {
+        $id = $this->asUser($this->teacher)->postJson("/api/v1/exams/{$this->exam->id}/prints", ['kind' => 'key_sheet'])
+            ->assertStatus(202)->json('data.id');
+
+        $print = WorksheetPrint::query()->findOrFail($id);
+        $this->assertSame(1, PdfMerger::pageCount(Storage::disk('local')->path($print->file_path)));
+    }
+
+    public function test_a_written_exam_renders_ten_students_to_a_job_and_a_bubble_exam_twenty(): void
+    {
+        Bus::fake();
+        $this->enroll(25);
+        $url = "/api/v1/exams/{$this->exam->id}/prints";
+
+        $this->asUser($this->teacher)->postJson($url, ['kind' => 'answer_sheet'])->assertStatus(202);
+        Bus::assertChained([RenderAnswerSheetsJob::class, RenderAnswerSheetsJob::class, RenderAnswerSheetsJob::class, MergeWorksheetsJob::class]);
+
+        $bubbles = $this->createExam(['title' => 'สอบย่อย']);
+        $this->addSection($bubbles, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 6]);
+        $this->approveExam($bubbles);
+        Bus::fake();
+        $this->asUser($this->teacher)->postJson("/api/v1/exams/{$bubbles->id}/prints", ['kind' => 'answer_sheet'])->assertStatus(202);
+        Bus::assertChained([RenderAnswerSheetsJob::class, RenderAnswerSheetsJob::class, MergeWorksheetsJob::class]);
+    }
+
+    private function enroll(int $count): void
+    {
+        for ($n = 1; $n <= $count; $n++) {
+            $this->enrollStudent($this->classroom, $n, 'นักเรียนคนที่ '.$n);
+        }
     }
 
     public function test_the_copier_skips_written_questions_and_the_library_hides_them(): void
