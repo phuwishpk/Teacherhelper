@@ -66,7 +66,7 @@
 
 **Files:** Modify `backend/app/Domain/Exams/ExamBooklet.php`, `ExamPayload.php`; Tests `ExamBookletTest.php`, `ExamWrittenSectionTest.php`
 
-- [ ] Failing tests: booklet hint reads `เขียนตอบในกระดาษคำตอบหน้า 2` for a written question on written page 2 (exam of 6 mcq + 2 open, bubble 1 page); with an overflowing written layout the hint is the step-1 text without a page and the booklet still plans; `GET /exams/{id}` `sheet` has `written_pages` and `written_overflow`.
+- [ ] Failing tests: booklet hint reads `เขียนตอบในกระดาษคำตอบหน้า 2` for a written question on written page 2 (exam of 6 mcq + 2 open, bubble 1 page); with an overflowing written layout the hint is the step-1 text without a page and the booklet still plans; `GET /exams/{id}` has `written_sheet: {pages, overflow}` next to the unchanged `sheet`.
 - [ ] Implement (`ExamBooklet::plan` computes `ExamSheetLayout::writtenPageOf` once and passes the page into `questionHtml`); run → PASS; commit `feat(backend): booklet names the page to write on`.
 
 ### Task 6: Docs, gates

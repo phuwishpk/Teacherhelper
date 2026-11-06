@@ -5,6 +5,7 @@ namespace Tests\Feature\Exams;
 use App\Domain\Exams\ExamSheetLayout;
 use App\Domain\Exams\ExamWrittenLayout;
 use App\Domain\Worksheets\ArucoMarkers;
+use App\Domain\Worksheets\WorksheetGeometry;
 use App\Exceptions\ApiException;
 use App\Models\Assignment;
 use App\Models\Question;
@@ -148,5 +149,23 @@ class ExamWrittenLayoutTest extends TestCase
             array_combine(array_column($open['questions'], 'id'), [2, 2, 3, 3, 4]),
             $pages,
         );
+    }
+
+    public function test_the_instruction_line_sits_below_every_box(): void
+    {
+        // A default show_work pair ends at 266 mm (7 + 80 + 3 + 16 per block): the line must not print over its final-answer box.
+        $this->addSection($this->exam, ['type' => 'show_work', 'question_count' => 2]);
+        $this->addSection($this->exam, ['type' => 'open', 'question_count' => 3]);
+
+        $bottoms = [];
+        foreach (ExamWrittenLayout::blocks($this->exam) as $block) {
+            $region = $block['region'];
+            $bottoms[] = max($region->rect['y'] + $region->rect['h'], ($region->final['y'] ?? 0) + ($region->final['h'] ?? 0));
+        }
+
+        $this->assertSame(266.0, $bottoms[1], 'the second show_work box ends at 266 mm');
+        $this->assertLessThanOrEqual(WorksheetGeometry::CONTENT_BOTTOM, max($bottoms));
+        $this->assertGreaterThanOrEqual(WorksheetGeometry::CONTENT_BOTTOM, ExamWrittenLayout::INSTRUCTION_Y);
+        $this->assertGreaterThan(max($bottoms), ExamWrittenLayout::INSTRUCTION_Y);
     }
 }

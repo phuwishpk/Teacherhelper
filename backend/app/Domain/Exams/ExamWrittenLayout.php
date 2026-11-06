@@ -22,6 +22,12 @@ final class ExamWrittenLayout
     public const LABEL_H = 7.0;
 
     /**
+     * The y of the instruction line under the boxes: just below the content
+     * area the boxes may fill (the lowest box ends at WorksheetGeometry::CONTENT_BOTTOM).
+     */
+    public const INSTRUCTION_Y = WorksheetGeometry::CONTENT_BOTTOM + 2.0;
+
+    /**
      * @return list<array{question: Question, number: int, points: float, label_top: float, region: RegionGeometry, page_index: int}>
      */
     public static function blocks(Assignment $exam): array

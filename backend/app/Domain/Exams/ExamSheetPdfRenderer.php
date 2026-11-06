@@ -145,7 +145,7 @@ class ExamSheetPdfRenderer
 
         $mpdf->SetFont(WorksheetMpdfFactory::FONT, 'B', 11);
         $mpdf->SetTextColor(0, 0, 0);
-        $mpdf->SetXY(WorksheetGeometry::TITLE_X, ExamSheetGeometry::FOOTER_Y - 3);
+        $mpdf->SetXY(WorksheetGeometry::TITLE_X, ExamWrittenLayout::INSTRUCTION_Y);
         $mpdf->WriteCell(150, 6, 'เขียนคำตอบในกรอบของแต่ละข้อเท่านั้น', 0, 0, 'L');
         $mpdf->SetFont(WorksheetMpdfFactory::FONT, '', 8);
         $mpdf->SetTextColor(120, 120, 120);
