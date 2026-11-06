@@ -45,6 +45,7 @@ class ExamScreen extends ConsumerWidget {
     final draft = await showExamSectionDialog(
       context,
       nextPosition: d.sections.length + 1,
+      allowWritten: d.allowsWritten,
     );
     if (draft == null || !context.mounted) return;
     try {
