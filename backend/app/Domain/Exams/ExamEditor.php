@@ -53,6 +53,9 @@ final class ExamEditor
         return AssignmentLocked::run($exam->id, function (Assignment $exam) use ($input) {
             self::assertUnlocked($exam);
             $data = self::sectionData($input, null);
+            if (ExamSection::isWrittenType($data['attributes']['type'])) {
+                ExamWritten::assertAllowed($exam);
+            }
             $count = ExamSection::query()->where('assignment_id', $exam->id)->count();
             $max = (int) config('eduvision.exams.max_sections');
             if ($count >= $max) {
@@ -71,6 +74,7 @@ final class ExamEditor
                 array_splice($ids, $data['position'] - 1, 0, [$section->id]);
                 ExamPositions::rewriteSections($exam->id, $ids);
             }
+            ExamWritten::assertLast($exam);
             for ($i = 0; $i < $blank; $i++) {
                 $this->insertQuestion($exam, $section, [
                     'prompt_text' => '',
@@ -127,6 +131,7 @@ final class ExamEditor
                 array_splice($ids, max(0, min($data['position'] - 1, count($ids))), 0, [$section->id]);
                 ExamPositions::rewriteSections($exam->id, $ids);
                 ExamPositions::renumber($exam->id);
+                ExamWritten::assertLast($exam);
             }
             if ($structural) {
                 $this->afterStructureChange($exam);
@@ -449,7 +454,9 @@ final class ExamEditor
             'position' => (int) Question::query()->where('assignment_id', $exam->id)->max('position') + 1,
             'is_numeric' => false,
             'match_mode' => 'exact',
-            'rubric_status' => Question::RUBRIC_NOT_NEEDED,
+            // A written question starts with an empty rubric the teacher still has to set (§22.20.2).
+            'rubric_status' => $section->isWritten() ? Question::RUBRIC_DRAFT : Question::RUBRIC_NOT_NEEDED,
+            'answer_lines' => $section->isWritten() ? (int) ($attributes['answer_lines'] ?? ExamSection::DEFAULT_ANSWER_LINES) : null,
         ]);
         if ($section->type === ExamSection::TYPE_MCQ) {
             for ($p = 1; $p <= (int) $section->option_count; $p++) {
@@ -525,7 +532,7 @@ final class ExamEditor
         $rules = [
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'instructions' => ['sometimes', 'nullable', 'string', 'max:'.self::MAX_INSTRUCTIONS],
-            'type' => [...$sometimes, 'required', 'string', Rule::in(ExamSection::TYPES)],
+            'type' => [...$sometimes, 'required', 'string', Rule::in([...ExamSection::TYPES, ...ExamSection::WRITTEN_TYPES])],
             'option_count' => $type === ExamSection::TYPE_MCQ
                 ? [...$sometimes, 'required', 'integer', 'min:'.ExamSection::MIN_OPTIONS, 'max:'.ExamSection::MAX_OPTIONS]
                 : ['prohibited'],
@@ -541,7 +548,7 @@ final class ExamEditor
             'title.max' => 'ชื่อตอนยาวเกิน 255 ตัวอักษร',
             'instructions.max' => 'คำชี้แจงยาวเกิน '.self::MAX_INSTRUCTIONS.' ตัวอักษร',
             'type.required' => 'กรุณาเลือกชนิดของตอน',
-            'type.in' => 'ชนิดของตอนต้องเป็น ปรนัย ถูก/ผิด หรือเติมตัวเลข',
+            'type.in' => 'ชนิดของตอนต้องเป็น ปรนัย ถูก/ผิด เติมตัวเลข อัตนัย หรือแสดงวิธีทำ',
             'option_count.required' => 'กรุณาเลือกจำนวนตัวเลือก',
             'option_count.min' => 'ข้อปรนัยต้องมีอย่างน้อย '.ExamSection::MIN_OPTIONS.' ตัวเลือก',
             'option_count.max' => 'ข้อปรนัยมีได้ไม่เกิน '.ExamSection::MAX_OPTIONS.' ตัวเลือก',
