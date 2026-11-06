@@ -179,4 +179,34 @@ class ExamBookletTest extends TestCase
         $this->assertSame(2, ExamBooklet::perRow($options([str_repeat('ก', 35)])));
         $this->assertSame(1, ExamBooklet::perRow($options([str_repeat('ก', 36), 'ข'])));
     }
+
+    public function test_written_question_prints_without_options_and_with_a_write_hint(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'mcq', 'option_count' => 4, 'question_count' => 1]);
+        $open = $this->addSection($exam, ['type' => 'open', 'default_points' => 5]);
+        $this->asUser($this->teacher)->postJson("/api/v1/exam-sections/{$open['id']}/questions", ['prompt_text' => 'อธิบายวัฏจักรของน้ำ', 'max_points' => 3])->assertCreated();
+
+        $plan = app(ExamBooklet::class)->plan($exam->refresh(), $this->version($exam, 1));
+
+        $html = $plan->pages[0][2]['html'];
+        $this->assertStringContainsString('2.&nbsp;&nbsp;อธิบายวัฏจักรของน้ำ', $html);
+        $this->assertStringContainsString('(3 คะแนน)', $html, 'points that differ from the section default show on the question');
+        $this->assertStringContainsString('เขียนตอบในกระดาษคำตอบ', $html);
+        $this->assertStringNotContainsString('class="opts"', $html);
+        $this->assertStringNotContainsString('เขียนตอบในกระดาษคำตอบ', $plan->pages[0][1]['html'], 'a bubble question has no write hint');
+    }
+
+    public function test_a_written_question_without_a_prompt_blocks_the_booklet_but_not_the_key(): void
+    {
+        $exam = $this->createExam();
+        $this->addSection($exam, ['type' => 'open', 'question_count' => 1, 'default_points' => 4]);
+        $this->fillExam($exam, prompts: false);
+        $this->assertTrue($this->examJson($exam)['key_complete']);
+        $this->asUser($this->teacher)->postJson("/api/v1/assignments/{$exam->id}/answer-key/approve")->assertOk();
+
+        $this->asUser($this->teacher)->postJson("/api/v1/exams/{$exam->id}/prints", ['kind' => 'exam_booklet', 'version_no' => 1])
+            ->assertStatus(422)->assertJsonPath('code', 'answer_key_incomplete')
+            ->assertJsonPath('errors.questions.0', 'ข้อ 1: ยังไม่มีโจทย์');
+    }
 }
