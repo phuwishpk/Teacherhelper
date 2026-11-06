@@ -543,6 +543,10 @@ class _ExamQuestionFormState extends ConsumerState<_ExamQuestionForm> {
           ),
           validator: (v) => NumericAnswer.parseList(v ?? '', spec).error,
         );
+      case ExamSectionType.open:
+      case ExamSectionType.showWork:
+        // A written question is keyed by its rubric, not by choices (§22.20.2).
+        return const SizedBox.shrink();
       case ExamSectionType.trueFalse:
       case ExamSectionType.mcq:
         final single = _section.type == ExamSectionType.trueFalse;
